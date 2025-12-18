@@ -1,0 +1,22 @@
+case_dir: CS4SG2U1
+node: 10
+data_type: displacement
+component: y
+plot_type: time
+output: plot.png
+plot_style:
+  color: blue
+  linewidth: 2.0
+  linestyle: '-'
+  marker: o
+plot_properties:
+  title: Displacement vs Time
+  xlabel: Time (s)
+  ylabel: Displacement (mm)
+  fontsize: 12
+  fontname: Arial
+  legend: true
+  grid: true
+time_range:
+  start_step: 0
+  end_step: 100

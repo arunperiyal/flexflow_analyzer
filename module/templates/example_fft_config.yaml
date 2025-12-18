@@ -1,0 +1,18 @@
+case_dir: CS4SG2U1
+node: 10
+data_type: displacement
+component: y
+plot_type: fft
+output: fft_plot.png
+plot_style:
+  color: purple
+  linewidth: 1.5
+  linestyle: '-'
+  marker: null
+plot_properties:
+  title: FFT Analysis
+  xlabel: Frequency (Hz)
+  ylabel: Magnitude
+  fontsize: 12
+  fontname: Arial
+  grid: true

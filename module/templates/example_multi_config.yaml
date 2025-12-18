@@ -1,0 +1,35 @@
+cases:
+- case_dir: CS4SG1U1
+  node: 10
+  data_type: displacement
+  component: y
+  label: Case 1
+  style:
+    color: blue
+    linewidth: 2.0
+    linestyle: '-'
+    marker: o
+- case_dir: CS4SG2U1
+  node: 10
+  data_type: displacement
+  component: y
+  label: Case 2
+  style:
+    color: red
+    linewidth: 2.0
+    linestyle: --
+    marker: s
+plot_type: time
+output: comparison.png
+server_mode: true
+plot_properties:
+  title: Case Comparison
+  xlabel: Time (s)
+  ylabel: Displacement (mm)
+  fontsize: 12
+  fontname: Arial
+  legend: true
+  grid: true
+time_range:
+  start_step: 0
+  end_step: 100

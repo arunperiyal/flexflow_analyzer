@@ -1,0 +1,44 @@
+"""Help messages for info command."""
+
+from module.utils.colors import Colors
+
+def print_info_help():
+    """Print info command help."""
+    print(f"""
+{Colors.BOLD}{Colors.CYAN}FlexFlow Info Command{Colors.RESET}
+
+Display information about a FlexFlow case directory.
+
+{Colors.BOLD}USAGE:{Colors.RESET}
+    flexflow info {Colors.YELLOW}<case_directory>{Colors.RESET} [options]
+
+{Colors.BOLD}OPTIONS:{Colors.RESET}
+    {Colors.YELLOW}--preview{Colors.RESET}              Show first 20 time steps with sample data
+    {Colors.YELLOW}--verbose, -v{Colors.RESET}          Show detailed information
+    {Colors.YELLOW}--examples{Colors.RESET}             Show usage examples
+    {Colors.YELLOW}--help, -h{Colors.RESET}             Show this help message
+
+{Colors.BOLD}DESCRIPTION:{Colors.RESET}
+    The info command displays:
+    - Problem name from simflow.config
+    - Time increment from .def file
+    - Available data files (OTHD, OISD)
+    - Number of time steps
+    - Time range
+
+    With --preview, it displays the first 20 time steps with sample node data.
+""")
+
+
+def print_info_examples():
+    """Print info command examples."""
+    print(f"""
+{Colors.BOLD}{Colors.CYAN}Info Command Examples{Colors.RESET}
+
+{Colors.BOLD}Basic Usage:{Colors.RESET}
+    flexflow info CS4SG1U1
+    flexflow info CS4SG1U1 --verbose
+
+{Colors.BOLD}Preview Time Steps:{Colors.RESET}
+    flexflow info CS4SG1U1 --preview
+""")
