@@ -141,6 +141,14 @@ def create_parser():
     template_parser.add_argument('--examples', action='store_true',
                                 help='Show usage examples')
     
+    # Docs command
+    docs_parser = subparsers.add_parser('docs', add_help=False,
+                                       help='View documentation')
+    docs_parser.add_argument('topic', nargs='?',
+                            help='Documentation topic (main, plot, compare, info, template)')
+    docs_parser.add_argument('-h', '--help', action='store_true',
+                            help='Show help for docs command')
+    
     return parser
 
 

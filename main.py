@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from module.cli.parser import parse_args
 from module.cli.help_messages import *
-from module.commands import info, plot, compare, template
+from module.commands import info, plot, compare, template, docs, show_docs_help
 from module.installer import install, uninstall, update
 
 
@@ -59,6 +59,11 @@ def main():
             print_template_help()
         else:
             template.execute_template(args)
+    elif args.command == 'docs':
+        if hasattr(args, 'help') and args.help:
+            show_docs_help()
+        else:
+            docs.docs_command(args)
     else:
         print_main_help()
 

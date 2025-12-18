@@ -113,6 +113,15 @@ def install():
         shutil.rmtree(dst_module)
     shutil.copytree(src_module, dst_module)
     
+    # Copy docs directory
+    src_docs = os.path.join(script_dir, 'docs')
+    dst_docs = os.path.join(install_dir, 'docs')
+    if os.path.exists(src_docs):
+        if os.path.exists(dst_docs):
+            shutil.rmtree(dst_docs)
+        shutil.copytree(src_docs, dst_docs)
+        print(f"{Colors.GREEN}✓{Colors.RESET} Documentation copied")
+    
     main_script = os.path.join(install_dir, 'main.py')
     os.chmod(main_script, 0o755)
     
