@@ -2,10 +2,199 @@
 
 import os
 import sys
+import subprocess
+import shutil
+from pathlib import Path
 from module.utils.colors import Colors
 
 
 VERSION = "1.0.0"
+
+
+def check_python():
+    """Check if Python 3 is installed and display version."""
+    try:
+        python_version = sys.version.split()[0]
+        print(f"{Colors.CYAN}[INFO]{Colors.RESET} Python version: {python_version}")
+        return True
+    except Exception as e:
+        print(f"{Colors.RED}[ERROR]{Colors.RESET} Failed to check Python version: {e}")
+        return False
+
+
+def check_dependencies():
+    """Check and install required Python packages."""
+    print(f"{Colors.CYAN}[INFO]{Colors.RESET} Checking Python dependencies...")
+    
+    required_packages = ["numpy", "matplotlib", "markdown"]
+    missing_packages = []
+    
+    for package in required_packages:
+        try:
+            __import__(package)
+        except ImportError:
+            missing_packages.append(package)
+    
+    if missing_packages:
+        print(f"{Colors.YELLOW}[WARNING]{Colors.RESET} Missing packages: {', '.join(missing_packages)}")
+        response = input("Would you like to install them now? (y/n): ").strip().lower()
+        
+        if response == 'y':
+            print(f"{Colors.CYAN}[INFO]{Colors.RESET} Installing dependencies...")
+            try:
+                subprocess.run(
+                    [sys.executable, "-m", "pip", "install", "--user"] + missing_packages,
+                    check=True
+                )
+                print(f"{Colors.GREEN}[SUCCESS]{Colors.RESET} Dependencies installed successfully!")
+            except subprocess.CalledProcessError as e:
+                print(f"{Colors.RED}[ERROR]{Colors.RESET} Failed to install dependencies: {e}")
+                print(f"You can try manually: pip3 install --user {' '.join(missing_packages)}")
+                return False
+        else:
+            print(f"{Colors.YELLOW}[WARNING]{Colors.RESET} Skipping dependency installation. FlexFlow may not work correctly.")
+    else:
+        print(f"{Colors.GREEN}[SUCCESS]{Colors.RESET} All required Python packages are installed.")
+    
+    return True
+
+
+def convert_docs_to_html(docs_dir, install_docs_dir):
+    """Convert markdown documentation to HTML."""
+    print(f"{Colors.CYAN}[INFO]{Colors.RESET} Converting documentation to HTML...")
+    
+    if not os.path.exists(docs_dir):
+        print(f"{Colors.YELLOW}[WARNING]{Colors.RESET} Documentation directory not found at {docs_dir}")
+        return
+    
+    try:
+        import markdown
+    except ImportError:
+        print(f"{Colors.YELLOW}[WARNING]{Colors.RESET} markdown package not available, skipping HTML conversion")
+        return
+    
+    # Create installation docs directory
+    os.makedirs(install_docs_dir, exist_ok=True)
+    
+    # HTML template
+    html_template = """<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{title}</title>
+    <style>
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 0 20px;
+            color: #333;
+        }}
+        h1, h2, h3 {{ color: #2c3e50; }}
+        code {{
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: "Courier New", monospace;
+        }}
+        pre {{
+            background: #f4f4f4;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }}
+        pre code {{ background: none; padding: 0; }}
+        table {{
+            border-collapse: collapse;
+            width: 100%;
+            margin: 20px 0;
+        }}
+        th, td {{
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }}
+        th {{ background: #f4f4f4; }}
+    </style>
+</head>
+<body>
+{content}
+</body>
+</html>"""
+    
+    # Find all markdown files
+    docs_path = Path(docs_dir)
+    md_files = list(docs_path.rglob("*.md"))
+    
+    converted_count = 0
+    for md_file in md_files:
+        try:
+            # Read markdown content
+            with open(md_file, 'r', encoding='utf-8') as f:
+                md_content = f.read()
+            
+            # Convert to HTML
+            html_content = markdown.markdown(md_content, extensions=['tables', 'fenced_code'])
+            
+            # Get title from first heading or filename
+            title = md_file.stem.replace('_', ' ').title()
+            
+            # Create full HTML document
+            full_html = html_template.format(title=title, content=html_content)
+            
+            # Determine output path (preserve directory structure)
+            rel_path = md_file.relative_to(docs_path)
+            html_file = Path(install_docs_dir) / rel_path.with_suffix('.html')
+            
+            # Create parent directories if needed
+            html_file.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Write HTML file
+            with open(html_file, 'w', encoding='utf-8') as f:
+                f.write(full_html)
+            
+            converted_count += 1
+            
+        except Exception as e:
+            print(f"{Colors.YELLOW}[WARNING]{Colors.RESET} Failed to convert {md_file.name}: {e}")
+    
+    print(f"{Colors.GREEN}[SUCCESS]{Colors.RESET} Converted {converted_count} documentation files to HTML")
+    print(f"Documentation installed to: {install_docs_dir}")
+
+
+def create_wrapper_script(main_script, local_bin):
+    """Create a wrapper script in ~/.local/bin."""
+    print(f"{Colors.CYAN}[INFO]{Colors.RESET} Creating wrapper script...")
+    
+    response = input(f"Would you like to create a symlink in {local_bin}? (y/n): ").strip().lower()
+    
+    if response == 'y':
+        if not os.path.exists(local_bin):
+            os.makedirs(local_bin)
+            print(f"{Colors.CYAN}[INFO]{Colors.RESET} Created directory: {local_bin}")
+        
+        wrapper_script = os.path.join(local_bin, "flexflow")
+        
+        try:
+            with open(wrapper_script, 'w') as f:
+                f.write("#!/bin/bash\n")
+                f.write(f'python3 "{main_script}" "$@"\n')
+            
+            os.chmod(wrapper_script, 0o755)
+            print(f"{Colors.GREEN}[SUCCESS]{Colors.RESET} Created executable wrapper at {wrapper_script}")
+            
+            # Check if LOCAL_BIN is in PATH
+            path_var = os.environ.get('PATH', '')
+            if local_bin not in path_var:
+                print(f"{Colors.YELLOW}[WARNING]{Colors.RESET} {local_bin} is not in your PATH")
+                return True  # Needs PATH update
+            
+        except Exception as e:
+            print(f"{Colors.RED}[ERROR]{Colors.RESET} Failed to create wrapper script: {e}")
+    
+    return False
 
 
 def install_microsoft_fonts():
@@ -76,15 +265,25 @@ def install_microsoft_fonts():
 
 
 def install():
-    """Install flexflow command globally"""
-    import shutil
+    """Install flexflow command globally with all features from install.sh."""
+    # Print header
+    print(f"\n{Colors.BLUE}{'━' * 50}{Colors.RESET}")
+    print(f"{Colors.BLUE}  FlexFlow Installation{Colors.RESET}")
+    print(f"{Colors.BLUE}{'━' * 50}{Colors.RESET}\n")
     
+    # Step 1: Check Python
+    if not check_python():
+        sys.exit(1)
+    
+    # Step 2: Check and install dependencies
+    if not check_dependencies():
+        sys.exit(1)
+    
+    # Step 3: Setup installation directories
     script_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     home = os.path.expanduser('~')
     default_install_dir = os.path.join(home, '.local', 'share', 'flexflow')
     
-    # Interactive installation directory selection
-    print(f"{Colors.CYAN}FlexFlow Installation{Colors.RESET}")
     print(f"\n{Colors.BOLD}Installation Directory:{Colors.RESET}")
     print(f"Default: {Colors.YELLOW}{default_install_dir}{Colors.RESET}")
     
@@ -95,83 +294,123 @@ def install():
     # Create installation directory
     try:
         os.makedirs(install_dir, exist_ok=True)
-        print(f"\n{Colors.GREEN}✓{Colors.RESET} Installation directory: {install_dir}")
+        print(f"{Colors.GREEN}[SUCCESS]{Colors.RESET} Installation directory: {install_dir}")
     except Exception as e:
-        print(f"{Colors.RED}Error:{Colors.RESET} Failed to create directory: {e}", file=sys.stderr)
+        print(f"{Colors.RED}[ERROR]{Colors.RESET} Failed to create directory: {e}", file=sys.stderr)
         sys.exit(1)
     
-    # Copy files to installation directory
-    print(f"\n{Colors.CYAN}Copying files...{Colors.RESET}")
+    # Step 4: Copy files
+    print(f"\n{Colors.CYAN}[INFO]{Colors.RESET} Copying files...")
     
-    # Copy main.py
-    shutil.copy2(os.path.join(script_dir, 'main.py'), install_dir)
+    try:
+        # Copy main.py
+        shutil.copy2(os.path.join(script_dir, 'main.py'), install_dir)
+        main_script = os.path.join(install_dir, 'main.py')
+        os.chmod(main_script, 0o755)
+        
+        # Copy module directory
+        src_module = os.path.join(script_dir, 'module')
+        dst_module = os.path.join(install_dir, 'module')
+        if os.path.exists(dst_module):
+            shutil.rmtree(dst_module)
+        shutil.copytree(src_module, dst_module)
+        
+        print(f"{Colors.GREEN}[SUCCESS]{Colors.RESET} Files copied successfully")
+    except Exception as e:
+        print(f"{Colors.RED}[ERROR]{Colors.RESET} Failed to copy files: {e}")
+        sys.exit(1)
     
-    # Copy module directory
-    src_module = os.path.join(script_dir, 'module')
-    dst_module = os.path.join(install_dir, 'module')
-    if os.path.exists(dst_module):
-        shutil.rmtree(dst_module)
-    shutil.copytree(src_module, dst_module)
-    
-    # Copy docs directory
+    # Step 5: Convert and install documentation
     src_docs = os.path.join(script_dir, 'docs')
     dst_docs = os.path.join(install_dir, 'docs')
     if os.path.exists(src_docs):
-        if os.path.exists(dst_docs):
-            shutil.rmtree(dst_docs)
-        shutil.copytree(src_docs, dst_docs)
-        print(f"{Colors.GREEN}✓{Colors.RESET} Documentation copied")
+        convert_docs_to_html(src_docs, dst_docs)
     
-    main_script = os.path.join(install_dir, 'main.py')
-    os.chmod(main_script, 0o755)
+    # Step 6: Setup shell alias
+    print(f"\n{Colors.CYAN}[INFO]{Colors.RESET} Setting up shell alias...")
     
-    print(f"{Colors.GREEN}✓{Colors.RESET} Files copied successfully")
+    # Detect shell config file
+    shell_config = None
+    if 'ZSH_VERSION' in os.environ or os.path.exists(os.path.join(home, '.zshrc')):
+        shell_config = os.path.join(home, '.zshrc')
+    elif os.path.exists(os.path.join(home, '.bashrc')):
+        shell_config = os.path.join(home, '.bashrc')
+    elif os.path.exists(os.path.join(home, '.bash_profile')):
+        shell_config = os.path.join(home, '.bash_profile')
+    elif os.path.exists(os.path.join(home, '.profile')):
+        shell_config = os.path.join(home, '.profile')
     
-    # Find shell rc file
-    rc_files = []
-    for rc in ['.bashrc', '.bash_profile', '.profile', '.zshrc']:
-        path = os.path.join(home, rc)
-        if os.path.exists(path):
-            rc_files.append(path)
-    
-    if not rc_files:
-        print(f"{Colors.RED}Error:{Colors.RESET} No shell RC file found", file=sys.stderr)
+    if not shell_config:
+        print(f"{Colors.RED}[ERROR]{Colors.RESET} No shell configuration file found")
         sys.exit(1)
     
-    # Create alias command
-    alias_cmd = f'alias flexflow="python3 {main_script}"'
-    
-    # Add to first RC file found
-    rc_file = rc_files[0]
+    print(f"{Colors.CYAN}[INFO]{Colors.RESET} Detected shell configuration file: {shell_config}")
     
     # Check if alias already exists
-    with open(rc_file, 'r') as f:
-        content = f.read()
+    try:
+        with open(shell_config, 'r') as f:
+            content = f.read()
+    except:
+        content = ""
+    
+    alias_cmd = f'alias flexflow="python3 {main_script}"'
     
     if 'alias flexflow=' in content:
-        print(f"\n{Colors.YELLOW}Warning:{Colors.RESET} flexflow alias already exists in {rc_file}")
-        response = input("Overwrite? (y/n): ")
-        if response.lower() != 'y':
-            print("Installation cancelled")
-            sys.exit(0)
+        print(f"{Colors.YELLOW}[WARNING]{Colors.RESET} FlexFlow alias already exists in {shell_config}")
+        response = input("Would you like to update it? (y/n): ").strip().lower()
         
-        # Remove old alias
-        lines = content.split('\n')
-        lines = [l for l in lines if 'alias flexflow=' not in l and 'FlexFlow CLI alias' not in l]
-        content = '\n'.join(lines)
+        if response != 'y':
+            print(f"{Colors.CYAN}[INFO]{Colors.RESET} Skipping alias addition.")
+        else:
+            # Remove old alias
+            lines = content.split('\n')
+            lines = [l for l in lines if 'alias flexflow=' not in l and 'FlexFlow alias' not in l]
+            content = '\n'.join(lines)
+            
+            # Add new alias
+            with open(shell_config, 'w') as f:
+                f.write(content)
+                if not content.endswith('\n'):
+                    f.write('\n')
+                f.write(f'\n# FlexFlow alias - added by install\n{alias_cmd}\n')
+            
+            print(f"{Colors.GREEN}[SUCCESS]{Colors.RESET} Alias updated in {shell_config}")
+    else:
+        # Add new alias
+        with open(shell_config, 'a') as f:
+            f.write(f'\n# FlexFlow alias - added by install\n{alias_cmd}\n')
+        
+        print(f"{Colors.GREEN}[SUCCESS]{Colors.RESET} Alias added to {shell_config}")
     
-    # Add new alias
-    with open(rc_file, 'w') as f:
-        f.write(content)
-        if not content.endswith('\n'):
-            f.write('\n')
-        f.write(f'\n# FlexFlow CLI alias\n{alias_cmd}\n')
+    # Step 7: Optional wrapper script in ~/.local/bin
+    local_bin = os.path.join(home, '.local', 'bin')
+    needs_path_update = create_wrapper_script(main_script, local_bin)
     
-    print(f"\n{Colors.GREEN}✓{Colors.RESET} FlexFlow installed successfully!")
-    print(f"\nInstallation directory: {Colors.BOLD}{install_dir}{Colors.RESET}")
-    print(f"Alias added to: {Colors.BOLD}{rc_file}{Colors.RESET}")
+    if needs_path_update:
+        # Add local bin to PATH
+        with open(shell_config, 'a') as f:
+            f.write(f'\n# Add local bin to PATH - added by FlexFlow install\n')
+            f.write(f'export PATH="$HOME/.local/bin:$PATH"\n')
+        print(f"{Colors.GREEN}[SUCCESS]{Colors.RESET} Added {local_bin} to PATH in {shell_config}")
     
-    # Ask about Microsoft fonts installation
+    # Step 8: Test installation
+    print(f"\n{Colors.CYAN}[INFO]{Colors.RESET} Testing FlexFlow installation...")
+    try:
+        result = subprocess.run(
+            [sys.executable, main_script, "--version"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode == 0:
+            print(f"{Colors.GREEN}[SUCCESS]{Colors.RESET} FlexFlow is working correctly!")
+        else:
+            print(f"{Colors.YELLOW}[WARNING]{Colors.RESET} FlexFlow test returned non-zero exit code")
+    except Exception as e:
+        print(f"{Colors.YELLOW}[WARNING]{Colors.RESET} FlexFlow test failed: {e}")
+        print(f"Try running: python3 {main_script} --help")
+    
+    # Step 9: Optional Microsoft fonts
     print(f"\n{Colors.CYAN}Optional: Microsoft Fonts Installation{Colors.RESET}")
     print(f"Install Times New Roman, Arial, and other Microsoft fonts?")
     print(f"These fonts are useful for academic publications and professional plots.")
@@ -183,13 +422,25 @@ def install():
         install_microsoft_fonts()
     else:
         print(f"\n{Colors.YELLOW}Skipped{Colors.RESET} Microsoft fonts installation")
-        print(f"You can still use 'serif' for Times-like fonts")
         print(f"To install later, run:")
         print(f"  {Colors.CYAN}sudo apt-get install ttf-mscorefonts-installer{Colors.RESET}")
     
-    print(f"\nTo use flexflow command, run:")
-    print(f"  {Colors.CYAN}source {rc_file}{Colors.RESET}")
-    print(f"\nOr restart your terminal.")
+    # Step 10: Show completion message
+    print(f"\n{Colors.GREEN}{'━' * 50}{Colors.RESET}")
+    print(f"{Colors.GREEN}  Installation Complete!{Colors.RESET}")
+    print(f"{Colors.GREEN}{'━' * 50}{Colors.RESET}\n")
+    
+    print(f"{Colors.CYAN}[INFO]{Colors.RESET} To start using FlexFlow, run one of the following:")
+    print(f"  {Colors.CYAN}source {shell_config}{Colors.RESET}  # Then use 'flexflow' command")
+    print(f"  {Colors.CYAN}python3 {main_script} --help{Colors.RESET}  # Direct invocation")
+    
+    print(f"\n{Colors.CYAN}[INFO]{Colors.RESET} Quick start:")
+    print(f"  {Colors.CYAN}flexflow info <case_directory>{Colors.RESET}")
+    print(f"  {Colors.CYAN}flexflow plot <case_directory> --data-type displacement --node 10 --component y{Colors.RESET}")
+    
+    print(f"\n{Colors.CYAN}[INFO]{Colors.RESET} For more information:")
+    print(f"  {Colors.CYAN}flexflow --help{Colors.RESET}")
+    print(f"  {Colors.CYAN}flexflow docs{Colors.RESET}\n")
 
 
 def uninstall():

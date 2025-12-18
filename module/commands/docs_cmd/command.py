@@ -25,8 +25,8 @@ def find_docs_directory():
     return None
 
 
-def open_markdown(filepath):
-    """Open markdown file with appropriate viewer."""
+def open_file(filepath):
+    """Open file with appropriate viewer (HTML or markdown)."""
     if not os.path.exists(filepath):
         print(f"{Colors.RED}Error:{Colors.RESET} File not found: {filepath}", file=sys.stderr)
         return False
@@ -36,14 +36,23 @@ def open_markdown(filepath):
         # Try xdg-open (Linux)
         if subprocess.run(['which', 'xdg-open'], capture_output=True).returncode == 0:
             subprocess.Popen(['xdg-open', filepath], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            print(f"{Colors.GREEN}✓{Colors.RESET} Opened documentation in browser")
             return True
         
         # Try open (macOS)
         if subprocess.run(['which', 'open'], capture_output=True).returncode == 0:
             subprocess.Popen(['open', filepath], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            print(f"{Colors.GREEN}✓{Colors.RESET} Opened documentation in browser")
             return True
         
-        # Try common terminal pagers
+        # If HTML and no GUI opener available, try text browser
+        if filepath.endswith('.html'):
+            for browser in ['lynx', 'w3m', 'links']:
+                if subprocess.run(['which', browser], capture_output=True).returncode == 0:
+                    subprocess.run([browser, filepath])
+                    return True
+        
+        # Try common terminal pagers for markdown
         for viewer in ['bat', 'less', 'more', 'cat']:
             if subprocess.run(['which', viewer], capture_output=True).returncode == 0:
                 if viewer == 'bat':
@@ -102,15 +111,15 @@ def docs_command(args):
     
     topic = args.topic.lower()
     
-    # Map topics to files
+    # Map topics to files (prefer HTML, fallback to markdown)
     doc_map = {
-        'main': os.path.join(docs_dir, 'USAGE.md'),
-        'usage': os.path.join(docs_dir, 'USAGE.md'),
-        'info': os.path.join(docs_dir, 'usage', 'commands', 'info.md'),
-        'plot': os.path.join(docs_dir, 'usage', 'commands', 'plot.md'),
-        'compare': os.path.join(docs_dir, 'usage', 'commands', 'compare.md'),
-        'template': os.path.join(docs_dir, 'usage', 'commands', 'template.md'),
-        'refactoring': os.path.join(docs_dir, 'REFACTORING_SUMMARY.md'),
+        'main': 'USAGE',
+        'usage': 'USAGE',
+        'info': 'usage/commands/info',
+        'plot': 'usage/commands/plot',
+        'compare': 'usage/commands/compare',
+        'template': 'usage/commands/template',
+        'refactoring': 'REFACTORING_SUMMARY',
     }
     
     if topic not in doc_map:
@@ -120,16 +129,27 @@ def docs_command(args):
             print(f"  • {key}")
         return 1
     
-    filepath = doc_map[topic]
+    doc_path = doc_map[topic]
     
-    if not os.path.exists(filepath):
-        print(f"{Colors.RED}Error:{Colors.RESET} Documentation file not found: {filepath}", file=sys.stderr)
+    # Try HTML first (installed version), then markdown (source version)
+    html_path = os.path.join(docs_dir, f"{doc_path}.html")
+    md_path = os.path.join(docs_dir, f"{doc_path}.md")
+    
+    filepath = None
+    if os.path.exists(html_path):
+        filepath = html_path
+    elif os.path.exists(md_path):
+        filepath = md_path
+    else:
+        print(f"{Colors.RED}Error:{Colors.RESET} Documentation file not found", file=sys.stderr)
+        print(f"  Tried: {html_path}")
+        print(f"         {md_path}")
         return 1
     
     print(f"{Colors.CYAN}Opening documentation:{Colors.RESET} {topic}")
     print(f"{Colors.DIM}File: {filepath}{Colors.RESET}\n")
     
-    if open_markdown(filepath):
+    if open_file(filepath):
         return 0
     else:
         return 1
