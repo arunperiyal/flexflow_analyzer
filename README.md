@@ -18,12 +18,16 @@ FlexFlow is a command-line tool and Python library for post-processing FlexFlow 
 ### Installation
 
 ```bash
-# Install dependencies
-pip install numpy matplotlib pyyaml
-
-# Install FlexFlow CLI (creates 'flexflow' alias)
+# Install FlexFlow CLI (creates 'flexflow' alias and installs dependencies)
 python main.py --install
 ```
+
+This will:
+- Install Python dependencies (numpy, matplotlib, pyyaml, markdown)
+- Create 'flexflow' command alias
+- Optionally install Microsoft fonts for publication-quality plots
+- Convert and install HTML documentation
+- Configure your shell environment
 
 ### Basic Usage
 
@@ -38,7 +42,10 @@ flexflow plot CS4SG2U1 --data-type displacement --plot-type time --node 10 --com
 flexflow plot CS4SG2U1 --data-type force --plot-type time --component tz
 
 # Compare multiple cases
-flexflow compare --input-file comparison.yaml
+flexflow compare CS4SG1U1 CS4SG2U1 --node 10 --data-type displacement --component y
+
+# View documentation
+flexflow docs plot
 
 # Generate template configuration
 flexflow template --type multi --output my_config.yaml
@@ -48,16 +55,18 @@ flexflow template --type multi --output my_config.yaml
 
 FlexFlow uses a git-style command structure:
 
-- **`info`** - Preview case data and timesteps
-- **`plot`** - Create plots from a single case
-- **`compare`** - Compare multiple cases using YAML config
+- **`info`** - Display case information and preview timesteps
+- **`plot`** - Create plots from a single case with advanced styling
+- **`compare`** - Compare multiple cases on a single plot
 - **`template`** - Generate YAML configuration templates
+- **`docs`** - View documentation in browser
 
 For detailed help:
 ```bash
 flexflow --help
 flexflow plot --help
 flexflow plot --examples
+flexflow docs plot  # View plot documentation
 ```
 
 ## Features
@@ -79,10 +88,13 @@ flexflow plot --examples
 - Smart merging of multiple OTHD/OISD output files
 - Restart simulation handling (overlapping time ranges)
 - Time calculation from .def file parameters
-- Customizable plot styling (colors, line styles, markers)
-- Time/timestep range filtering
-- Server mode for headless operation
-- Pipeline-friendly output modes
+- Advanced plot styling (colors, line styles, markers, fonts)
+- LaTeX rendering support for labels and titles
+- Custom legend positioning and styling
+- Time range filtering for focused analysis
+- Automatic headless mode for SSH/remote systems
+- Publication-quality output (PDF, SVG, PNG)
+- Built-in documentation viewer
 
 ## Project Structure
 
@@ -97,18 +109,20 @@ flexflow/
 │   │   │   └── oisd_reader.py   # OISD force/pressure reader
 │   │   └── parsers/          # Configuration parsers
 │   │       └── def_parser.py    # .def file parser
-│   ├── commands/              # Command implementations
-│   │   ├── info.py           # Info command
-│   │   ├── plot.py           # Plot command
-│   │   ├── compare.py        # Compare command
-│   │   └── template.py       # Template generation
+│   ├── commands/              # Command implementations (restructured)
+│   │   ├── info_cmd/         # Info command
+│   │   ├── plot_cmd/         # Plot command
+│   │   ├── compare_cmd/      # Compare command
+│   │   ├── template_cmd/     # Template generation
+│   │   └── docs_cmd/         # Documentation viewer
 │   ├── cli/                   # CLI interface
 │   │   ├── parser.py         # Argument parser
-│   │   └── help_messages.py  # Help text and examples
+│   │   └── help_messages/    # Help messages per command
 │   ├── installer/             # Installation management
-│   │   └── install.py        # Install/uninstall utilities
+│   │   └── install.py        # Install/uninstall/update utilities
 │   ├── utils/                 # Utilities
 │   │   ├── plot_utils.py     # Plotting functions
+│   │   ├── data_utils.py     # Data manipulation utilities
 │   │   ├── logger.py         # Logging utility
 │   │   ├── colors.py         # Terminal colors
 │   │   ├── config.py         # App configuration
@@ -117,8 +131,13 @@ flexflow/
 │       ├── example_single_config.yaml
 │       ├── example_multi_config.yaml
 │       └── example_fft_config.yaml
-├── docs/
-│   └── USAGE.md              # Complete usage guide
+├── docs/                      # Documentation
+│   ├── USAGE.md              # Complete usage guide
+│   └── usage/                # Per-command documentation
+│       ├── cli/              # CLI documentation
+│       ├── commands/         # Command-specific docs
+│       ├── core/             # Core functionality docs
+│       └── utils/            # Utility documentation
 └── CS4SG*/                    # Example cases
 ```
 
@@ -132,6 +151,7 @@ flexflow/
 
 ### Single Case Plot
 
+Basic plot:
 ```bash
 flexflow plot CS4SG2U1 \
   --data-type displacement \
@@ -139,13 +159,43 @@ flexflow plot CS4SG2U1 \
   --node 10 \
   --component y \
   --plot-style "blue,2,-,o" \
-  --title "Node 10 Y-Displacement" \
+  --title "Node 10 Y-Displacement|16" \
   --output displacement.png
+```
+
+Publication-quality plot with LaTeX:
+```bash
+flexflow plot CS4SG1U1 \
+  --node 10 --data-type displacement \
+  --plot-type time --component y \
+  --start-time 100 --end-time 200 \
+  --plot-style "green,2,--,None" \
+  --title "Case 1|16" \
+  --ylabel '$y$|15|latex' \
+  --xlabel '$\tau$|12|latex' \
+  --fontname "serif" \
+  --legend "Node 10|12" \
+  --legend-style "best|12|on|False" \
+  --output figure.pdf
 ```
 
 ### Multi-Case Comparison
 
-Create `comparison.yaml`:
+Direct command line:
+```bash
+flexflow compare CS4SG1U1 CS4SG2U1 \
+  --node 100 --data-type displacement --component y \
+  --plot-style "blue,2,-,o|red,2,--,s" \
+  --legend "Case 1|Case 2" \
+  --legend-style "best|14|on|False" \
+  --title "Displacement Comparison|16" \
+  --ylabel '$y$ (m)|14|latex' \
+  --xlabel 'Time (s)|14' \
+  --fontname "serif" \
+  --output comparison.pdf
+```
+
+Using YAML configuration:
 ```yaml
 data_type: displacement
 plot_type: time
@@ -219,17 +269,20 @@ CS4SG2U1/
 
 - Python 3.6+
 - NumPy
-- Matplotlib
+- Matplotlib  
 - PyYAML
+- Markdown (for documentation conversion)
 
 ## Installation
 
 ```bash
-# Install dependencies
-pip install numpy matplotlib pyyaml
-
-# Install FlexFlow CLI globally
+# Install FlexFlow CLI globally (installs dependencies automatically)
 python main.py --install
+
+# During installation, you'll be prompted to:
+# - Install Python dependencies (numpy, matplotlib, pyyaml, markdown)
+# - Install Microsoft fonts (optional, for Times New Roman, Arial, etc.)
+# - The tool will create 'flexflow' command alias in your shell
 
 # Update installation
 flexflow --update

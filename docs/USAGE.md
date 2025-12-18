@@ -5,10 +5,11 @@ Complete guide for using FlexFlow CLI tool for post-processing FlexFlow simulati
 ## Detailed Command Documentation
 
 For detailed documentation on each command, see:
-- [info command](./usage/info/README.md) - Display case information
-- [plot command](./usage/plot/README.md) - Create plots from single cases
-- [compare command](./usage/compare/README.md) - Compare multiple cases
-- [template command](./usage/template/README.md) - Generate YAML templates
+- [info command](./usage/commands/info/README.md) - Display case information
+- [plot command](./usage/commands/plot/README.md) - Create plots from single cases
+- [compare command](./usage/commands/compare/README.md) - Compare multiple cases
+- [template command](./usage/commands/template/README.md) - Generate YAML templates
+- [docs command](./usage/commands/docs/README.md) - View documentation
 
 ## Table of Contents
 
@@ -26,16 +27,19 @@ For detailed documentation on each command, see:
 ### Install FlexFlow CLI
 
 ```bash
-python main.py --install
+flexflow --install
 ```
 
 This will:
 - Create a `flexflow` alias in your shell configuration
 - Make the tool accessible from anywhere using `flexflow` command
-- Optionally install Microsoft fonts (Times New Roman, Arial, etc.)
+- Install Python dependencies (numpy, matplotlib, pyyaml, markdown)
+- Optionally install Microsoft fonts (Times New Roman, Arial, etc.) for publication-quality plots
+- Convert documentation from Markdown to HTML for easy viewing
+- Copy HTML documentation to installation directory
 - Source your shell configuration automatically
 
-**Note:** During installation, you'll be prompted to install Microsoft fonts. This is optional but recommended for academic publications.
+**Note:** During installation, you'll be prompted to install Microsoft fonts. This is optional but recommended for academic publications that require Times New Roman or Arial fonts.
 
 ### Verify Installation
 
@@ -67,10 +71,10 @@ View timestep information without plotting:
 flexflow info CS4SG2U1
 ```
 
-Preview specific time range:
+Preview first 20 timesteps:
 
 ```bash
-flexflow info CS4SG2U1 --start-time 10.0 --end-time 50.0
+flexflow info CS4SG2U1 --preview
 ```
 
 ### 2. Plot Single Case
@@ -120,6 +124,7 @@ Available commands:
 - `plot` - Plot data from a single case
 - `compare` - Compare multiple cases on one plot
 - `template` - Generate template YAML configuration files
+- `docs` - View documentation in browser
 
 ### Global Options
 
@@ -147,10 +152,7 @@ flexflow info <case_directory> [options]
 
 ```
 <case_directory>    Path to FlexFlow case directory (required)
---start-time FLOAT  Filter from this time value
---end-time FLOAT    Filter to this time value
---start-step INT    Filter from this timestep index
---end-step INT      Filter to this timestep index
+--preview           Show first 20 timesteps with sample data
 -v, --verbose       Show detailed information
 --examples          Show usage examples
 -h, --help          Show help message
@@ -158,17 +160,17 @@ flexflow info <case_directory> [options]
 
 ### Examples
 
-Preview first 20 timesteps:
+Display case information:
 ```bash
 flexflow info CS4SG2U1
 ```
 
-Preview specific time range:
+Preview first 20 timesteps:
 ```bash
-flexflow info CS4SG2U1 --start-time 10.0 --end-time 50.0
+flexflow info CS4SG2U1 --preview
 ```
 
-Preview with verbose output:
+Verbose output:
 ```bash
 flexflow info CS4SG2U1 -v
 ```
@@ -206,34 +208,40 @@ flexflow plot <case_directory> [options]
 #### Plot Customization Options
 
 ```
---plot-style STR    Plot style as "color,width,linestyle,marker"
-                    Examples: "blue,2,-,o" or "red,1.5,--,^"
---title STR         Plot title
---xlabel STR        X-axis label
---ylabel STR        Y-axis label
---legend STR        Legend label
---fontsize INT      Font size for labels and title
---fontname STR      Font family name
+--plot-style STR     Plot style as "color,width,linestyle,marker"
+                     Color: red, blue, green, #FF5733, etc.
+                     Linestyle: - (solid), -- (dashed), -. (dashdot), : (dotted)
+                     Marker: o, s, ^, v, *, +, x, None
+                     Examples: "blue,2,-,o" or "red,1.5,--,None"
+--title STR          Plot title: "text|fontsize|latex"
+                     Examples: "My Title|16" or "Case 1|14|latex"
+--xlabel STR         X-axis label: "text|fontsize|latex"
+                     Examples: "Time (s)|12" or "$\\tau$|12|latex"
+--ylabel STR         Y-axis label: "text|fontsize|latex"
+                     Examples: "Displacement|14" or "$y$|15|latex"
+--legend STR         Legend label (same format as title)
+--legend-style STR   Legend style: "position|fontsize|frameon|latex"
+                     Position: best, upper right, north, northeast, etc.
+                     Example: "best|12|on|False" or "northeast|14|off|True"
+--fontname STR       Font family: serif, sans-serif, DejaVu Serif, etc.
+                     Note: Use 'serif' for Times-like font
 ```
 
-#### Time/Step Filtering Options
+#### Time Filtering Options
 
 ```
 --start-time FLOAT  Filter from this time value
 --end-time FLOAT    Filter to this time value
---start-step INT    Filter from this timestep index
---end-step INT      Filter to this timestep index
---use-index         Use timestep index instead of time for x-axis
---no-def-time       Don't use time increment from .def file
 ```
 
 #### Output Options
 
 ```
--o, --output FILE   Output filename (default: auto-generated)
---no-display        Don't display plot (save only, for servers)
+-o, --output FILE   Output filename (auto-enables headless mode)
+                    Supports: .png, .pdf, .svg, .jpg
+--no-display        Don't display plot (useful for SSH/remote systems)
 -v, --verbose       Show detailed information
--q, --quiet         Minimal output (for scripts/pipelines)
+--examples          Show usage examples
 ```
 
 #### Alternative Input
@@ -345,46 +353,150 @@ flexflow plot CS4SG2U1 --data-type displacement --plot-type time --node 10 --com
 
 ### Server Mode (Headless)
 
-For remote servers without display:
+For remote servers without display (SSH sessions):
 
 ```bash
+# Automatically uses headless mode when --output is specified
 flexflow plot CS4SG2U1 --data-type displacement --plot-type time --node 10 --component y \
-  --no-display -o output.png
+  --output output.png
+
+# Explicitly disable display
+flexflow plot CS4SG2U1 --data-type displacement --plot-type time --node 10 --component y \
+  --output output.pdf --no-display
+```
+
+### Advanced Styling Examples
+
+With LaTeX rendering and custom fonts:
+
+```bash
+# Publication-quality plot with Times-like font and LaTeX labels
+flexflow plot CS4SG1U1 --node 10 --data-type displacement \
+  --plot-type time --component y --start-time 100 --end-time 200 \
+  --output figure.pdf --plot-style "green,2,--,None" \
+  --title "Case 1|16" --ylabel '$y$|15|latex' --xlabel '$\tau$|12|latex' \
+  --fontname "serif" --legend "Node 10|12"
+
+# With legend positioning
+flexflow plot CS4SG1U1 --node 10 --data-type displacement \
+  --plot-type time --component y \
+  --legend "Displacement" --legend-style "northeast|14|on|False"
 ```
 
 ---
 
 ## `compare` Command
 
-Compare multiple cases on a single plot using YAML configuration.
+Compare data from multiple FlexFlow cases on a single plot.
 
 ### Usage
 
 ```bash
-flexflow compare <config.yaml> [options]
+flexflow compare <case1> <case2> [...] [options]
+flexflow compare --input-file <yaml_file>
+```
+
+### Required Options
+
+```
+--node N              Node number to compare
+--data-type TYPE     Data type: displacement or force
+```
+
+### Plot Options
+
+```
+--plot-type TYPE     Plot type: time, fft, traj2d, traj3d (default: time)
+--component X [Y Z]  Components to plot (x, y, z)
+--start-time T       Start time for plot
+--end-time T         End time for plot
+```
+
+### Styling Options
+
+```
+--plot-style STYLES  Plot styles for each case, separated by |
+                     Format per case: color,width,linestyle,marker
+                     Example: "blue,2,-,o|red,2,--,s|green,2,-.,^"
+--legend LABELS      Custom legend labels separated by |
+                     Example: "Case 1|Case 2|Case 3"
+--legend-style STYLE Legend style: position|fontsize|frameon|latex
+                     Example: "best|12|on|False" or "northeast|14|off|True"
+--title TEXT         Plot title (format: "text|fontsize|latex")
+--xlabel TEXT        X-axis label (format: "text|fontsize|latex")
+--ylabel TEXT        Y-axis label (format: "text|fontsize|latex")
+--fontsize N         Font size (default: 12)
+--fontname NAME      Font family (e.g., serif, sans-serif)
+```
+
+### Output Options
+
+```
+--output FILE        Save plot to file (auto-enables headless mode)
+--no-display         Don't display plot (useful for SSH/remote)
+-v, --verbose        Show detailed information
+--examples           Show usage examples
+```
+
+### Examples
+
+Compare two cases:
+```bash
+flexflow compare CS4SG1U1 CS4SG2U1 --node 100 --data-type displacement \
+  --component y --plot-style "blue,2,-,o|red,2,--,s" \
+  --legend "Case 1|Case 2" --output comparison.png
+```
+
+With custom styling:
+```bash
+flexflow compare CS4SG1U1 CS4SG2U1 CS4SG3U1 \
+  --node 100 --data-type displacement --component y \
+  --plot-style "blue,2,-,None|red,2,--,None|green,2,-.,None" \
+  --legend "Uniform|Graded|Optimized" \
+  --legend-style "best|14|on|False" \
+  --title "Displacement Comparison|16" \
+  --ylabel '$y$ (m)|14|latex' --xlabel 'Time (s)|14' \
+  --fontname "serif" --output compare.pdf
+```
+
+---
+
+## `docs` Command
+
+View FlexFlow documentation in your default browser.
+
+### Usage
+
+```bash
+flexflow docs [command]
 ```
 
 ### Options
 
 ```
---input-file FILE   YAML configuration file (required)
--v, --verbose       Show detailed information
--q, --quiet         Minimal output (only show output filename)
---examples          Show usage examples
--h, --help          Show help message
+command         Optional: Specify command to view docs for
+                Options: info, plot, compare, template
+                If not specified, opens main documentation
 ```
 
 ### Examples
 
-Compare multiple cases:
+View main documentation:
 ```bash
-flexflow compare comparison.yaml
+flexflow docs
 ```
 
-Quiet mode for scripts:
+View plot command documentation:
 ```bash
-flexflow compare comparison.yaml -q
+flexflow docs plot
 ```
+
+View compare command documentation:
+```bash
+flexflow docs compare
+```
+
+**Note:** Documentation is converted to HTML during installation and opened in your default browser.
 
 ---
 
