@@ -32,41 +32,33 @@ This will:
 ### Basic Usage
 
 ```bash
-# Preview case data
+# Get case information
 flexflow info CS4SG2U1
 
 # Plot displacement
 flexflow plot CS4SG2U1 --data-type displacement --plot-type time --node 10 --component y
 
-# Plot force
-flexflow plot CS4SG2U1 --data-type force --plot-type time --component tz
-
 # Compare multiple cases
 flexflow compare CS4SG1U1 CS4SG2U1 --node 10 --data-type displacement --component y
 
 # View documentation
-flexflow docs plot
-
-# Generate template configuration
-flexflow template --type multi --output my_config.yaml
+flexflow docs
 ```
 
 ### Commands
 
-FlexFlow uses a git-style command structure:
-
-- **`info`** - Display case information and preview timesteps
-- **`plot`** - Create plots from a single case with advanced styling
+- **`info`** - Display case information
+- **`preview`** - Preview displacement data in table format
+- **`statistics`** - Show statistical analysis of data
+- **`plot`** - Create plots from a single case
 - **`compare`** - Compare multiple cases on a single plot
 - **`template`** - Generate YAML configuration templates
-- **`docs`** - View documentation in browser
+- **`docs`** - View documentation
 
-For detailed help:
+For detailed help on any command:
 ```bash
-flexflow --help
-flexflow plot --help
-flexflow plot --examples
-flexflow docs plot  # View plot documentation
+flexflow <command> --help
+flexflow <command> --examples
 ```
 
 ## Features
@@ -111,6 +103,8 @@ flexflow/
 │   │       └── def_parser.py    # .def file parser
 │   ├── commands/              # Command implementations (restructured)
 │   │   ├── info_cmd/         # Info command
+│   │   ├── preview_cmd/      # Preview command
+│   │   ├── statistics_cmd/   # Statistics command
 │   │   ├── plot_cmd/         # Plot command
 │   │   ├── compare_cmd/      # Compare command
 │   │   ├── template_cmd/     # Template generation
@@ -143,111 +137,14 @@ flexflow/
 
 ## Documentation
 
-- **[Complete Usage Guide](docs/USAGE.md)** - Comprehensive documentation with examples
-- **[Quick Start](QUICKSTART.md)** - Get started quickly
-- **[API Reference](#python-api)** - Python API documentation
-
-## Examples
-
-### Single Case Plot
-
-Basic plot:
+For comprehensive documentation with examples:
 ```bash
-flexflow plot CS4SG2U1 \
-  --data-type displacement \
-  --plot-type time \
-  --node 10 \
-  --component y \
-  --plot-style "blue,2,-,o" \
-  --title "Node 10 Y-Displacement|16" \
-  --output displacement.png
+flexflow docs
 ```
 
-Publication-quality plot with LaTeX:
-```bash
-flexflow plot CS4SG1U1 \
-  --node 10 --data-type displacement \
-  --plot-type time --component y \
-  --start-time 100 --end-time 200 \
-  --plot-style "green,2,--,None" \
-  --title "Case 1|16" \
-  --ylabel '$y$|15|latex' \
-  --xlabel '$\tau$|12|latex' \
-  --fontname "serif" \
-  --legend "Node 10|12" \
-  --legend-style "best|12|on|False" \
-  --output figure.pdf
-```
-
-### Multi-Case Comparison
-
-Direct command line:
-```bash
-flexflow compare CS4SG1U1 CS4SG2U1 \
-  --node 100 --data-type displacement --component y \
-  --plot-style "blue,2,-,o|red,2,--,s" \
-  --legend "Case 1|Case 2" \
-  --legend-style "best|14|on|False" \
-  --title "Displacement Comparison|16" \
-  --ylabel '$y$ (m)|14|latex' \
-  --xlabel 'Time (s)|14' \
-  --fontname "serif" \
-  --output comparison.pdf
-```
-
-Using YAML configuration:
-```yaml
-data_type: displacement
-plot_type: time
-
-plot:
-  title: "Multi-Case Comparison"
-  ylabel: "Y Displacement (m)"
-
-cases:
-  - directory: CS4SG1U1
-    label: "Case 1"
-    node: 10
-    component: y
-    style: "blue,2,-,o"
-  
-  - directory: CS4SG2U1
-    label: "Case 2"
-    node: 10
-    component: y
-    style: "red,2,--,s"
-
-output: comparison.png
-```
-
-Run:
-```bash
-flexflow compare --input-file comparison.yaml
-```
-
-## Python API
-
-Use FlexFlow in your Python scripts:
-
-```python
-from module.core.case import FlexFlowCase
-from module.utils.plot_utils import plot_node_displacements
-import matplotlib.pyplot as plt
-
-# Load case
-case = FlexFlowCase('CS4SG2U1')
-reader = case.load_othd_data()
-
-# Get displacement data
-data = reader.get_node_displacements(node_id=10)
-print(f"Max Y displacement: {data['dy'].max():.6f}")
-
-# Create plot
-fig, ax = plot_node_displacements(reader, node_id=10, component='y')
-plt.savefig('displacement.png')
-```
-
-For more examples, see [docs/USAGE.md](docs/USAGE.md#python-api).
+Or view the documentation files:
+- **[Complete Usage Guide](docs/USAGE.md)** - Detailed documentation with examples
+- Command-specific documentation in `docs/usage/commands/`
 
 ## FlexFlow Case Structure
 

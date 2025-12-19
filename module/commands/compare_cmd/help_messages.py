@@ -41,6 +41,11 @@ Compare data from multiple FlexFlow cases on a single plot.
     {Colors.YELLOW}--fontsize{Colors.RESET} N         Font size (default: 12)
     {Colors.YELLOW}--fontname{Colors.RESET} NAME      Font family (e.g., "Times New Roman", serif, Arial)
 
+{Colors.BOLD}LAYOUT OPTIONS:{Colors.RESET}
+    {Colors.YELLOW}--subplot{Colors.RESET} LAYOUT      Create subplots instead of overlaying cases
+                           Format: rows,columns (e.g., "2,2" for 2x2 grid)
+                           Each case will be plotted in a separate subplot
+
 {Colors.BOLD}OUTPUT OPTIONS:{Colors.RESET}
     {Colors.YELLOW}--output{Colors.RESET} FILE        Save plot to file (auto-enables headless mode)
     {Colors.YELLOW}--no-display{Colors.RESET}          Don't display plot (useful for SSH/remote)
@@ -77,6 +82,12 @@ def print_compare_examples():
 {Colors.BOLD}Save to File (Remote/SSH):{Colors.RESET}
     flexflow compare CS4SG1U1 CS4SG2U1 --node 100 --data-type displacement \\
         --component y --output comparison.png --no-display
+
+{Colors.BOLD}Subplot Layout:{Colors.RESET}
+    flexflow compare CS4SG1U1 CS4SG2U1 CS4SG3U1 CS4SG4U1 --node 100 \\
+        --data-type displacement --component y --subplot "2,2" \\
+        --legend "Case 1|Case 2|Case 3|Case 4" \\
+        --output comparison_subplots.pdf
 
 {Colors.BOLD}Using YAML Configuration:{Colors.RESET}
     flexflow compare --input-file comparison.yaml

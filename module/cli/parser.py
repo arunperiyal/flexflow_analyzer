@@ -33,8 +33,6 @@ def create_parser():
     info_parser = subparsers.add_parser('info', add_help=False,
                                         help='Show case information')
     info_parser.add_argument('case', nargs='?', help='Case directory path')
-    info_parser.add_argument('--preview', action='store_true',
-                            help='Show first 20 timesteps')
     info_parser.add_argument('-v', '--verbose', action='store_true',
                             help='Enable verbose output')
     info_parser.add_argument('-h', '--help', action='store_true',
@@ -117,6 +115,8 @@ def create_parser():
     compare_parser.add_argument('--output', help='Output file path')
     compare_parser.add_argument('--no-display', action='store_true',
                                help="Don't display plot")
+    compare_parser.add_argument('--subplot', 
+                               help='Subplot layout as rows,columns (e.g., "2,2" for 2x2 grid). Each case will be plotted in a separate subplot')
     compare_parser.add_argument('--input-file', help='Load config from YAML file')
     compare_parser.add_argument('-v', '--verbose', action='store_true',
                                help='Enable verbose output')
@@ -148,6 +148,36 @@ def create_parser():
                             help='Documentation topic (main, plot, compare, info, template)')
     docs_parser.add_argument('-h', '--help', action='store_true',
                             help='Show help for docs command')
+    
+    # Statistics command
+    statistics_parser = subparsers.add_parser('statistics', add_help=False,
+                                             help='Show statistical analysis of data')
+    statistics_parser.add_argument('case', nargs='?', help='Case directory path')
+    statistics_parser.add_argument('--node', type=int,
+                                   help='Node ID to analyze (default: all nodes)')
+    statistics_parser.add_argument('-v', '--verbose', action='store_true',
+                                   help='Enable verbose output')
+    statistics_parser.add_argument('-h', '--help', action='store_true',
+                                   help='Show help for statistics command')
+    statistics_parser.add_argument('--examples', action='store_true',
+                                   help='Show usage examples')
+    
+    # Preview command
+    preview_parser = subparsers.add_parser('preview', add_help=False,
+                                          help='Preview displacement data')
+    preview_parser.add_argument('case', nargs='?', help='Case directory path')
+    preview_parser.add_argument('--node', type=int,
+                               help='Node ID to preview (default: 0)')
+    preview_parser.add_argument('--start-time', type=float,
+                               help='Start time for preview')
+    preview_parser.add_argument('--end-time', type=float,
+                               help='End time for preview')
+    preview_parser.add_argument('-v', '--verbose', action='store_true',
+                               help='Enable verbose output')
+    preview_parser.add_argument('-h', '--help', action='store_true',
+                               help='Show help for preview command')
+    preview_parser.add_argument('--examples', action='store_true',
+                               help='Show usage examples')
     
     return parser
 

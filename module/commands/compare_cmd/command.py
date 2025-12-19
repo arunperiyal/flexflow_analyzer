@@ -116,13 +116,53 @@ def execute_compare(args):
         # Default colors if no styles provided
         default_colors = ['blue', 'red', 'green', 'orange', 'purple', 'brown', 'pink', 'gray', 'olive', 'cyan']
         
-        # Create figure
-        fig, ax = plt.subplots(figsize=(12, 8))
+        # Create figure based on plot type
+        plot_type = args.plot_type if hasattr(args, 'plot_type') and args.plot_type else 'time'
+        
+        # Parse subplot layout if specified
+        use_subplots = False
+        subplot_rows, subplot_cols = 1, 1
+        if hasattr(args, 'subplot') and args.subplot:
+            try:
+                parts = args.subplot.split(',')
+                if len(parts) == 2:
+                    subplot_rows = int(parts[0].strip())
+                    subplot_cols = int(parts[1].strip())
+                    use_subplots = True
+                    if subplot_rows * subplot_cols < len(args.cases):
+                        logger.warning(f"Subplot grid ({subplot_rows}x{subplot_cols}) has fewer cells than cases ({len(args.cases)})")
+            except ValueError:
+                logger.warning(f"Invalid subplot format: {args.subplot}, expected 'rows,cols'")
+        
+        if use_subplots:
+            fig, axes = plt.subplots(subplot_rows, subplot_cols, figsize=(6*subplot_cols, 5*subplot_rows))
+            # Make axes always a flat array for easier iteration
+            if subplot_rows == 1 and subplot_cols == 1:
+                axes = [axes]
+            else:
+                axes = axes.flatten() if subplot_rows > 1 or subplot_cols > 1 else [axes]
+        elif plot_type == 'traj3d':
+            from mpl_toolkits.mplot3d import Axes3D
+            fig = plt.figure(figsize=(12, 10))
+            ax = fig.add_subplot(111, projection='3d')
+            axes = [ax]
+        else:
+            fig, ax = plt.subplots(figsize=(12, 8))
+            axes = [ax]  # Single axis wrapped in list for uniform handling
         
         # Process each case
         for i, case_dir in enumerate(args.cases):
             logger.info(f"Loading case {i+1}/{len(args.cases)}: {case_dir}")
             case = FlexFlowCase(case_dir, verbose=args.verbose)
+            
+            # Select appropriate axis for this case
+            if use_subplots:
+                if i >= len(axes):
+                    logger.warning(f"Not enough subplots for case {i+1}, skipping")
+                    continue
+                current_ax = axes[i]
+            else:
+                current_ax = axes[0]  # Use single axis for all cases
             
             # Get data based on type
             if args.data_type == 'displacement':
@@ -179,94 +219,137 @@ def execute_compare(args):
             else:
                 label = case.problem_name if hasattr(case, 'problem_name') else case_dir
             
-            # Plot with label and style
-            ax.plot(times, values, label=label, **style)
+            # Plot based on type
+            if plot_type == 'fft':
+                # Compute FFT
+                from numpy.fft import fft, fftfreq
+                dt = case.get_time_increment() if case.get_time_increment() else np.mean(np.diff(times))
+                n = len(values)
+                yf = fft(values)
+                xf = fftfreq(n, dt)[:n//2]
+                current_ax.plot(xf, 2.0/n * np.abs(yf[:n//2]), label=label, **style)
+            elif plot_type == 'traj2d':
+                # Need two components for 2D trajectory
+                logger.error("traj2d plot type not fully implemented for direct compare command")
+                continue
+            elif plot_type == 'traj3d':
+                # Need three components for 3D trajectory
+                logger.error("traj3d plot type not fully implemented for direct compare command")
+                continue
+            else:  # time series (default)
+                current_ax.plot(times, values, label=label, **style)
+            
+            # Add grid and legend to each subplot
+            if use_subplots:
+                current_ax.grid(True, alpha=0.3)
+                current_ax.legend(loc='best', fontsize=10)
         
         # Parse and set labels with enhanced format
         from module.commands.plot_cmd.command import parse_label
         
-        # Set title
-        if args.title:
-            title_info = parse_label(args.title)
-            if title_info:
-                if title_info['usetex']:
-                    plt.rc('text', usetex=True)
-                title_kwargs = {}
-                if title_info['fontsize']:
-                    title_kwargs['fontsize'] = title_info['fontsize']
+        # Apply labels to all axes
+        for idx, current_ax in enumerate(axes[:len(args.cases)]):
+            # Set title (different for subplots vs single plot)
+            if use_subplots:
+                # For subplots, use case name as title
+                case_label = legend_labels[idx] if idx < len(legend_labels) else args.cases[idx]
                 if args.fontname:
-                    title_kwargs['fontfamily'] = args.fontname
-                ax.set_title(title_info['text'], **title_kwargs)
-        else:
-            title = f'Comparison: {args.data_type.capitalize()} - {args.component.upper()}'
-            if args.fontname:
-                ax.set_title(title, fontfamily=args.fontname)
+                    current_ax.set_title(case_label, fontfamily=args.fontname)
+                else:
+                    current_ax.set_title(case_label)
             else:
-                ax.set_title(title)
-        
-        # Set xlabel
-        if args.xlabel:
-            xlabel_info = parse_label(args.xlabel)
-            if xlabel_info:
-                if xlabel_info['usetex']:
-                    plt.rc('text', usetex=True)
-                xlabel_kwargs = {}
-                if xlabel_info['fontsize']:
-                    xlabel_kwargs['fontsize'] = xlabel_info['fontsize']
+                # For single plot, use provided title or default
+                if args.title:
+                    title_info = parse_label(args.title)
+                    if title_info:
+                        if title_info['usetex']:
+                            plt.rc('text', usetex=True)
+                        title_kwargs = {}
+                        if title_info['fontsize']:
+                            title_kwargs['fontsize'] = title_info['fontsize']
+                        if args.fontname:
+                            title_kwargs['fontfamily'] = args.fontname
+                        current_ax.set_title(title_info['text'], **title_kwargs)
+                else:
+                    title = f'Comparison: {args.data_type.capitalize()} - {args.component.upper()}'
+                    if args.fontname:
+                        current_ax.set_title(title, fontfamily=args.fontname)
+                    else:
+                        current_ax.set_title(title)
+            
+            # Set xlabel
+            if args.xlabel:
+                xlabel_info = parse_label(args.xlabel)
+                if xlabel_info:
+                    if xlabel_info['usetex']:
+                        plt.rc('text', usetex=True)
+                    xlabel_kwargs = {}
+                    if xlabel_info['fontsize']:
+                        xlabel_kwargs['fontsize'] = xlabel_info['fontsize']
+                    if args.fontname:
+                        xlabel_kwargs['fontfamily'] = args.fontname
+                    current_ax.set_xlabel(xlabel_info['text'], **xlabel_kwargs)
+            else:
+                xlabel = 'Frequency (Hz)' if plot_type == 'fft' else 'Time'
                 if args.fontname:
-                    xlabel_kwargs['fontfamily'] = args.fontname
-                ax.set_xlabel(xlabel_info['text'], **xlabel_kwargs)
-        else:
-            xlabel = 'Time'
-            if args.fontname:
-                ax.set_xlabel(xlabel, fontfamily=args.fontname)
+                    current_ax.set_xlabel(xlabel, fontfamily=args.fontname)
+                else:
+                    current_ax.set_xlabel(xlabel)
+            
+            # Set ylabel
+            if args.ylabel:
+                ylabel_info = parse_label(args.ylabel)
+                if ylabel_info:
+                    if ylabel_info['usetex']:
+                        plt.rc('text', usetex=True)
+                    ylabel_kwargs = {}
+                    if ylabel_info['fontsize']:
+                        ylabel_kwargs['fontsize'] = ylabel_info['fontsize']
+                    if args.fontname:
+                        ylabel_kwargs['fontfamily'] = args.fontname
+                    current_ax.set_ylabel(ylabel_info['text'], **ylabel_kwargs)
             else:
-                ax.set_xlabel(xlabel)
-        
-        # Set ylabel
-        if args.ylabel:
-            ylabel_info = parse_label(args.ylabel)
-            if ylabel_info:
-                if ylabel_info['usetex']:
-                    plt.rc('text', usetex=True)
-                ylabel_kwargs = {}
-                if ylabel_info['fontsize']:
-                    ylabel_kwargs['fontsize'] = ylabel_info['fontsize']
+                if plot_type == 'fft':
+                    ylabel = f'Amplitude'
+                else:
+                    ylabel = f'{args.component.upper()} {args.data_type.capitalize()}'
                 if args.fontname:
-                    ylabel_kwargs['fontfamily'] = args.fontname
-                ax.set_ylabel(ylabel_info['text'], **ylabel_kwargs)
-        else:
-            ylabel = f'{args.component.upper()} {args.data_type.capitalize()}'
+                    current_ax.set_ylabel(ylabel, fontfamily=args.fontname)
+                else:
+                    current_ax.set_ylabel(ylabel)
+            
+            # Set tick label fonts
             if args.fontname:
-                ax.set_ylabel(ylabel, fontfamily=args.fontname)
-            else:
-                ax.set_ylabel(ylabel)
+                for label in current_ax.get_xticklabels() + current_ax.get_yticklabels():
+                    label.set_fontfamily(args.fontname)
+            
+            # Add grid and legend for single plot mode (subplots already have this)
+            if not use_subplots:
+                current_ax.grid(True, alpha=0.3)
+                
+                # Configure and show legend
+                from module.commands.plot_cmd.command import parse_legend_style
+                if hasattr(args, 'legend_style') and args.legend_style:
+                    legend_style = parse_legend_style(args.legend_style)
+                    if legend_style.get('usetex'):
+                        plt.rc('text', usetex=True)
+                    legend_kwargs = {}
+                    if 'loc' in legend_style:
+                        legend_kwargs['loc'] = legend_style['loc']
+                    if 'fontsize' in legend_style:
+                        legend_kwargs['fontsize'] = legend_style['fontsize']
+                    if 'frameon' in legend_style:
+                        legend_kwargs['frameon'] = legend_style['frameon']
+                    if args.fontname:
+                        legend_kwargs['prop'] = {'family': args.fontname}
+                    current_ax.legend(**legend_kwargs)
+                else:
+                    current_ax.legend()
         
-        # Set tick label fonts
-        if args.fontname:
-            for label in ax.get_xticklabels() + ax.get_yticklabels():
-                label.set_fontfamily(args.fontname)
-        
-        ax.grid(True, alpha=0.3)
-        
-        # Configure and show legend
-        from module.commands.plot_cmd.command import parse_legend_style
-        if hasattr(args, 'legend_style') and args.legend_style:
-            legend_style = parse_legend_style(args.legend_style)
-            if legend_style.get('usetex'):
-                plt.rc('text', usetex=True)
-            legend_kwargs = {}
-            if 'loc' in legend_style:
-                legend_kwargs['loc'] = legend_style['loc']
-            if 'fontsize' in legend_style:
-                legend_kwargs['fontsize'] = legend_style['fontsize']
-            if 'frameon' in legend_style:
-                legend_kwargs['frameon'] = legend_style['frameon']
-            if args.fontname:
-                legend_kwargs['prop'] = {'family': args.fontname}
-            ax.legend(**legend_kwargs)
-        else:
-            ax.legend()
+        # Hide unused subplots
+        if use_subplots:
+            for idx in range(len(args.cases), len(axes)):
+                axes[idx].set_visible(False)
         
         plt.tight_layout()
         

@@ -13,7 +13,6 @@ Display information about a FlexFlow case directory.
     flexflow info {Colors.YELLOW}<case_directory>{Colors.RESET} [options]
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
-    {Colors.YELLOW}--preview{Colors.RESET}              Show first 20 time steps with sample data
     {Colors.YELLOW}--verbose, -v{Colors.RESET}          Show detailed information
     {Colors.YELLOW}--examples{Colors.RESET}             Show usage examples
     {Colors.YELLOW}--help, -h{Colors.RESET}             Show this help message
@@ -25,8 +24,6 @@ Display information about a FlexFlow case directory.
     - Available data files (OTHD, OISD)
     - Number of time steps
     - Time range
-
-    With --preview, it displays the first 20 time steps with sample node data.
 """)
 
 
@@ -38,7 +35,4 @@ def print_info_examples():
 {Colors.BOLD}Basic Usage:{Colors.RESET}
     flexflow info CS4SG1U1
     flexflow info CS4SG1U1 --verbose
-
-{Colors.BOLD}Preview Time Steps:{Colors.RESET}
-    flexflow info CS4SG1U1 --preview
 """)
