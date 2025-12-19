@@ -25,6 +25,7 @@ python main.py --install
 This will:
 - Install Python dependencies (numpy, matplotlib, pyyaml, markdown)
 - Create 'flexflow' command alias
+- Set up shell autocompletion (bash/zsh/fish)
 - Optionally install Microsoft fonts for publication-quality plots
 - Convert and install HTML documentation
 - Configure your shell environment
@@ -60,6 +61,23 @@ For detailed help on any command:
 flexflow <command> --help
 flexflow <command> --examples
 ```
+
+## Shell Autocompletion
+
+FlexFlow includes powerful tab completion for bash, zsh, and fish shells:
+
+```bash
+# Press TAB to see available commands
+flexflow <TAB>
+
+# Press TAB to complete options
+flexflow plot --<TAB>
+
+# Complete data types, components, and more
+flexflow plot CS4SG1U1 --data-type <TAB>
+```
+
+See [Autocompletion Guide](docs/AUTOCOMPLETION.md) for detailed setup and usage.
 
 ## Features
 

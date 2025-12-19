@@ -24,11 +24,12 @@ def print_main_help():
     {Colors.CYAN}docs{Colors.RESET}        View documentation
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
-    {Colors.YELLOW}--install{Colors.RESET}      Install FlexFlow system-wide (includes MS fonts option)
-    {Colors.YELLOW}--uninstall{Colors.RESET}    Remove FlexFlow from system
-    {Colors.YELLOW}--update{Colors.RESET}       Update FlexFlow installation
-    {Colors.YELLOW}--examples{Colors.RESET}     Show usage examples
-    {Colors.YELLOW}--help, -h{Colors.RESET}     Show this help message
+    {Colors.YELLOW}--install{Colors.RESET}           Install FlexFlow system-wide (includes MS fonts & completion)
+    {Colors.YELLOW}--uninstall{Colors.RESET}         Remove FlexFlow from system
+    {Colors.YELLOW}--update{Colors.RESET}            Update FlexFlow installation
+    {Colors.YELLOW}--completion{Colors.RESET} <shell> Generate completion script (bash|zsh|fish)
+    {Colors.YELLOW}--examples{Colors.RESET}          Show usage examples
+    {Colors.YELLOW}--help, -h{Colors.RESET}          Show this help message
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
     flexflow info CS4SG1U1
@@ -36,6 +37,12 @@ def print_main_help():
     flexflow statistics CS4SG1U1 --node 24
     flexflow plot CS4SG1U1 --node 100 --data-type displacement
     flexflow compare CS4SG1U1 CS4SG2U1 --node 100 --data-type displacement
+
+{Colors.BOLD}TAB COMPLETION:{Colors.RESET}
+    Press TAB to complete commands, options, and values:
+    flexflow <TAB>                      # Show all commands
+    flexflow plot --<TAB>               # Show all plot options
+    flexflow plot --data-type <TAB>    # Show: displacement force moment pressure
 
 For more help on a specific command:
     flexflow {Colors.YELLOW}<command>{Colors.RESET} --help

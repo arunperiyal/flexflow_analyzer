@@ -27,6 +27,10 @@ def main():
     elif args.update:
         update()
         return
+    elif args.completion:
+        from module.cli.completion import generate_completion_script
+        print(generate_completion_script(args.completion))
+        return
     
     # Handle commands
     if not args.command:

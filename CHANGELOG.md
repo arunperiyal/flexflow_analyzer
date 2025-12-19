@@ -1,6 +1,35 @@
 # FlexFlow OTHD/OISD Reader - Change Log
 
-## Version 2.0.0 - Current (2025-12-18)
+## Version 2.1.0 - Current (2025-12-19)
+
+### New Features
+- **Shell Autocompletion**: Comprehensive tab completion support for bash, zsh, and fish shells
+  - Command completion (info, plot, compare, etc.)
+  - Option/flag completion (--data-type, --plot-type, etc.)
+  - Value completion (displacement, force, x, y, z, etc.)
+  - Dynamic case directory completion
+  - Context-aware suggestions
+  - File path completion for --output and --input-file
+
+### Installation Improvements
+- Autocompletion automatically installed during setup
+- Detection of current shell and automatic configuration
+- Manual completion script generation: `flexflow --completion <shell>`
+- Completion scripts uninstalled with `flexflow --uninstall`
+
+### Documentation
+- Added comprehensive autocompletion guide: `docs/AUTOCOMPLETION.md`
+- Added quick start guide: `COMPLETION_QUICKSTART.md`
+- Updated README with autocompletion section
+- Enhanced help messages with TAB completion hints
+
+### Technical Changes
+- New module: `module/cli/completion.py` for completion script generation
+- Support for bash-completion, zsh compdef, and fish completion systems
+- Integration with installer for automatic setup
+- Shell detection utilities
+
+## Version 2.0.0 - (2025-12-18)
 
 ### Major Refactoring
 - Complete code reorganization into modular structure

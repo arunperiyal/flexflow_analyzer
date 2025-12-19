@@ -410,7 +410,55 @@ def install():
         print(f"{Colors.YELLOW}[WARNING]{Colors.RESET} FlexFlow test failed: {e}")
         print(f"Try running: python3 {main_script} --help")
     
-    # Step 9: Optional Microsoft fonts
+    # Step 9: Shell completion installation
+    print(f"\n{Colors.CYAN}[INFO]{Colors.RESET} Setting up shell autocompletion...")
+    
+    from module.cli.completion import detect_shell, install_completion, get_completion_install_path
+    
+    detected_shell = detect_shell()
+    if detected_shell:
+        print(f"Detected shell: {detected_shell}")
+        response = input(f"Install tab completion for {detected_shell}? (y/n): ").strip().lower()
+        
+        if response == 'y':
+            try:
+                if install_completion(detected_shell, verbose=True):
+                    # Add source line to shell config
+                    if detected_shell == 'bash':
+                        completion_path = get_completion_install_path('bash')
+                        source_line = f"\n# FlexFlow completion\n[[ -f {completion_path} ]] && source {completion_path}\n"
+                        
+                        # Check if already in shell_config
+                        with open(shell_config, 'r') as f:
+                            config_content = f.read()
+                        
+                        if 'FlexFlow completion' not in config_content:
+                            with open(shell_config, 'a') as f:
+                                f.write(source_line)
+                            print(f"{Colors.GREEN}[SUCCESS]{Colors.RESET} Added completion source to {shell_config}")
+                    
+                    print(f"{Colors.GREEN}[SUCCESS]{Colors.RESET} Shell completion installed!")
+                    print(f"\n{Colors.YELLOW}Note:{Colors.RESET} Restart your shell or run:")
+                    if detected_shell == 'bash':
+                        print(f"  {Colors.CYAN}source ~/.bashrc{Colors.RESET}")
+                    elif detected_shell == 'zsh':
+                        print(f"  {Colors.CYAN}source ~/.zshrc{Colors.RESET}")
+                    elif detected_shell == 'fish':
+                        print(f"  {Colors.CYAN}Restart fish shell{Colors.RESET}")
+                else:
+                    print(f"{Colors.YELLOW}[WARNING]{Colors.RESET} Completion installation had issues, but you can still use:")
+                    print(f"  {Colors.CYAN}flexflow --completion {detected_shell} > ~/flexflow-completion{Colors.RESET}")
+            except Exception as e:
+                print(f"{Colors.YELLOW}[WARNING]{Colors.RESET} Could not install completion: {e}")
+                print(f"You can manually generate it with:")
+                print(f"  {Colors.CYAN}flexflow --completion {detected_shell}{Colors.RESET}")
+        else:
+            print(f"{Colors.YELLOW}[INFO]{Colors.RESET} Skipped shell completion installation")
+    else:
+        print(f"{Colors.YELLOW}[INFO]{Colors.RESET} Could not detect shell. Skipping autocompletion.")
+        print(f"Supported shells: bash, zsh, fish")
+    
+    # Step 10: Optional Microsoft fonts
     print(f"\n{Colors.CYAN}Optional: Microsoft Fonts Installation{Colors.RESET}")
     print(f"Install Times New Roman, Arial, and other Microsoft fonts?")
     print(f"These fonts are useful for academic publications and professional plots.")
@@ -425,7 +473,7 @@ def install():
         print(f"To install later, run:")
         print(f"  {Colors.CYAN}sudo apt-get install ttf-mscorefonts-installer{Colors.RESET}")
     
-    # Step 10: Show completion message
+    # Step 11: Show completion message
     print(f"\n{Colors.GREEN}{'━' * 50}{Colors.RESET}")
     print(f"{Colors.GREEN}  Installation Complete!{Colors.RESET}")
     print(f"{Colors.GREEN}{'━' * 50}{Colors.RESET}\n")
@@ -440,7 +488,11 @@ def install():
     
     print(f"\n{Colors.CYAN}[INFO]{Colors.RESET} For more information:")
     print(f"  {Colors.CYAN}flexflow --help{Colors.RESET}")
-    print(f"  {Colors.CYAN}flexflow docs{Colors.RESET}\n")
+    print(f"  {Colors.CYAN}flexflow docs{Colors.RESET}")
+    
+    print(f"\n{Colors.CYAN}[INFO]{Colors.RESET} Tab completion is available - try pressing TAB after typing:")
+    print(f"  {Colors.CYAN}flexflow <TAB>{Colors.RESET}  # Shows available commands")
+    print(f"  {Colors.CYAN}flexflow plot --<TAB>{Colors.RESET}  # Shows available options\n")
 
 
 def uninstall():
@@ -460,11 +512,11 @@ def uninstall():
         new_lines = []
         skip_next = False
         for i, line in enumerate(lines):
-            if 'FlexFlow CLI alias' in line:
+            if 'FlexFlow CLI alias' in line or 'FlexFlow alias' in line or 'FlexFlow completion' in line:
                 skip_next = True
                 removed = True
                 continue
-            if skip_next and 'alias flexflow=' in line:
+            if skip_next and ('alias flexflow=' in line or 'flexflow' in line and 'source' in line):
                 skip_next = False
                 continue
             new_lines.append(line)
@@ -473,6 +525,14 @@ def uninstall():
             with open(rc_file, 'w') as f:
                 f.writelines(new_lines)
             print(f"{Colors.GREEN}✓{Colors.RESET} Removed flexflow alias from {rc_file}")
+    
+    # Remove shell completions
+    from module.cli.completion import detect_shell, uninstall_completion
+    
+    print(f"\n{Colors.CYAN}[INFO]{Colors.RESET} Removing shell completions...")
+    for shell in ['bash', 'zsh', 'fish']:
+        if uninstall_completion(shell, verbose=False):
+            print(f"{Colors.GREEN}✓{Colors.RESET} Removed {shell} completion")
     
     if not removed:
         print(f"{Colors.YELLOW}Warning:{Colors.RESET} flexflow alias not found")

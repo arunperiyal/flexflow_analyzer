@@ -21,6 +21,8 @@ def create_parser():
                        help='Uninstall flexflow command')
     parser.add_argument('--update', action='store_true',
                        help='Update flexflow installation')
+    parser.add_argument('--completion', choices=['bash', 'zsh', 'fish'],
+                       help='Generate shell completion script')
     parser.add_argument('--version', action='store_true',
                        help='Show version information')
     parser.add_argument('-h', '--help', action='store_true',

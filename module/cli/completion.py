@@ -1,0 +1,631 @@
+"""
+Shell completion generator for FlexFlow CLI
+"""
+
+import os
+import sys
+from pathlib import Path
+
+
+BASH_COMPLETION_SCRIPT = '''# Bash completion for flexflow CLI
+# Source this file or add to ~/.bashrc
+
+_flexflow_completions() {
+    local cur prev words cword
+    _init_completion || return
+
+    # Get the command (if any)
+    local cmd=""
+    local i
+    for (( i=1; i < cword; i++ )); do
+        if [[ "${words[i]}" != -* ]]; then
+            cmd="${words[i]}"
+            break
+        fi
+    done
+
+    # Top-level commands and flags
+    local commands="info preview statistics plot compare template docs"
+    local global_flags="--install --uninstall --update --version --help -h"
+
+    # If no command yet, complete commands and global flags
+    if [[ -z "$cmd" ]]; then
+        COMPREPLY=( $(compgen -W "$commands $global_flags" -- "$cur") )
+        return
+    fi
+
+    # Command-specific completions
+    case "$cmd" in
+        info)
+            local flags="-v --verbose -h --help --examples"
+            if [[ "$cur" == -* ]]; then
+                COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
+            else
+                _flexflow_complete_cases
+            fi
+            ;;
+        preview)
+            local flags="--node --start-time --end-time -v --verbose -h --help --examples"
+            if [[ "$cur" == -* ]]; then
+                COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
+            else
+                case "$prev" in
+                    --node|--start-time|--end-time)
+                        # No completion for numeric values
+                        ;;
+                    *)
+                        _flexflow_complete_cases
+                        ;;
+                esac
+            fi
+            ;;
+        statistics)
+            local flags="--node -v --verbose -h --help --examples"
+            if [[ "$cur" == -* ]]; then
+                COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
+            else
+                case "$prev" in
+                    --node)
+                        # No completion for numeric values
+                        ;;
+                    *)
+                        _flexflow_complete_cases
+                        ;;
+                esac
+            fi
+            ;;
+        plot)
+            local flags="--node --data-type --component --plot-type --traj-x --traj-y --traj-z \\
+                        --start-time --end-time --start-step --end-step --plot-style \\
+                        --title --xlabel --ylabel --legend --legend-style --fontsize --fontname \\
+                        --output --no-display --input-file -v --verbose -h --help --examples"
+            if [[ "$cur" == -* ]]; then
+                COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
+            else
+                case "$prev" in
+                    --data-type)
+                        COMPREPLY=( $(compgen -W "displacement force moment pressure" -- "$cur") )
+                        ;;
+                    --component|--traj-x|--traj-y|--traj-z)
+                        COMPREPLY=( $(compgen -W "x y z magnitude tx ty tz all" -- "$cur") )
+                        ;;
+                    --plot-type)
+                        COMPREPLY=( $(compgen -W "time fft traj2d traj3d" -- "$cur") )
+                        ;;
+                    --input-file|--output)
+                        _filedir
+                        ;;
+                    --node|--start-time|--end-time|--start-step|--end-step|--fontsize| \\
+                    --plot-style|--title|--xlabel|--ylabel|--legend|--legend-style|--fontname)
+                        # No completion for these
+                        ;;
+                    *)
+                        _flexflow_complete_cases
+                        ;;
+                esac
+            fi
+            ;;
+        compare)
+            local flags="--node --data-type --component --plot-type \\
+                        --start-time --end-time --start-step --end-step \\
+                        --title --xlabel --ylabel --legend --legend-style \\
+                        --fontsize --fontname --plot-style --output --no-display \\
+                        --subplot --input-file -v --verbose -h --help --examples"
+            if [[ "$cur" == -* ]]; then
+                COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
+            else
+                case "$prev" in
+                    --data-type)
+                        COMPREPLY=( $(compgen -W "displacement force moment pressure" -- "$cur") )
+                        ;;
+                    --component)
+                        COMPREPLY=( $(compgen -W "x y z magnitude tx ty tz all" -- "$cur") )
+                        ;;
+                    --plot-type)
+                        COMPREPLY=( $(compgen -W "time fft traj2d traj3d" -- "$cur") )
+                        ;;
+                    --input-file|--output)
+                        _filedir
+                        ;;
+                    --node|--start-time|--end-time|--start-step|--end-step| \\
+                    --fontsize|--fontname|--plot-style|--title|--xlabel|--ylabel| \\
+                    --legend|--legend-style|--subplot)
+                        # No completion for these
+                        ;;
+                    *)
+                        _flexflow_complete_cases
+                        ;;
+                esac
+            fi
+            ;;
+        template)
+            local flags="--output --force -v --verbose -h --help --examples"
+            if [[ "$cur" == -* ]]; then
+                COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
+            else
+                case "$prev" in
+                    --output)
+                        _filedir
+                        ;;
+                    template)
+                        COMPREPLY=( $(compgen -W "single multi fft" -- "$cur") )
+                        ;;
+                    *)
+                        if [[ -z "${words[2]}" ]] || [[ "${words[2]}" == -* ]]; then
+                            COMPREPLY=( $(compgen -W "single multi fft" -- "$cur") )
+                        fi
+                        ;;
+                esac
+            fi
+            ;;
+        docs)
+            local flags="-h --help"
+            if [[ "$cur" == -* ]]; then
+                COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
+            else
+                COMPREPLY=( $(compgen -W "main plot compare info template statistics preview" -- "$cur") )
+            fi
+            ;;
+    esac
+}
+
+# Helper function to complete case directories
+_flexflow_complete_cases() {
+    local IFS=$'\\n'
+    # Look for directories matching CS* or *U* patterns
+    local cases=()
+    for dir in CS* *U*/; do
+        if [[ -d "$dir" ]]; then
+            cases+=("${dir%/}")
+        fi
+    done 2>/dev/null
+    COMPREPLY=( $(compgen -W "${cases[*]}" -- "$cur") )
+}
+
+complete -F _flexflow_completions flexflow
+'''
+
+ZSH_COMPLETION_SCRIPT = '''#compdef flexflow
+# Zsh completion for flexflow CLI
+
+_flexflow() {
+    local -a commands global_flags
+    commands=(
+        'info:Show case information'
+        'preview:Preview displacement data in table format'
+        'statistics:Show statistical analysis of data'
+        'plot:Create plots from a single case'
+        'compare:Compare multiple cases on a single plot'
+        'template:Generate YAML configuration templates'
+        'docs:View documentation'
+    )
+    
+    global_flags=(
+        '--install[Install flexflow command globally]'
+        '--uninstall[Uninstall flexflow command]'
+        '--update[Update flexflow installation]'
+        '--version[Show version information]'
+        '(-h --help)'{-h,--help}'[Show help message]'
+    )
+
+    _arguments -C \\
+        "1: :{_describe 'command' commands}" \\
+        '*:: :->args' \\
+        $global_flags
+
+    case $state in
+        args)
+            case $words[1] in
+                info)
+                    _arguments \\
+                        '1:case:_flexflow_cases' \\
+                        '(-v --verbose)'{-v,--verbose}'[Enable verbose output]' \\
+                        '(-h --help)'{-h,--help}'[Show help]' \\
+                        '--examples[Show usage examples]'
+                    ;;
+                preview)
+                    _arguments \\
+                        '1:case:_flexflow_cases' \\
+                        '--node[Node ID to preview]:node:' \\
+                        '--start-time[Start time for preview]:time:' \\
+                        '--end-time[End time for preview]:time:' \\
+                        '(-v --verbose)'{-v,--verbose}'[Enable verbose output]' \\
+                        '(-h --help)'{-h,--help}'[Show help]' \\
+                        '--examples[Show usage examples]'
+                    ;;
+                statistics)
+                    _arguments \\
+                        '1:case:_flexflow_cases' \\
+                        '--node[Node ID to analyze]:node:' \\
+                        '(-v --verbose)'{-v,--verbose}'[Enable verbose output]' \\
+                        '(-h --help)'{-h,--help}'[Show help]' \\
+                        '--examples[Show usage examples]'
+                    ;;
+                plot)
+                    _arguments \\
+                        '1:case:_flexflow_cases' \\
+                        '--node[Node ID to plot]:node:' \\
+                        '--data-type[Data type]:type:(displacement force moment pressure)' \\
+                        '--component[Component to plot]:component:(x y z magnitude tx ty tz all)' \\
+                        '--plot-type[Plot type]:type:(time fft traj2d traj3d)' \\
+                        '--traj-x[X component for trajectory]:component:(x y z magnitude)' \\
+                        '--traj-y[Y component for trajectory]:component:(x y z magnitude)' \\
+                        '--traj-z[Z component for trajectory]:component:(x y z magnitude)' \\
+                        '--start-time[Start time]:time:' \\
+                        '--end-time[End time]:time:' \\
+                        '--start-step[Start timestep]:step:' \\
+                        '--end-step[End timestep]:step:' \\
+                        '--plot-style[Plot style]:style:' \\
+                        '--title[Plot title]:title:' \\
+                        '--xlabel[X-axis label]:label:' \\
+                        '--ylabel[Y-axis label]:label:' \\
+                        '--legend[Legend label]:label:' \\
+                        '--legend-style[Legend style]:style:' \\
+                        '--fontsize[Font size]:size:' \\
+                        '--fontname[Font name]:name:' \\
+                        '--output[Output file]:file:_files' \\
+                        '--no-display[Do not display plot]' \\
+                        '--input-file[Load config from YAML]:file:_files -g "*.yaml"' \\
+                        '(-v --verbose)'{-v,--verbose}'[Enable verbose output]' \\
+                        '(-h --help)'{-h,--help}'[Show help]' \\
+                        '--examples[Show usage examples]'
+                    ;;
+                compare)
+                    _arguments \\
+                        '*:case:_flexflow_cases' \\
+                        '--node[Node ID to plot]:node:' \\
+                        '--data-type[Data type]:type:(displacement force moment pressure)' \\
+                        '--component[Component to plot]:component:(x y z magnitude tx ty tz all)' \\
+                        '--plot-type[Plot type]:type:(time fft traj2d traj3d)' \\
+                        '--start-time[Start time]:time:' \\
+                        '--end-time[End time]:time:' \\
+                        '--start-step[Start timestep]:step:' \\
+                        '--end-step[End timestep]:step:' \\
+                        '--title[Plot title]:title:' \\
+                        '--xlabel[X-axis label]:label:' \\
+                        '--ylabel[Y-axis label]:label:' \\
+                        '--legend[Legend labels]:labels:' \\
+                        '--legend-style[Legend style]:style:' \\
+                        '--fontsize[Font size]:size:' \\
+                        '--fontname[Font name]:name:' \\
+                        '--plot-style[Plot styles]:styles:' \\
+                        '--output[Output file]:file:_files' \\
+                        '--no-display[Do not display plot]' \\
+                        '--subplot[Subplot layout]:layout:' \\
+                        '--input-file[Load config from YAML]:file:_files -g "*.yaml"' \\
+                        '(-v --verbose)'{-v,--verbose}'[Enable verbose output]' \\
+                        '(-h --help)'{-h,--help}'[Show help]' \\
+                        '--examples[Show usage examples]'
+                    ;;
+                template)
+                    _arguments \\
+                        '1:type:(single multi fft)' \\
+                        '--output[Output file]:file:_files' \\
+                        '--force[Overwrite existing file]' \\
+                        '(-v --verbose)'{-v,--verbose}'[Enable verbose output]' \\
+                        '(-h --help)'{-h,--help}'[Show help]' \\
+                        '--examples[Show usage examples]'
+                    ;;
+                docs)
+                    _arguments \\
+                        '1:topic:(main plot compare info template statistics preview)' \\
+                        '(-h --help)'{-h,--help}'[Show help]'
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+# Helper function to complete case directories
+_flexflow_cases() {
+    local -a cases
+    cases=(${(f)"$(ls -d CS* *U*/ 2>/dev/null | sed 's#/##')"})
+    _describe 'case directory' cases
+}
+
+_flexflow "$@"
+'''
+
+FISH_COMPLETION_SCRIPT = '''# Fish completion for flexflow CLI
+
+# Global options
+complete -c flexflow -l install -d "Install flexflow command globally"
+complete -c flexflow -l uninstall -d "Uninstall flexflow command"
+complete -c flexflow -l update -d "Update flexflow installation"
+complete -c flexflow -l version -d "Show version information"
+complete -c flexflow -s h -l help -d "Show help message"
+
+# Commands
+complete -c flexflow -f -n "__fish_use_subcommand" -a "info" -d "Show case information"
+complete -c flexflow -f -n "__fish_use_subcommand" -a "preview" -d "Preview displacement data"
+complete -c flexflow -f -n "__fish_use_subcommand" -a "statistics" -d "Show statistical analysis"
+complete -c flexflow -f -n "__fish_use_subcommand" -a "plot" -d "Create plots from a single case"
+complete -c flexflow -f -n "__fish_use_subcommand" -a "compare" -d "Compare multiple cases"
+complete -c flexflow -f -n "__fish_use_subcommand" -a "template" -d "Generate YAML templates"
+complete -c flexflow -f -n "__fish_use_subcommand" -a "docs" -d "View documentation"
+
+# Info command
+complete -c flexflow -n "__fish_seen_subcommand_from info" -s v -l verbose -d "Enable verbose output"
+complete -c flexflow -n "__fish_seen_subcommand_from info" -s h -l help -d "Show help"
+complete -c flexflow -n "__fish_seen_subcommand_from info" -l examples -d "Show examples"
+
+# Preview command
+complete -c flexflow -n "__fish_seen_subcommand_from preview" -l node -d "Node ID to preview"
+complete -c flexflow -n "__fish_seen_subcommand_from preview" -l start-time -d "Start time"
+complete -c flexflow -n "__fish_seen_subcommand_from preview" -l end-time -d "End time"
+complete -c flexflow -n "__fish_seen_subcommand_from preview" -s v -l verbose -d "Enable verbose output"
+complete -c flexflow -n "__fish_seen_subcommand_from preview" -s h -l help -d "Show help"
+complete -c flexflow -n "__fish_seen_subcommand_from preview" -l examples -d "Show examples"
+
+# Statistics command
+complete -c flexflow -n "__fish_seen_subcommand_from statistics" -l node -d "Node ID to analyze"
+complete -c flexflow -n "__fish_seen_subcommand_from statistics" -s v -l verbose -d "Enable verbose output"
+complete -c flexflow -n "__fish_seen_subcommand_from statistics" -s h -l help -d "Show help"
+complete -c flexflow -n "__fish_seen_subcommand_from statistics" -l examples -d "Show examples"
+
+# Plot command
+complete -c flexflow -n "__fish_seen_subcommand_from plot" -l node -d "Node ID to plot"
+complete -c flexflow -n "__fish_seen_subcommand_from plot" -l data-type -d "Data type" -xa "displacement force moment pressure"
+complete -c flexflow -n "__fish_seen_subcommand_from plot" -l component -d "Component" -xa "x y z magnitude tx ty tz all"
+complete -c flexflow -n "__fish_seen_subcommand_from plot" -l plot-type -d "Plot type" -xa "time fft traj2d traj3d"
+complete -c flexflow -n "__fish_seen_subcommand_from plot" -l traj-x -d "X component" -xa "x y z magnitude"
+complete -c flexflow -n "__fish_seen_subcommand_from plot" -l traj-y -d "Y component" -xa "x y z magnitude"
+complete -c flexflow -n "__fish_seen_subcommand_from plot" -l traj-z -d "Z component" -xa "x y z magnitude"
+complete -c flexflow -n "__fish_seen_subcommand_from plot" -l start-time -d "Start time"
+complete -c flexflow -n "__fish_seen_subcommand_from plot" -l end-time -d "End time"
+complete -c flexflow -n "__fish_seen_subcommand_from plot" -l start-step -d "Start timestep"
+complete -c flexflow -n "__fish_seen_subcommand_from plot" -l end-step -d "End timestep"
+complete -c flexflow -n "__fish_seen_subcommand_from plot" -l plot-style -d "Plot style"
+complete -c flexflow -n "__fish_seen_subcommand_from plot" -l title -d "Plot title"
+complete -c flexflow -n "__fish_seen_subcommand_from plot" -l xlabel -d "X-axis label"
+complete -c flexflow -n "__fish_seen_subcommand_from plot" -l ylabel -d "Y-axis label"
+complete -c flexflow -n "__fish_seen_subcommand_from plot" -l legend -d "Legend label"
+complete -c flexflow -n "__fish_seen_subcommand_from plot" -l legend-style -d "Legend style"
+complete -c flexflow -n "__fish_seen_subcommand_from plot" -l fontsize -d "Font size"
+complete -c flexflow -n "__fish_seen_subcommand_from plot" -l fontname -d "Font name"
+complete -c flexflow -n "__fish_seen_subcommand_from plot" -l output -d "Output file" -r
+complete -c flexflow -n "__fish_seen_subcommand_from plot" -l no-display -d "Do not display plot"
+complete -c flexflow -n "__fish_seen_subcommand_from plot" -l input-file -d "Load YAML config" -r
+complete -c flexflow -n "__fish_seen_subcommand_from plot" -s v -l verbose -d "Enable verbose output"
+complete -c flexflow -n "__fish_seen_subcommand_from plot" -s h -l help -d "Show help"
+complete -c flexflow -n "__fish_seen_subcommand_from plot" -l examples -d "Show examples"
+
+# Compare command
+complete -c flexflow -n "__fish_seen_subcommand_from compare" -l node -d "Node ID to plot"
+complete -c flexflow -n "__fish_seen_subcommand_from compare" -l data-type -d "Data type" -xa "displacement force moment pressure"
+complete -c flexflow -n "__fish_seen_subcommand_from compare" -l component -d "Component" -xa "x y z magnitude tx ty tz all"
+complete -c flexflow -n "__fish_seen_subcommand_from compare" -l plot-type -d "Plot type" -xa "time fft traj2d traj3d"
+complete -c flexflow -n "__fish_seen_subcommand_from compare" -l start-time -d "Start time"
+complete -c flexflow -n "__fish_seen_subcommand_from compare" -l end-time -d "End time"
+complete -c flexflow -n "__fish_seen_subcommand_from compare" -l start-step -d "Start timestep"
+complete -c flexflow -n "__fish_seen_subcommand_from compare" -l end-step -d "End timestep"
+complete -c flexflow -n "__fish_seen_subcommand_from compare" -l title -d "Plot title"
+complete -c flexflow -n "__fish_seen_subcommand_from compare" -l xlabel -d "X-axis label"
+complete -c flexflow -n "__fish_seen_subcommand_from compare" -l ylabel -d "Y-axis label"
+complete -c flexflow -n "__fish_seen_subcommand_from compare" -l legend -d "Legend labels"
+complete -c flexflow -n "__fish_seen_subcommand_from compare" -l legend-style -d "Legend style"
+complete -c flexflow -n "__fish_seen_subcommand_from compare" -l fontsize -d "Font size"
+complete -c flexflow -n "__fish_seen_subcommand_from compare" -l fontname -d "Font name"
+complete -c flexflow -n "__fish_seen_subcommand_from compare" -l plot-style -d "Plot styles"
+complete -c flexflow -n "__fish_seen_subcommand_from compare" -l output -d "Output file" -r
+complete -c flexflow -n "__fish_seen_subcommand_from compare" -l no-display -d "Do not display plot"
+complete -c flexflow -n "__fish_seen_subcommand_from compare" -l subplot -d "Subplot layout"
+complete -c flexflow -n "__fish_seen_subcommand_from compare" -l input-file -d "Load YAML config" -r
+complete -c flexflow -n "__fish_seen_subcommand_from compare" -s v -l verbose -d "Enable verbose output"
+complete -c flexflow -n "__fish_seen_subcommand_from compare" -s h -l help -d "Show help"
+complete -c flexflow -n "__fish_seen_subcommand_from compare" -l examples -d "Show examples"
+
+# Template command
+complete -c flexflow -n "__fish_seen_subcommand_from template" -xa "single multi fft"
+complete -c flexflow -n "__fish_seen_subcommand_from template" -l output -d "Output file" -r
+complete -c flexflow -n "__fish_seen_subcommand_from template" -l force -d "Overwrite existing file"
+complete -c flexflow -n "__fish_seen_subcommand_from template" -s v -l verbose -d "Enable verbose output"
+complete -c flexflow -n "__fish_seen_subcommand_from template" -s h -l help -d "Show help"
+complete -c flexflow -n "__fish_seen_subcommand_from template" -l examples -d "Show examples"
+
+# Docs command
+complete -c flexflow -n "__fish_seen_subcommand_from docs" -xa "main plot compare info template statistics preview"
+complete -c flexflow -n "__fish_seen_subcommand_from docs" -s h -l help -d "Show help"
+'''
+
+
+def generate_completion_script(shell='bash'):
+    """
+    Generate shell completion script
+    
+    Parameters:
+    -----------
+    shell : str
+        Shell type: 'bash', 'zsh', or 'fish'
+    
+    Returns:
+    --------
+    str
+        Completion script content
+    """
+    if shell == 'bash':
+        return BASH_COMPLETION_SCRIPT
+    elif shell == 'zsh':
+        return ZSH_COMPLETION_SCRIPT
+    elif shell == 'fish':
+        return FISH_COMPLETION_SCRIPT
+    else:
+        raise ValueError(f"Unsupported shell: {shell}")
+
+
+def get_completion_install_path(shell='bash'):
+    """
+    Get the installation path for completion scripts
+    
+    Parameters:
+    -----------
+    shell : str
+        Shell type: 'bash', 'zsh', or 'fish'
+    
+    Returns:
+    --------
+    Path
+        Installation path for the completion script
+    """
+    home = Path.home()
+    
+    if shell == 'bash':
+        # Always use user directory to avoid permission issues
+        completion_dir = home / '.bash_completion.d'
+        completion_dir.mkdir(exist_ok=True)
+        return completion_dir / 'flexflow'
+    
+    elif shell == 'zsh':
+        # Use user's zsh completion directory
+        zsh_completion_dir = home / '.zsh' / 'completion'
+        zsh_completion_dir.mkdir(parents=True, exist_ok=True)
+        return zsh_completion_dir / '_flexflow'
+    
+    elif shell == 'fish':
+        # Use fish user completions directory
+        fish_completion_dir = home / '.config' / 'fish' / 'completions'
+        fish_completion_dir.mkdir(parents=True, exist_ok=True)
+        return fish_completion_dir / 'flexflow.fish'
+    
+    else:
+        raise ValueError(f"Unsupported shell: {shell}")
+
+
+def install_completion(shell='bash', verbose=False):
+    """
+    Install shell completion for the specified shell
+    
+    Parameters:
+    -----------
+    shell : str
+        Shell type: 'bash', 'zsh', or 'fish'
+    verbose : bool
+        Enable verbose output
+    
+    Returns:
+    --------
+    bool
+        True if installation successful, False otherwise
+    """
+    try:
+        script = generate_completion_script(shell)
+        install_path = get_completion_install_path(shell)
+        
+        # Write completion script
+        install_path.parent.mkdir(parents=True, exist_ok=True)
+        install_path.write_text(script)
+        
+        if verbose:
+            print(f"Installed {shell} completion to: {install_path}")
+        
+        # Add instructions for enabling completion
+        if shell == 'bash':
+            bash_rc = Path.home() / '.bashrc'
+            completion_source = f"\n# FlexFlow completion\n"
+            
+            if not install_path.parent.name == 'bash_completion.d':
+                completion_source += f"[[ -f {install_path} ]] && source {install_path}\n"
+                
+                # Check if already in .bashrc
+                if bash_rc.exists():
+                    bashrc_content = bash_rc.read_text()
+                    if str(install_path) not in bashrc_content:
+                        if verbose:
+                            print(f"\nAdd this to your {bash_rc}:")
+                            print(completion_source)
+        
+        elif shell == 'zsh':
+            zsh_rc = Path.home() / '.zshrc'
+            completion_dir = install_path.parent
+            completion_source = f"\n# FlexFlow completion\nfpath=({completion_dir} $fpath)\nautoload -Uz compinit && compinit\n"
+            
+            if zsh_rc.exists():
+                zshrc_content = zsh_rc.read_text()
+                if str(completion_dir) not in zshrc_content:
+                    if verbose:
+                        print(f"\nAdd this to your {zsh_rc}:")
+                        print(completion_source)
+        
+        elif shell == 'fish':
+            # Fish automatically loads completions from this directory
+            if verbose:
+                print("Fish will automatically load completions on next shell restart")
+        
+        return True
+    
+    except PermissionError as e:
+        print(f"Error: Permission denied writing to {install_path.parent}")
+        print(f"The completion script will be saved to a user directory instead.")
+        return False
+    except Exception as e:
+        print(f"Error installing {shell} completion: {e}")
+        if verbose:
+            import traceback
+            traceback.print_exc()
+        return False
+
+
+def uninstall_completion(shell='bash', verbose=False):
+    """
+    Uninstall shell completion for the specified shell
+    
+    Parameters:
+    -----------
+    shell : str
+        Shell type: 'bash', 'zsh', or 'fish'
+    verbose : bool
+        Enable verbose output
+    
+    Returns:
+    --------
+    bool
+        True if uninstallation successful, False otherwise
+    """
+    try:
+        install_path = get_completion_install_path(shell)
+        
+        if install_path.exists():
+            install_path.unlink()
+            if verbose:
+                print(f"Removed {shell} completion from: {install_path}")
+            return True
+        else:
+            if verbose:
+                print(f"No {shell} completion found at: {install_path}")
+            return False
+    
+    except Exception as e:
+        print(f"Error uninstalling {shell} completion: {e}")
+        return False
+
+
+def detect_shell():
+    """
+    Detect the current shell
+    
+    Returns:
+    --------
+    str
+        Shell name ('bash', 'zsh', or 'fish'), or None if unknown
+    """
+    shell = os.environ.get('SHELL', '')
+    
+    if 'bash' in shell:
+        return 'bash'
+    elif 'zsh' in shell:
+        return 'zsh'
+    elif 'fish' in shell:
+        return 'fish'
+    else:
+        return None
+
+
+if __name__ == '__main__':
+    # Test script generation
+    import sys
+    
+    if len(sys.argv) > 1:
+        shell_type = sys.argv[1]
+        print(generate_completion_script(shell_type))
+    else:
+        print("Usage: python completion.py [bash|zsh|fish]")
