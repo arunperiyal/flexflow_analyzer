@@ -236,6 +236,18 @@ def create_parser():
                                        help='Timestep to extract (e.g., 1000)')
     tecplot_extract_parser.add_argument('--output-file', type=str,
                                        help='Output CSV file path (if not provided, shows preview)')
+    tecplot_extract_parser.add_argument('--xmin', type=float,
+                                       help='Minimum X coordinate for subdomain extraction')
+    tecplot_extract_parser.add_argument('--xmax', type=float,
+                                       help='Maximum X coordinate for subdomain extraction')
+    tecplot_extract_parser.add_argument('--ymin', type=float,
+                                       help='Minimum Y coordinate for subdomain extraction')
+    tecplot_extract_parser.add_argument('--ymax', type=float,
+                                       help='Maximum Y coordinate for subdomain extraction')
+    tecplot_extract_parser.add_argument('--zmin', type=float,
+                                       help='Minimum Z coordinate for subdomain extraction')
+    tecplot_extract_parser.add_argument('--zmax', type=float,
+                                       help='Maximum Z coordinate for subdomain extraction')
     
     # Add main tecplot help flags
     tecplot_parser.add_argument('-v', '--verbose', action='store_true',

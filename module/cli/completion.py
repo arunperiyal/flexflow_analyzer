@@ -206,12 +206,13 @@ _flexflow_completions() {
                                 ;;
                             extract)
                                 local flags="--variables --zone --timestep --output-file \\
+                                            --xmin --xmax --ymin --ymax --zmin --zmax \\
                                             -v --verbose -h --help"
                                 if [[ "$cur" == -* ]]; then
                                     COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
                                 else
                                     case "$prev" in
-                                        --variables|--zone|--timestep)
+                                        --variables|--zone|--timestep|--xmin|--xmax|--ymin|--ymax|--zmin|--zmax)
                                             # No completion for these
                                             ;;
                                         --output-file)
@@ -400,6 +401,12 @@ _flexflow() {
                                         '--zone[Zone name]:zone:' \\
                                         '--timestep[Timestep to extract]:step:' \\
                                         '--output-file[Output file]:file:_files' \\
+                                        '--xmin[Minimum X coordinate]:xmin:' \\
+                                        '--xmax[Maximum X coordinate]:xmax:' \\
+                                        '--ymin[Minimum Y coordinate]:ymin:' \\
+                                        '--ymax[Maximum Y coordinate]:ymax:' \\
+                                        '--zmin[Minimum Z coordinate]:zmin:' \\
+                                        '--zmax[Maximum Z coordinate]:zmax:' \\
                                         '(-v --verbose)'{-v,--verbose}'[Enable verbose output]' \\
                                         '(-h --help)'{-h,--help}'[Show help]'
                                     ;;
@@ -543,7 +550,14 @@ complete -c flexflow -n "__fish_seen_subcommand_from tecplot; and __fish_seen_su
 complete -c flexflow -n "__fish_seen_subcommand_from tecplot; and __fish_seen_subcommand_from extract" -l zone -d "Zone name to extract from"
 complete -c flexflow -n "__fish_seen_subcommand_from tecplot; and __fish_seen_subcommand_from extract" -l timestep -d "Timestep to extract"
 complete -c flexflow -n "__fish_seen_subcommand_from tecplot; and __fish_seen_subcommand_from extract" -l output-file -d "Output file path" -r
+complete -c flexflow -n "__fish_seen_subcommand_from tecplot; and __fish_seen_subcommand_from extract" -l xmin -d "Minimum X coordinate"
+complete -c flexflow -n "__fish_seen_subcommand_from tecplot; and __fish_seen_subcommand_from extract" -l xmax -d "Maximum X coordinate"
+complete -c flexflow -n "__fish_seen_subcommand_from tecplot; and __fish_seen_subcommand_from extract" -l ymin -d "Minimum Y coordinate"
+complete -c flexflow -n "__fish_seen_subcommand_from tecplot; and __fish_seen_subcommand_from extract" -l ymax -d "Maximum Y coordinate"
+complete -c flexflow -n "__fish_seen_subcommand_from tecplot; and __fish_seen_subcommand_from extract" -l zmin -d "Minimum Z coordinate"
+complete -c flexflow -n "__fish_seen_subcommand_from tecplot; and __fish_seen_subcommand_from extract" -l zmax -d "Maximum Z coordinate"
 complete -c flexflow -n "__fish_seen_subcommand_from tecplot; and __fish_seen_subcommand_from extract" -s v -l verbose -d "Enable verbose output"
+complete -c flexflow -n "__fish_seen_subcommand_from tecplot; and __fish_seen_subcommand_from extract" -s h -l help -d "Show help"
 complete -c flexflow -n "__fish_seen_subcommand_from tecplot; and __fish_seen_subcommand_from extract" -s h -l help -d "Show help"
 '''
 

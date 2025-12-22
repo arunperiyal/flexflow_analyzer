@@ -712,6 +712,24 @@ def execute_extract(args, logger):
     logger.info(f"From zone: {args.zone}")
     logger.info(f"Timestep: {args.timestep}")
     
+    # Parse subdomain parameters
+    subdomain = {}
+    if hasattr(args, 'xmin') and args.xmin is not None:
+        subdomain['xmin'] = args.xmin
+    if hasattr(args, 'xmax') and args.xmax is not None:
+        subdomain['xmax'] = args.xmax
+    if hasattr(args, 'ymin') and args.ymin is not None:
+        subdomain['ymin'] = args.ymin
+    if hasattr(args, 'ymax') and args.ymax is not None:
+        subdomain['ymax'] = args.ymax
+    if hasattr(args, 'zmin') and args.zmin is not None:
+        subdomain['zmin'] = args.zmin
+    if hasattr(args, 'zmax') and args.zmax is not None:
+        subdomain['zmax'] = args.zmax
+    
+    if subdomain:
+        logger.info(f"Subdomain filter: {subdomain}")
+    
     # Use pytecplot-based extraction
     from module.tecplot_handler import extract_data_pytecplot, extract_data_macro
     
@@ -722,7 +740,8 @@ def execute_extract(args, logger):
         args.timestep,
         args.zone,
         requested_vars,
-        output_file
+        output_file,
+        subdomain if subdomain else None
     )
     
     if result is None:
@@ -733,7 +752,8 @@ def execute_extract(args, logger):
             args.timestep,
             args.zone,
             requested_vars,
-            output_file if output_file else str(case_dir / f"extracted_{args.timestep}.csv")
+            output_file if output_file else str(case_dir / f"extracted_{args.timestep}.csv"),
+            subdomain if subdomain else None
         )
     
     if not result:

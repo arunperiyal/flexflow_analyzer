@@ -124,6 +124,24 @@ flexflow tecplot extract <case_dir> [options]
 --help, -h             Show help message
 ```
 
+#### Subdomain Extraction
+
+Extract data only from a specific spatial region using coordinate bounds. Supports both 2D (X,Y) and 3D (X,Y,Z) filtering.
+
+```
+--xmin VALUE           Minimum X coordinate
+--xmax VALUE           Maximum X coordinate
+--ymin VALUE           Minimum Y coordinate
+--ymax VALUE           Maximum Y coordinate
+--zmin VALUE           Minimum Z coordinate (for 3D)
+--zmax VALUE           Maximum Z coordinate (for 3D)
+```
+
+**Notes:**
+- Coordinate variables (X,Y,Z) are only included in output if explicitly specified in `--variables` flag
+- Subdomain filtering requires pytecplot (not available in macro-based extraction)
+- If no points fall within the specified subdomain, an error is reported
+
 #### Examples
 
 **Extract single variable:**
@@ -139,6 +157,24 @@ flexflow tecplot extract CS4SG1U1 --timestep 1000 --variables X,Y,Z,U,V,W --zone
 **Extract with custom output file:**
 ```bash
 flexflow tecplot extract CS4SG1U1 --timestep 1000 --variables Y --zone FIELD --output-file results.csv
+```
+
+**Extract 2D subdomain (X and Y range):**
+```bash
+flexflow tecplot extract CS4SG1U1 --timestep 1000 --variables U,V \
+  --zone FIELD --xmin -1.0 --xmax 1.0 --ymin -2.0 --ymax 2.0
+```
+
+**Extract 3D subdomain:**
+```bash
+flexflow tecplot extract CS4SG1U1 --timestep 1000 --variables X,Y,Z,U,V,W \
+  --zone FIELD --xmin -1.0 --xmax 1.0 --ymin -2.0 --ymax 2.0 --zmin -3.0 --zmax 3.0
+```
+
+**Extract subdomain with single axis constraint:**
+```bash
+flexflow tecplot extract CS4SG1U1 --timestep 1000 --variables Y,U \
+  --zone FIELD --xmin 0.0 --xmax 0.5
 ```
 
 **Extract with verbose output:**

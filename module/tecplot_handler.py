@@ -7,8 +7,24 @@ import numpy as np
 from pathlib import Path
 
 
-def extract_data_pytecplot(case_dir, timestep, zone, variables, output_file=None):
-    """Extract data from PLT file using pytecplot via tec360-env wrapper."""
+def extract_data_pytecplot(case_dir, timestep, zone, variables, output_file=None, subdomain=None):
+    """Extract data from PLT file using pytecplot via tec360-env wrapper.
+    
+    Parameters:
+    -----------
+    case_dir : str
+        Path to case directory
+    timestep : int
+        Timestep number
+    zone : str
+        Zone name to extract from
+    variables : list
+        List of variable names to extract
+    output_file : str, optional
+        Output CSV file path
+    subdomain : dict, optional
+        Subdomain bounds as {'xmin': val, 'xmax': val, 'ymin': val, 'ymax': val, 'zmin': val, 'zmax': val}
+    """
     import subprocess
     import tempfile
     
@@ -28,10 +44,17 @@ def extract_data_pytecplot(case_dir, timestep, zone, variables, output_file=None
     print(f"Using pytecplot (via tec360-env) for extraction...")
     print(f"Loading PLT file: {plt_file}")
     
+    if subdomain:
+        print(f"Subdomain filter: {subdomain}")
+    
+    # Prepare subdomain string for script
+    subdomain_str = str(subdomain) if subdomain else 'None'
+    
     # Create a Python script that will run with tec360-env
     script_content = f"""
 import tecplot as tp
 import pandas as pd
+import numpy as np
 
 # Load the PLT file
 plt_file = r"{plt_file}"
@@ -54,8 +77,25 @@ print(f"Extracting zone: {{target_zone.name}}")
 print(f"Zone type: {{target_zone.zone_type}}")
 print(f"Variables: {variables}")
 
-# Extract data
+# Subdomain filtering parameters
+subdomain = {subdomain_str}
+
+# Extract data (including coordinates if subdomain filtering needed)
 data = {{}}
+needs_coordinates = subdomain is not None
+
+# If subdomain is specified, we need X, Y, Z for filtering
+coord_vars = []
+if needs_coordinates:
+    for coord in ['X', 'Y', 'Z']:
+        try:
+            var = dataset.variable(coord)
+            coord_vars.append(coord)
+            data[coord] = target_zone.values(var).as_numpy_array()
+        except:
+            pass  # Coordinate not available
+
+# Extract requested variables
 for var_name in {variables}:
     try:
         var = dataset.variable(var_name)
@@ -69,11 +109,66 @@ if not data:
 
 # Create DataFrame
 df = pd.DataFrame(data)
+total_points_before = len(df)
+
+# Apply subdomain filtering
+if subdomain:
+    print(f"\\nApplying subdomain filter...")
+    mask = np.ones(len(df), dtype=bool)
+    
+    if 'xmin' in subdomain and 'X' in df.columns:
+        mask &= (df['X'] >= subdomain['xmin'])
+        print(f"  X >= {{subdomain['xmin']}}")
+    if 'xmax' in subdomain and 'X' in df.columns:
+        mask &= (df['X'] <= subdomain['xmax'])
+        print(f"  X <= {{subdomain['xmax']}}")
+    if 'ymin' in subdomain and 'Y' in df.columns:
+        mask &= (df['Y'] >= subdomain['ymin'])
+        print(f"  Y >= {{subdomain['ymin']}}")
+    if 'ymax' in subdomain and 'Y' in df.columns:
+        mask &= (df['Y'] <= subdomain['ymax'])
+        print(f"  Y <= {{subdomain['ymax']}}")
+    if 'zmin' in subdomain and 'Z' in df.columns:
+        mask &= (df['Z'] >= subdomain['zmin'])
+        print(f"  Z >= {{subdomain['zmin']}}")
+    if 'zmax' in subdomain and 'Z' in df.columns:
+        mask &= (df['Z'] <= subdomain['zmax'])
+        print(f"  Z <= {{subdomain['zmax']}}")
+    
+    df = df[mask].copy()
+    print(f"\\nFiltered: {{total_points_before}} points -> {{len(df)}} points")
+    
+    # Check if any points remain
+    if len(df) == 0:
+        print("[ERROR] No points found within specified subdomain")
+        exit(1)
+    
+    # Remove coordinate columns if they weren't requested
+    requested_vars = {variables}
+    for coord in coord_vars:
+        if coord not in requested_vars:
+            df = df.drop(columns=[coord])
+
+# Reset index after filtering
+df = df.reset_index(drop=True)
 
 # Output
 output_file = {"'" + output_file + "'" if output_file else "None"}
 if output_file:
-    df.to_csv(output_file, index=False)
+    # Write metadata as comments at the beginning
+    with open(output_file, 'w') as f:
+        f.write(f"# Tecplot data extraction\\n")
+        f.write(f"# Source: {plt_file}\\n")
+        f.write(f"# Zone: {zone}\\n")
+        f.write(f"# Timestep: {timestep}\\n")
+        f.write(f"# Variables: {{', '.join(requested_vars)}}\\n")
+        if subdomain:
+            f.write(f"# Subdomain: {{subdomain}}\\n")
+        f.write(f"# Total points: {{len(df)}}\\n")
+        f.write(f"#\\n")
+    
+    # Append the data
+    df.to_csv(output_file, mode='a', index=False)
     print(f"✓ Data saved to: {{output_file}}")
     print(f"  Rows: {{len(df)}}")
     print(f"  Columns: {{list(df.columns)}}")
@@ -112,9 +207,29 @@ else:
         os.unlink(script_file)
 
 
-def extract_data_macro(case_dir, timestep, zone, variables, output_file):
-    """Extract data from PLT file using Tecplot macro."""
+def extract_data_macro(case_dir, timestep, zone, variables, output_file, subdomain=None):
+    """Extract data from PLT file using Tecplot macro.
+    
+    Parameters:
+    -----------
+    case_dir : str
+        Path to case directory
+    timestep : int
+        Timestep number
+    zone : str
+        Zone name to extract from
+    variables : list
+        List of variable names to extract
+    output_file : str
+        Output file path
+    subdomain : dict, optional
+        Subdomain bounds (Note: subdomain filtering in macros is limited)
+    """
     from .config_handler import load_simflow_config
+    
+    if subdomain:
+        print("[WARNING] Subdomain filtering is not fully supported in macro-based extraction")
+        print("          Please use pytecplot-based extraction for subdomain filtering")
     
     case_path = Path(case_dir)
     config = load_simflow_config(case_path)
