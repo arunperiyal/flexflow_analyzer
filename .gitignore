@@ -67,3 +67,9 @@ Thumbs.db
 
 # Project specific
 traced_output.pdf
+
+# Temporary data files
+output.csv
+*.dat
+tecplot_python.py
+untitled.mcr

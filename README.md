@@ -54,6 +54,7 @@ flexflow docs
 - **`plot`** - Create plots from a single case
 - **`compare`** - Compare multiple cases on a single plot
 - **`template`** - Generate YAML configuration templates
+- **`tecplot`** - Inspect and work with Tecplot PLT binary files
 - **`docs`** - View documentation
 
 For detailed help on any command:
@@ -175,9 +176,13 @@ CS4SG2U1/
 ├── othd_files/           # Displacement output files
 │   ├── riser1.othd
 │   └── riser2.othd
-└── oisd_files/           # Force/pressure output files
-    ├── riser1.oisd
-    └── riser2.oisd
+├── oisd_files/           # Force/pressure output files
+│   ├── riser1.oisd
+│   └── riser2.oisd
+└── binary/               # Tecplot binary files (optional)
+    ├── riser.100.plt
+    ├── riser.200.plt
+    └── riser.300.plt
 ```
 
 ## Requirements

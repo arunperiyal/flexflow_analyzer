@@ -1,6 +1,54 @@
 # FlexFlow OTHD/OISD Reader - Change Log
 
-## Version 2.1.0 - Current (2025-12-19)
+## Version 2.2.0 - Current (2025-12-19)
+
+### New Features - Compare Command
+- **Separate Plots Mode**: Create individual plot files for each case
+  - New flag: `--separate` to enable separate plots mode
+  - New flag: `--output-prefix` to set filename prefix (default: "case_")
+  - New flag: `--output-format` to specify format: png, pdf, svg (default: png)
+  - YAML support: `separate: true`, `output_prefix`, `output_format` fields
+  - Overrides `--subplot` flag when enabled
+  - Generates files as: `{prefix}{case_basename}.{format}`
+  
+- **Enhanced Time Range Support**: Proper handling of FlexFlow time step IDs (tsId)
+  - Time step IDs (tsId) start from 1, not 0
+  - `start_step`/`end_step` interpret values as tsId (1-based)
+  - Time calculation: `time = step_id × dt`
+  - Both plot and compare commands now support step ID and time value specifications
+  - Consistent filtering across all commands using `filter_data_by_time_range`
+
+### Improvements
+- **Plot Command**: 
+  - Fixed YAML configuration support for `case_dir` (was only checking `case`)
+  - Proper extraction of `plot_properties` section from YAML
+  - Time range filtering now works correctly with both step IDs and time values
+  
+- **Template System**:
+  - Updated all templates with correct step ID documentation
+  - Added comprehensive comments explaining tsId vs array indexing
+  - Examples showing both step ID and time value approaches
+  - Updated `example_multi_config.yaml` with separate plots documentation
+
+### Bug Fixes
+- Fixed step index interpretation (was using 0-based array indices instead of 1-based tsId)
+- Corrected time range filtering in compare command
+- Fixed YAML configuration parsing for nested plot_properties
+
+### Documentation
+- Updated `docs/usage/commands/compare.md` with separate plots mode
+- Added output modes comparison table
+- Enhanced YAML configuration examples
+- Documented time range specification methods (step IDs vs time values)
+- Added tips for batch processing and publication-quality outputs
+
+### Technical Changes
+- New function: `execute_separate_plots()` for command-line separate mode
+- New function: `execute_separate_plots_from_yaml()` for YAML separate mode
+- Refactored time range handling to use step IDs (tsId) consistently
+- Updated help messages with new flags and examples
+
+## Version 2.1.0 - (2025-12-19)
 
 ### New Features
 - **Shell Autocompletion**: Comprehensive tab completion support for bash, zsh, and fish shells

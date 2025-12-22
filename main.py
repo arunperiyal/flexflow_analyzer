@@ -86,6 +86,20 @@ def main():
             print_preview_help()
         else:
             preview.execute_preview(args)
+    elif args.command == 'tecplot':
+        # Check if there's a subcommand - if so, let execute_tecplot handle help
+        if hasattr(args, 'tecplot_subcommand') and args.tecplot_subcommand:
+            from module.commands.tecplot_cmd import execute_tecplot
+            execute_tecplot(args)
+        elif hasattr(args, 'examples') and args.examples:
+            from module.commands.tecplot_cmd.help_messages import print_tecplot_examples
+            print_tecplot_examples()
+        elif hasattr(args, 'help') and args.help:
+            from module.commands.tecplot_cmd.help_messages import print_tecplot_help
+            print_tecplot_help()
+        else:
+            from module.commands.tecplot_cmd import execute_tecplot
+            execute_tecplot(args)
     else:
         print_main_help()
 

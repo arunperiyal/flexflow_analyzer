@@ -1,27 +1,48 @@
+# FlexFlow Multi-Case Comparison Configuration Template
+# This template demonstrates how to compare multiple cases in a single plot
+
+# List of cases to compare
 cases:
 - case_dir: CS4SG1U1
   node: 10
   data_type: displacement
   component: y
-  label: Case 1
+  label: Case 1         # Label for legend
   style:
     color: blue
     linewidth: 2.0
     linestyle: '-'
     marker: o
+
 - case_dir: CS4SG2U1
   node: 10
   data_type: displacement
   component: y
-  label: Case 2
+  label: Case 2         # Label for legend
   style:
     color: red
     linewidth: 2.0
-    linestyle: --
+    linestyle: '--'
     marker: s
+
+# Type of plot: time, fft, traj2d, or traj3d
 plot_type: time
+
+# Output mode options
+# Option 1: Combined plot (default) - all cases in single plot
 output: comparison.png
+
+# Option 2: Separate plots - create individual plot file for each case
+# Uncomment the lines below to enable separate plots mode
+# separate: true
+# output_prefix: comparison_      # Filename prefix (default: "case_")
+# output_format: png              # Output format: png, pdf, svg (default: png)
+# Example: Creates comparison_CS4SG1U1.png, comparison_CS4SG2U1.png, etc.
+
+# Server mode (set to false to display plot window)
 server_mode: true
+
+# Plot properties
 plot_properties:
   title: Case Comparison
   xlabel: Time (s)
@@ -30,6 +51,14 @@ plot_properties:
   fontname: Arial
   legend: true
   grid: true
+
+# Time range for filtering data (optional)
 time_range:
-  start_step: 0
-  end_step: 100
+  # Option 1: Use step IDs (tsId values, starting from 1)
+  # Time is calculated as: step_id * dt
+  start_step: 1       # tsId 1 corresponds to first time step
+  end_step: 100       # tsId 100 corresponds to 100th time step
+  
+  # Option 2: Use time values directly (comment out start_step/end_step if using this)
+  # start_time: 0.05
+  # end_time: 5.0

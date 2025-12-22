@@ -114,11 +114,17 @@ def create_parser():
     compare_parser.add_argument('--fontname', help='Font name')
     compare_parser.add_argument('--plot-style', 
                                help='Plot styles separated by | (e.g., "blue,2,-,o|red,2,--,s|green,2,-.,^")')
-    compare_parser.add_argument('--output', help='Output file path')
+    compare_parser.add_argument('--output', help='Output file path (for combined plot mode)')
     compare_parser.add_argument('--no-display', action='store_true',
                                help="Don't display plot")
     compare_parser.add_argument('--subplot', 
                                help='Subplot layout as rows,columns (e.g., "2,2" for 2x2 grid). Each case will be plotted in a separate subplot')
+    compare_parser.add_argument('--separate', action='store_true',
+                               help='Create separate plot files for each case (overrides --subplot)')
+    compare_parser.add_argument('--output-prefix', 
+                               help='Output file prefix when using --separate (e.g., "comparison_")')
+    compare_parser.add_argument('--output-format', 
+                               help='Output file format when using --separate (e.g., "png", "pdf", "svg")')
     compare_parser.add_argument('--input-file', help='Load config from YAML file')
     compare_parser.add_argument('-v', '--verbose', action='store_true',
                                help='Enable verbose output')
@@ -179,6 +185,64 @@ def create_parser():
     preview_parser.add_argument('-h', '--help', action='store_true',
                                help='Show help for preview command')
     preview_parser.add_argument('--examples', action='store_true',
+                               help='Show usage examples')
+    
+    # Tecplot command
+    tecplot_parser = subparsers.add_parser('tecplot', add_help=False,
+                                          help='Work with Tecplot PLT files')
+    tecplot_subparsers = tecplot_parser.add_subparsers(dest='tecplot_subcommand',
+                                                       help='Tecplot subcommands')
+    
+    # tecplot info
+    tecplot_info_parser = tecplot_subparsers.add_parser('info', add_help=False,
+                                                        help='Show PLT file information')
+    tecplot_info_parser.add_argument('case', nargs='?', help='Case directory path')
+    tecplot_info_parser.add_argument('-v', '--verbose', action='store_true',
+                                    help='Enable verbose output')
+    tecplot_info_parser.add_argument('-h', '--help', action='store_true',
+                                    help='Show help for info command')
+    
+    # Filtering flags for sections to display
+    tecplot_info_parser.add_argument('--basic', action='store_true',
+                                    help='Show only basic file information')
+    tecplot_info_parser.add_argument('--variables', action='store_true',
+                                    help='Show only variables section')
+    tecplot_info_parser.add_argument('--zones', action='store_true',
+                                    help='Show only zone information')
+    tecplot_info_parser.add_argument('--checks', action='store_true',
+                                    help='Show only consistency checks')
+    tecplot_info_parser.add_argument('--stats', action='store_true',
+                                    help='Show only data statistics')
+    
+    # Additional options
+    tecplot_info_parser.add_argument('--detailed', action='store_true',
+                                    help='Show detailed statistics (min/max for all variables)')
+    tecplot_info_parser.add_argument('--sample-file', type=int, metavar='STEP',
+                                    help='Analyze specific timestep file (default: first)')
+    
+    # tecplot extract
+    tecplot_extract_parser = tecplot_subparsers.add_parser('extract', add_help=False,
+                                                           help='Extract data from PLT files')
+    tecplot_extract_parser.add_argument('case', nargs='?', help='Case directory path')
+    tecplot_extract_parser.add_argument('-v', '--verbose', action='store_true',
+                                       help='Enable verbose output')
+    tecplot_extract_parser.add_argument('-h', '--help', action='store_true',
+                                       help='Show help for extract command')
+    tecplot_extract_parser.add_argument('--variables', type=str,
+                                       help='Comma-separated list of variables to extract (e.g., Y,U,V)')
+    tecplot_extract_parser.add_argument('--zone', type=str,
+                                       help='Zone name to extract from (e.g., FIELD)')
+    tecplot_extract_parser.add_argument('--timestep', type=int,
+                                       help='Timestep to extract (e.g., 1000)')
+    tecplot_extract_parser.add_argument('--output-file', type=str,
+                                       help='Output CSV file path (if not provided, shows preview)')
+    
+    # Add main tecplot help flags
+    tecplot_parser.add_argument('-v', '--verbose', action='store_true',
+                               help='Enable verbose output')
+    tecplot_parser.add_argument('-h', '--help', action='store_true',
+                               help='Show help for tecplot command')
+    tecplot_parser.add_argument('--examples', action='store_true',
                                help='Show usage examples')
     
     return parser

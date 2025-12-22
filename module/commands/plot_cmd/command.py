@@ -532,7 +532,7 @@ def execute_plot_from_yaml(config, args):
     logger = Logger(verbose=args.verbose)
     
     # Extract configuration
-    case_dir = config.get('case')
+    case_dir = config.get('case_dir') or config.get('case')
     node = config.get('node')
     data_type = config.get('data_type')
     component = config.get('component')
@@ -551,6 +551,36 @@ def execute_plot_from_yaml(config, args):
         elif isinstance(ps, str):
             plot_style = parse_plot_style(ps)
     
+    # Extract time range parameters
+    start_time = None
+    end_time = None
+    
+    # Check for direct start_time/end_time
+    if 'start_time' in config:
+        start_time = config['start_time']
+    if 'end_time' in config:
+        end_time = config['end_time']
+    
+    # Check for time_range section
+    if 'time_range' in config:
+        time_range = config['time_range']
+        if 'start_time' in time_range:
+            start_time = time_range['start_time']
+        if 'end_time' in time_range:
+            end_time = time_range['end_time']
+        
+        # Convert step IDs (tsId) to time if needed
+        # Note: tsId starts from 1, not 0. Time = tsId * dt
+        if 'start_step' in time_range and start_time is None:
+            start_step = time_range['start_step']
+            if start_step > 0 and case.othd_reader and hasattr(case.othd_reader, 'time_increment'):
+                start_time = start_step * case.othd_reader.time_increment
+        
+        if 'end_step' in time_range and end_time is None:
+            end_step = time_range['end_step']
+            if end_step > 0 and case.othd_reader and hasattr(case.othd_reader, 'time_increment'):
+                end_time = end_step * case.othd_reader.time_increment
+    
     # Generate plot
     if data_type == 'displacement':
         if not node:
@@ -559,19 +589,22 @@ def execute_plot_from_yaml(config, args):
         if plot_type == 'time':
             fig, axes = plot_utils.plot_node_displacements(
                 case.othd_reader, node, component=component,
-                use_index=False, plot_style=plot_style
+                use_index=False, plot_style=plot_style,
+                start_time=start_time, end_time=end_time
             )
         elif plot_type == 'fft':
             fig, axes = plot_utils.plot_fft(
                 case.othd_reader, node_id=node,
-                component=component, plot_style=plot_style
+                component=component, plot_style=plot_style,
+                start_time=start_time, end_time=end_time
             )
         elif plot_type == 'traj2d':
             comp_x = config.get('traj_x', 'x')
             comp_y = config.get('traj_y', 'y')
             fig, axes = plot_utils.plot_trajectory_2d(
                 case.othd_reader, node_id=node,
-                comp_x=comp_x, comp_y=comp_y, plot_style=plot_style
+                comp_x=comp_x, comp_y=comp_y, plot_style=plot_style,
+                start_time=start_time, end_time=end_time
             )
         elif plot_type == 'traj3d':
             comp_x = config.get('traj_x', 'x')
@@ -580,35 +613,43 @@ def execute_plot_from_yaml(config, args):
             fig, axes = plot_utils.plot_trajectory_3d(
                 case.othd_reader, node_id=node,
                 comp_x=comp_x, comp_y=comp_y, comp_z=comp_z,
-                plot_style=plot_style
+                plot_style=plot_style,
+                start_time=start_time, end_time=end_time
             )
     elif data_type == 'force':
         fig, axes = plot_utils.plot_force_data(
             case.oisd_reader, component=component,
-            use_index=False, plot_style=plot_style
+            use_index=False, plot_style=plot_style,
+            start_time=start_time, end_time=end_time
         )
     else:
         raise ValueError(f"Unsupported data type: {data_type}")
     
     # Apply properties from config
-    if 'title' in config and axes:
-        if isinstance(axes, list):
-            axes[0].set_title(config['title'])
-        else:
-            axes.set_title(config['title'])
+    # Check both direct config and plot_properties section
+    plot_props = config.get('plot_properties', {})
     
-    if 'xlabel' in config and axes:
+    title = config.get('title') or plot_props.get('title')
+    if title and axes:
         if isinstance(axes, list):
-            axes[-1].set_xlabel(config['xlabel'])
+            axes[0].set_title(title)
         else:
-            axes.set_xlabel(config['xlabel'])
+            axes.set_title(title)
     
-    if 'ylabel' in config and axes:
+    xlabel = config.get('xlabel') or plot_props.get('xlabel')
+    if xlabel and axes:
+        if isinstance(axes, list):
+            axes[-1].set_xlabel(xlabel)
+        else:
+            axes.set_xlabel(xlabel)
+    
+    ylabel = config.get('ylabel') or plot_props.get('ylabel')
+    if ylabel and axes:
         if isinstance(axes, list):
             for ax in axes:
-                ax.set_ylabel(config['ylabel'])
+                ax.set_ylabel(ylabel)
         else:
-            axes.set_ylabel(config['ylabel'])
+            axes.set_ylabel(ylabel)
     
     # Save or display
     output_file = config.get('output', args.output)

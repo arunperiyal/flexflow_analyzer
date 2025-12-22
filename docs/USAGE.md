@@ -81,6 +81,7 @@ flexflow <command> [options]
 - **`plot`** - Create plots from a single case
 - **`compare`** - Compare multiple cases on one plot
 - **`template`** - Generate template YAML configuration files
+- **`tecplot`** - Inspect and work with Tecplot PLT binary files
 - **`docs`** - View documentation in browser
 
 ### Global Options
@@ -102,6 +103,7 @@ For comprehensive documentation on each command, see:
 - [plot command](./usage/commands/plot.md) - Create plots from single cases
 - [compare command](./usage/commands/compare.md) - Compare multiple cases
 - [template command](./usage/commands/template.md) - Generate YAML templates
+- [tecplot command](./usage/commands/tecplot.md) - Work with Tecplot PLT files
 
 Or use the built-in documentation viewer:
 
@@ -109,6 +111,7 @@ Or use the built-in documentation viewer:
 flexflow docs           # View main documentation
 flexflow docs plot      # View plot command docs
 flexflow docs compare   # View compare command docs
+flexflow docs tecplot   # View tecplot command docs
 ```
 
 **Examples:**

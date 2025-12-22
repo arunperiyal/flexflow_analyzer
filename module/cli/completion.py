@@ -25,7 +25,7 @@ _flexflow_completions() {
     done
 
     # Top-level commands and flags
-    local commands="info preview statistics plot compare template docs"
+    local commands="info preview statistics plot compare template tecplot docs"
     local global_flags="--install --uninstall --update --version --help -h"
 
     # If no command yet, complete commands and global flags
@@ -163,9 +163,69 @@ _flexflow_completions() {
             if [[ "$cur" == -* ]]; then
                 COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
             else
-                COMPREPLY=( $(compgen -W "main plot compare info template statistics preview" -- "$cur") )
+                COMPREPLY=( $(compgen -W "main plot compare info template statistics preview tecplot" -- "$cur") )
             fi
             ;;
+                tecplot)
+                    local subcommand_args case_args
+                    
+                    # Parse for subcommand (info or extract)
+                    subcommand_args=()
+                    case_args=()
+                    local has_subcommand=0
+                    
+                    for word in "${words[@]:2}"; do
+                        if [[ "$word" == "info" ]] || [[ "$word" == "extract" ]]; then
+                            has_subcommand=1
+                            break
+                        fi
+                    done
+                    
+                    if [[ $has_subcommand -eq 0 ]]; then
+                        # No subcommand yet, offer subcommands and global flags
+                        local flags="-v --verbose -h --help --examples"
+                        COMPREPLY=( $(compgen -W "info extract $flags" -- "$cur") )
+                    else
+                        # Have subcommand, delegate to subcommand completion
+                        case "${words[2]}" in
+                            info)
+                                local flags="--basic --variables --zones --checks --stats \\
+                                            --detailed --sample-file -v --verbose -h --help"
+                                if [[ "$cur" == -* ]]; then
+                                    COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
+                                else
+                                    case "$prev" in
+                                        --sample-file)
+                                            # No completion for numeric values
+                                            ;;
+                                        *)
+                                            _flexflow_complete_cases
+                                            ;;
+                                    esac
+                                fi
+                                ;;
+                            extract)
+                                local flags="--variables --zone --timestep --output-file \\
+                                            -v --verbose -h --help"
+                                if [[ "$cur" == -* ]]; then
+                                    COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
+                                else
+                                    case "$prev" in
+                                        --variables|--zone|--timestep)
+                                            # No completion for these
+                                            ;;
+                                        --output-file)
+                                            _filedir
+                                            ;;
+                                        *)
+                                            _flexflow_complete_cases
+                                            ;;
+                                    esac
+                                fi
+                                ;;
+                        esac
+                    fi
+                    ;;
     esac
 }
 
@@ -197,6 +257,7 @@ _flexflow() {
         'plot:Create plots from a single case'
         'compare:Compare multiple cases on a single plot'
         'template:Generate YAML configuration templates'
+        'tecplot:Inspect and work with Tecplot PLT files'
         'docs:View documentation'
     )
     
@@ -308,8 +369,43 @@ _flexflow() {
                     ;;
                 docs)
                     _arguments \\
-                        '1:topic:(main plot compare info template statistics preview)' \\
+                        '1:topic:(main plot compare info template statistics preview tecplot)' \\
                         '(-h --help)'{-h,--help}'[Show help]'
+                    ;;
+                tecplot)
+                    _arguments -C \\
+                        '1:subcommand:(info extract)' \\
+                        '*:: :->tecplot_args'
+                    
+                    case $state in
+                        tecplot_args)
+                            case $words[1] in
+                                info)
+                                    _arguments \\
+                                        '1:case:_flexflow_cases' \\
+                                        '--basic[Show only basic information]' \\
+                                        '--variables[Show variable names]' \\
+                                        '--zones[Show zone information]' \\
+                                        '--checks[Show consistency checks]' \\
+                                        '--stats[Show statistics]' \\
+                                        '--detailed[Show detailed statistics]' \\
+                                        '--sample-file[Analyze specific timestep]:step:' \\
+                                        '(-v --verbose)'{-v,--verbose}'[Enable verbose output]' \\
+                                        '(-h --help)'{-h,--help}'[Show help]'
+                                    ;;
+                                extract)
+                                    _arguments \\
+                                        '1:case:_flexflow_cases' \\
+                                        '--variables[Variables to extract]:variables:' \\
+                                        '--zone[Zone name]:zone:' \\
+                                        '--timestep[Timestep to extract]:step:' \\
+                                        '--output-file[Output file]:file:_files' \\
+                                        '(-v --verbose)'{-v,--verbose}'[Enable verbose output]' \\
+                                        '(-h --help)'{-h,--help}'[Show help]'
+                                    ;;
+                            esac
+                            ;;
+                    esac
                     ;;
             esac
             ;;
@@ -342,6 +438,7 @@ complete -c flexflow -f -n "__fish_use_subcommand" -a "statistics" -d "Show stat
 complete -c flexflow -f -n "__fish_use_subcommand" -a "plot" -d "Create plots from a single case"
 complete -c flexflow -f -n "__fish_use_subcommand" -a "compare" -d "Compare multiple cases"
 complete -c flexflow -f -n "__fish_use_subcommand" -a "template" -d "Generate YAML templates"
+complete -c flexflow -f -n "__fish_use_subcommand" -a "tecplot" -d "Inspect and work with Tecplot PLT files"
 complete -c flexflow -f -n "__fish_use_subcommand" -a "docs" -d "View documentation"
 
 # Info command
@@ -424,8 +521,30 @@ complete -c flexflow -n "__fish_seen_subcommand_from template" -s h -l help -d "
 complete -c flexflow -n "__fish_seen_subcommand_from template" -l examples -d "Show examples"
 
 # Docs command
-complete -c flexflow -n "__fish_seen_subcommand_from docs" -xa "main plot compare info template statistics preview"
+complete -c flexflow -n "__fish_seen_subcommand_from docs" -xa "main plot compare info template statistics preview tecplot"
 complete -c flexflow -n "__fish_seen_subcommand_from docs" -s h -l help -d "Show help"
+
+# Tecplot command - subcommands
+complete -c flexflow -n "__fish_seen_subcommand_from tecplot; and not __fish_seen_subcommand_from info extract" -xa "info extract"
+
+# Tecplot info subcommand
+complete -c flexflow -n "__fish_seen_subcommand_from tecplot; and __fish_seen_subcommand_from info" -l basic -d "Show only basic information"
+complete -c flexflow -n "__fish_seen_subcommand_from tecplot; and __fish_seen_subcommand_from info" -l variables -d "Show variable names"
+complete -c flexflow -n "__fish_seen_subcommand_from tecplot; and __fish_seen_subcommand_from info" -l zones -d "Show zone information"
+complete -c flexflow -n "__fish_seen_subcommand_from tecplot; and __fish_seen_subcommand_from info" -l checks -d "Show consistency checks"
+complete -c flexflow -n "__fish_seen_subcommand_from tecplot; and __fish_seen_subcommand_from info" -l stats -d "Show statistics"
+complete -c flexflow -n "__fish_seen_subcommand_from tecplot; and __fish_seen_subcommand_from info" -l detailed -d "Show detailed statistics"
+complete -c flexflow -n "__fish_seen_subcommand_from tecplot; and __fish_seen_subcommand_from info" -l sample-file -d "Analyze specific timestep"
+complete -c flexflow -n "__fish_seen_subcommand_from tecplot; and __fish_seen_subcommand_from info" -s v -l verbose -d "Enable verbose output"
+complete -c flexflow -n "__fish_seen_subcommand_from tecplot; and __fish_seen_subcommand_from info" -s h -l help -d "Show help"
+
+# Tecplot extract subcommand
+complete -c flexflow -n "__fish_seen_subcommand_from tecplot; and __fish_seen_subcommand_from extract" -l variables -d "Variables to extract (comma-separated)"
+complete -c flexflow -n "__fish_seen_subcommand_from tecplot; and __fish_seen_subcommand_from extract" -l zone -d "Zone name to extract from"
+complete -c flexflow -n "__fish_seen_subcommand_from tecplot; and __fish_seen_subcommand_from extract" -l timestep -d "Timestep to extract"
+complete -c flexflow -n "__fish_seen_subcommand_from tecplot; and __fish_seen_subcommand_from extract" -l output-file -d "Output file path" -r
+complete -c flexflow -n "__fish_seen_subcommand_from tecplot; and __fish_seen_subcommand_from extract" -s v -l verbose -d "Enable verbose output"
+complete -c flexflow -n "__fish_seen_subcommand_from tecplot; and __fish_seen_subcommand_from extract" -s h -l help -d "Show help"
 '''
 
 

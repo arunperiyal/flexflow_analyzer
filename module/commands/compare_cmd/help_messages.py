@@ -45,9 +45,15 @@ Compare data from multiple FlexFlow cases on a single plot.
     {Colors.YELLOW}--subplot{Colors.RESET} LAYOUT      Create subplots instead of overlaying cases
                            Format: rows,columns (e.g., "2,2" for 2x2 grid)
                            Each case will be plotted in a separate subplot
+    {Colors.YELLOW}--separate{Colors.RESET}            Create separate plot files for each case (overrides --subplot)
+    {Colors.YELLOW}--output-prefix{Colors.RESET} TEXT  Prefix for separate plot filenames (default: "case_")
+                           Example: "comparison_" → comparison_CS4SG1U1.png, etc.
+    {Colors.YELLOW}--output-format{Colors.RESET} FMT   Output format for separate plots: png, pdf, svg
+                           Default: png
 
 {Colors.BOLD}OUTPUT OPTIONS:{Colors.RESET}
     {Colors.YELLOW}--output{Colors.RESET} FILE        Save plot to file (auto-enables headless mode)
+                           For combined plot mode only
     {Colors.YELLOW}--no-display{Colors.RESET}          Don't display plot (useful for SSH/remote)
     {Colors.YELLOW}--verbose, -v{Colors.RESET}         Show detailed information
     {Colors.YELLOW}--examples{Colors.RESET}            Show usage examples
@@ -88,6 +94,12 @@ def print_compare_examples():
         --data-type displacement --component y --subplot "2,2" \\
         --legend "Case 1|Case 2|Case 3|Case 4" \\
         --output comparison_subplots.pdf
+
+{Colors.BOLD}Separate Plots for Each Case:{Colors.RESET}
+    flexflow compare CS4SG1U1 CS4SG2U1 CS4SG3U1 --node 100 \\
+        --data-type displacement --component y --separate \\
+        --output-prefix "result_" --output-format pdf
+    # Creates: result_CS4SG1U1.pdf, result_CS4SG2U1.pdf, result_CS4SG3U1.pdf
 
 {Colors.BOLD}Using YAML Configuration:{Colors.RESET}
     flexflow compare --input-file comparison.yaml

@@ -1,14 +1,32 @@
+# FlexFlow FFT Analysis Configuration Template
+# This template demonstrates how to perform FFT (frequency domain) analysis
+
+# Case directory containing the simulation output files
 case_dir: CS4SG2U1
+
+# Node ID to analyze (0-indexed in code)
 node: 10
+
+# Type of data to analyze: displacement, force, moment, or pressure
 data_type: displacement
+
+# Component to analyze: x, y, z, or magnitude
 component: y
+
+# Plot type: fft for frequency domain analysis
 plot_type: fft
+
+# Output file path (PNG, PDF, SVG supported)
 output: fft_plot.png
+
+# Plot styling options
 plot_style:
   color: purple
   linewidth: 1.5
   linestyle: '-'
-  marker: null
+  marker: null        # Usually no markers for FFT plots
+
+# Plot properties
 plot_properties:
   title: FFT Analysis
   xlabel: Frequency (Hz)
@@ -16,3 +34,14 @@ plot_properties:
   fontsize: 12
   fontname: Arial
   grid: true
+
+# Time range for filtering data before FFT (optional)
+# This allows you to analyze a specific portion of the time history
+time_range:
+  # Option 1: Use step IDs (tsId values, starting from 1)
+  # start_step: 1
+  # end_step: 1000
+  
+  # Option 2: Use time values directly
+  # start_time: 0.05
+  # end_time: 50.0

@@ -40,6 +40,222 @@ def ensure_ms_fonts_loaded():
         pass  # Silently fail if can't add fonts
 
 
+def execute_separate_plots(args, logger, plot_styles, legend_labels, default_colors):
+    """
+    Create separate plot files for each case
+    
+    Parameters:
+    -----------
+    args : argparse.Namespace
+        Parsed command arguments
+    logger : Logger
+        Logger instance
+    plot_styles : list
+        List of plot style dictionaries
+    legend_labels : list
+        List of legend labels
+    default_colors : list
+        List of default colors
+    """
+    import os
+    
+    plot_type = args.plot_type if hasattr(args, 'plot_type') and args.plot_type else 'time'
+    
+    # Determine output naming
+    output_prefix = args.output_prefix if hasattr(args, 'output_prefix') and args.output_prefix else 'case_'
+    
+    # Determine output format/extension
+    if hasattr(args, 'output_format') and args.output_format:
+        # Use --output-format if specified
+        output_format = args.output_format.lower()
+        if not output_format.startswith('.'):
+            output_format = '.' + output_format
+        output_ext = output_format
+    elif args.output:
+        # Fallback to extracting extension from --output (for backward compatibility)
+        _, ext = os.path.splitext(args.output)
+        output_ext = ext if ext else '.png'
+    else:
+        # Default to PNG
+        output_ext = '.png'
+    
+    # Process each case
+    for i, case_dir in enumerate(args.cases):
+        logger.info(f"Processing case {i+1}/{len(args.cases)}: {case_dir}")
+        
+        # Load case
+        case = FlexFlowCase(case_dir, verbose=args.verbose)
+        
+        # Create figure
+        if plot_type == 'traj3d':
+            from mpl_toolkits.mplot3d import Axes3D
+            fig = plt.figure(figsize=(12, 10))
+            ax = fig.add_subplot(111, projection='3d')
+        else:
+            fig, ax = plt.subplots(figsize=(12, 8))
+        
+        # Get data based on type
+        if args.data_type == 'displacement':
+            if not case.othd_reader:
+                logger.warning(f"No OTHD data in {case_dir}, skipping")
+                plt.close(fig)
+                continue
+            
+            data = case.othd_reader.get_node_displacements(args.node)
+            times = data['times']
+            comp_map = {'x': 'dx', 'y': 'dy', 'z': 'dz', 'magnitude': 'magnitude'}
+            values = data[comp_map.get(args.component, 'dy')]
+            
+        elif args.data_type == 'force':
+            if not case.oisd_reader:
+                logger.warning(f"No OISD data in {case_dir}, skipping")
+                plt.close(fig)
+                continue
+            
+            data = case.oisd_reader.get_total_traction()
+            times = data['times']
+            comp_map = {'tx': 'tx', 'ty': 'ty', 'tz': 'tz', 'magnitude': 'magnitude'}
+            values = data[comp_map.get(args.component, 'ty')]
+        else:
+            logger.error(f"Unsupported data type: {args.data_type}")
+            plt.close(fig)
+            continue
+        
+        # Apply time range if specified
+        start_time = None
+        end_time = None
+        
+        if args.start_step is not None and args.start_step > 0:
+            dt = case.othd_reader.time_increment if case.othd_reader else (case.oisd_reader.time_increment if case.oisd_reader else None)
+            if dt:
+                start_time = args.start_step * dt
+        
+        if args.end_step is not None and args.end_step > 0:
+            dt = case.othd_reader.time_increment if case.othd_reader else (case.oisd_reader.time_increment if case.oisd_reader else None)
+            if dt:
+                end_time = args.end_step * dt
+        
+        if args.start_time is not None:
+            start_time = args.start_time
+        if args.end_time is not None:
+            end_time = args.end_time
+        
+        # Filter data if time range specified
+        if start_time is not None or end_time is not None:
+            from ...utils.data_utils import filter_data_by_time_range
+            filtered_data = filter_data_by_time_range(
+                {'times': times, 'values': values},
+                start_time=start_time,
+                end_time=end_time
+            )
+            times = filtered_data['times']
+            values = filtered_data['values']
+        
+        # Get plot style
+        if i < len(plot_styles):
+            style = plot_styles[i]
+        else:
+            style = {'color': default_colors[i % len(default_colors)], 'linewidth': 1.5}
+        
+        # Get label
+        if i < len(legend_labels):
+            label = legend_labels[i]
+        else:
+            label = case.problem_name if hasattr(case, 'problem_name') else os.path.basename(case_dir.rstrip('/'))
+        
+        # Plot based on type
+        if plot_type == 'fft':
+            from numpy.fft import fft, fftfreq
+            dt = case.get_time_increment() if case.get_time_increment() else np.mean(np.diff(times))
+            n = len(values)
+            yf = fft(values)
+            xf = fftfreq(n, dt)[:n//2]
+            ax.plot(xf, 2.0/n * np.abs(yf[:n//2]), **style)
+        else:  # time series (default)
+            ax.plot(times, values, **style)
+        
+        # Set labels
+        from module.commands.plot_cmd.command import parse_label
+        
+        if args.title:
+            title_info = parse_label(args.title)
+            if title_info:
+                if title_info['usetex']:
+                    plt.rc('text', usetex=True)
+                title_kwargs = {}
+                if title_info['fontsize']:
+                    title_kwargs['fontsize'] = title_info['fontsize']
+                if args.fontname:
+                    title_kwargs['fontfamily'] = args.fontname
+                ax.set_title(f"{title_info['text']} - {label}", **title_kwargs)
+        else:
+            title = f'{label}: {args.data_type.capitalize()} - {args.component.upper()}'
+            if args.fontname:
+                ax.set_title(title, fontfamily=args.fontname)
+            else:
+                ax.set_title(title)
+        
+        if args.xlabel:
+            xlabel_info = parse_label(args.xlabel)
+            if xlabel_info:
+                if xlabel_info['usetex']:
+                    plt.rc('text', usetex=True)
+                xlabel_kwargs = {}
+                if xlabel_info['fontsize']:
+                    xlabel_kwargs['fontsize'] = xlabel_info['fontsize']
+                if args.fontname:
+                    xlabel_kwargs['fontfamily'] = args.fontname
+                ax.set_xlabel(xlabel_info['text'], **xlabel_kwargs)
+        else:
+            xlabel = 'Frequency (Hz)' if plot_type == 'fft' else 'Time'
+            if args.fontname:
+                ax.set_xlabel(xlabel, fontfamily=args.fontname)
+            else:
+                ax.set_xlabel(xlabel)
+        
+        if args.ylabel:
+            ylabel_info = parse_label(args.ylabel)
+            if ylabel_info:
+                if ylabel_info['usetex']:
+                    plt.rc('text', usetex=True)
+                ylabel_kwargs = {}
+                if ylabel_info['fontsize']:
+                    ylabel_kwargs['fontsize'] = ylabel_info['fontsize']
+                if args.fontname:
+                    ylabel_kwargs['fontfamily'] = args.fontname
+                ax.set_ylabel(ylabel_info['text'], **ylabel_kwargs)
+        else:
+            if plot_type == 'fft':
+                ylabel = 'Amplitude'
+            else:
+                ylabel = f'{args.component.upper()} {args.data_type.capitalize()}'
+            if args.fontname:
+                ax.set_ylabel(ylabel, fontfamily=args.fontname)
+            else:
+                ax.set_ylabel(ylabel)
+        
+        # Set tick label fonts
+        if args.fontname:
+            for lbl in ax.get_xticklabels() + ax.get_yticklabels():
+                lbl.set_fontfamily(args.fontname)
+        
+        ax.grid(True, alpha=0.3)
+        plt.tight_layout()
+        
+        # Generate output filename
+        case_basename = os.path.basename(case_dir.rstrip('/'))
+        output_file = f"{output_prefix}{case_basename}{output_ext}"
+        
+        # Save plot
+        logger.info(f"Saving plot to: {output_file}")
+        fig.savefig(output_file, dpi=300, bbox_inches='tight')
+        logger.success(f"Plot saved to {output_file}")
+        
+        plt.close(fig)
+    
+    logger.success("Separate plots completed")
+
+
 def execute_compare(args):
     """
     Execute the compare command
@@ -116,10 +332,18 @@ def execute_compare(args):
         # Default colors if no styles provided
         default_colors = ['blue', 'red', 'green', 'orange', 'purple', 'brown', 'pink', 'gray', 'olive', 'cyan']
         
+        # Check if using separate plots mode
+        use_separate = hasattr(args, 'separate') and args.separate
+        
+        if use_separate:
+            # Execute separate plots for each case
+            execute_separate_plots(args, logger, plot_styles, legend_labels, default_colors)
+            return
+        
         # Create figure based on plot type
         plot_type = args.plot_type if hasattr(args, 'plot_type') and args.plot_type else 'time'
         
-        # Parse subplot layout if specified
+        # Parse subplot layout if specified (ignored if --separate is used)
         use_subplots = False
         subplot_rows, subplot_cols = 1, 1
         if hasattr(args, 'subplot') and args.subplot:
@@ -194,17 +418,38 @@ def execute_compare(args):
                 continue
             
             # Apply time range if specified
-            if args.start_step is not None or args.end_step is not None:
-                start = args.start_step if args.start_step is not None else 0
-                end = args.end_step + 1 if args.end_step is not None else len(times)
-                times = times[start:end]
-                values = values[start:end]
-            elif args.start_time is not None or args.end_time is not None:
-                times_arr = np.array(times)
-                start_idx = 0 if args.start_time is None else np.searchsorted(times_arr, args.start_time)
-                end_idx = len(times) if args.end_time is None else np.searchsorted(times_arr, args.end_time)
-                times = times[start_idx:end_idx]
-                values = values[start_idx:end_idx]
+            start_time = None
+            end_time = None
+            
+            # Convert step IDs to time if specified
+            if args.start_step is not None:
+                if args.start_step > 0:
+                    dt = case.othd_reader.time_increment if case.othd_reader else (case.oisd_reader.time_increment if case.oisd_reader else None)
+                    if dt:
+                        start_time = args.start_step * dt
+            
+            if args.end_step is not None:
+                if args.end_step > 0:
+                    dt = case.othd_reader.time_increment if case.othd_reader else (case.oisd_reader.time_increment if case.oisd_reader else None)
+                    if dt:
+                        end_time = args.end_step * dt
+            
+            # Use time values if specified directly
+            if args.start_time is not None:
+                start_time = args.start_time
+            if args.end_time is not None:
+                end_time = args.end_time
+            
+            # Filter data if time range specified
+            if start_time is not None or end_time is not None:
+                from ...utils.data_utils import filter_data_by_time_range
+                filtered_data = filter_data_by_time_range(
+                    {'times': times, 'values': values},
+                    start_time=start_time,
+                    end_time=end_time
+                )
+                times = filtered_data['times']
+                values = filtered_data['values']
             
             # Get plot style for this case
             if i < len(plot_styles):
@@ -373,6 +618,187 @@ def execute_compare(args):
         sys.exit(1)
 
 
+def execute_separate_plots_from_yaml(config, args, logger):
+    """
+    Create separate plot files for each case from YAML configuration
+    
+    Parameters:
+    -----------
+    config : dict
+        YAML configuration dictionary
+    args : argparse.Namespace
+        Command arguments
+    logger : Logger
+        Logger instance
+    """
+    import os
+    
+    plot_type = config.get('plot_type', 'time')
+    plot_props = config.get('plot_properties', {})
+    time_range = config.get('time_range', {})
+    cases = config.get('cases', [])
+    output_prefix = config.get('output_prefix', 'case_')
+    
+    # Determine output format/extension
+    if config.get('output_format'):
+        # Use output_format from YAML if specified
+        output_format = config['output_format'].lower()
+        if not output_format.startswith('.'):
+            output_format = '.' + output_format
+        output_ext = output_format
+    elif config.get('output'):
+        # Fallback to extracting extension from output (backward compatibility)
+        _, ext = os.path.splitext(config['output'])
+        output_ext = ext if ext else '.png'
+    elif args.output:
+        # Fallback to command-line --output
+        _, ext = os.path.splitext(args.output)
+        output_ext = ext if ext else '.png'
+    else:
+        # Default to PNG
+        output_ext = '.png'
+    
+    # Process each case
+    for i, case_config in enumerate(cases):
+        case_dir = case_config['case_dir']
+        node = case_config.get('node')
+        data_type = case_config['data_type']
+        component = case_config.get('component', 'y')
+        label = case_config.get('label', os.path.basename(case_dir.rstrip('/')))
+        style = case_config.get('style', {})
+        
+        logger.info(f"Processing case {i+1}/{len(cases)}: {case_dir}")
+        
+        # Load case
+        case = FlexFlowCase(case_dir, verbose=args.verbose)
+        
+        # Create figure
+        if plot_type == 'traj3d':
+            from mpl_toolkits.mplot3d import Axes3D
+            fig = plt.figure(figsize=(12, 10))
+            ax = fig.add_subplot(111, projection='3d')
+        else:
+            fig, ax = plt.subplots(figsize=(12, 8))
+        
+        # Get data
+        if data_type == 'displacement':
+            if not case.othd_reader:
+                logger.warning(f"No OTHD data in {case_dir}, skipping")
+                plt.close(fig)
+                continue
+            
+            data = case.othd_reader.get_node_displacements(node)
+            times = data['times']
+            comp_map = {'x': 'dx', 'y': 'dy', 'z': 'dz', 'magnitude': 'magnitude'}
+            values = {k: data[comp_map[k]] for k in ['x', 'y', 'z', 'magnitude'] if k in comp_map}
+            
+        elif data_type == 'force':
+            if not case.oisd_reader:
+                logger.warning(f"No OISD data in {case_dir}, skipping")
+                plt.close(fig)
+                continue
+            
+            data = case.oisd_reader.get_total_traction()
+            times = data['times']
+            values = {'x': data['tx'], 'y': data['ty'], 'z': data['tz'], 'magnitude': data['magnitude']}
+        else:
+            logger.warning(f"Unsupported data type: {data_type}")
+            plt.close(fig)
+            continue
+        
+        # Apply time range
+        start_time = time_range.get('start_time')
+        end_time = time_range.get('end_time')
+        
+        # Convert step IDs to time if needed
+        if 'start_step' in time_range and start_time is None:
+            start_step = time_range['start_step']
+            if start_step > 0 and case.othd_reader and hasattr(case.othd_reader, 'time_increment'):
+                start_time = start_step * case.othd_reader.time_increment
+            elif start_step > 0 and case.oisd_reader and hasattr(case.oisd_reader, 'time_increment'):
+                start_time = start_step * case.oisd_reader.time_increment
+        
+        if 'end_step' in time_range and end_time is None:
+            end_step = time_range['end_step']
+            if end_step > 0 and case.othd_reader and hasattr(case.othd_reader, 'time_increment'):
+                end_time = end_step * case.othd_reader.time_increment
+            elif end_step > 0 and case.oisd_reader and hasattr(case.oisd_reader, 'time_increment'):
+                end_time = end_step * case.oisd_reader.time_increment
+        
+        # Filter by time range
+        if start_time is not None or end_time is not None:
+            from ...utils.data_utils import filter_data_by_time_range
+            filtered_data = filter_data_by_time_range(
+                {'times': times, **values},
+                start_time=start_time,
+                end_time=end_time
+            )
+            times = filtered_data['times']
+            for k in values:
+                values[k] = filtered_data[k]
+        
+        # Plot based on type
+        if plot_type == 'time':
+            comp = component if isinstance(component, str) else component[0]
+            ax.plot(times, values[comp],
+                   color=style.get('color'),
+                   linewidth=style.get('linewidth', 1.5),
+                   linestyle=style.get('linestyle', '-'),
+                   marker=style.get('marker'))
+        
+        elif plot_type == 'fft':
+            comp = component if isinstance(component, str) else component[0]
+            y_data = values[comp]
+            
+            from numpy.fft import fft, fftfreq
+            dt = case.time_increment if case.time_increment else np.mean(np.diff(times))
+            n = len(y_data)
+            yf = fft(y_data)
+            xf = fftfreq(n, dt)[:n//2]
+            
+            ax.plot(xf, 2.0/n * np.abs(yf[:n//2]),
+                   color=style.get('color'),
+                   linewidth=style.get('linewidth', 1.5),
+                   linestyle=style.get('linestyle', '-'))
+        
+        elif plot_type == 'traj2d':
+            comps = component if isinstance(component, list) else ['x', 'y']
+            ax.plot(values[comps[0]], values[comps[1]],
+                   color=style.get('color'),
+                   linewidth=style.get('linewidth', 1.5),
+                   linestyle=style.get('linestyle', '-'))
+        
+        elif plot_type == 'traj3d':
+            comps = component if isinstance(component, list) else ['x', 'y', 'z']
+            ax.plot(values[comps[0]], values[comps[1]], values[comps[2]],
+                   color=style.get('color'),
+                   linewidth=style.get('linewidth', 2))
+        
+        # Apply plot properties (with case-specific title)
+        title = plot_props.get('title', 'Plot')
+        ax.set_title(f"{title} - {label}")
+        ax.set_xlabel(plot_props.get('xlabel', 'X'))
+        ax.set_ylabel(plot_props.get('ylabel', 'Y'))
+        if plot_type == 'traj3d':
+            ax.set_zlabel(plot_props.get('zlabel', 'Z'))
+        ax.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        
+        # Generate output filename
+        case_basename = os.path.basename(case_dir.rstrip('/'))
+        output_file = f"{output_prefix}{case_basename}{output_ext}"
+        
+        # Save plot
+        logger.info(f"Saving plot to: {output_file}")
+        fig.savefig(output_file, dpi=300, bbox_inches='tight')
+        logger.success(f"Plot saved to {output_file}")
+        
+        plt.close(fig)
+    
+    logger.success("Separate plots completed")
+
+
 def execute_compare_from_yaml(config, args, logger):
     """Execute compare from YAML configuration"""
     
@@ -381,9 +807,16 @@ def execute_compare_from_yaml(config, args, logger):
     plot_props = config.get('plot_properties', {})
     time_range = config.get('time_range', {})
     cases = config.get('cases', [])
+    separate_plots = config.get('separate', False)
+    output_prefix = config.get('output_prefix', 'case_')
     
     if not cases:
         raise ValueError("No cases specified in configuration")
+    
+    # Check if using separate plots mode
+    if separate_plots:
+        execute_separate_plots_from_yaml(config, args, logger)
+        return
     
     # Create figure
     if plot_type == 'traj3d':
@@ -431,11 +864,36 @@ def execute_compare_from_yaml(config, args, logger):
             continue
         
         # Apply time range
-        start_step = time_range.get('start_step', 0)
-        end_step = time_range.get('end_step', len(times))
-        times = np.array(times)[start_step:end_step]
-        for k in values:
-            values[k] = values[k][start_step:end_step]
+        start_time = time_range.get('start_time')
+        end_time = time_range.get('end_time')
+        
+        # Convert step IDs (tsId) to time if needed
+        # Note: tsId starts from 1, not 0. Time = tsId * dt
+        if 'start_step' in time_range and start_time is None:
+            start_step = time_range['start_step']
+            if start_step > 0 and case.othd_reader and hasattr(case.othd_reader, 'time_increment'):
+                start_time = start_step * case.othd_reader.time_increment
+            elif start_step > 0 and case.oisd_reader and hasattr(case.oisd_reader, 'time_increment'):
+                start_time = start_step * case.oisd_reader.time_increment
+        
+        if 'end_step' in time_range and end_time is None:
+            end_step = time_range['end_step']
+            if end_step > 0 and case.othd_reader and hasattr(case.othd_reader, 'time_increment'):
+                end_time = end_step * case.othd_reader.time_increment
+            elif end_step > 0 and case.oisd_reader and hasattr(case.oisd_reader, 'time_increment'):
+                end_time = end_step * case.oisd_reader.time_increment
+        
+        # Filter by time range
+        if start_time is not None or end_time is not None:
+            from ...utils.data_utils import filter_data_by_time_range
+            filtered_data = filter_data_by_time_range(
+                {'times': times, **values},
+                start_time=start_time,
+                end_time=end_time
+            )
+            times = filtered_data['times']
+            for k in values:
+                values[k] = filtered_data[k]
         
         # Plot based on type
         if plot_type == 'time':
