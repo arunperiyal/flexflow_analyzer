@@ -54,6 +54,8 @@ def create_parser():
                            help='Number of processors (default: 36)')
     new_parser.add_argument('--freq', type=int, default=50,
                            help='Output frequency (default: 50)')
+    new_parser.add_argument('--from-config', dest='from_config',
+                           help='Load configuration from YAML file')
     new_parser.add_argument('--force', action='store_true',
                            help='Overwrite existing directory if it exists')
     new_parser.add_argument('-v', '--verbose', action='store_true',

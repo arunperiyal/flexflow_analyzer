@@ -5,6 +5,7 @@ New command implementation
 import os
 import sys
 import shutil
+import yaml
 from pathlib import Path
 from ...utils.logger import Logger
 from ...utils.colors import Colors
@@ -236,6 +237,284 @@ def update_postFlex_problem_freq(script_path, problem_name=None, freq_value=None
         f.writelines(lines)
 
 
+def load_yaml_config(config_path):
+    """
+    Load YAML configuration file
+    
+    Parameters:
+    -----------
+    config_path : Path
+        Path to YAML config file
+    
+    Returns:
+    --------
+    dict
+        Configuration dictionary
+    """
+    try:
+        with open(config_path, 'r') as f:
+            config = yaml.safe_load(f)
+        return config
+    except yaml.YAMLError as e:
+        raise ValueError(f"Error parsing YAML config: {e}")
+    except Exception as e:
+        raise ValueError(f"Error reading config file: {e}")
+
+
+def substitute_geo_parameters(geo_file_path, parameters):
+    """
+    Substitute parameters in .geo file
+    Replaces #parameter_name with actual values
+    
+    Parameters:
+    -----------
+    geo_file_path : Path
+        Path to .geo file
+    parameters : dict
+        Dictionary of parameter_name: value pairs
+    """
+    if not parameters:
+        return
+    
+    lines = []
+    with open(geo_file_path, 'r') as f:
+        for line in f:
+            modified_line = line
+            # Look for #parameter_name patterns
+            for param_name, param_value in parameters.items():
+                placeholder = f"#{param_name}"
+                if placeholder in line:
+                    # Replace #parameter_name with the value
+                    modified_line = modified_line.replace(placeholder, str(param_value))
+            lines.append(modified_line)
+    
+    # Write back
+    with open(geo_file_path, 'w') as f:
+        f.writelines(lines)
+
+
+def substitute_def_parameters(def_file_path, parameters):
+    """
+    Substitute parameters in .def file
+    Updates variable definitions
+    
+    Parameters:
+    -----------
+    def_file_path : Path
+        Path to .def file
+    parameters : dict
+        Dictionary of variable_name: value pairs
+    """
+    if not parameters:
+        return
+    
+    lines = []
+    in_define_block = False
+    current_variable = None
+    
+    with open(def_file_path, 'r') as f:
+        for line in f:
+            stripped = line.strip()
+            
+            # Detect define block start
+            if stripped.startswith('define{'):
+                in_define_block = True
+                lines.append(line)
+                continue
+            
+            # Detect define block end
+            if in_define_block and stripped == '}':
+                in_define_block = False
+                lines.append(line)
+                continue
+            
+            # Inside define block, look for variable definitions
+            if in_define_block:
+                if stripped.startswith('variable'):
+                    # Extract variable name
+                    parts = stripped.split('=')
+                    if len(parts) == 2:
+                        current_variable = parts[1].strip()
+                    lines.append(line)
+                elif stripped.startswith('value') and current_variable:
+                    # Check if we need to replace this variable's value
+                    if current_variable in parameters:
+                        # Replace the value
+                        indent = len(line) - len(line.lstrip())
+                        lines.append(' ' * indent + f"value    = {parameters[current_variable]}\n")
+                        current_variable = None
+                    else:
+                        lines.append(line)
+                        current_variable = None
+                else:
+                    lines.append(line)
+            else:
+                lines.append(line)
+    
+    # Write back
+    with open(def_file_path, 'w') as f:
+        f.writelines(lines)
+
+
+def create_case_from_config(case_config, ref_case_path, logger, force=False):
+    """
+    Create a single case from configuration dictionary
+    
+    Parameters:
+    -----------
+    case_config : dict
+        Case configuration dictionary
+    ref_case_path : Path
+        Path to reference case directory
+    logger : Logger
+        Logger instance
+    force : bool
+        Whether to overwrite existing directory
+    
+    Returns:
+    --------
+    bool
+        True if successful, False otherwise
+    """
+    # Extract configuration
+    case_name = case_config.get('case_name', case_config.get('name'))
+    if not case_name:
+        logger.error("Case name not specified in configuration")
+        return False
+    
+    problem_name = case_config.get('problem_name')
+    np_value = case_config.get('processors', 36)
+    freq_value = case_config.get('output_frequency', 50)
+    geo_params = case_config.get('geo', {})
+    def_params = case_config.get('def', {})
+    
+    logger.info(f"\nCreating case: {case_name}")
+    logger.info(f"  Problem: {problem_name if problem_name else 'from reference'}")
+    logger.info(f"  Processors: {np_value}")
+    logger.info(f"  Output Frequency: {freq_value}")
+    
+    # Check simflow.config exists
+    config_path = ref_case_path / 'simflow.config'
+    if not config_path.exists():
+        logger.error(f"simflow.config not found in reference case: {ref_case_path}")
+        return False
+    
+    # Parse problem name from config if not specified
+    try:
+        original_problem_name = parse_simflow_config(config_path)
+        if not problem_name:
+            problem_name = original_problem_name
+    except ValueError as e:
+        logger.error(str(e))
+        return False
+    
+    # Validate reference case has all mandatory files
+    if not validate_reference_case(ref_case_path, original_problem_name, logger):
+        return False
+    
+    # Setup target path
+    target_path = Path(case_name).resolve()
+    
+    # Check if target directory exists
+    if target_path.exists():
+        if not force:
+            logger.error(f"Target directory already exists: {target_path}")
+            logger.error("Use --force flag to overwrite")
+            return False
+        else:
+            logger.warning(f"Removing existing directory: {target_path}")
+            shutil.rmtree(target_path)
+    
+    # Create target directory
+    logger.info(f"Creating case directory: {target_path}")
+    target_path.mkdir(parents=True, exist_ok=True)
+    
+    # Copy files
+    logger.info("Copying files from reference case...")
+    
+    files_to_copy = [
+        'simflow.config',
+        f'{original_problem_name}.geo',
+        f'{original_problem_name}.def',
+        'preFlex.sh',
+        'mainFlex.sh',
+        'postFlex.sh'
+    ]
+    
+    for filename in files_to_copy:
+        src = ref_case_path / filename
+        
+        # Handle renaming if problem name changed
+        if problem_name != original_problem_name and (filename.endswith('.geo') or filename.endswith('.def')):
+            extension = filename.split('.')[-1]
+            dest_filename = f"{problem_name}.{extension}"
+            dest = target_path / dest_filename
+            logger.info(f"  Copying and renaming: {filename} -> {dest_filename}")
+        else:
+            dest = target_path / filename
+            logger.info(f"  Copying: {filename}")
+        
+        shutil.copy2(src, dest)
+        
+        # Make shell scripts executable
+        if filename.endswith('.sh'):
+            os.chmod(dest, 0o755)
+    
+    # Update simflow.config if problem name changed
+    if problem_name != original_problem_name:
+        logger.info(f"Updating problem name in simflow.config to: {problem_name}")
+        target_config = target_path / 'simflow.config'
+        update_simflow_config(target_config, problem_name)
+    
+    # Update np and freq values in simflow.config
+    logger.info(f"Updating simflow.config with np={np_value}, freq={freq_value}")
+    target_config = target_path / 'simflow.config'
+    update_simflow_np_freq(target_config, np_value=np_value, freq_value=freq_value)
+    
+    # Update SLURM job names in shell scripts
+    logger.info("Updating SLURM job names in shell scripts...")
+    slurm_scripts = {
+        'preFlex.sh': f"{case_name}_pre",
+        'mainFlex.sh': f"{case_name}_main",
+        'postFlex.sh': f"{case_name}_post"
+    }
+    
+    for script_name, job_name in slurm_scripts.items():
+        script_path = target_path / script_name
+        if script_path.exists():
+            update_slurm_jobname(script_path, job_name)
+            logger.info(f"  Updated {script_name}: job name set to '{job_name}'")
+    
+    # Update mainFlex.sh with np value
+    mainFlex_path = target_path / 'mainFlex.sh'
+    if mainFlex_path.exists():
+        logger.info(f"Updating mainFlex.sh: setting #SBATCH -n to {np_value}")
+        update_mainFlex_np(mainFlex_path, np_value)
+    
+    # Update postFlex.sh with problem name and freq
+    postFlex_path = target_path / 'postFlex.sh'
+    if postFlex_path.exists():
+        logger.info(f"Updating postFlex.sh: PROBLEM={problem_name}, OUTFREQ={freq_value}")
+        update_postFlex_problem_freq(postFlex_path, problem_name=problem_name, freq_value=freq_value)
+    
+    # Apply geometry parameter substitutions
+    if geo_params:
+        geo_file = target_path / f"{problem_name}.geo"
+        if geo_file.exists():
+            logger.info(f"Applying geometry parameters: {geo_params}")
+            substitute_geo_parameters(geo_file, geo_params)
+    
+    # Apply def parameter substitutions
+    if def_params:
+        def_file = target_path / f"{problem_name}.def"
+        if def_file.exists():
+            logger.info(f"Applying flow parameters: {def_params}")
+            substitute_def_parameters(def_file, def_params)
+    
+    logger.success(f"Successfully created case: {case_name}")
+    return True
+
+
 def execute_new(args):
     """
     Execute the new command
@@ -247,18 +526,9 @@ def execute_new(args):
     """
     from .help_messages import print_new_help
     
-    # Show help if no case name provided
-    if not args.case_name:
-        print_new_help()
-        return
-    
     logger = Logger(verbose=args.verbose)
     
     try:
-        # Setup paths
-        case_name = args.case_name
-        target_path = Path(case_name).resolve()
-        
         # Determine reference case path
         if args.ref_case:
             ref_case_path = Path(args.ref_case).resolve()
@@ -275,6 +545,86 @@ def execute_new(args):
         if not ref_case_path.is_dir():
             logger.error(f"Reference case path is not a directory: {ref_case_path}")
             sys.exit(1)
+        
+        # Handle YAML configuration
+        if args.from_config:
+            # Load YAML config
+            config_file = Path(args.from_config)
+            if not config_file.is_absolute():
+                # Try relative to ref case first
+                config_file = ref_case_path / args.from_config
+                if not config_file.exists():
+                    # Try relative to current directory
+                    config_file = Path(args.from_config).resolve()
+            
+            if not config_file.exists():
+                logger.error(f"Configuration file not found: {args.from_config}")
+                sys.exit(1)
+            
+            logger.info(f"Loading configuration from: {config_file}")
+            config = load_yaml_config(config_file)
+            
+            # Check for batch cases
+            if 'cases' in config:
+                # Batch mode
+                cases = config['cases']
+                logger.info(f"Batch mode: Creating {len(cases)} cases")
+                
+                success_count = 0
+                for case_config in cases:
+                    # Override with command-line flags if provided
+                    if args.problem_name:
+                        case_config['problem_name'] = args.problem_name
+                    if args.np != 36:  # Check if np was explicitly set
+                        case_config['processors'] = args.np
+                    if args.freq != 50:  # Check if freq was explicitly set
+                        case_config['output_frequency'] = args.freq
+                    
+                    if create_case_from_config(case_config, ref_case_path, logger, args.force):
+                        success_count += 1
+                    else:
+                        logger.warning(f"Failed to create case: {case_config.get('name', 'unknown')}")
+                
+                print(f"\n{Colors.bold(Colors.cyan('Batch Creation Summary:'))}")
+                print(f"  {Colors.bold('Total cases:')} {len(cases)}")
+                print(f"  {Colors.bold('Successful:')} {success_count}")
+                print(f"  {Colors.bold('Failed:')} {len(cases) - success_count}")
+                print()
+                
+            else:
+                # Single case mode from config
+                # Override config with command-line flags
+                if args.case_name:
+                    config['case_name'] = args.case_name
+                if args.problem_name:
+                    config['problem_name'] = args.problem_name
+                if args.np != 36:
+                    config['processors'] = args.np
+                if args.freq != 50:
+                    config['output_frequency'] = args.freq
+                
+                if not config.get('case_name'):
+                    logger.error("Case name not specified in config or command line")
+                    sys.exit(1)
+                
+                if create_case_from_config(config, ref_case_path, logger, args.force):
+                    print(f"\n{Colors.bold(Colors.cyan('Case Created:'))}")
+                    print(f"  {Colors.bold('Location:')} {Path(config['case_name']).resolve()}")
+                    print(f"  {Colors.bold('Problem:')} {config.get('problem_name', 'from reference')}")
+                    print(f"  {Colors.bold('Files copied:')} 6")
+                    print()
+                else:
+                    sys.exit(1)
+            
+            return
+        
+        # Original command-line only mode
+        if not args.case_name:
+            print_new_help()
+            return
+        
+        case_name = args.case_name
+        target_path = Path(case_name).resolve()
         
         # Check simflow.config exists
         config_path = ref_case_path / 'simflow.config'
