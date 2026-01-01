@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from module.cli.parser import parse_args
 from module.cli.help_messages import *
-from module.commands import info, plot, compare, template, docs, statistics, preview, show_docs_help
+from module.commands import info, plot, compare, template, docs, statistics, preview, new, show_docs_help
 from module.installer import install, uninstall, update
 
 
@@ -42,6 +42,15 @@ def main():
             print_info_help()
         else:
             info.execute_info(args)
+    elif args.command == 'new':
+        if hasattr(args, 'examples') and args.examples:
+            from module.commands.new_cmd.help_messages import print_new_examples
+            print_new_examples()
+        elif hasattr(args, 'help') and args.help:
+            from module.commands.new_cmd.help_messages import print_new_help
+            print_new_help()
+        else:
+            new.execute_new(args)
     elif args.command == 'plot':
         if hasattr(args, 'examples') and args.examples:
             print_plot_examples()

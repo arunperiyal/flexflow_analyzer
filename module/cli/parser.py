@@ -42,6 +42,27 @@ def create_parser():
     info_parser.add_argument('--examples', action='store_true',
                             help='Show usage examples')
     
+    # New command
+    new_parser = subparsers.add_parser('new', add_help=False,
+                                       help='Create a new case directory')
+    new_parser.add_argument('case_name', nargs='?', help='Name of the new case directory')
+    new_parser.add_argument('--ref-case', dest='ref_case',
+                           help='Path to reference case directory (default: ./refCase)')
+    new_parser.add_argument('--problem-name', dest='problem_name',
+                           help='Override problem name in simflow.config')
+    new_parser.add_argument('--np', type=int, default=36,
+                           help='Number of processors (default: 36)')
+    new_parser.add_argument('--freq', type=int, default=50,
+                           help='Output frequency (default: 50)')
+    new_parser.add_argument('--force', action='store_true',
+                           help='Overwrite existing directory if it exists')
+    new_parser.add_argument('-v', '--verbose', action='store_true',
+                           help='Enable verbose output')
+    new_parser.add_argument('-h', '--help', action='store_true',
+                           help='Show help for new command')
+    new_parser.add_argument('--examples', action='store_true',
+                           help='Show usage examples')
+    
     # Plot command
     plot_parser = subparsers.add_parser('plot', add_help=False,
                                        help='Plot simulation data')

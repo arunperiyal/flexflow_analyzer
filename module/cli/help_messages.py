@@ -16,6 +16,7 @@ def print_main_help():
 
 {Colors.BOLD}COMMANDS:{Colors.RESET}
     {Colors.CYAN}info{Colors.RESET}        Display case information
+    {Colors.CYAN}new{Colors.RESET}         Create a new case directory
     {Colors.CYAN}preview{Colors.RESET}     Preview displacement data in table format
     {Colors.CYAN}statistics{Colors.RESET}  Show statistical analysis of data
     {Colors.CYAN}plot{Colors.RESET}        Plot displacement or force data
@@ -33,6 +34,7 @@ def print_main_help():
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
     flexflow info CS4SG1U1
+    flexflow new myCase --problem-name test
     flexflow preview CS4SG1U1 --node 24
     flexflow statistics CS4SG1U1 --node 24
     flexflow plot CS4SG1U1 --node 100 --data-type displacement
