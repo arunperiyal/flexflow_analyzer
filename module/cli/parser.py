@@ -60,6 +60,10 @@ def create_parser():
                            help='Overwrite existing directory if it exists')
     new_parser.add_argument('-v', '--verbose', action='store_true',
                            help='Enable verbose output')
+    new_parser.add_argument('--list-vars', dest='list_vars', action='store_true',
+                           help='List all variables found in reference case files')
+    new_parser.add_argument('--dry-run', dest='dry_run', action='store_true',
+                           help='Preview changes without creating the case directory')
     new_parser.add_argument('-h', '--help', action='store_true',
                            help='Show help for new command')
     new_parser.add_argument('--examples', action='store_true',
