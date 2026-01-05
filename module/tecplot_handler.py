@@ -225,15 +225,25 @@ def extract_data_macro(case_dir, timestep, zone, variables, output_file, subdoma
     subdomain : dict, optional
         Subdomain bounds (Note: subdomain filtering in macros is limited)
     """
-    from .config_handler import load_simflow_config
-    
     if subdomain:
         print("[WARNING] Subdomain filtering is not fully supported in macro-based extraction")
         print("          Please use pytecplot-based extraction for subdomain filtering")
     
     case_path = Path(case_dir)
-    config = load_simflow_config(case_path)
-    problem_name = config.get('problem', 'riser')
+    
+    # Parse simflow.config to get problem name
+    config_file = case_path / 'simflow.config'
+    problem_name = 'riser'  # default
+    if config_file.exists():
+        try:
+            with open(config_file, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith('problem') and '=' in line and not line.startswith('#'):
+                        problem_name = line.split('=')[1].strip()
+                        break
+        except Exception:
+            pass
     
     # Find PLT file
     plt_file = case_path / "binary" / f"{problem_name}.{timestep}.plt"

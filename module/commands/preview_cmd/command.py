@@ -91,26 +91,56 @@ def execute_preview(args):
         console.print(f"[bold]Steps Shown:[/bold] {end_idx - start_idx + 1}")
         console.print()
         
+        # Determine which columns to show
+        all_columns = {
+            'Step': lambda step: str(step),
+            'Time': lambda step: f"{times[step]:.6f}",
+            'dx': lambda step: f"{dx[step]:.6e}",
+            'dy': lambda step: f"{dy[step]:.6e}",
+            'dz': lambda step: f"{dz[step]:.6e}",
+            'Magnitude': lambda step: f"{magnitude[step]:.6e}"
+        }
+        
+        # If --variable specified, filter columns
+        if hasattr(args, 'variable') and args.variable:
+            # Always include Step and Time
+            requested_vars = set(['Step', 'Time'])
+            for var in args.variable:
+                # Support both dx and x notation
+                var_upper = var.upper()
+                if var_upper in ['X', 'DX']:
+                    requested_vars.add('dx')
+                elif var_upper in ['Y', 'DY']:
+                    requested_vars.add('dy')
+                elif var_upper in ['Z', 'DZ']:
+                    requested_vars.add('dz')
+                elif var_upper in ['MAG', 'MAGNITUDE']:
+                    requested_vars.add('Magnitude')
+                elif var in all_columns:
+                    requested_vars.add(var)
+            columns_to_show = [col for col in all_columns.keys() if col in requested_vars]
+        else:
+            columns_to_show = list(all_columns.keys())
+        
         # Create data table with Rich
         table = Table(title="Displacement Data", box=box.SIMPLE, 
                      show_header=True, header_style="bold yellow")
-        table.add_column("Step", justify="right", style="cyan")
-        table.add_column("Time (s)", justify="right", style="white")
-        table.add_column("dx", justify="right", style="green")
-        table.add_column("dy", justify="right", style="green")
-        table.add_column("dz", justify="right", style="green")
-        table.add_column("Magnitude", justify="right", style="magenta")
+        
+        # Add columns based on selection
+        for col in columns_to_show:
+            if col == "Step":
+                table.add_column(col, justify="right", style="cyan")
+            elif col == "Time":
+                table.add_column("Time (s)", justify="right", style="white")
+            elif col in ["dx", "dy", "dz"]:
+                table.add_column(col, justify="right", style="green")
+            elif col == "Magnitude":
+                table.add_column(col, justify="right", style="magenta")
         
         # Add data rows
         for step in range(start_idx, end_idx + 1):
-            table.add_row(
-                str(step),
-                f"{times[step]:.6f}",
-                f"{dx[step]:.6e}",
-                f"{dy[step]:.6e}",
-                f"{dz[step]:.6e}",
-                f"{magnitude[step]:.6e}"
-            )
+            row_data = [all_columns[col](step) for col in columns_to_show]
+            table.add_row(*row_data)
         
         console.print(table)
         console.print()

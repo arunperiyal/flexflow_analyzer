@@ -35,6 +35,8 @@ class DataCommand(BaseCommand):
                                 help='Start time for preview')
         show_parser.add_argument('--end-time', type=float,
                                 help='End time for preview')
+        show_parser.add_argument('--variable', '--variables', type=str, action='append',
+                                help='Specify columns to show (can be used multiple times)')
         show_parser.add_argument('-v', '--verbose', action='store_true',
                                 help='Enable verbose output')
         show_parser.add_argument('-h', '--help', action='store_true',
