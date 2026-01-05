@@ -44,7 +44,9 @@ class TecplotConverter:
         
         # Check common installation paths
         common_paths = [
+            '/usr/local/tecplot/360ex_2024r1',
             '/usr/local/tecplot/360ex_2022r1',
+            '/opt/tecplot/360ex_2024r1',
             '/opt/tecplot/360ex_2022r1',
             '/usr/local/tecplot/360',
         ]
