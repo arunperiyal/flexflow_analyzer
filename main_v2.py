@@ -62,14 +62,26 @@ def parse_args_v2(args=None):
 def main():
     """Main entry point using registry pattern"""
     
-    # Import and register commands
+    # Import and register all commands
     from module.commands.info import InfoCommand
-    registry.register(InfoCommand)
+    from module.commands.new import NewCommand
+    from module.commands.plot import PlotCommand
+    from module.commands.compare import CompareCommand
+    from module.commands.preview import PreviewCommand
+    from module.commands.statistics import StatisticsCommand
+    from module.commands.template import TemplateCommand
+    from module.commands.docs import DocsCommand
+    from module.commands.tecplot import TecplotCommand
     
-    # TODO: Register other commands as they are migrated
-    # registry.register(NewCommand)
-    # registry.register(PlotCommand)
-    # ... etc
+    registry.register(InfoCommand)
+    registry.register(NewCommand)
+    registry.register(PlotCommand)
+    registry.register(CompareCommand)
+    registry.register(PreviewCommand)
+    registry.register(StatisticsCommand)
+    registry.register(TemplateCommand)
+    registry.register(DocsCommand)
+    registry.register(TecplotCommand)
     
     # Parse arguments
     args = parse_args_v2()
