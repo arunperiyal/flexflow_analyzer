@@ -62,7 +62,7 @@ def parse_args_v2(args=None):
 def main():
     """Main entry point using registry pattern"""
     
-    # Import and register all commands
+    # Import and register all commands (flat structure for backward compatibility)
     from module.commands.info import InfoCommand
     from module.commands.new import NewCommand
     from module.commands.plot import PlotCommand
@@ -73,6 +73,7 @@ def main():
     from module.commands.docs import DocsCommand
     from module.commands.tecplot import TecplotCommand
     
+    # Register original flat commands (backward compatibility)
     registry.register(InfoCommand)
     registry.register(NewCommand)
     registry.register(PlotCommand)
@@ -82,6 +83,17 @@ def main():
     registry.register(TemplateCommand)
     registry.register(DocsCommand)
     registry.register(TecplotCommand)
+    
+    # Import and register new domain-driven command groups
+    from module.commands.case_group import CaseCommand
+    from module.commands.data_group import DataCommand
+    from module.commands.field_group import FieldCommand
+    from module.commands.config_group import ConfigCommand
+    
+    registry.register(CaseCommand)
+    registry.register(DataCommand)
+    registry.register(FieldCommand)
+    registry.register(ConfigCommand)
     
     # Parse arguments
     args = parse_args_v2()
