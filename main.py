@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """
-FlexFlow CLI - Main entry point
+FlexFlow CLI - Main entry point (Version 2 - Registry Pattern)
+
+This is the new implementation using the command registry pattern.
+It runs alongside the old main.py during Phase 1 for testing.
 """
 
 import sys
@@ -8,14 +11,80 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from module.cli.parser import parse_args
-from module.cli.help_messages import *
-from module.commands import info, plot, compare, template, docs, statistics, preview, new, show_docs_help
+from module.cli.registry import registry
+from module.cli.help_messages import print_main_help
 from module.installer import install, uninstall, update
 
 
+def create_parser_v2():
+    """Create argument parser with registry pattern"""
+    import argparse
+    
+    parser = argparse.ArgumentParser(
+        description='FlexFlow - Analyze and visualize FlexFlow simulation data',
+        add_help=False
+    )
+    
+    # Global options
+    parser.add_argument('--install', action='store_true',
+                       help='Install flexflow command globally')
+    parser.add_argument('--uninstall', action='store_true',
+                       help='Uninstall flexflow command')
+    parser.add_argument('--update', action='store_true',
+                       help='Update flexflow installation')
+    parser.add_argument('--completion', choices=['bash', 'zsh', 'fish'],
+                       help='Generate shell completion script')
+    parser.add_argument('--version', action='store_true',
+                       help='Show version information')
+    parser.add_argument('-h', '--help', action='store_true',
+                       help='Show help message')
+    
+    # Create subparsers for commands
+    subparsers = parser.add_subparsers(dest='command', help='Available commands')
+    
+    # Let each registered command add its parser
+    for command in registry.all():
+        command.setup_parser(subparsers)
+    
+    return parser
+
+
+def parse_args_v2(args=None):
+    """Parse command line arguments"""
+    parser = create_parser_v2()
+    
+    if args is None:
+        args = sys.argv[1:]
+    
+    return parser.parse_args(args)
+
+
 def main():
-    args = parse_args()
+    """Main entry point using registry pattern"""
+    
+    # Import and register all commands
+    from module.commands.info import InfoCommand
+    from module.commands.new import NewCommand
+    from module.commands.plot import PlotCommand
+    from module.commands.compare import CompareCommand
+    from module.commands.preview import PreviewCommand
+    from module.commands.statistics import StatisticsCommand
+    from module.commands.template import TemplateCommand
+    from module.commands.docs import DocsCommand
+    from module.commands.tecplot import TecplotCommand
+    
+    registry.register(InfoCommand)
+    registry.register(NewCommand)
+    registry.register(PlotCommand)
+    registry.register(CompareCommand)
+    registry.register(PreviewCommand)
+    registry.register(StatisticsCommand)
+    registry.register(TemplateCommand)
+    registry.register(DocsCommand)
+    registry.register(TecplotCommand)
+    
+    # Parse arguments
+    args = parse_args_v2()
     
     # Handle global flags first
     if args.install:
@@ -32,85 +101,18 @@ def main():
         print(generate_completion_script(args.completion))
         return
     
-    # Handle commands
+    # Handle commands via registry
     if not args.command:
         print_main_help()
-    elif args.command == 'info':
-        if hasattr(args, 'examples') and args.examples:
-            print_info_examples()
-        elif hasattr(args, 'help') and args.help:
-            print_info_help()
-        else:
-            info.execute_info(args)
-    elif args.command == 'new':
-        if hasattr(args, 'examples') and args.examples:
-            from module.commands.new_cmd.help_messages import print_new_examples
-            print_new_examples()
-        elif hasattr(args, 'help') and args.help:
-            from module.commands.new_cmd.help_messages import print_new_help
-            print_new_help()
-        else:
-            new.execute_new(args)
-    elif args.command == 'plot':
-        if hasattr(args, 'examples') and args.examples:
-            print_plot_examples()
-        elif hasattr(args, 'help') and args.help:
-            print_plot_help()
-        else:
-            plot.execute_plot(args)
-    elif args.command == 'compare':
-        if hasattr(args, 'examples') and args.examples:
-            print_compare_examples()
-        elif hasattr(args, 'help') and args.help:
-            print_compare_help()
-        else:
-            compare.execute_compare(args)
-    elif args.command == 'template':
-        if hasattr(args, 'examples') and args.examples:
-            print_template_examples()
-        elif hasattr(args, 'help') and args.help:
-            print_template_help()
-        else:
-            template.execute_template(args)
-    elif args.command == 'docs':
-        if hasattr(args, 'help') and args.help:
-            show_docs_help()
-        else:
-            docs.docs_command(args)
-    elif args.command == 'statistics':
-        if hasattr(args, 'examples') and args.examples:
-            from module.commands.statistics_cmd.help_messages import print_statistics_examples
-            print_statistics_examples()
-        elif hasattr(args, 'help') and args.help:
-            from module.commands.statistics_cmd.help_messages import print_statistics_help
-            print_statistics_help()
-        else:
-            statistics.execute_statistics(args)
-    elif args.command == 'preview':
-        if hasattr(args, 'examples') and args.examples:
-            from module.commands.preview_cmd.help_messages import print_preview_examples
-            print_preview_examples()
-        elif hasattr(args, 'help') and args.help:
-            from module.commands.preview_cmd.help_messages import print_preview_help
-            print_preview_help()
-        else:
-            preview.execute_preview(args)
-    elif args.command == 'tecplot':
-        # Check if there's a subcommand - if so, let execute_tecplot handle help
-        if hasattr(args, 'tecplot_subcommand') and args.tecplot_subcommand:
-            from module.commands.tecplot_cmd import execute_tecplot
-            execute_tecplot(args)
-        elif hasattr(args, 'examples') and args.examples:
-            from module.commands.tecplot_cmd.help_messages import print_tecplot_examples
-            print_tecplot_examples()
-        elif hasattr(args, 'help') and args.help:
-            from module.commands.tecplot_cmd.help_messages import print_tecplot_help
-            print_tecplot_help()
-        else:
-            from module.commands.tecplot_cmd import execute_tecplot
-            execute_tecplot(args)
     else:
-        print_main_help()
+        command = registry.get(args.command)
+        if command:
+            command.execute(args)
+        else:
+            print(f"Error: Unknown command '{args.command}'", file=sys.stderr)
+            print("\nAvailable commands:", ", ".join(registry.list_names()))
+            print(f"\nRun 'flexflow --help' for more information")
+            sys.exit(1)
 
 
 if __name__ == '__main__':
