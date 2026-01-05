@@ -6,6 +6,7 @@ from FlexFlow OTHD (Output Time History Data) files.
 """
 
 import numpy as np
+from tqdm import tqdm
 
 
 class OTHDReader:

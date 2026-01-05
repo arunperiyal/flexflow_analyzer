@@ -1,0 +1,19 @@
+# FlexFlow Manager - Python Dependencies
+
+# Core dependencies
+numpy>=1.24.0
+matplotlib>=3.7.0
+PyYAML>=6.0
+markdown>=3.5.0
+
+# Modern enhancements (Quick Wins)
+rich>=13.7.0              # Beautiful terminal output, tables, progress bars
+tqdm>=4.66.0              # Progress bars for long operations
+pandas>=2.2.0             # DataFrame operations, data export
+
+# Optional but recommended
+# pydantic>=2.5.0         # Config validation (uncomment when needed)
+# pytest>=7.4.0           # Testing framework (uncomment when needed)
+# pytest-cov>=4.1.0       # Test coverage (uncomment when needed)
+# loguru>=0.7.0           # Better logging (uncomment when needed)
+# typer[all]>=0.9.0       # Modern CLI framework (for future refactor)

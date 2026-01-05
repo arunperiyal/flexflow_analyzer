@@ -11,6 +11,7 @@ import glob
 from .readers.othd_reader import OTHDReader
 from .readers.oisd_reader import OISDReader
 from .parsers.def_parser import parse_def_file
+from tqdm import tqdm
 
 
 class FlexFlowCase:

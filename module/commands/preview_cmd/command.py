@@ -8,6 +8,11 @@ from ...core.case import FlexFlowCase
 from ...utils.logger import Logger
 from ...utils.colors import Colors
 
+# Modern libraries
+from rich.console import Console
+from rich.table import Table
+from rich import box
+
 
 def execute_preview(args):
     """
@@ -73,25 +78,43 @@ def execute_preview(args):
             start_idx = 0
             end_idx = min(9, len(times) - 1)
         
-        # Print header
-        print(f"\n{Colors.bold(Colors.cyan('FlexFlow Data Preview'))}")
-        print(f"{Colors.bold('Case Directory:')} {case.case_directory}")
-        print(f"{Colors.bold('Problem Name:')} {case.problem_name}")
-        print(f"{Colors.bold('Node:')} {node_id}")
-        print(f"{Colors.bold('Time Range:')} {times[start_idx]:.6f} to {times[end_idx]:.6f}")
-        print(f"{Colors.bold('Total Steps Shown:')} {end_idx - start_idx + 1}")
+        # Use Rich for better formatting
+        console = Console()
         
-        # Print table header
-        print(f"\n{Colors.bold(Colors.yellow('Displacement Data:'))}")
-        print(f"{'Step':<8} {'Time':<15} {'dx':<18} {'dy':<18} {'dz':<18} {'Magnitude':<18}")
-        print("-" * 95)
+        # Create header info
+        console.print()
+        console.print("[bold cyan]FlexFlow Data Preview[/bold cyan]")
+        console.print(f"[bold]Case:[/bold] {case.case_directory}")
+        console.print(f"[bold]Problem:[/bold] {case.problem_name}")
+        console.print(f"[bold]Node:[/bold] {node_id}")
+        console.print(f"[bold]Time Range:[/bold] {times[start_idx]:.6f} to {times[end_idx]:.6f} s")
+        console.print(f"[bold]Steps Shown:[/bold] {end_idx - start_idx + 1}")
+        console.print()
         
-        # Print data rows
+        # Create data table with Rich
+        table = Table(title="Displacement Data", box=box.SIMPLE, 
+                     show_header=True, header_style="bold yellow")
+        table.add_column("Step", justify="right", style="cyan")
+        table.add_column("Time (s)", justify="right", style="white")
+        table.add_column("dx", justify="right", style="green")
+        table.add_column("dy", justify="right", style="green")
+        table.add_column("dz", justify="right", style="green")
+        table.add_column("Magnitude", justify="right", style="magenta")
+        
+        # Add data rows
         for step in range(start_idx, end_idx + 1):
-            print(f"{step:<8} {times[step]:<15.6f} {dx[step]:<18.6e} {dy[step]:<18.6e} "
-                  f"{dz[step]:<18.6e} {magnitude[step]:<18.6e}")
+            table.add_row(
+                str(step),
+                f"{times[step]:.6f}",
+                f"{dx[step]:.6e}",
+                f"{dy[step]:.6e}",
+                f"{dz[step]:.6e}",
+                f"{magnitude[step]:.6e}"
+            )
         
-        print()
+        console.print(table)
+        console.print()
+        
         logger.success("Preview command completed")
         
     except Exception as e:

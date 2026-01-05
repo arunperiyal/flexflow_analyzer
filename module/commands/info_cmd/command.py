@@ -7,6 +7,12 @@ from ...core.case import FlexFlowCase
 from ...utils.logger import Logger
 from ...utils.colors import Colors
 
+# Modern libraries
+from rich.console import Console
+from rich.table import Table
+from rich.panel import Panel
+from rich import box
+
 
 def execute_info(args):
     """
@@ -25,41 +31,53 @@ def execute_info(args):
         return
     
     logger = Logger(verbose=args.verbose)
+    console = Console()
     
     try:
         # Load case
         logger.info(f"Loading case from: {args.case}")
         case = FlexFlowCase(args.case, verbose=args.verbose)
         
-        # Print case summary (always printed, no verbose check)
-        print(f"\n{Colors.bold(Colors.cyan('FlexFlow Case Information'))}")
-        print(f"{Colors.bold('Case Directory:')} {case.case_directory}")
-        print(f"{Colors.bold('Problem Name:')} {case.problem_name}")
+        # Create main info table
+        table = Table(title="FlexFlow Case Information", box=box.ROUNDED, 
+                     title_style="bold cyan", show_header=True, header_style="bold")
+        table.add_column("Property", style="cyan", no_wrap=True)
+        table.add_column("Value", style="white")
+        
+        # Basic info
+        table.add_row("Case Directory", case.case_directory)
+        table.add_row("Problem Name", case.problem_name)
         if hasattr(case, 'time_increment') and case.time_increment:
-            print(f"{Colors.bold('Time Increment:')} {case.time_increment}")
+            table.add_row("Time Increment", f"{case.time_increment:.6f} s")
         
         # Find OTHD files
         othd_files = case.find_othd_files()
-        print(f"\n{Colors.bold(Colors.yellow('OTHD Files:'))} {len(othd_files)} file(s)")
+        table.add_row("OTHD Files", f"{len(othd_files)} file(s)")
+        
         if len(othd_files) > 0:
             # Load OTHD data to get info
             reader = case.othd_reader
-            print(f"  Nodes: {reader.num_nodes}")
-            print(f"  Timesteps: {len(reader.times)}")
+            table.add_row("Nodes", f"{reader.num_nodes:,}")
+            table.add_row("Timesteps", f"{len(reader.times):,}")
             if len(reader.times) > 0:
-                print(f"  Time Range: {reader.times[0]:.6f} to {reader.times[-1]:.6f}")
+                table.add_row("Time Range", f"{reader.times[0]:.4f} → {reader.times[-1]:.4f} s")
         
         # Find OISD files
         oisd_files = case.find_oisd_files()
         if len(oisd_files) > 0:
-            print(f"\n{Colors.bold(Colors.yellow('OISD Files:'))} {len(oisd_files)} file(s)")
+            table.add_row("OISD Files", f"{len(oisd_files)} file(s)")
             # Load OISD data to get info
             reader = case.oisd_reader
-            print(f"  Timesteps: {len(reader.times)}")
             if len(reader.times) > 0:
-                print(f"  Time Range: {reader.times[0]:.6f} to {reader.times[-1]:.6f}")
+                table.add_row("OISD Time Range", f"{reader.times[0]:.4f} → {reader.times[-1]:.4f} s")
         
-        print()
+        console.print()
+        console.print(table)
+        console.print()
+        
+        # Status indicator
+        console.print("[green]✓[/green] [bold]Valid case structure[/bold]")
+        console.print()
         
         logger.success("Info command completed")
         
