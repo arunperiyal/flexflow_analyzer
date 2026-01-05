@@ -12,7 +12,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from module.cli.registry import registry
-from module.cli.help_messages import print_main_help
+from module.cli.help_messages import print_main_help, print_main_examples
 from module.installer import install, uninstall, update
 
 
@@ -34,6 +34,8 @@ def create_parser_v2():
                        help='Update flexflow installation')
     parser.add_argument('--completion', choices=['bash', 'zsh', 'fish'],
                        help='Generate shell completion script')
+    parser.add_argument('--examples', action='store_true',
+                       help='Show comprehensive usage examples')
     parser.add_argument('--version', action='store_true',
                        help='Show version information')
     parser.add_argument('-h', '--help', action='store_true',
@@ -111,6 +113,9 @@ def main():
     elif args.completion:
         from module.cli.completion import generate_completion_script
         print(generate_completion_script(args.completion))
+        return
+    elif args.examples:
+        print_main_examples()
         return
     
     # Handle commands via registry

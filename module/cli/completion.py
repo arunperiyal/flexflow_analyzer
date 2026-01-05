@@ -25,8 +25,8 @@ _flexflow_completions() {
     done
 
     # Top-level commands and flags
-    local commands="info new preview statistics plot compare template tecplot docs"
-    local global_flags="--install --uninstall --update --version --help -h"
+    local commands="info new preview statistics plot compare template tecplot docs case data field config"
+    local global_flags="--install --uninstall --update --completion --examples --version --help -h"
 
     # If no command yet, complete commands and global flags
     if [[ -z "$cmd" ]]; then
@@ -36,6 +36,185 @@ _flexflow_completions() {
 
     # Command-specific completions
     case "$cmd" in
+        case)
+            # Parse for subcommand (show or create)
+            local subcommand=""
+            for (( i=2; i < cword; i++ )); do
+                if [[ "${words[i]}" == "show" ]] || [[ "${words[i]}" == "create" ]]; then
+                    subcommand="${words[i]}"
+                    break
+                fi
+            done
+            
+            if [[ -z "$subcommand" ]]; then
+                # No subcommand yet
+                local flags="-v --verbose -h --help --examples"
+                COMPREPLY=( $(compgen -W "show create $flags" -- "$cur") )
+            else
+                # Have subcommand
+                case "$subcommand" in
+                    show)
+                        local flags="-v --verbose -h --help --examples"
+                        if [[ "$cur" == -* ]]; then
+                            COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
+                        else
+                            _flexflow_complete_cases
+                        fi
+                        ;;
+                    create)
+                        local flags="--ref-case --problem-name --np --freq --from-config --force --list-vars --dry-run -v --verbose -h --help --examples"
+                        if [[ "$cur" == -* ]]; then
+                            COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
+                        else
+                            case "$prev" in
+                                --ref-case)
+                                    _filedir -d
+                                    ;;
+                                --from-config)
+                                    _filedir
+                                    ;;
+                                *)
+                                    # No default completion for case name
+                                    ;;
+                            esac
+                        fi
+                        ;;
+                esac
+            fi
+            ;;
+        data)
+            # Parse for subcommand (show or stats)
+            local subcommand=""
+            for (( i=2; i < cword; i++ )); do
+                if [[ "${words[i]}" == "show" ]] || [[ "${words[i]}" == "stats" ]]; then
+                    subcommand="${words[i]}"
+                    break
+                fi
+            done
+            
+            if [[ -z "$subcommand" ]]; then
+                # No subcommand yet
+                local flags="-v --verbose -h --help --examples"
+                COMPREPLY=( $(compgen -W "show stats $flags" -- "$cur") )
+            else
+                # Have subcommand
+                case "$subcommand" in
+                    show)
+                        local flags="--node --component --start-time --end-time --start-step --end-step -v --verbose -h --help --examples"
+                        if [[ "$cur" == -* ]]; then
+                            COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
+                        else
+                            case "$prev" in
+                                --component)
+                                    COMPREPLY=( $(compgen -W "x y z magnitude" -- "$cur") )
+                                    ;;
+                                --node|--start-time|--end-time|--start-step|--end-step)
+                                    ;;
+                                *)
+                                    _flexflow_complete_cases
+                                    ;;
+                            esac
+                        fi
+                        ;;
+                    stats)
+                        local flags="--node --component -v --verbose -h --help --examples"
+                        if [[ "$cur" == -* ]]; then
+                            COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
+                        else
+                            case "$prev" in
+                                --component)
+                                    COMPREPLY=( $(compgen -W "x y z magnitude" -- "$cur") )
+                                    ;;
+                                --node)
+                                    ;;
+                                *)
+                                    _flexflow_complete_cases
+                                    ;;
+                            esac
+                        fi
+                        ;;
+                esac
+            fi
+            ;;
+        field)
+            # Parse for subcommand (info or extract)
+            local subcommand=""
+            for (( i=2; i < cword; i++ )); do
+                if [[ "${words[i]}" == "info" ]] || [[ "${words[i]}" == "extract" ]]; then
+                    subcommand="${words[i]}"
+                    break
+                fi
+            done
+            
+            if [[ -z "$subcommand" ]]; then
+                # No subcommand yet
+                local flags="-v --verbose -h --help --examples"
+                COMPREPLY=( $(compgen -W "info extract $flags" -- "$cur") )
+            else
+                # Delegate to tecplot completion (same functionality)
+                case "$subcommand" in
+                    info)
+                        local flags="--basic --variables --zones --checks --stats --detailed --sample-file -v --verbose -h --help --examples"
+                        if [[ "$cur" == -* ]]; then
+                            COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
+                        else
+                            _flexflow_complete_cases
+                        fi
+                        ;;
+                    extract)
+                        local flags="--variables --zone --timestep --output-file --xmin --xmax --ymin --ymax --zmin --zmax -v --verbose -h --help --examples"
+                        if [[ "$cur" == -* ]]; then
+                            COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
+                        else
+                            case "$prev" in
+                                --output-file)
+                                    _filedir
+                                    ;;
+                                *)
+                                    _flexflow_complete_cases
+                                    ;;
+                            esac
+                        fi
+                        ;;
+                esac
+            fi
+            ;;
+        config)
+            # Parse for subcommand (template)
+            local subcommand=""
+            for (( i=2; i < cword; i++ )); do
+                if [[ "${words[i]}" == "template" ]]; then
+                    subcommand="${words[i]}"
+                    break
+                fi
+            done
+            
+            if [[ -z "$subcommand" ]]; then
+                # No subcommand yet
+                local flags="-v --verbose -h --help --examples"
+                COMPREPLY=( $(compgen -W "template $flags" -- "$cur") )
+            else
+                # template subcommand
+                local flags="--output --force -v --verbose -h --help --examples"
+                if [[ "$cur" == -* ]]; then
+                    COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
+                else
+                    case "$prev" in
+                        --output)
+                            _filedir
+                            ;;
+                        template)
+                            COMPREPLY=( $(compgen -W "single multi fft" -- "$cur") )
+                            ;;
+                        *)
+                            if [[ -z "${words[3]}" ]] || [[ "${words[3]}" == -* ]]; then
+                                COMPREPLY=( $(compgen -W "single multi fft" -- "$cur") )
+                            fi
+                            ;;
+                    esac
+                fi
+            fi
+            ;;
         info)
             local flags="-v --verbose -h --help --examples"
             if [[ "$cur" == -* ]]; then
