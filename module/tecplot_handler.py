@@ -52,6 +52,9 @@ def extract_data_pytecplot(case_dir, timestep, zone, variables, output_file=None
     
     # Create a Python script that will run with tec360-env
     script_content = f"""
+import sys
+sys.path.insert(0, '/usr/local/tecplot/360ex_2024r1/pytecplot')
+
 import tecplot as tp
 import pandas as pd
 import numpy as np
