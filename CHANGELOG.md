@@ -1,6 +1,28 @@
 # FlexFlow OTHD/OISD Reader - Change Log
 
-## Version 2.2.0 - Current (2025-12-19)
+## Version 2.3.0 - Current (2026-01-05)
+
+### New Features - Case Management
+- **New Command**: Added `new` command for creating case directories from reference templates
+  - Create new FlexFlow simulation cases from a reference case template
+  - Automatic file copying and configuration updates
+  - Support for custom problem names, processor counts, and output frequencies
+  - YAML configuration support for single case or batch generation
+  - Parametric substitution in .geo files (e.g., `#groove_depth`, `#groove_width`)
+  - Parametric substitution in .def files (e.g., `Ur`, `Re` values)
+  - Automatic SLURM job name updates in shell scripts
+  - Dry-run mode for previewing changes without creating files
+  - Force flag to overwrite existing directories
+  - List variables feature (`--list-vars`) to see available parameters
+  - Command-line flags: `--ref-case`, `--problem-name`, `--np`, `--freq`, `--from-config`, `--force`, `--dry-run`, `--list-vars`
+
+### Documentation
+- Updated README.md with 'new' command in commands list and examples
+- Updated docs/USAGE.md with 'new' command in available commands
+- Added comprehensive documentation in docs/usage/commands/new.md
+- Added help messages and examples for 'new' command
+
+## Version 2.2.0 - (2025-12-19)
 
 ### New Features - Compare Command
 - **Separate Plots Mode**: Create individual plot files for each case

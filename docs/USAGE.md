@@ -78,6 +78,9 @@ flexflow <command> [options]
 ### Available Commands
 
 - **`info`** - Display case information and preview timesteps
+- **`new`** - Create a new case directory from a reference template
+- **`preview`** - Preview displacement data in table format
+- **`statistics`** - Show statistical analysis of data
 - **`plot`** - Create plots from a single case
 - **`compare`** - Compare multiple cases on one plot
 - **`template`** - Generate template YAML configuration files

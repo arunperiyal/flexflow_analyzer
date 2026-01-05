@@ -36,6 +36,9 @@ This will:
 # Get case information
 flexflow info CS4SG2U1
 
+# Create a new case
+flexflow new myCase --problem-name test --np 64
+
 # Plot displacement
 flexflow plot CS4SG2U1 --data-type displacement --plot-type time --node 10 --component y
 
@@ -49,6 +52,7 @@ flexflow docs
 ### Commands
 
 - **`info`** - Display case information
+- **`new`** - Create a new case directory from a reference template
 - **`preview`** - Preview displacement data in table format
 - **`statistics`** - Show statistical analysis of data
 - **`plot`** - Create plots from a single case

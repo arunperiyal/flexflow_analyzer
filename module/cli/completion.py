@@ -25,7 +25,7 @@ _flexflow_completions() {
     done
 
     # Top-level commands and flags
-    local commands="info preview statistics plot compare template tecplot docs"
+    local commands="info new preview statistics plot compare template tecplot docs"
     local global_flags="--install --uninstall --update --version --help -h"
 
     # If no command yet, complete commands and global flags
@@ -42,6 +42,27 @@ _flexflow_completions() {
                 COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
             else
                 _flexflow_complete_cases
+            fi
+            ;;
+        new)
+            local flags="--ref-case --problem-name --np --freq --from-config --force --list-vars --dry-run -v --verbose -h --help --examples"
+            if [[ "$cur" == -* ]]; then
+                COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
+            else
+                case "$prev" in
+                    --ref-case)
+                        _filedir -d
+                        ;;
+                    --from-config)
+                        _filedir
+                        ;;
+                    --problem-name|--np|--freq)
+                        # No completion for text/numeric values
+                        ;;
+                    *)
+                        # No default completion for case name
+                        ;;
+                esac
             fi
             ;;
         preview)
@@ -253,6 +274,7 @@ _flexflow() {
     local -a commands global_flags
     commands=(
         'info:Show case information'
+        'new:Create a new case directory from reference template'
         'preview:Preview displacement data in table format'
         'statistics:Show statistical analysis of data'
         'plot:Create plots from a single case'
@@ -281,6 +303,21 @@ _flexflow() {
                 info)
                     _arguments \\
                         '1:case:_flexflow_cases' \\
+                        '(-v --verbose)'{-v,--verbose}'[Enable verbose output]' \\
+                        '(-h --help)'{-h,--help}'[Show help]' \\
+                        '--examples[Show usage examples]'
+                    ;;
+                new)
+                    _arguments \\
+                        '1:case_name:' \\
+                        '--ref-case[Reference case directory]:directory:_directories' \\
+                        '--problem-name[Problem name]:name:' \\
+                        '--np[Number of processors]:processors:' \\
+                        '--freq[Output frequency]:frequency:' \\
+                        '--from-config[Load from YAML file]:file:_files' \\
+                        '--force[Overwrite existing directory]' \\
+                        '--list-vars[List available variables]' \\
+                        '--dry-run[Preview without creating files]' \\
                         '(-v --verbose)'{-v,--verbose}'[Enable verbose output]' \\
                         '(-h --help)'{-h,--help}'[Show help]' \\
                         '--examples[Show usage examples]'
@@ -440,6 +477,7 @@ complete -c flexflow -s h -l help -d "Show help message"
 
 # Commands
 complete -c flexflow -f -n "__fish_use_subcommand" -a "info" -d "Show case information"
+complete -c flexflow -f -n "__fish_use_subcommand" -a "new" -d "Create a new case directory"
 complete -c flexflow -f -n "__fish_use_subcommand" -a "preview" -d "Preview displacement data"
 complete -c flexflow -f -n "__fish_use_subcommand" -a "statistics" -d "Show statistical analysis"
 complete -c flexflow -f -n "__fish_use_subcommand" -a "plot" -d "Create plots from a single case"
@@ -452,6 +490,19 @@ complete -c flexflow -f -n "__fish_use_subcommand" -a "docs" -d "View documentat
 complete -c flexflow -n "__fish_seen_subcommand_from info" -s v -l verbose -d "Enable verbose output"
 complete -c flexflow -n "__fish_seen_subcommand_from info" -s h -l help -d "Show help"
 complete -c flexflow -n "__fish_seen_subcommand_from info" -l examples -d "Show examples"
+
+# New command
+complete -c flexflow -n "__fish_seen_subcommand_from new" -l ref-case -d "Reference case directory" -r
+complete -c flexflow -n "__fish_seen_subcommand_from new" -l problem-name -d "Problem name"
+complete -c flexflow -n "__fish_seen_subcommand_from new" -l np -d "Number of processors"
+complete -c flexflow -n "__fish_seen_subcommand_from new" -l freq -d "Output frequency"
+complete -c flexflow -n "__fish_seen_subcommand_from new" -l from-config -d "Load from YAML file" -r
+complete -c flexflow -n "__fish_seen_subcommand_from new" -l force -d "Overwrite existing directory"
+complete -c flexflow -n "__fish_seen_subcommand_from new" -l list-vars -d "List available variables"
+complete -c flexflow -n "__fish_seen_subcommand_from new" -l dry-run -d "Preview without creating"
+complete -c flexflow -n "__fish_seen_subcommand_from new" -s v -l verbose -d "Enable verbose output"
+complete -c flexflow -n "__fish_seen_subcommand_from new" -s h -l help -d "Show help"
+complete -c flexflow -n "__fish_seen_subcommand_from new" -l examples -d "Show examples"
 
 # Preview command
 complete -c flexflow -n "__fish_seen_subcommand_from preview" -l node -d "Node ID to preview"
