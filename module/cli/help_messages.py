@@ -21,6 +21,7 @@ def print_main_help():
     {Colors.CYAN}statistics{Colors.RESET}  Show statistical analysis of data
     {Colors.CYAN}plot{Colors.RESET}        Plot displacement or force data
     {Colors.CYAN}compare{Colors.RESET}     Compare multiple cases
+    {Colors.CYAN}tecplot{Colors.RESET}     Work with Tecplot PLT files
     {Colors.CYAN}template{Colors.RESET}    Generate template YAML files
     {Colors.CYAN}docs{Colors.RESET}        View documentation
 
