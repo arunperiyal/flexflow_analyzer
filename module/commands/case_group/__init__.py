@@ -44,10 +44,18 @@ class CaseCommand(BaseCommand):
                                   help='Path to reference case directory')
         create_parser.add_argument('--problem-name', type=str,
                                   help='Problem name to set in simflow.config')
-        create_parser.add_argument('--np', type=int,
-                                  help='Number of processors')
+        create_parser.add_argument('--np', type=int, default=36,
+                                  help='Number of processors (default: 36)')
+        create_parser.add_argument('--freq', type=int, default=50,
+                                  help='Output frequency (default: 50)')
         create_parser.add_argument('--from-config', type=str,
                                   help='Create from YAML config file')
+        create_parser.add_argument('--force', action='store_true',
+                                  help='Force overwrite if case already exists')
+        create_parser.add_argument('--list-vars', action='store_true',
+                                  help='List available variables in reference case')
+        create_parser.add_argument('--dry-run', action='store_true',
+                                  help='Show what would be created without actually creating')
         create_parser.add_argument('-v', '--verbose', action='store_true',
                                   help='Enable verbose output')
         create_parser.add_argument('-h', '--help', action='store_true',

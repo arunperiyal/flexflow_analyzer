@@ -28,10 +28,14 @@ class ConfigCommand(BaseCommand):
         # config template (was: template)
         template_parser = config_subparsers.add_parser('template', add_help=False,
                                                       help='Generate configuration templates')
-        template_parser.add_argument('type', nargs='?',
-                                    help='Template type: single or multi')
-        template_parser.add_argument('output_file', nargs='?',
-                                    help='Output file path')
+        template_parser.add_argument('template_type', nargs='?',
+                                    help='Template type: single, multi, or fft')
+        template_parser.add_argument('--output', '-o', type=str,
+                                    help='Output file path (default: case_config.yaml or compare_config.yaml)')
+        template_parser.add_argument('--force', action='store_true',
+                                    help='Force overwrite if file already exists')
+        template_parser.add_argument('-v', '--verbose', action='store_true',
+                                    help='Enable verbose output')
         template_parser.add_argument('-h', '--help', action='store_true',
                                     help='Show help for template command')
         template_parser.add_argument('--examples', action='store_true',
