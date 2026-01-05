@@ -12,6 +12,8 @@ FlexFlow is a command-line tool and Python library for post-processing FlexFlow 
 - **Flexible Plotting**: Time-domain, FFT, 2D/3D trajectories
 - **Server-Friendly**: Headless operation for remote HPC clusters
 - **YAML Configuration**: Complex plots defined in configuration files
+- **Domain-Driven Structure**: Intuitive command organization by entity (case, data, field, config)
+- **Beautiful Output**: Rich-formatted tables and modern terminal UI
 
 ## Quick Start
 
@@ -23,21 +25,27 @@ python main.py --install
 ```
 
 This will:
-- Install Python dependencies (numpy, matplotlib, pyyaml, markdown)
+- Install Python dependencies (numpy, matplotlib, pyyaml, markdown, rich, tqdm, pandas)
 - Create 'flexflow' command alias
 - Set up shell autocompletion (bash/zsh/fish)
 - Optionally install Microsoft fonts for publication-quality plots
 - Convert and install HTML documentation
 - Configure your shell environment
 
-### Basic Usage
+### Basic Usage (Domain-Driven Structure)
 
 ```bash
 # Get case information
-flexflow info CS4SG2U1
+flexflow case show CS4SG2U1
 
 # Create a new case
-flexflow new myCase --problem-name test --np 64
+flexflow case create myCase --problem-name test --np 64
+
+# Preview raw data
+flexflow data show CS4SG2U1 --node 24
+
+# Statistical analysis
+flexflow data stats CS4SG2U1 --node 100
 
 # Plot displacement
 flexflow plot CS4SG2U1 --data-type displacement --plot-type time --node 10 --component y
@@ -45,25 +53,58 @@ flexflow plot CS4SG2U1 --data-type displacement --plot-type time --node 10 --com
 # Compare multiple cases
 flexflow compare CS4SG1U1 CS4SG2U1 --node 10 --data-type displacement --component y
 
+# Work with Tecplot PLT files
+flexflow field info CS4SG2U1
+flexflow field extract CS4SG2U1 --variables X,Y,U --zone FIELD --timestep 1000
+
+# Generate configuration templates
+flexflow config template single plot_config.yaml
+
 # View documentation
 flexflow docs
 ```
 
 ### Commands
 
-- **`info`** - Display case information
-- **`new`** - Create a new case directory from a reference template
-- **`preview`** - Preview displacement data in table format
-- **`statistics`** - Show statistical analysis of data
+#### Domain-Driven Commands (Recommended)
+
+**`case`** - Manage simulation cases
+- `case show` - Display case information (was: `info`)
+- `case create` - Create new case directory (was: `new`)
+
+**`data`** - Work with time-series data
+- `data show` - Preview raw data in table format (was: `preview`)
+- `data stats` - Statistical analysis (was: `statistics`)
+
+**`field`** - Work with Tecplot PLT files
+- `field info` - Show PLT file information (was: `tecplot info`)
+- `field extract` - Extract data to CSV (was: `tecplot extract`)
+
+**`config`** - Configuration management
+- `config template` - Generate YAML templates (was: `template`)
+
+#### Visualization Commands
+
 - **`plot`** - Create plots from a single case
 - **`compare`** - Compare multiple cases on a single plot
-- **`template`** - Generate YAML configuration templates
-- **`tecplot`** - Inspect and work with Tecplot PLT binary files
+
+#### Utility Commands
+
 - **`docs`** - View documentation
+
+#### Legacy Commands (Still Supported)
+
+The old flat command structure still works for backward compatibility:
+```bash
+flexflow info CS4SG2U1          # Same as: flexflow case show CS4SG2U1
+flexflow preview CS4SG2U1       # Same as: flexflow data show CS4SG2U1
+flexflow tecplot info CS4SG2U1  # Same as: flexflow field info CS4SG2U1
+```
 
 For detailed help on any command:
 ```bash
 flexflow <command> --help
+flexflow <command> <subcommand> --help
 flexflow <command> --examples
 ```
 
@@ -74,6 +115,11 @@ FlexFlow includes powerful tab completion for bash, zsh, and fish shells:
 ```bash
 # Press TAB to see available commands
 flexflow <TAB>
+
+# Press TAB to see subcommands
+flexflow case <TAB>          # Shows: show, create
+flexflow data <TAB>          # Shows: show, stats
+flexflow field <TAB>         # Shows: info, extract
 
 # Press TAB to complete options
 flexflow plot --<TAB>
@@ -196,6 +242,9 @@ CS4SG2U1/
 - Matplotlib  
 - PyYAML
 - Markdown (for documentation conversion)
+- Rich (for beautiful terminal output)
+- tqdm (for progress bars)
+- pandas (for data operations)
 
 ## Installation
 
@@ -204,7 +253,7 @@ CS4SG2U1/
 python main.py --install
 
 # During installation, you'll be prompted to:
-# - Install Python dependencies (numpy, matplotlib, pyyaml, markdown)
+# - Install Python dependencies (numpy, matplotlib, pyyaml, markdown, rich, tqdm, pandas)
 # - Install Microsoft fonts (optional, for Times New Roman, Arial, etc.)
 # - The tool will create 'flexflow' command alias in your shell
 

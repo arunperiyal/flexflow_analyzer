@@ -1,6 +1,116 @@
 # FlexFlow OTHD/OISD Reader - Change Log
 
-## Version 2.3.0 - Current (2026-01-05)
+## Version 2.4.0 - Current (2026-01-05)
+
+### Major Update - Domain-Driven Architecture & Modern UI
+
+#### New Features - Domain-Driven Command Structure
+- **Complete Restructuring**: Introduced intuitive domain-driven command organization
+  - `flexflow case` - Manage simulation cases (show, create)
+  - `flexflow data` - Work with time-series data (show, stats)
+  - `flexflow field` - Work with Tecplot PLT files (info, extract)
+  - `flexflow config` - Configuration management (template)
+- **Command Groups**:
+  - `case show` - Display case information (formerly `info`)
+  - `case create` - Create new case (formerly `new`)
+  - `data show` - Preview raw data (formerly `preview`)
+  - `data stats` - Statistical analysis (formerly `statistics`)
+  - `field info` - PLT file information (formerly `tecplot info`)
+  - `field extract` - Extract to CSV (formerly `tecplot extract`)
+  - `config template` - Generate templates (formerly `template`)
+- **Backward Compatibility**: All old flat commands still work
+- **Benefits**:
+  - Better organization by domain entity
+  - Improved discoverability with tab completion
+  - Matches industry standards (kubectl, aws cli, docker)
+  - Easy to extend with new subcommands
+  - Zero breaking changes
+
+#### Modern UI Enhancements
+- **Rich Library Integration**: Beautiful terminal output
+  - Professional box-drawn tables
+  - Color-coded information display
+  - Formatted numbers with thousand separators
+  - Status indicators (✓)
+- **tqdm Progress Bars**: Visual progress for long operations
+- **pandas Integration**: Ready for advanced data operations
+- **Enhanced Commands**:
+  - `info/case show`: Beautiful Rich tables instead of plain text
+  - `preview/data show`: Color-coded data tables
+  - All help messages: Professional formatting
+
+#### Requirements Update
+- Added `rich>=13.7.0` for beautiful terminal output
+- Added `tqdm>=4.66.0` for progress bars
+- Added `pandas>=2.2.0` for data operations
+
+### Testing & Validation
+- **100% Test Coverage**: 40/40 tests passing
+  - Phase 3 tests (backward compatibility): 20/20 ✓
+  - Phase 4 new commands: 10/10 ✓
+  - Phase 4 old commands: 10/10 ✓
+- New test suite: `test_phase4.sh`
+- All existing functionality preserved
+
+### Documentation Updates
+- Updated README.md with domain-driven structure
+- Enhanced main help message with command groups
+- Added "Getting Started" section to main help
+- Updated all command examples
+- Added backward compatibility notes
+- Updated requirements list
+
+### Technical Implementation
+- Created 4 new command group modules:
+  - `module/commands/case_group/`
+  - `module/commands/data_group/`
+  - `module/commands/field_group/`
+  - `module/commands/config_group/`
+- Registry pattern extended for command groups
+- Delegation to existing implementations (zero duplication)
+- Beautiful help messages using Rich library
+- 532 lines of new code
+
+### Migration Guide
+Users can immediately start using the new structure:
+```bash
+# New style (recommended)
+flexflow case show CS4SG1U1
+flexflow data show CS4SG1U1 --node 24
+flexflow field info CS4SG1U1
+
+# Old style (still works)
+flexflow info CS4SG1U1
+flexflow preview CS4SG1U1 --node 24
+flexflow tecplot info CS4SG1U1
+```
+
+### Examples
+
+#### New Command Structure
+```bash
+# Case management
+flexflow case show CS4SG1U1
+flexflow case create myCase --problem-name test
+
+# Data operations
+flexflow data show CS4SG1U1 --node 24
+flexflow data stats CS4SG1U1 --node 100
+
+# Field data
+flexflow field info CS4SG1U1
+flexflow field extract CS4SG1U1 --variables X,Y,U --zone FIELD
+
+# Configuration
+flexflow config template single output.yaml
+
+# Tab completion
+flexflow case <TAB>      # Shows: show, create
+flexflow data <TAB>      # Shows: show, stats
+flexflow field <TAB>     # Shows: info, extract
+```
+
+## Version 2.3.0 - (2026-01-05)
 
 ### New Features - Case Management
 - **New Command**: Added `new` command for creating case directories from reference templates
