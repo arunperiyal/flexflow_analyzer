@@ -4,21 +4,21 @@ A powerful Python toolkit for reading, analyzing, and visualizing FlexFlow simul
 
 ## 🚀 What's New
 
+**🎉 Standalone Executable Available!** - No Python installation required!
+- Download single 71MB file
+- Works on any Linux system
+- No setup, no activation, just run!
+- See [docs/guides/STANDALONE_SUCCESS.md](docs/guides/STANDALONE_SUCCESS.md)
+
 **✨ PyTecplot Integration** - FlexFlow now uses pytecplot API for 2-3x faster PLT file operations!
 - Direct Python API (no macro files needed)
 - Automatic fallback to macros if needed
-- See [PYTECPLOT_GUIDE.md](PYTECPLOT_GUIDE.md) for details
+- See [docs/guides/PYTECPLOT_GUIDE.md](docs/guides/PYTECPLOT_GUIDE.md) for details
 
-**🎯 Smart Auto-Python Wrapper** - No more manual environment activation!
+**🎯 Smart Auto-Python Wrapper** - Alternative setup with auto Python 3.12!
 - Automatically uses Python 3.12 for Tecplot operations
 - Uses your default Python for everything else
-- Just works - no `conda activate` needed!
-- See [AUTO_PYTHON_GUIDE.md](AUTO_PYTHON_GUIDE.md) for details
-
-**Setup (one-time):**
-```bash
-python3 update_wrapper.py
-```
+- See [docs/guides/AUTO_PYTHON_GUIDE.md](docs/guides/AUTO_PYTHON_GUIDE.md) for details
 
 ## Overview
 
@@ -35,7 +35,21 @@ FlexFlow is a command-line tool and Python library for post-processing FlexFlow 
 
 ## Quick Start
 
-### Installation
+### Three Ways to Use FlexFlow
+
+#### Option 1: Standalone Executable (Recommended - No Python Needed!)
+
+```bash
+# Download and extract
+tar -xzf flexflow-standalone-v2.0-linux-x86_64.tar.gz
+
+# Run directly
+./flexflow-standalone/flexflow case show CS4SG1U1
+```
+
+See [docs/guides/STANDALONE_SUCCESS.md](docs/guides/STANDALONE_SUCCESS.md) for details.
+
+#### Option 2: Install from Source
 
 ```bash
 # Install FlexFlow CLI (creates 'flexflow' alias and installs dependencies)
@@ -49,6 +63,21 @@ This will:
 - Optionally install Microsoft fonts for publication-quality plots
 - Convert and install HTML documentation
 - Configure your shell environment
+
+#### Option 3: Auto-Wrapper Setup
+
+```bash
+# One-time setup
+conda create -n tecplot312 python=3.12 -y
+conda activate tecplot312
+pip install pytecplot
+python update_wrapper.py
+
+# Use normally (auto Python 3.12)
+flexflow field extract CS4SG1U1 --timestep 1000
+```
+
+See [docs/guides/AUTO_PYTHON_GUIDE.md](docs/guides/AUTO_PYTHON_GUIDE.md) for details.
 
 ### Basic Usage (Domain-Driven Structure)
 
@@ -298,3 +327,23 @@ This project is provided as-is for use with FlexFlow simulations.
 - [Complete Usage Guide](docs/USAGE.md)
 - [Quick Start Guide](QUICKSTART.md)
 - Example YAML configurations in the repository root
+
+## 📚 Documentation
+
+FlexFlow has comprehensive documentation organized by purpose:
+
+### Quick Start
+- **[Standalone Executable](docs/guides/STANDALONE_SUCCESS.md)** - No Python needed! (Recommended)
+- **[Quick Reference](docs/guides/PYTECPLOT_QUICKREF.md)** - Command cheatsheet
+- **[Project Status](PROJECT_STATUS.md)** - Current state and features
+
+### Complete Guides
+- **[PyTecplot Guide](docs/guides/PYTECPLOT_GUIDE.md)** - Complete usage guide  
+- **[Auto-Wrapper Guide](docs/guides/AUTO_PYTHON_GUIDE.md)** - Alternative setup
+- **[Documentation Index](docs/INDEX.md)** - All documentation organized
+
+### For Developers
+- **[Technical Docs](docs/technical/)** - Implementation details
+- **[Development Docs](docs/development/)** - Contributing guides
+- **[CHANGELOG.md](CHANGELOG.md)** - Version history
+
