@@ -36,7 +36,7 @@ def create_parser_v2():
                        help='Generate shell completion script')
     parser.add_argument('--examples', action='store_true',
                        help='Show comprehensive usage examples')
-    parser.add_argument('--version', action='store_true',
+    parser.add_argument('--version', '-v', action='store_true',
                        help='Show version information')
     parser.add_argument('-h', '--help', action='store_true',
                        help='Show help message')
@@ -116,6 +116,10 @@ def main():
         return
     elif args.examples:
         print_main_examples()
+        return
+    elif args.version:
+        from __version__ import get_full_version_info
+        print(get_full_version_info())
         return
     
     # Handle commands via registry
