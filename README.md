@@ -2,6 +2,24 @@
 
 A powerful Python toolkit for reading, analyzing, and visualizing FlexFlow simulation output files (OTHD and OISD).
 
+## 🚀 What's New
+
+**✨ PyTecplot Integration** - FlexFlow now uses pytecplot API for 2-3x faster PLT file operations!
+- Direct Python API (no macro files needed)
+- Automatic fallback to macros if needed
+- See [PYTECPLOT_GUIDE.md](PYTECPLOT_GUIDE.md) for details
+
+**🎯 Smart Auto-Python Wrapper** - No more manual environment activation!
+- Automatically uses Python 3.12 for Tecplot operations
+- Uses your default Python for everything else
+- Just works - no `conda activate` needed!
+- See [AUTO_PYTHON_GUIDE.md](AUTO_PYTHON_GUIDE.md) for details
+
+**Setup (one-time):**
+```bash
+python3 update_wrapper.py
+```
+
 ## Overview
 
 FlexFlow is a command-line tool and Python library for post-processing FlexFlow CFD simulation results. It provides:
@@ -53,9 +71,12 @@ flexflow plot CS4SG2U1 --data-type displacement --plot-type time --node 10 --com
 # Compare multiple cases
 flexflow compare CS4SG1U1 CS4SG2U1 --node 10 --data-type displacement --component y
 
-# Work with Tecplot PLT files
+# Work with Tecplot PLT files (NEW: PyTecplot support!)
 flexflow field info CS4SG2U1
 flexflow field extract CS4SG2U1 --variables X,Y,U --zone FIELD --timestep 1000
+
+# Convert PLT to HDF5 (using pytecplot - 2x faster!)
+flexflow tecplot convert CS4SG2U1 --format hdf5
 
 # Generate configuration templates
 flexflow config template single plot_config.yaml

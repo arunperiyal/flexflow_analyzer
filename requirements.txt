@@ -10,6 +10,7 @@ markdown>=3.5.0
 rich>=13.7.0              # Beautiful terminal output, tables, progress bars
 tqdm>=4.66.0              # Progress bars for long operations
 pandas>=2.2.0             # DataFrame operations, data export
+pytecplot>=1.6.0          # Tecplot Python API for data extraction
 
 # Optional but recommended
 # pydantic>=2.5.0         # Config validation (uncomment when needed)

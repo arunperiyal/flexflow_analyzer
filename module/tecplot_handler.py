@@ -8,7 +8,13 @@ from pathlib import Path
 
 
 def extract_data_pytecplot(case_dir, timestep, zone, variables, output_file=None, subdomain=None):
-    """Extract data from PLT file using pytecplot via tec360-env wrapper.
+    """Extract data from PLT file using pytecplot API in batch mode.
+    
+    This function uses the new pytecplot-based implementation which works
+    reliably in batch mode with Python 3.12 or earlier.
+    
+    NOTE: Python 3.13+ is NOT compatible with Tecplot 360 2024 R1.
+          Use Python 3.12 or earlier (e.g., conda activate tecplot312).
     
     Parameters:
     -----------
@@ -23,195 +29,42 @@ def extract_data_pytecplot(case_dir, timestep, zone, variables, output_file=None
     output_file : str, optional
         Output CSV file path
     subdomain : dict, optional
-        Subdomain bounds as {'xmin': val, 'xmax': val, 'ymin': val, 'ymax': val, 'zmin': val, 'zmax': val}
+        Subdomain bounds for filtering data
+        
+    Returns:
+    --------
+    tuple or None
+        (success: bool, output_file or error_message) if successful,
+        None to fallback to macro-based extraction
     """
-    import subprocess
-    import tempfile
-    
-    # Check if tec360-env exists
-    tec360_env = '/usr/local/tecplot/360ex_2024r1/bin/tec360-env'
-    if not os.path.exists(tec360_env):
-        print(f"[WARNING] tec360-env not found at {tec360_env}")
-        print("Falling back to macro-based extraction...")
-        return None  # Signal to try macro approach
-    
-    #Find the PLT file
-    plt_file = Path(case_dir) / "binary" / f"riser.{timestep}.plt"
-    if not plt_file.exists():
-        print(f"[ERROR] PLT file not found: {plt_file}")
-        return False
-    
-    print(f"Using pytecplot (via tec360-env) for extraction...")
-    print(f"Loading PLT file: {plt_file}")
-    
-    if subdomain:
-        print(f"Subdomain filter: {subdomain}")
-    
-    # Prepare subdomain string for script
-    subdomain_str = str(subdomain) if subdomain else 'None'
-    
-    # Create a Python script that will run with tec360-env
-    script_content = f"""
-import sys
-sys.path.insert(0, '/usr/local/tecplot/360ex_2024r1/pytecplot')
-
-import tecplot as tp
-import pandas as pd
-import numpy as np
-
-# Load the PLT file
-plt_file = r"{plt_file}"
-dataset = tp.data.load_tecplot(plt_file)
-
-# Find the zone
-target_zone = None
-for z in dataset.zones():
-    if z.name == "{zone}":
-        target_zone = z
-        break
-
-if target_zone is None:
-    print(f"[ERROR] Zone '{zone}' not found")
-    available_zones = [z.name for z in dataset.zones()]
-    print(f"Available zones: {{', '.join(available_zones)}}")
-    exit(1)
-
-print(f"Extracting zone: {{target_zone.name}}")
-print(f"Zone type: {{target_zone.zone_type}}")
-print(f"Variables: {variables}")
-
-# Subdomain filtering parameters
-subdomain = {subdomain_str}
-
-# Extract data (including coordinates if subdomain filtering needed)
-data = {{}}
-needs_coordinates = subdomain is not None
-
-# If subdomain is specified, we need X, Y, Z for filtering
-coord_vars = []
-if needs_coordinates:
-    for coord in ['X', 'Y', 'Z']:
-        try:
-            var = dataset.variable(coord)
-            coord_vars.append(coord)
-            data[coord] = target_zone.values(var).as_numpy_array()
-        except:
-            pass  # Coordinate not available
-
-# Extract requested variables
-for var_name in {variables}:
+    # Try to use the new pytecplot implementation
     try:
-        var = dataset.variable(var_name)
-        data[var_name] = target_zone.values(var).as_numpy_array()
+        from .tecplot_pytec import extract_data_pytecplot as pytec_extract
+        success, result = pytec_extract(case_dir, timestep, zone, variables, output_file, subdomain)
+        if success:
+            return (success, result)
+        else:
+            print(f"[WARNING] PyTecplot extraction failed: {result}")
+            print("[INFO] Falling back to macro-based extraction")
+            return None
+    except ImportError:
+        print("[INFO] pytecplot module not available, using macro-based extraction")
+        return None
     except Exception as e:
-        print(f"[WARNING] Could not extract variable '{{var_name}}': {{e}}")
-
-if not data:
-    print("[ERROR] No data extracted")
-    exit(1)
-
-# Create DataFrame
-df = pd.DataFrame(data)
-total_points_before = len(df)
-
-# Apply subdomain filtering
-if subdomain:
-    print(f"\\nApplying subdomain filter...")
-    mask = np.ones(len(df), dtype=bool)
-    
-    if 'xmin' in subdomain and 'X' in df.columns:
-        mask &= (df['X'] >= subdomain['xmin'])
-        print(f"  X >= {{subdomain['xmin']}}")
-    if 'xmax' in subdomain and 'X' in df.columns:
-        mask &= (df['X'] <= subdomain['xmax'])
-        print(f"  X <= {{subdomain['xmax']}}")
-    if 'ymin' in subdomain and 'Y' in df.columns:
-        mask &= (df['Y'] >= subdomain['ymin'])
-        print(f"  Y >= {{subdomain['ymin']}}")
-    if 'ymax' in subdomain and 'Y' in df.columns:
-        mask &= (df['Y'] <= subdomain['ymax'])
-        print(f"  Y <= {{subdomain['ymax']}}")
-    if 'zmin' in subdomain and 'Z' in df.columns:
-        mask &= (df['Z'] >= subdomain['zmin'])
-        print(f"  Z >= {{subdomain['zmin']}}")
-    if 'zmax' in subdomain and 'Z' in df.columns:
-        mask &= (df['Z'] <= subdomain['zmax'])
-        print(f"  Z <= {{subdomain['zmax']}}")
-    
-    df = df[mask].copy()
-    print(f"\\nFiltered: {{total_points_before}} points -> {{len(df)}} points")
-    
-    # Check if any points remain
-    if len(df) == 0:
-        print("[ERROR] No points found within specified subdomain")
-        exit(1)
-    
-    # Remove coordinate columns if they weren't requested
-    requested_vars = {variables}
-    for coord in coord_vars:
-        if coord not in requested_vars:
-            df = df.drop(columns=[coord])
-
-# Reset index after filtering
-df = df.reset_index(drop=True)
-
-# Output
-output_file = {"'" + output_file + "'" if output_file else "None"}
-if output_file:
-    # Write metadata as comments at the beginning
-    with open(output_file, 'w') as f:
-        f.write(f"# Tecplot data extraction\\n")
-        f.write(f"# Source: {plt_file}\\n")
-        f.write(f"# Zone: {zone}\\n")
-        f.write(f"# Timestep: {timestep}\\n")
-        f.write(f"# Variables: {{', '.join(requested_vars)}}\\n")
-        if subdomain:
-            f.write(f"# Subdomain: {{subdomain}}\\n")
-        f.write(f"# Total points: {{len(df)}}\\n")
-        f.write(f"#\\n")
-    
-    # Append the data
-    df.to_csv(output_file, mode='a', index=False)
-    print(f"✓ Data saved to: {{output_file}}")
-    print(f"  Rows: {{len(df)}}")
-    print(f"  Columns: {{list(df.columns)}}")
-else:
-    print(f"\\nData preview (first 10 rows of {{len(df)}} total):")
-    print(df.head(10).to_string(index=False))
-    if len(df) > 10:
-        print(f"\\n... ({{len(df) - 10}} more rows)")
-"""
-    
-    # Write script to temporary file
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
-        f.write(script_content)
-        script_file = f.name
-    
-    try:
-        # Run with tec360-env
-        result = subprocess.run(
-            [tec360_env, '--', 'python3', script_file],
-            capture_output=True,
-            text=True
-        )
-        
-        print(result.stdout)
-        if result.stderr:
-            print(result.stderr)
-        
-        return result.returncode == 0
-    
-    except Exception as e:
-        print(f"[ERROR] Failed to extract data: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
-    finally:
-        os.unlink(script_file)
+        print(f"[WARNING] PyTecplot error: {e}")
+        print("[INFO] Falling back to macro-based extraction")
+        return None
 
 
 def extract_data_macro(case_dir, timestep, zone, variables, output_file, subdomain=None):
     """Extract data from PLT file using Tecplot macro.
+    
+    NOTE: Due to Tecplot licensing and batch mode limitations, this approach may not work
+    reliably in all environments. Alternative approaches:
+    
+    1. Use 'flexflow data show' command to extract from HDF5 files (recommended)
+    2. Open Tecplot GUI and manually export data
+    3. Convert PLT to HDF5 first, then use flexflow data commands
     
     Parameters:
     -----------
@@ -227,10 +80,36 @@ def extract_data_macro(case_dir, timestep, zone, variables, output_file, subdoma
         Output file path
     subdomain : dict, optional
         Subdomain bounds (Note: subdomain filtering in macros is limited)
+    
+    Returns:
+    --------
+    bool
+        True if extraction succeeded, False otherwise
     """
+    print("\n" + "="*70)
+    print("NOTE: PLT extraction has known limitations in batch mode")
+    print("="*70)
+    print("Recommended alternatives:")
+    print("  1. Use 'flexflow data show <case>' to extract from HDF5 files")
+    print("  2. Open Tecplot GUI and manually export data")
+    print(f"  3. Convert {os.path.basename(case_dir)} to HDF5 format first")
+    print("="*70 + "\n")
+    
+    # Check if HDF5 files exist
+    case_path = Path(case_dir)
+    hdf5_dir = case_path / 'output'
+    if hdf5_dir.exists() and any(hdf5_dir.glob('*.h5')):
+        print(f"✓ HDF5 files detected in {hdf5_dir}")
+        print(f"  Try: flexflow data show {case_path.name} --timestep {timestep} --variables {','.join(variables)}")
+        print()
+        return False  # Don't attempt macro extraction if HDF5 available
+    
+    print("Attempting macro-based PLT extraction...")
+    print("(This may not work reliably due to licensing/batch mode issues)\n")
+    
     if subdomain:
         print("[WARNING] Subdomain filtering is not fully supported in macro-based extraction")
-        print("          Please use pytecplot-based extraction for subdomain filtering")
+        print("          Consider post-processing the CSV output for filtering")
     
     case_path = Path(case_dir)
     
@@ -256,57 +135,153 @@ def extract_data_macro(case_dir, timestep, zone, variables, output_file, subdoma
     
     # Default output file
     if not output_file:
-        output_file = case_path / f"{problem_name}.{timestep}.dat"
+        output_file = case_path / f"{problem_name}_{timestep}_extracted.csv"
     else:
         output_file = Path(output_file)
     
-    # Create macro
-    macro_file = case_path / "extract_data.mcr"
+    # Force CSV extension (most compatible format)
+    output_file = output_file.with_suffix('.csv')
     
-    var_list = " ".join([f'"{v}"' for v in variables])
+    # Read available variables from PLT file
+    from module.commands.tecplot_cmd.command import read_tecplot_variables
+    available_vars = read_tecplot_variables(plt_file)
     
+    if not available_vars:
+        print("[WARNING] Could not read variables from PLT file, using standard mapping")
+        # Use standard variable list
+        available_vars = ['X', 'Y', 'Z', 'U', 'V', 'W', 'Pressure', 'dispX', 'dispY', 'dispZ',
+                         'eddy', 'xVor', 'yVor', 'zVor', 'QCriterion', 'orderPar']
+    
+    # Map variable names to indices (1-based for Tecplot)
+    var_indices = []
+    missing_vars = []
+    
+    for v in variables:
+        try:
+            idx = available_vars.index(v) + 1  # 1-based indexing
+            var_indices.append(str(idx))
+        except ValueError:
+            # Try case-insensitive match
+            found = False
+            for i, av in enumerate(available_vars):
+                if av.upper() == v.upper():
+                    var_indices.append(str(i + 1))
+                    found = True
+                    break
+            if not found:
+                missing_vars.append(v)
+    
+    if missing_vars:
+        print(f"[WARNING] Variables not found in PLT file: {', '.join(missing_vars)}")
+        print(f"Available variables: {', '.join(available_vars)}")
+    
+    if not var_indices:
+        print("[ERROR] No valid variables to extract")
+        return False
+    
+    var_list = " ".join(var_indices)
+    
+    # Create macro file
+    macro_file = case_path / f"extract_{timestep}.mcr"
+    
+    # Use EXPORT with CSV format - most reliable for batch mode
     macro_content = f"""#!MC 1410
 $!READDATASET  '{plt_file}' 
   READDATAOPTION = NEW
   RESETSTYLE = YES
-$!EXPORTSETUP EXPORTFORMAT = TECPLOT
+$!EXPORTSETUP EXPORTFORMAT = CSV
 $!EXPORTSETUP EXPORTFNAME = '{output_file}'
 $!EXPORTSETUP INCLUDETEXT = NO
 $!EXPORTSETUP INCLUDEGEOM = NO
 $!EXPORTSETUP INCLUDECUSTOMLABELS = NO
 $!EXPORTSETUP INCLUDEDATA = YES
-$!EXPORTSETUP ZONELIST = ["{zone}"]
+$!EXPORTSETUP CSVOVERRIDE{{COLUMNHEADERS}} = YES
+$!EXPORTSETUP ZONELIST = [1]
 $!EXPORTSETUP VARLIST = [{var_list}]
-$!EXPORT
+$!EXPORT 
+  EXPORTREGION = ALLZONES
 $!QUIT
 """
     
     macro_file.write_text(macro_content)
-    print(f"Created macro: {macro_file}")
+    print(f"Created extraction macro: {macro_file.name}")
     
-    # Execute macro
+    # Execute macro with Tecplot 360 in batch mode
     import subprocess
-    cmd = ['tec360', '-b', '--osmesa', '-p', str(macro_file)]
-    print(f"Executing: {' '.join(cmd)}")
+    tec360 = '/usr/local/tecplot/360ex_2024r1/bin/tec360'
+    if not os.path.exists(tec360):
+        print(f"[ERROR] tec360 not found at {tec360}")
+        print("Please ensure Tecplot 360 is installed and the path is correct")
+        return False
     
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    cmd = [tec360, '-b', '--mesa', '--disable-FBOs', '-p', str(macro_file)]
+    print(f"Executing Tecplot 360 in batch mode...")
     
-    if result.returncode == 0 and output_file.exists():
-        print(f"✓ Data extracted to: {output_file}")
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
         
-        # Show preview
-        try:
-            df = pd.read_csv(output_file, delim_whitespace=True, skiprows=1)
-            print(f"\nData preview (first 10 rows of {len(df)} total):")
-            print(df.head(10).to_string(index=False))
-        except Exception as e:
-            print(f"[WARNING] Could not preview data: {e}")
-        
-        # Cleanup macro
-        macro_file.unlink()
-        return True
-    else:
-        print(f"[ERROR] Extraction failed")
-        if result.stderr:
-            print(result.stderr)
+        # Check for success
+        if result.returncode == 0 and output_file.exists():
+            print(f"✓ Data extracted to: {output_file}")
+            
+            # Show preview
+            try:
+                df = pd.read_csv(output_file)
+                print(f"\nData preview (first 10 rows of {len(df)} total):")
+                print(df.head(10).to_string(index=False))
+                if len(df) > 10:
+                    print(f"... ({len(df) - 10} more rows)")
+                
+                # Apply subdomain filtering if requested (post-processing)
+                if subdomain:
+                    print("\nApplying subdomain filter...")
+                    original_len = len(df)
+                    mask = pd.Series([True] * len(df))
+                    
+                    if 'xmin' in subdomain and 'X' in df.columns:
+                        mask &= df['X'] >= subdomain['xmin']
+                    if 'xmax' in subdomain and 'X' in df.columns:
+                        mask &= df['X'] <= subdomain['xmax']
+                    if 'ymin' in subdomain and 'Y' in df.columns:
+                        mask &= df['Y'] >= subdomain['ymin']
+                    if 'ymax' in subdomain and 'Y' in df.columns:
+                        mask &= df['Y'] <= subdomain['ymax']
+                    if 'zmin' in subdomain and 'Z' in df.columns:
+                        mask &= df['Z'] >= subdomain['zmin']
+                    if 'zmax' in subdomain and 'Z' in df.columns:
+                        mask &= df['Z'] <= subdomain['zmax']
+                    
+                    df = df[mask]
+                    print(f"  Filtered: {original_len} → {len(df)} points")
+                    
+                    # Save filtered data
+                    filtered_output = output_file.with_stem(output_file.stem + '_filtered')
+                    df.to_csv(filtered_output, index=False)
+                    print(f"✓ Filtered data saved to: {filtered_output}")
+                
+            except Exception as e:
+                print(f"[WARNING] Could not preview data: {e}")
+                if os.path.getsize(output_file) > 0:
+                    print(f"File size: {os.path.getsize(output_file)} bytes")
+            
+            # Cleanup macro
+            macro_file.unlink()
+            return True
+        else:
+            print(f"[ERROR] Extraction failed")
+            if result.stderr:
+                print(f"Stderr: {result.stderr}")
+            if result.stdout:
+                print(f"Stdout (last 500 chars): {result.stdout[-500:]}")
+            print(f"Macro file kept for debugging: {macro_file}")
+            return False
+            
+    except subprocess.TimeoutExpired:
+        print("[ERROR] Extraction timed out after 120 seconds")
+        print(f"Macro file kept for debugging: {macro_file}")
+        return False
+    except Exception as e:
+        print(f"[ERROR] Unexpected error: {e}")
+        import traceback
+        traceback.print_exc()
         return False

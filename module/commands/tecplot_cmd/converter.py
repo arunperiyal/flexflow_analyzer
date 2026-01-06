@@ -1,5 +1,5 @@
 """
-PLT to HDF5/VTK converter using Tecplot 360
+PLT to HDF5/VTK converter using pytecplot API (preferred) or Tecplot 360 macros (fallback)
 """
 
 import os
@@ -14,7 +14,7 @@ from ...utils.logger import Logger
 class TecplotConverter:
     """Convert Tecplot binary PLT files to HDF5/VTK format"""
     
-    def __init__(self, case_dir, verbose=False):
+    def __init__(self, case_dir, verbose=False, use_pytecplot=True):
         """
         Parameters:
         -----------
@@ -22,10 +22,13 @@ class TecplotConverter:
             Case directory containing binary/ subdirectory with PLT files
         verbose : bool
             Enable verbose logging
+        use_pytecplot : bool
+            Try to use pytecplot API first (recommended, faster and more reliable)
         """
         self.case_dir = Path(case_dir)
         self.binary_dir = self.case_dir / 'binary'
         self.logger = Logger(verbose=verbose)
+        self.use_pytecplot = use_pytecplot
         self.tec360_path = self._find_tecplot()
         
     def _find_tecplot(self):
@@ -227,6 +230,43 @@ class TecplotConverter:
         --------
         list : List of converted file paths
         """
+        # Try pytecplot first if requested
+        if self.use_pytecplot:
+            self.logger.info("Attempting pytecplot-based conversion...")
+            try:
+                from ...tecplot_pytec import convert_plt_to_format, check_python_version
+                
+                # Check Python version compatibility
+                compatible, msg = check_python_version()
+                if not compatible:
+                    self.logger.warning(msg)
+                    self.logger.info("Falling back to macro-based conversion")
+                else:
+                    # Try pytecplot conversion
+                    success, result = convert_plt_to_format(
+                        self.case_dir, 
+                        output_format=output_format,
+                        start_step=start_step,
+                        end_step=end_step,
+                        keep_original=keep_original,
+                        output_dir=output_dir
+                    )
+                    
+                    if success:
+                        self.logger.success("PyTecplot conversion completed successfully!")
+                        return result
+                    else:
+                        self.logger.warning(f"PyTecplot conversion failed: {result}")
+                        self.logger.info("Falling back to macro-based conversion")
+            except ImportError:
+                self.logger.warning("pytecplot not installed, using macro-based conversion")
+            except Exception as e:
+                self.logger.warning(f"PyTecplot error: {e}")
+                self.logger.info("Falling back to macro-based conversion")
+        
+        # Fallback to macro-based conversion
+        self.logger.info("Using macro-based conversion...")
+        
         # Check Tecplot availability
         if not self.tec360_path:
             raise RuntimeError(
