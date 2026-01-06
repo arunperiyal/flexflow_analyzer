@@ -1,33 +1,19 @@
-# Case directories (simulation data)
-CS*/
-*U*/
-
 # Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
 *.egg
+*.egg-info/
+dist-old/
+build-old/
+*.manifest
+*.spec-old
 
 # Virtual environments
 venv/
-ENV/
 env/
+ENV/
 .venv
 
 # IDE
@@ -36,40 +22,35 @@ env/
 *.swp
 *.swo
 *~
+
+# OS
 .DS_Store
+Thumbs.db
 
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# Generated output files
-*.pdf
-*.png
-*.jpg
-*.jpeg
-*.svg
-
-# Backup files
-*.backup
-*.bak
-*.old
-
-# Logs
+# Project specific
 *.log
-logs/
+batch.log
+test_*.mcr
+demo_extract_*.csv
+test_standard_py313/
+
+# Build artifacts (keep dist/ and build/ for now)
+*.pyc
+.pytest_cache/
 
 # Temporary files
 *.tmp
-.cache/
+*.bak
+*.backup
 
-# OS specific
-Thumbs.db
-.DS_Store
 
-# Project specific
-traced_output.pdf
+# Test case directories
+CS4SG*/
+refCase/
 
-# Temporary data files
-output.csv
-*.dat
+# PyInstaller build artifacts
+build/
+dist/
+
+# Old tecplot scripts
 tecplot_python.py
-untitled.mcr
