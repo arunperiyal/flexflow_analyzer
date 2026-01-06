@@ -1,131 +1,210 @@
-# FlexFlow Documentation Index
+# FlexFlow Documentation
 
-## Quick Start
+## Getting Started
 
-**New Users:** Start here! 👇
-
-1. **[Standalone Success](guides/STANDALONE_SUCCESS.md)** - Download and run (recommended)
-2. **[Quick Reference](guides/PYTECPLOT_QUICKREF.md)** - Command cheatsheet
-3. **[Project Status](../PROJECT_STATUS.md)** - Current state overview
-
-## User Guides
-
-### Getting Started
-- **[Standalone Executable](guides/STANDALONE_SUCCESS.md)** - No Python needed! (Recommended)
-- **[Auto-Wrapper Setup](guides/AUTO_PYTHON_GUIDE.md)** - Alternative method with auto Python 3.12
-- **[PyTecplot Guide](guides/PYTECPLOT_GUIDE.md)** - Complete usage guide
+### Installation
+- [INSTALL.md](../INSTALL.md) - Quick installation guide
+- [setup/INSTALL_INTERACTIVE.md](setup/INSTALL_INTERACTIVE.md) - Detailed installation
 
 ### Quick Reference
-- **[Command Quickref](guides/PYTECPLOT_QUICKREF.md)** - All commands at a glance
+
+```bash
+# Installation
+./install.sh
+
+# Basic usage
+ff -v                        # Version
+ff case show CS4SG1U1       # Case info
+ff field info CS4SG1U1      # Field info
+ff plot CS4SG1U1 --node 10  # Plot data
+```
+
+## Command Reference
+
+### Case Commands
+
+```bash
+ff case show <case>         # Display case information
+ff case create <name>       # Create new case from template
+ff case list                # List all available cases
+```
+
+### Field Commands
+
+```bash
+ff field info <case>        # Show field information
+ff field list <case>        # List available fields
+ff field extract <case>     # Extract field data
+```
+
+### Data Commands
+
+```bash
+ff data compare <cases>     # Compare multiple cases
+ff data export <case>       # Export data
+ff data statistics <case>   # Show statistics
+```
+
+### Plot Commands
+
+```bash
+ff plot <case> [options]    # Create plots
+  --node N                  # Select node
+  --component x|y|z         # Select component
+  --output FILE             # Save to file
+  --show                    # Display plot
+```
+
+### Tecplot Commands
+
+```bash
+ff tecplot convert <file>   # Convert PLT files
+  --format hdf5|szplt       # Output format
+ff tecplot info <file>      # Show PLT file info
+```
 
 ## Technical Documentation
 
-### Implementation Details
-- **[PyTecplot Migration](technical/PYTECPLOT_MIGRATION.md)** - How we implemented pytecplot
-- **[PyTecplot Complete](technical/PYTECPLOT_COMPLETE.md)** - Technical summary
-- **[Standalone Build](technical/STANDALONE_BUILD.md)** - How to build standalone executable
+- [technical/STARTUP_PERFORMANCE.md](technical/STARTUP_PERFORMANCE.md) - Performance guide
+- [technical/STANDALONE_BUILD.md](technical/STANDALONE_BUILD.md) - Building standalone
 
-### Python Version Issues
-- **[Python 3.13 Investigation](technical/PYTHON_3.13_INVESTIGATION.md)** - Root cause analysis
-- **[Version Verification](technical/PYTHON_VERSION_VERIFICATION.md)** - Test results
-- **[Tecplot Fix Summary](technical/tecplot_fix_summary.md)** - Original fix documentation
+## Examples
 
-## Setup & Installation
+### Analyze a Case
 
-### Installation Methods
-- **[Install Guide](setup/INSTALL.md)** - Standard installation
-- **[Update Guide](setup/UPDATE.md)** - Updating FlexFlow
-- **[Uninstall Guide](setup/UNINSTALL.md)** - Removing FlexFlow
+```bash
+# Show case overview
+ff case show CS4SG1U1
 
-## Usage Documentation
+# Expected output:
+# Loading OTHD files...
+# Loaded: 49 nodes, 4430 timesteps
+# Time range: 0.05 to 221.50
+# ...
+```
 
-### Commands & Features
-- **[Usage Overview](USAGE.md)** - All features and commands
-- **[Command Reference](usage/commands/)** - Detailed command documentation
+### Extract Field Data
 
-### Module Documentation
-- **[Core Module](usage/core/)** - Core functionality
-- **[CLI Module](usage/cli/)** - Command-line interface
-- **[Utils Module](usage/utils/)** - Utility functions
+```bash
+# Get field information
+ff field info CS4SG1U1
 
-## Development
+# Extract specific field
+ff field extract CS4SG1U1 --field displacement --node 10
+```
 
-### For Contributors
-- **[Autocompletion](AUTOCOMPLETION.md)** - Shell completion
-- **[Development Docs](development/)** - Implementation details
-  - Autocompletion implementation
-  - Tecplot integration
-  - Refactoring summaries
-  - Session summaries
+### Compare Cases
 
-## Archive
+```bash
+# Compare two cases
+ff data compare CS4SG1U1 CS4SG2U1 --component y
 
-### Historical Documents
-- **[Complete Solution](archive/COMPLETE_SOLUTION.md)** - Original complete solution doc
-- **[Final Checklist](archive/FINAL_CHECKLIST.md)** - Implementation checklist
-- **[Modern Libraries](archive/MODERN_LIBRARIES.md)** - Library analysis
-- **[Architecture Analysis](archive/OPTIMAL_ARCHITECTURE_ANALYSIS.md)** - Design decisions
+# With custom output
+ff data compare CS4SG1U1 CS4SG2U1 --output comparison.png
+```
 
-## Root Documentation
+### Create Plots
 
-### Essential Files
-- **[README.md](../README.md)** - Main project readme
-- **[CHANGELOG.md](../CHANGELOG.md)** - Version history
-- **[PROJECT_STATUS.md](../PROJECT_STATUS.md)** - Current project status
+```bash
+# Simple time series plot
+ff plot CS4SG1U1 --node 10 --component y
+
+# Save to file
+ff plot CS4SG1U1 --node 10 --component y --output displacement.png
+
+# Multiple components
+ff plot CS4SG1U1 --node 10 --component xyz --show
+```
+
+### Convert Tecplot Files
+
+```bash
+# Convert to HDF5
+ff tecplot convert CS4SG1U1/binary/riser.1000.plt --format hdf5
+
+# Convert to SZPLT
+ff tecplot convert CS4SG1U1/binary/riser.1000.plt --format szplt
+```
+
+## Tips
+
+### Fast Startup
+
+Use the alias installation for fastest startup:
+```bash
+./install.sh
+# Choose Option 1: Fast Alias
+# Result: 0.4s startup time
+```
+
+### Tab Completion
+
+Enable tab completion during installation for easier use:
+```bash
+ff case <TAB>       # Shows: show, create, list
+ff field <TAB>      # Shows: info, list, extract
+```
+
+### Help
+
+Get help for any command:
+```bash
+ff --help           # Main help
+ff case --help      # Case command help
+ff plot --help      # Plot command help
+```
+
+## Troubleshooting
+
+### Command not found
+
+```bash
+# Reload shell
+source ~/.bashrc
+
+# Check if alias exists
+alias | grep ff
+```
+
+### Import errors
+
+```bash
+# Activate environment manually
+conda activate tecplot312
+
+# Check packages
+pip list | grep pytecplot
+```
+
+### Tecplot errors
+
+```bash
+# Check Tecplot installation
+which tec360
+
+# Test pytecplot
+python -c "import tecplot; print('OK')"
+```
+
+## Version
+
+Current version: **2.0.0**
+
+Check version:
+```bash
+ff -v
+```
+
+## Support
+
+- GitHub: https://github.com/arunperiyal/flexflow_analyzer
+- Issues: https://github.com/arunperiyal/flexflow_analyzer/issues
 
 ---
 
-## Documentation Structure
-
-```
-docs/
-├── guides/              # User-facing guides
-│   ├── STANDALONE_SUCCESS.md
-│   ├── PYTECPLOT_QUICKREF.md
-│   ├── PYTECPLOT_GUIDE.md
-│   └── AUTO_PYTHON_GUIDE.md
-│
-├── technical/           # Technical documentation
-│   ├── PYTECPLOT_MIGRATION.md
-│   ├── STANDALONE_BUILD.md
-│   └── PYTHON_3.13_INVESTIGATION.md
-│
-├── setup/              # Installation & setup
-│   ├── INSTALL.md
-│   ├── UPDATE.md
-│   └── UNINSTALL.md
-│
-├── usage/              # Usage & API docs
-│   ├── commands/
-│   ├── core/
-│   └── utils/
-│
-├── development/        # Development docs
-│   └── (implementation details)
-│
-└── archive/           # Historical documents
-    └── (old docs)
-```
-
-## Recommended Reading Path
-
-### For End Users:
-1. Start with [Standalone Success](guides/STANDALONE_SUCCESS.md)
-2. Check [Quick Reference](guides/PYTECPLOT_QUICKREF.md)
-3. Read [Project Status](../PROJECT_STATUS.md) for overview
-
-### For Developers:
-1. Read [PyTecplot Migration](technical/PYTECPLOT_MIGRATION.md)
-2. Check [Standalone Build](technical/STANDALONE_BUILD.md)
-3. Review [Development Docs](development/)
-
-### For Troubleshooting:
-1. Check [Python 3.13 Investigation](technical/PYTHON_3.13_INVESTIGATION.md)
-2. Read [Version Verification](technical/PYTHON_VERSION_VERIFICATION.md)
-3. See [Tecplot Fix Summary](technical/tecplot_fix_summary.md)
-
----
-
-**Last Updated:** 2026-01-06  
-**FlexFlow Version:** 2.0 (Standalone)  
-**Documentation Version:** 1.0
+**Documentation Structure:**
+- README.md - Project overview
+- INSTALL.md - Quick install
+- docs/INDEX.md - This file (command reference)
+- docs/setup/ - Installation guides
+- docs/technical/ - Technical details
