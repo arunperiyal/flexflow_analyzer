@@ -54,3 +54,25 @@ dist/
 
 # Old tecplot scripts
 tecplot_python.py
+
+# Build directories (PyInstaller)
+build/
+dist/
+releases/
+*.spec
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
