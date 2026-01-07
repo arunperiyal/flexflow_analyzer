@@ -37,10 +37,10 @@ _flexflow_completions() {
     # Command-specific completions
     case "$cmd" in
         case)
-            # Parse for subcommand (show or create)
+            # Parse for subcommand (show, create, or run)
             local subcommand=""
             for (( i=2; i < cword; i++ )); do
-                if [[ "${words[i]}" == "show" ]] || [[ "${words[i]}" == "create" ]]; then
+                if [[ "${words[i]}" == "show" ]] || [[ "${words[i]}" == "create" ]] || [[ "${words[i]}" == "run" ]]; then
                     subcommand="${words[i]}"
                     break
                 fi
@@ -49,7 +49,7 @@ _flexflow_completions() {
             if [[ -z "$subcommand" ]]; then
                 # No subcommand yet
                 local flags="-v --verbose -h --help --examples"
-                COMPREPLY=( $(compgen -W "show create $flags" -- "$cur") )
+                COMPREPLY=( $(compgen -W "show create run $flags" -- "$cur") )
             else
                 # Have subcommand
                 case "$subcommand" in
@@ -75,6 +75,21 @@ _flexflow_completions() {
                                     ;;
                                 *)
                                     # No default completion for case name
+                                    ;;
+                            esac
+                        fi
+                        ;;
+                    run)
+                        local flags="--no-monitor --clean --from-step --dry-run -v --verbose -h --help --examples"
+                        if [[ "$cur" == -* ]]; then
+                            COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
+                        else
+                            case "$prev" in
+                                --from-step)
+                                    # No completion for numeric values
+                                    ;;
+                                *)
+                                    _flexflow_complete_cases
                                     ;;
                             esac
                         fi

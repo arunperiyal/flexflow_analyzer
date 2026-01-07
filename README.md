@@ -49,6 +49,7 @@ ff -v
 ```bash
 ff case show <case>          # Show case information
 ff case create <name>        # Create new case from template
+ff case run <case>           # Submit and monitor SLURM simulation jobs
 ff case list                 # List available cases
 
 ff field info <case>         # Show field information

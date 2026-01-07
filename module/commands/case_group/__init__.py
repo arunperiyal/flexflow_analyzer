@@ -1,16 +1,16 @@
 """
 Case command group - Domain-driven structure
-Handles case operations: show, create
+Handles case operations: show, create, run
 """
 
 from ..base import BaseCommand
 
 
 class CaseCommand(BaseCommand):
-    """Case operations (show, create)"""
+    """Case operations (show, create, run)"""
     
     name = "case"
-    description = "Case operations (show, create)"
+    description = "Case operations (show, create, run)"
     category = "Core"
     
     def setup_parser(self, subparsers):
@@ -63,6 +63,25 @@ class CaseCommand(BaseCommand):
         create_parser.add_argument('--examples', action='store_true',
                                   help='Show usage examples')
         
+        # case run
+        run_parser = case_subparsers.add_parser('run', add_help=False,
+                                               help='Submit and monitor SLURM jobs')
+        run_parser.add_argument('case', nargs='?', help='Case directory path')
+        run_parser.add_argument('--no-monitor', action='store_true',
+                               help='Submit jobs without monitoring')
+        run_parser.add_argument('--clean', action='store_true',
+                               help='Clean start (remove existing OTHD files)')
+        run_parser.add_argument('--from-step', type=int,
+                               help='Restart from specific timestep')
+        run_parser.add_argument('--dry-run', action='store_true',
+                               help='Show what would be done without submitting jobs')
+        run_parser.add_argument('-v', '--verbose', action='store_true',
+                               help='Enable verbose output')
+        run_parser.add_argument('-h', '--help', action='store_true',
+                               help='Show help for run command')
+        run_parser.add_argument('--examples', action='store_true',
+                               help='Show usage examples')
+        
         # Main case help flags
         parser.add_argument('-h', '--help', action='store_true',
                            help='Show help for case command')
@@ -79,6 +98,10 @@ class CaseCommand(BaseCommand):
             # Delegate to new command
             from ..new_cmd import command as new_cmd
             new_cmd.execute_new(args)
+        elif hasattr(args, 'case_subcommand') and args.case_subcommand == 'run':
+            # Delegate to run command
+            from .run_cmd import execute_case_run
+            execute_case_run(args)
         else:
             # Show help for case group
             self.show_help()
@@ -106,6 +129,7 @@ class CaseCommand(BaseCommand):
         
         table.add_row("show", "Display case information (was: info)")
         table.add_row("create", "Create new case from template (was: new)")
+        table.add_row("run", "Submit and monitor SLURM simulation jobs")
         
         console.print("[bold]SUBCOMMANDS:[/bold]")
         console.print(table)
@@ -113,6 +137,8 @@ class CaseCommand(BaseCommand):
         console.print("[bold]EXAMPLES:[/bold]")
         console.print("    flexflow case show CS4SG1U1")
         console.print("    flexflow case create myCase --problem-name test")
+        console.print("    flexflow case run CS4SG1U1")
+        console.print("    flexflow case run CS4SG1U1 --no-monitor")
         console.print()
 
 

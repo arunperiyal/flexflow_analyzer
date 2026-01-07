@@ -26,6 +26,7 @@ ff plot CS4SG1U1 --node 10  # Plot data
 ```bash
 ff case show <case>         # Display case information
 ff case create <name>       # Create new case from template
+ff case run <case>          # Submit and monitor SLURM simulation jobs
 ff case list                # List all available cases
 ```
 
@@ -69,6 +70,28 @@ ff tecplot info <file>      # Show PLT file info
 - [technical/STANDALONE_BUILD.md](technical/STANDALONE_BUILD.md) - Building standalone
 
 ## Examples
+
+### Run a Simulation
+
+```bash
+# Submit simulation jobs (first run)
+ff case run CS4SG1U1
+
+# Monitor progress automatically
+# Press Ctrl+C to stop monitoring (jobs continue)
+
+# Submit without monitoring
+ff case run CS4SG1U1 --no-monitor
+
+# Clean start (removes existing OTHD files)
+ff case run CS4SG1U1 --clean
+
+# Restart from specific timestep
+ff case run CS4SG1U1 --from-step 5000
+
+# Dry run (preview without submitting)
+ff case run CS4SG1U1 --dry-run
+```
 
 ### Analyze a Case
 
