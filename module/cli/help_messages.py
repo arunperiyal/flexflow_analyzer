@@ -24,6 +24,10 @@ def print_main_examples():
   {Colors.GREEN}Create new case:{Colors.RESET}
     flexflow case create myCase --problem-name test --np 64
     flexflow case create myCase --ref-case refCase --problem-name riser
+  
+  {Colors.GREEN}Run SLURM simulation:{Colors.RESET}
+    flexflow case run CS4SG1U1
+    flexflow case run CS4SG1U1 --no-monitor
 
 {Colors.BOLD}{Colors.CYAN}2. Data Operations{Colors.RESET} - {Colors.YELLOW}flexflow data{Colors.RESET}
 
@@ -146,6 +150,7 @@ def print_main_help():
     {Colors.CYAN}case{Colors.RESET}        Manage simulation cases
                  {Colors.DIM}show{Colors.RESET}     - Display case information
                  {Colors.DIM}create{Colors.RESET}   - Create new case directory
+                 {Colors.DIM}run{Colors.RESET}      - Submit and monitor SLURM jobs
     
     {Colors.CYAN}data{Colors.RESET}        Work with time-series data  
                  {Colors.DIM}show{Colors.RESET}     - Preview data in table format
@@ -174,12 +179,13 @@ def print_main_help():
     {Colors.YELLOW}--update{Colors.RESET}            Update FlexFlow installation
     {Colors.YELLOW}--completion{Colors.RESET} <shell> Generate completion script (bash|zsh|fish)
     {Colors.YELLOW}--examples{Colors.RESET}          Show comprehensive usage examples
+    {Colors.YELLOW}--version, -v{Colors.RESET}       Show version information
     {Colors.YELLOW}--help, -h{Colors.RESET}          Show this help message
 
 {Colors.BOLD}TAB COMPLETION:{Colors.RESET}
     Press TAB to complete commands, subcommands, options, and values:
     flexflow <TAB>                   # Show all commands
-    flexflow case <TAB>              # Show: show, create
+    flexflow case <TAB>              # Show: show, create, run
     flexflow data <TAB>              # Show: show, stats
     flexflow plot --data-type <TAB>  # Show: displacement force moment pressure
 

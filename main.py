@@ -14,13 +14,30 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from module.cli.registry import registry
 from module.cli.help_messages import print_main_help, print_main_examples
 from module.installer import install, uninstall, update
+from module.utils.colors import Colors
 
 
 def create_parser_v2():
     """Create argument parser with registry pattern"""
     import argparse
     
-    parser = argparse.ArgumentParser(
+    class FlexFlowParser(argparse.ArgumentParser):
+        """Custom parser that shows better error messages"""
+        def error(self, message):
+            # Don't show argparse's default error, we'll handle it better
+            if 'invalid choice' in message:
+                # Extract the invalid command
+                import re
+                match = re.search(r"invalid choice: '(\w+)'", message)
+                if match:
+                    cmd = match.group(1)
+                    print(f"\n{Colors.RED}✗ Error: Unknown command '{cmd}'{Colors.RESET}\n", file=sys.stderr)
+                    print_main_help()
+                    sys.exit(2)
+            # For other errors, show default behavior
+            super().error(message)
+    
+    parser = FlexFlowParser(
         description='FlexFlow - Analyze and visualize FlexFlow simulation data',
         add_help=False
     )
