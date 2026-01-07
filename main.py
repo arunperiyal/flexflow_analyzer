@@ -1,32 +1,29 @@
 #!/usr/bin/env python3
 """
-FlexFlow CLI - Main entry point (Version 2 - Registry Pattern)
-
-This is the new implementation using the command registry pattern.
-It runs alongside the old main.py during Phase 1 for testing.
+FlexFlow - Main entry point
+Analyze and visualize FlexFlow simulation data
 """
 
 import sys
 import os
 
+# Add current directory to path for development mode
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from module.cli.registry import registry
-from module.cli.help_messages import print_main_help, print_main_examples
-from module.installer import install, uninstall, update
-from module.utils.colors import Colors
+from flexflow.cli.registry import registry
+from flexflow.cli.help_messages import print_main_help, print_main_examples
+from flexflow.installer import install, uninstall, update
+from flexflow.utils.colors import Colors
 
 
-def create_parser_v2():
+def create_parser():
     """Create argument parser with registry pattern"""
     import argparse
     
     class FlexFlowParser(argparse.ArgumentParser):
-        """Custom parser that shows better error messages"""
+        """Custom parser with better error messages"""
         def error(self, message):
-            # Don't show argparse's default error, we'll handle it better
             if 'invalid choice' in message:
-                # Extract the invalid command
                 import re
                 match = re.search(r"invalid choice: '(\w+)'", message)
                 if match:
@@ -34,7 +31,6 @@ def create_parser_v2():
                     print(f"\n{Colors.RED}✗ Error: Unknown command '{cmd}'{Colors.RESET}\n", file=sys.stderr)
                     print_main_help()
                     sys.exit(2)
-            # For other errors, show default behavior
             super().error(message)
     
     parser = FlexFlowParser(
@@ -68,56 +64,38 @@ def create_parser_v2():
     return parser
 
 
-def parse_args_v2(args=None):
-    """Parse command line arguments"""
-    parser = create_parser_v2()
-    
-    if args is None:
-        args = sys.argv[1:]
-    
-    return parser.parse_args(args)
-
-
 def main():
-    """Main entry point using registry pattern"""
+    """Main entry point"""
     
-    # Import and register all commands (flat structure for backward compatibility)
-    from module.commands.info import InfoCommand
-    from module.commands.new import NewCommand
-    from module.commands.plot import PlotCommand
-    from module.commands.compare import CompareCommand
-    from module.commands.preview import PreviewCommand
-    from module.commands.statistics import StatisticsCommand
-    from module.commands.template import TemplateCommand
-    from module.commands.docs import DocsCommand
-    from module.commands.tecplot import TecplotCommand
+    # Import and register all commands
+    from flexflow.commands.info import InfoCommand
+    from flexflow.commands.new import NewCommand
+    from flexflow.commands.plot import PlotCommand
+    from flexflow.commands.compare import CompareCommand
+    from flexflow.commands.preview import PreviewCommand
+    from flexflow.commands.statistics import StatisticsCommand
+    from flexflow.commands.template import TemplateCommand
+    from flexflow.commands.docs import DocsCommand
+    from flexflow.commands.tecplot import TecplotCommand
+    from flexflow.commands.case import CaseCommand
+    from flexflow.commands.data import DataCommand
+    from flexflow.commands.field import FieldCommand
+    from flexflow.commands.config import ConfigCommand
+    from flexflow.commands.agent import AgentCommand
     
-    # Register original flat commands (backward compatibility)
-    registry.register(InfoCommand)
-    registry.register(NewCommand)
-    registry.register(PlotCommand)
-    registry.register(CompareCommand)
-    registry.register(PreviewCommand)
-    registry.register(StatisticsCommand)
-    registry.register(TemplateCommand)
-    registry.register(DocsCommand)
-    registry.register(TecplotCommand)
-    
-    # Import and register new domain-driven command groups
-    from module.commands.case_group import CaseCommand
-    from module.commands.data_group import DataCommand
-    from module.commands.field_group import FieldCommand
-    from module.commands.config_group import ConfigCommand
-    
-    registry.register(CaseCommand)
-    registry.register(DataCommand)
-    registry.register(FieldCommand)
-    registry.register(ConfigCommand)
+    # Register all commands
+    for cmd_class in [
+        InfoCommand, NewCommand, PlotCommand, CompareCommand, PreviewCommand,
+        StatisticsCommand, TemplateCommand, DocsCommand, TecplotCommand,
+        CaseCommand, DataCommand, FieldCommand, ConfigCommand, AgentCommand
+    ]:
+        registry.register(cmd_class)
     
     # Parse arguments
-    args = parse_args_v2()
+    parser = create_parser()
+    args = parser.parse_args()
     
-    # Handle global flags first
+    # Handle global flags
     if args.install:
         install()
         return
@@ -128,7 +106,7 @@ def main():
         update()
         return
     elif args.completion:
-        from module.cli.completion import generate_completion_script
+        from flexflow.cli.completion import generate_completion_script
         print(generate_completion_script(args.completion))
         return
     elif args.examples:
@@ -138,19 +116,18 @@ def main():
         from __version__ import get_full_version_info
         print(get_full_version_info())
         return
-    
-    # Handle commands via registry
-    if not args.command:
+    elif args.help or not args.command:
         print_main_help()
+        return
+    
+    # Execute command via registry
+    command = registry.get(args.command)
+    if command:
+        command.execute(args)
     else:
-        command = registry.get(args.command)
-        if command:
-            command.execute(args)
-        else:
-            print(f"Error: Unknown command '{args.command}'", file=sys.stderr)
-            print("\nAvailable commands:", ", ".join(registry.list_names()))
-            print(f"\nRun 'flexflow --help' for more information")
-            sys.exit(1)
+        print(f"{Colors.RED}✗ Error: Unknown command '{args.command}'{Colors.RESET}", file=sys.stderr)
+        print(f"\nRun 'flexflow --help' for available commands")
+        sys.exit(1)
 
 
 if __name__ == '__main__':
@@ -161,4 +138,6 @@ if __name__ == '__main__':
         sys.exit(1)
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
         sys.exit(1)

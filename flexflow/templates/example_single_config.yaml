@@ -1,0 +1,48 @@
+# FlexFlow Single Plot Configuration Template
+# This template demonstrates how to create a single plot from OTHD data
+
+# Case directory containing the simulation output files
+case_dir: CS4SG2U1
+
+# Node ID to plot (0-indexed in code, but corresponds to node numbers in simulation)
+node: 10
+
+# Type of data to plot: displacement, force, moment, or pressure
+data_type: displacement
+
+# Component to plot: x, y, z, or magnitude
+component: y
+
+# Type of plot: time, fft, traj2d, or traj3d
+plot_type: time
+
+# Output file path (PNG, PDF, SVG supported)
+output: plot.png
+
+# Plot styling options
+plot_style:
+  color: blue
+  linewidth: 2.0
+  linestyle: '-'      # Options: '-', '--', '-.', ':'
+  marker: o           # Options: o, s, ^, v, *, +, x, or null for no marker
+
+# Plot properties
+plot_properties:
+  title: Displacement vs Time
+  xlabel: Time (s)
+  ylabel: Displacement (mm)
+  fontsize: 12
+  fontname: Arial     # Font family: Arial, Times New Roman, Courier, etc.
+  legend: true
+  grid: true
+
+# Time range for filtering data (optional)
+time_range:
+  # Option 1: Use step IDs (tsId values, starting from 1)
+  # Time is calculated as: step_id * dt
+  start_step: 1       # tsId 1 corresponds to first time step
+  end_step: 100       # tsId 100 corresponds to 100th time step
+  
+  # Option 2: Use time values directly (comment out start_step/end_step if using this)
+  # start_time: 0.05
+  # end_time: 5.0
