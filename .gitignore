@@ -48,6 +48,9 @@ test_standard_py313/
 CS4SG*/
 refCase/
 
+# Examples directory (contains large case files >50MB)
+examples/
+
 # PyInstaller build artifacts
 build/
 dist/
