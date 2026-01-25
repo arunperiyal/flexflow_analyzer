@@ -1,0 +1,45 @@
+# FlexFlow Case Configuration Template (Single Case)
+# This template is for creating a single case from a reference case
+
+# Case name (directory name that will be created)
+case_name: myCase
+
+# Problem name (must match the .geo and .def files in reference case)
+# Leave empty to use the same problem name as the reference case
+problem_name: riser
+
+# Processor and Output Settings
+processors: 36              # Number of processors to use
+output_frequency: 50        # Output frequency for data files
+
+# Geometry Parameters (for .geo file)
+# These values will replace #parameter_name placeholders in the .geo file
+# Example: #groove_depth in the .geo file will be replaced with 0.05
+geo:
+  groove_depth: 0.05        # Depth of groove relative to diameter
+  groove_width: 0.10        # Width of groove relative to diameter
+  # Add more geometry parameters as needed
+  # parameter_name: value
+
+# Flow/Solver Parameters (for .def file)
+# These will update variable definitions in the .def file's define{} blocks
+# Example: Variable 'Ur' will be set to 5.4
+def:
+  Ur: 5.4                   # Reduced velocity
+  Re: 1000                  # Reynolds number
+  # Add more solver parameters as needed
+  # parameter_name: value
+
+# SLURM Configuration (optional overrides)
+# Uncomment to override default SLURM settings
+# slurm:
+#   partition: medium
+#   walltime: "72:00:00"
+#   nodes: 3
+#   ntasks_per_node: 40
+#   mem_per_cpu: "4GB"
+
+# Notes:
+# - Make sure the parameter names match the placeholders in your .geo file (#parameter_name)
+# - Make sure the variable names match the definitions in your .def file (define{variable=...})
+# - The problem_name should match the base name of your .geo and .def files in the reference case

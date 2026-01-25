@@ -1,0 +1,1 @@
+"""Template command implementation"""

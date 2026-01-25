@@ -125,9 +125,9 @@ flexflow -v            # 0.75s
 
 ### Python Environment
 
-- **Name:** `tecplot312`
+- **Name:** `flexflow_env`
 - **Python:** 3.12
-- **Location:** `~/miniconda3/envs/tecplot312` (or anaconda3)
+- **Location:** `~/miniconda3/envs/flexflow_env` (or anaconda3)
 
 ### Python Packages
 
@@ -165,8 +165,8 @@ if [ -f "$HOME/miniconda3/etc/profile.d/conda.sh" ]; then
 fi
 
 # FlexFlow aliases
-alias ff='conda activate tecplot312 && python /path/to/flexflow/main.py'
-alias flexflow-dev='conda activate tecplot312 && python /path/to/flexflow/main.py'
+alias ff='conda activate flexflow_env && python /path/to/flexflow/main.py'
+alias flexflow-dev='conda activate flexflow_env && python /path/to/flexflow/main.py'
 
 # FlexFlow completion (optional)
 if [ -f "$HOME/.bash_completion.d/flexflow_completion" ]; then
@@ -183,13 +183,13 @@ After installation, verify everything works:
 ff -v                           # Should show FlexFlow 2.0.0
 
 # 2. Check environment
-conda env list | grep tecplot312  # Should exist
+conda env list | grep flexflow_env  # Should exist
 
 # 3. Test a command
 ff case show CS4SG1U1           # Should show case info
 
 # 4. Check Python packages
-conda activate tecplot312
+conda activate flexflow_env
 python -c "import tecplot; print('pytecplot OK')"
 ```
 
@@ -260,7 +260,7 @@ Edit `~/.bashrc` or `~/.zshrc` and remove lines between:
 ### Remove Environment
 
 ```bash
-conda env remove -n tecplot312
+conda env remove -n flexflow_env
 ```
 
 ### Remove Wrapper (if installed)
@@ -285,8 +285,8 @@ If you prefer not to use the installer:
 
 ### 1. Create environment
 ```bash
-conda create -n tecplot312 python=3.12 -y
-conda activate tecplot312
+conda create -n flexflow_env python=3.12 -y
+conda activate flexflow_env
 ```
 
 ### 2. Install dependencies
@@ -296,7 +296,7 @@ pip install numpy matplotlib pandas pyyaml rich tqdm pytecplot
 
 ### 3. Create alias
 ```bash
-echo 'alias ff="conda activate tecplot312 && python /path/to/flexflow/main.py"' >> ~/.bashrc
+echo 'alias ff="conda activate flexflow_env && python /path/to/flexflow/main.py"' >> ~/.bashrc
 source ~/.bashrc
 ```
 
@@ -326,7 +326,7 @@ A: Yes, just run `./install.sh` again and choose a different option.
 A: No! The alias/wrapper handles activation automatically.
 
 **Q: Will this conflict with my existing Python?**  
-A: No, it uses a separate conda environment (`tecplot312`).
+A: No, it uses a separate conda environment (`flexflow_env`).
 
 **Q: Can I install for multiple users?**  
 A: Yes, use Option 3 (System installation).

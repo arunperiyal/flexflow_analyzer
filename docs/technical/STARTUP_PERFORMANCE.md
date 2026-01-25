@@ -30,7 +30,7 @@ echo 'alias flexflow="python /media/arunperiyal/Works/projects/flexflow_manager/
 source ~/.bashrc
 
 # Activate conda once
-conda activate tecplot312
+conda activate flexflow_env
 
 # Use normally
 flexflow --version          # ~0.4s
@@ -116,7 +116,7 @@ nuitka --standalone --onefile main.py
 
 ```bash
 # One-time setup
-echo 'alias flexflow="conda activate tecplot312 && python /media/arunperiyal/Works/projects/flexflow_manager/main.py"' >> ~/.bashrc
+echo 'alias flexflow="conda activate flexflow_env && python /media/arunperiyal/Works/projects/flexflow_manager/main.py"' >> ~/.bashrc
 source ~/.bashrc
 
 # Or use the fast wrapper
@@ -159,7 +159,7 @@ The 2.8s startup is acceptable for:
 cat >> ~/.bashrc << 'EOF'
 
 # FlexFlow fast version (source)
-alias flexflow-dev='cd /media/arunperiyal/Works/projects/flexflow_manager && conda activate tecplot312 && python main.py'
+alias flexflow-dev='cd /media/arunperiyal/Works/projects/flexflow_manager && conda activate flexflow_env && python main.py'
 alias ff='flexflow-dev'  # Even shorter!
 EOF
 

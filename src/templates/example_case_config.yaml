@@ -1,0 +1,80 @@
+# FlexFlow Case Configuration File
+# This file defines parameters for case generation
+
+# Single Case Configuration
+# --------------------------
+case_name: testCase
+problem_name: riser
+
+# Processor and Output Settings
+processors: 36
+output_frequency: 50
+
+# Geometry Parameters (for .geo file)
+# These values will replace #parameter_name in the .geo file
+geo:
+  groove_depth: 0.05      # Depth of groove relative to diameter
+  groove_width: 0.10      # Width of groove relative to diameter
+
+# Flow/Solver Parameters (for .def file)
+# These will update variable definitions in the .def file
+def:
+  Ur: 5.4                 # Reduced velocity
+  Re: 1000                # Reynolds number
+
+# SLURM Configuration (optional overrides)
+# slurm:
+#   partition: medium
+#   walltime: "72:00:00"
+#   nodes: 3
+#   ntasks_per_node: 40
+
+
+# Batch Case Generation
+# --------------------------
+# Uncomment the section below to generate multiple cases
+# When 'cases' section exists, the single case config above is ignored
+
+# cases:
+#   - name: case1_groove03
+#     problem_name: riser
+#     processors: 120
+#     output_frequency: 100
+#     geo:
+#       groove_depth: 0.03
+#       groove_width: 0.08
+#     def:
+#       Ur: 4.0
+#       Re: 1000
+# 
+#   - name: case2_groove05
+#     problem_name: riser
+#     processors: 120
+#     output_frequency: 100
+#     geo:
+#       groove_depth: 0.05
+#       groove_width: 0.10
+#     def:
+#       Ur: 5.0
+#       Re: 1000
+# 
+#   - name: case3_groove07
+#     problem_name: riser
+#     processors: 120
+#     output_frequency: 100
+#     geo:
+#       groove_depth: 0.07
+#       groove_width: 0.12
+#     def:
+#       Ur: 6.0
+#       Re: 1000
+
+# Parameter Sweep Example
+# --------------------------
+# You can also define parameter sweeps (not yet implemented)
+# sweep:
+#   base_name: sweep_groove
+#   parameters:
+#     geo.groove_depth: [0.03, 0.05, 0.07, 0.09]
+#     def.Ur: [4.0, 5.0, 6.0]
+#   # This would generate 4x3 = 12 cases

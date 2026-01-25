@@ -118,7 +118,7 @@ flexflow_manager/
 ├── install.sh             # Installation script
 ├── main.py                # Main program
 ├── __version__.py         # Version information
-├── module/                # Source code
+├── src/                   # Source code
 ├── docs/                  # Documentation
 └── releases/              # Release packages
 ```

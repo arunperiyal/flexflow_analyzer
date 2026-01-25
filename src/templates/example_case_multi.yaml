@@ -1,0 +1,69 @@
+# FlexFlow Case Configuration Template (Multiple Cases)
+# This template is for creating multiple cases with parameter variations
+
+# Batch Case Generation
+# Define multiple cases with different parameters
+cases:
+  - name: case1_Ur4_groove03
+    problem_name: riser
+    processors: 120
+    output_frequency: 100
+    geo:
+      groove_depth: 0.03
+      groove_width: 0.08
+    def:
+      Ur: 4.0
+      Re: 1000
+
+  - name: case2_Ur5_groove05
+    problem_name: riser
+    processors: 120
+    output_frequency: 100
+    geo:
+      groove_depth: 0.05
+      groove_width: 0.10
+    def:
+      Ur: 5.0
+      Re: 1000
+
+  - name: case3_Ur6_groove07
+    problem_name: riser
+    processors: 120
+    output_frequency: 100
+    geo:
+      groove_depth: 0.07
+      groove_width: 0.12
+    def:
+      Ur: 6.0
+      Re: 1000
+
+  # Add more cases as needed
+  # - name: case4_...
+  #   problem_name: riser
+  #   processors: 120
+  #   output_frequency: 100
+  #   geo:
+  #     parameter: value
+  #   def:
+  #     variable: value
+
+# Optional: SLURM Configuration (applies to all cases)
+# Uncomment to override default SLURM settings for all cases
+# slurm:
+#   partition: medium
+#   walltime: "72:00:00"
+#   nodes: 3
+#   ntasks_per_node: 40
+#   mem_per_cpu: "4GB"
+
+# Notes:
+# - Each case in the list will be created as a separate directory
+# - All cases should reference the same reference case directory
+# - Parameter names must match placeholders in .geo file (#parameter_name)
+# - Variable names must match definitions in .def file (define{variable=...})
+# - Use descriptive case names that reflect the parameter variations
+
+# Example Usage:
+# 1. Edit this file to define your parameter sweep
+# 2. Run: flexflow case create --from-config this_file.yaml --ref-case ./refCase
+# 3. All cases will be created with the specified parameter variations

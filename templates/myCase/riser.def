@@ -1,0 +1,527 @@
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#                             GEOM/MESH 
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+nodeCoordinates {
+    coordinates             = File( "riser.crd" )
+}
+
+elementGroup( "interior" ) {
+    elements                = File( "riser.fluid.cnn" )
+    shape                   = eightNodeBrick
+}
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#                              SOLVER
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+physicalField {
+    flow	= navierStokes
+    mesh	= ale
+    turb	= des
+}
+
+solveSequence {
+    fieldSequence		= {mesh,flow, turb}
+    mode			= dynamic
+    minNonlinearIterations	= 2
+    maxNonlinearIterations 	= 6
+    cnvTol			= 5e-4
+    stgCnvTol		   	= 5e-4
+    stgLhsUpdFreq	   	= 1
+}
+
+timeSteppingControl{
+    maxTimeSteps              = 5000
+    initialTimeIncrement      = 0.05
+    order 		      	= second
+    highFrequencyDampingFactor = 0.99
+}
+
+nonlinearPdeSolve( "flow") {
+    equation			= flow
+    minNonlinearIterations     = 1
+    maxNonlinearIterations	= 1
+    numKrylovVectors		= 15
+    linearSolverTolerance	= 5e-3
+}
+
+nonlinearPdeSolve( "mesh") {
+	equation		= mesh
+	minNonlinearIterations	= 1
+	maxNonlinearIterations	= 1
+	linearSolver		= cg
+	linearSolverTolerance   = 5e-4
+}
+
+nonlinearPdeSolve( "turb") {
+	equation		= turb
+	minNonlinearIterations	= 1
+	maxNonlinearIterations	= 1
+	linearSolverTolerance   = 5e-4
+}
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#                              PARAMETERS
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+define{
+	variable = PI
+	value	 = 3.141592654
+}
+
+#-------------------------------------------------------------------------
+#                            VIV PARAMETERS
+#-------------------------------------------------------------------------
+define{
+	variable = RE
+	value	 = 1000
+}
+
+#-------------------------------------------------------------------------
+#                           CYLINDER SIZE
+#-------------------------------------------------------------------------
+define{
+	variable = DIA
+	value	 = 1.0
+}
+
+define{
+	variable = SPAN
+	value	 = 12*DIA
+}
+
+#-------------------------------------------------------------------------
+#                          FAR FIELD VELOCITY
+#-------------------------------------------------------------------------
+define{
+	variable = U
+	value	 = 0.0
+}
+define{
+	variable = V
+	value 	 = 0.0
+}
+define{
+	variable = W
+	value	 = 1.0
+}
+define{
+	variable = SPEED
+	value = (U^2 + V^2 + W^2)^0.5
+}
+
+
+#-------------------------------------------------------------------------
+#                           FLUID PROPERTIES
+#-------------------------------------------------------------------------
+# DENSITY
+define{
+	variable = RHO
+	value = 1000.0 
+}
+
+# VISCOSITY
+define{
+	variable = MU
+	value    = (RHO*SPEED*DIA/RE)
+}
+
+#-------------------------------------------------------------------------
+#                           STRUCTURE PROPERTIES
+#-------------------------------------------------------------------------
+# MASS RATIO
+define{
+	variable = MSTAR
+	value = 10.0
+}
+
+# REDUCED_VELOCITY
+define{
+	variable = Ur
+	value    = 5.4
+}
+
+define{
+	variable = volume_cyl
+	value	 = PI * DIA * DIA * SPAN/4
+}
+
+
+define{
+	variable = MASS
+	value	 = MSTAR * RHO * (volume_cyl)
+}
+
+define{
+	variable = MASSPERL
+	value	 = MASS/SPAN
+}
+
+define{
+	variable = rhoS
+	value	 = MSTAR * RHO
+}
+
+define{
+	variable = EI
+	value	 = (4*PI^2 * SPEED^2 * MASSPERL * SPAN^4)/(DIA^2 * (4.73^4) * Ur^2)
+}
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#                      FLEXIBLE BEAM DEFINITION
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+beamSolid( "beam_1" ) {
+	nElems	= 48
+	rhoA 	= MASSPERL
+	EA	= 0.06
+	EIx	= EI
+	EIy	= EI
+	EIz	= EI
+	GJ	= 1e4
+	J	= 0.1
+	pnt1 	= {0, 0, 0}
+	pnt2	= {12, 0, 0}
+	bcType	= fixFix
+	activeDof = {0, 1, 1, 0, 1, 1}
+    	beamLineCrd = File( "beamLineCrd.txt" )
+	surfaceOutputs = { "cylinder_body" }
+}
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#                          FIELD PROPERTIES
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+densityModel( "fluid" ) {   
+    density         = RHO 
+}
+
+viscosityModel ( "fluid" ) {   
+    viscosity       = 	MU 
+}
+
+materialModel  ( "fluid" ) {   
+	densityModel	= "fluid" 
+	viscosityModel	= "fluid" 
+}
+
+elementProperty( "interior" ) {
+	materialModel	= "fluid"
+	residualControl	= "on"	
+}
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#                        INITIAL CONDITIONS
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+initField( velocity ) {
+    defaultValues   = {U, V, W}
+}
+
+initField( pressure ) {
+    defaultValue    = 0.0
+}
+
+initField( disp ) {
+	defaultValues	= {0, 0, 0}
+}
+
+initField( eddyViscosity ) {
+	defaultValue	= 5*MU/RHO
+}
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#                    FLUID BOUNDARY CONDITIONS
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+#-------------------------------------------------------------------------
+#                         INLET CONDITIONS
+#-------------------------------------------------------------------------
+bcDirichlet( "x-inlet" ) {
+	variable		= velocityX
+	value			= U
+	nodes			= File( "riser.inlet.nbc" )
+}
+bcDirichlet( "y-inlet" ) {
+	variable		= velocityY
+	value			= V
+	nodes			= File( "riser.inlet.nbc" )
+}
+bcDirichlet( "z-inlet" ) {
+	variable		= velocityZ
+	value			= W
+	nodes			= File( "riser.inlet.nbc" )
+}
+bcDirichlet( "eddy-inlet" ) {
+	variable		= eddyViscosity
+	value			= 0.0
+	nodes			= File( "riser.inlet.nbc")
+}
+#-------------------------------------------------------------------------
+#                  SLIP CONDITION ON THE TOP-BOTTOM WALLS
+#-------------------------------------------------------------------------
+bcSymmetric( "top-slip" ){
+	surfaces	= File( "riser.top.srf" )
+	shape		= fourNodeQuad
+	elementGroup	= "interior"
+	type		= planar
+}
+bcNeumann( "eddy-top" ){
+	surfaces	= File( "riser.top.srf" )
+	shape		= fourNodeQuad
+	elementGroup	= "interior"
+	variable	= turbulenceFlux
+	type		= free
+}
+
+bcSymmetric( "bottom-slip" ){
+	surfaces	= File( "riser.bottom.srf" )
+	shape		= fourNodeQuad
+	elementGroup	= "interior"
+	type		= planar
+}
+bcNeumann( "eddy-bottom" ){
+	surfaces	= File( "riser.bottom.srf" )
+	shape		= fourNodeQuad
+	elementGroup	= "interior"
+	variable	= turbulenceFlux
+	type		= free
+}
+
+#-------------------------------------------------------------------------
+#                       SYMMETRIC CONDITIONS
+#-------------------------------------------------------------------------
+bcSymmetric( "side-1-slip" ){
+	surfaces	= File( "riser.side1.srf" )
+	shape		= fourNodeQuad
+	elementGroup	= "interior"
+	type		= planar
+}
+bcNeumann( "eddy-side1" ){
+	surfaces	= File( "riser.side1.srf" )
+	shape		= fourNodeQuad
+	elementGroup	= "interior"
+	variable	= turbulenceFlux
+	type		= free
+}
+
+bcSymmetric( "side-2-slip" ){
+	surfaces	= File( "riser.side2.srf" )
+	shape		= fourNodeQuad
+	elementGroup	= "interior"
+	type		= planar
+}
+bcNeumann( "eddy-side2" ){
+	surfaces	= File( "riser.side2.srf" )
+	shape		= fourNodeQuad
+	elementGroup	= "interior"
+	variable	= turbulenceFlux
+	type		= free
+}
+
+#-------------------------------------------------------------------------
+#                           BC ON OUTFLOW
+#-------------------------------------------------------------------------
+bcOutflow( "outflow" ){
+	surfaces	= File( "riser.outlet.srf" )
+	shape		= fourNodeQuad
+	elementGroup	= "interior"
+	pressure	= 0
+}
+bcNeumann( "eddy-outflow") {
+	surfaces	= File( "riser.outlet.srf")
+	shape		= fourNodeQuad
+	elementGroup	= "interior"
+	variable 	= turbulenceFlux
+	type		= outflow
+}
+
+#------------------------------------------------------------------------
+#                        BC ON CYLINDER WALL
+#------------------------------------------------------------------------
+bcDirichlet( "x-wall" ) {
+    nodes               = File( "riser.cyl.nbc" ) 
+    variable            = velocityX 
+    type		= matchMeshVelocity
+}
+
+bcDirichlet( "y-wall" ) {
+    nodes               = File( "riser.cyl.nbc" ) 
+    variable            = velocityY 
+    type		= matchMeshVelocity
+}
+
+bcDirichlet( "z-wall" ) {
+	nodes		= File( "riser.cyl.nbc" )
+	variable	= velocityZ
+	type		= matchMeshVelocity
+}
+bcTurbWall( "turb wall") {
+    surfaces        	= File( "riser.cyl.srf" ) 
+    elementGroup    	= "interior"
+    shape           	= fourNodeQuad
+}
+
+bcDirichlet ("eddy-wall") {
+    nodes		= File( "riser.cyl.nbc" )
+    variable	 	= eddyViscosity
+    value    		= 0.0
+}
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#                    ALE BOUNDARY CONDITIONS
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+#-------------------------------------------------------------------------
+#                         INLET CONDITIONS
+#-------------------------------------------------------------------------
+bcDirichlet( "x-disp-inlet" ) {
+	variable		= meshDisplacementX
+	value			= 0.0
+	nodes			= File( "riser.inlet.nbc" )
+}
+bcDirichlet( "y-disp-inlet" ) {
+	variable		= meshDisplacementY
+	value			= 0.0
+	nodes			= File( "riser.inlet.nbc" )
+}
+bcDirichlet( "z-disp-inlet" ) {
+	variable		= meshDisplacementZ
+	value			= 0.0
+	nodes			= File( "riser.inlet.nbc" )
+}
+#-------------------------------------------------------------------------
+#                  CONDITION ON THE TOP-BOTTOM WALLS
+#-------------------------------------------------------------------------
+bcDirichlet( "x-disp-top" ) {
+	variable		= meshDisplacementX
+	value			= 0.0
+	nodes			= File( "riser.top.nbc" )
+}
+bcDirichlet( "y-disp-top" ) {
+	variable		= meshDisplacementY
+	value			= 0.0
+	nodes			= File( "riser.top.nbc" )
+}
+bcDirichlet( "z-disp-top" ) {
+	variable		= meshDisplacementZ
+	value			= 0.0
+	nodes			= File( "riser.top.nbc" )
+}
+bcDirichlet( "x-disp-bottom" ) {
+	variable		= meshDisplacementX
+	value			= 0.0
+	nodes			= File( "riser.bottom.nbc" )
+}
+bcDirichlet( "y-disp-bottom" ) {
+	variable		= meshDisplacementY
+	value			= 0.0
+	nodes			= File( "riser.bottom.nbc" )
+}
+bcDirichlet( "z-disp-bottom" ) {
+	variable		= meshDisplacementZ
+	value			= 0.0
+	nodes			= File( "riser.bottom.nbc" )
+}
+
+bcDirichlet( "x-disp-side1" ) {
+	variable		= meshDisplacementX
+	value			= 0.0
+	nodes			= File( "riser.side1.nbc" )
+}
+bcDirichlet( "y-disp-side1" ) {
+	variable		= meshDisplacementY
+	value			= 0.0
+	nodes			= File( "riser.side1.nbc" )
+}
+bcDirichlet( "z-disp-side1" ) {
+	variable		= meshDisplacementZ
+	value			= 0.0
+	nodes			= File( "riser.side1.nbc" )
+}
+bcDirichlet( "x-disp-side2" ) {
+	variable		= meshDisplacementX
+	value			= 0.0
+	nodes			= File( "riser.side2.nbc" )
+}
+bcDirichlet( "y-disp-side2" ) {
+	variable		= meshDisplacementY
+	value			= 0.0
+	nodes			= File( "riser.side2.nbc" )
+}
+bcDirichlet( "z-disp-side2" ) {
+	variable		= meshDisplacementZ
+	value			= 0.0
+	nodes			= File( "riser.side2.nbc" )
+}
+
+#-------------------------------------------------------------------------
+#                           BC ON OUTFLOW
+#-------------------------------------------------------------------------
+bcDirichlet( "x-disp-outlet" ) {
+	variable		= meshDisplacementX
+	value			= 0.0
+	nodes			= File( "riser.outlet.nbc" )
+}
+bcDirichlet( "y-disp-outlet" ) {
+	variable		= meshDisplacementY
+	value			= 0.0
+	nodes			= File( "riser.outlet.nbc" )
+}
+bcDirichlet( "z-disp-outlet" ) {
+	variable		= meshDisplacementZ
+	value			= 0.0
+	nodes			= File( "riser.outlet.nbc" )
+}
+
+#------------------------------------------------------------------------
+#                        BC ON CYLINDER WALL
+#------------------------------------------------------------------------
+bcDirichlet( "x-disp-cyl" ) {
+    nodes               = File( "riser.cyl_BL.nbc" ) 
+    variable            = meshDisplacementX
+    value		 = 0.0
+#    type		= beamBody
+#    beamBody		= "beam_1"
+}
+
+bcDirichlet( "y-disp-cyl" ) {
+    nodes               = File( "riser.cyl_BL.nbc" ) 
+    variable            = meshDisplacementY
+    type		= beamBody
+    beamBody		= "beam_1"
+}
+
+bcDirichlet( "z-disp-cyl" ) {
+    nodes               = File( "riser.cyl_BL.nbc" ) 
+    variable            = meshDisplacementZ
+    value		 = 0.0
+#    type		= meshMotion
+#    meshMotion		= "cylinder"
+}
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+# 				OUTPUT
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+outputSimulation{
+    outputInitialCondition	= "on"
+    outFreq 		  	= 100
+}
+
+outputRestart{
+    outFreq			= 100
+}
+
+outputSurface( "cylinder_body"  ){
+    surfaces        = File( "riser.cyl.srf" ) 
+    elementGroup    = "interior"
+    shape           = fourNodeQuad
+    intgOutFreq     = 1
+    nodalOutFreq    = 1
+}
+
+
+outputTimeHistory( "riser_probe"){
+    type	    = nodal
+    nodes	    = File( "riser.cyl_nodes.nbc" )
+    outputFrequency = 1
+}
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+# 				SOLVE
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+solve { }

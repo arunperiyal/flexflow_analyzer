@@ -193,7 +193,7 @@ alias | grep ff
 
 ```bash
 # Activate environment manually
-conda activate tecplot312
+conda activate flexflow_env
 
 # Check packages
 pip list | grep pytecplot
