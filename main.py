@@ -65,6 +65,7 @@ def main():
     from src.commands.case import CaseCommand
     from src.commands.data import DataCommand
     from src.commands.field import FieldCommand
+    from src.commands.check import CheckCommand
 
     # Visualization commands
     from src.commands.visualization import PlotCommand, CompareCommand
@@ -77,6 +78,8 @@ def main():
     for cmd_class in [
         # Domain commands
         CaseCommand, DataCommand, FieldCommand,
+        # File inspection
+        CheckCommand,
         # Visualization commands
         PlotCommand, CompareCommand,
         # Utility commands

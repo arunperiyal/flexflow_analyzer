@@ -149,6 +149,9 @@ def print_main_help():
                  {Colors.DIM}plot{Colors.RESET}     - Plot configuration templates
                  {Colors.DIM}case{Colors.RESET}     - Case creation templates
 
+{Colors.BOLD}FILE INSPECTION:{Colors.RESET}
+    {Colors.CYAN}check{Colors.RESET}       Inspect data files (OTHD, OISD)
+
 {Colors.BOLD}VISUALIZATION COMMANDS:{Colors.RESET}
     {Colors.CYAN}plot{Colors.RESET}        Plot displacement or force data
     {Colors.CYAN}compare{Colors.RESET}     Compare multiple cases
@@ -177,9 +180,10 @@ def print_main_help():
 
 {Colors.BOLD}GETTING STARTED:{Colors.RESET}
     1. View case information:    flexflow case show CS4SG1U1
-    2. Preview data:             flexflow data show CS4SG1U1 --node 24
-    3. Create plots:             flexflow plot CS4SG1U1 --node 100
-    4. Compare cases:            flexflow compare CS4SG1U1 CS4SG2U1
+    2. Check data files:         flexflow check riser.othd
+    3. Preview data:             flexflow data show CS4SG1U1 --node 24
+    4. Create plots:             flexflow plot CS4SG1U1 --node 100
+    5. Compare cases:            flexflow compare CS4SG1U1 CS4SG2U1
 
 For more help on a specific command:
     flexflow {Colors.YELLOW}<command>{Colors.RESET} --help
