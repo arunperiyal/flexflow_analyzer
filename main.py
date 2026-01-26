@@ -96,7 +96,8 @@ def main():
         from src.cli.completion import generate_completion_script
         print(generate_completion_script(args.completion))
         return
-    elif args.examples:
+    elif hasattr(args, 'examples') and args.examples and not hasattr(args, 'case_subcommand'):
+        # Only show main examples if NOT a subcommand
         print_main_examples()
         return
     elif args.version:
