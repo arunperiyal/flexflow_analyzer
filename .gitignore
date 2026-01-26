@@ -49,7 +49,10 @@ CS4SG*/
 refCase/
 
 # Examples directory (contains large case files >50MB)
-examples/
+# Examples directory (contains user simulation data)  
+# Ignore all examples except the standard template
+examples/*
+!examples/standard/
 
 # PyInstaller build artifacts
 build/

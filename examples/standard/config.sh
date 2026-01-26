@@ -93,13 +93,13 @@ export LOG_DIR="${LOG_DIR:-logs}"
 # ADVANCED SETTINGS
 # ============================================================================
 
-# Maximum walltime for different phases (HH:MM:SS)
-export PRE_WALLTIME="24:00:00"
-export MAIN_WALLTIME="72:00:00"
-export POST_WALLTIME="24:00:00"
-
 # Memory per CPU (if needed)
 # export MEM_PER_CPU="4G"
+
+# Note: Walltime is set in SBATCH directives in each script:
+#   preFlex.sh:  24:00:00
+#   mainFlex.sh: 72:00:00
+#   postFlex.sh: 24:00:00
 
 # ============================================================================
 # VALIDATION
