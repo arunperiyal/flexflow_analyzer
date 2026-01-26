@@ -8,89 +8,86 @@ from ....utils.colors import Colors
 def print_new_help():
     """Print help message for new command"""
     help_text = f"""
-{Colors.BOLD}{Colors.CYAN}FlexFlow New Command{Colors.RESET}
+{Colors.BOLD}{Colors.CYAN}FlexFlow Case Create Command{Colors.RESET}
 
 Create a new case directory from a reference case template.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    flexflow new {Colors.YELLOW}<case_name>{Colors.RESET} [OPTIONS]
-    flexflow new {Colors.YELLOW}--from-config{Colors.RESET} <yaml_file>
+    flexflow case create {Colors.YELLOW}<case_name>{Colors.RESET} [OPTIONS]
+    flexflow case create {Colors.YELLOW}--from-config{Colors.RESET} <yaml_file>
 
 {Colors.BOLD}ARGUMENTS:{Colors.RESET}
     {Colors.YELLOW}<case_name>{Colors.RESET}              Name of the new case directory to create
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
-    {Colors.YELLOW}--ref-case{Colors.RESET} PATH          Path to reference case directory (default: ./refCase)
-    {Colors.YELLOW}--problem-name{Colors.RESET} NAME      Override problem name in simflow.config
-    {Colors.YELLOW}--np{Colors.RESET} NUM                 Number of processors (default: 36)
-    {Colors.YELLOW}--freq{Colors.RESET} NUM               Output frequency (default: 50)
-    {Colors.YELLOW}--from-config{Colors.RESET} FILE       Load configuration from YAML file
+    {Colors.YELLOW}--ref-case{Colors.RESET} {Colors.CYAN}<path>{Colors.RESET}        Path to reference case directory
+    {Colors.YELLOW}--problem-name{Colors.RESET} {Colors.CYAN}<name>{Colors.RESET}    Override problem name in simflow.config
+    {Colors.YELLOW}--np{Colors.RESET} {Colors.CYAN}<number>{Colors.RESET}            Number of processors (default: 36)
+    {Colors.YELLOW}--freq{Colors.RESET} {Colors.CYAN}<number>{Colors.RESET}          Output frequency (default: 50)
+    {Colors.YELLOW}--from-config{Colors.RESET} {Colors.CYAN}<file>{Colors.RESET}    Load configuration from YAML file
     {Colors.YELLOW}--force{Colors.RESET}                  Overwrite existing directory if it exists
+    {Colors.YELLOW}--dry-run{Colors.RESET}                Show what would be created without creating
     {Colors.YELLOW}-v, --verbose{Colors.RESET}            Enable verbose output
     {Colors.YELLOW}-h, --help{Colors.RESET}               Show this help message
+    {Colors.YELLOW}--examples{Colors.RESET}               Show usage examples
 
 {Colors.BOLD}DESCRIPTION:{Colors.RESET}
-    Creates a new case directory by copying files from a reference case.
+    Creates a new case directory by copying files from a reference case template.
+    The reference template should contain all necessary simulation files and scripts.
     
-    {Colors.DIM}The reference directory must contain these mandatory files:{Colors.RESET}
-    - simflow.config
-    - <problem>.geo
-    - <problem>.def
-    - preFlex.sh
-    - mainFlex.sh
-    - postFlex.sh
+    {Colors.DIM}Required files in reference directory:{Colors.RESET}
+    - simflow.config          {Colors.DIM}# Simulation configuration{Colors.RESET}
+    - {Colors.CYAN}<problem>{Colors.RESET}.geo           {Colors.DIM}# Gmsh geometry file{Colors.RESET}
+    - {Colors.CYAN}<problem>{Colors.RESET}.def           {Colors.DIM}# FlexFlow definition file{Colors.RESET}
+    - preFlex.sh              {Colors.DIM}# Pre-processing script{Colors.RESET}
+    - mainFlex.sh             {Colors.DIM}# Main simulation script{Colors.RESET}
+    - postFlex.sh             {Colors.DIM}# Post-processing script{Colors.RESET}
     
-    Where <problem> is the problem name specified in simflow.config.
+    {Colors.DIM}Optional files that will be copied if present:{Colors.RESET}
+    - config.sh               {Colors.DIM}# Script configuration{Colors.RESET}
+    - common.sh               {Colors.DIM}# Reusable functions{Colors.RESET}
+    - case_config.yaml        {Colors.DIM}# FlexFlow case config{Colors.RESET}
     
-    {Colors.BOLD}The command automatically:{Colors.RESET}
-    - Updates SLURM job names in shell scripts to {Colors.CYAN}<casename>_<pre|main|post>{Colors.RESET}
-    - Sets {Colors.CYAN}np{Colors.RESET} and {Colors.CYAN}nsg{Colors.RESET} in simflow.config (default: 36)
-    - Sets {Colors.CYAN}outFreq{Colors.RESET} in simflow.config (default: 50)
-    - Updates {Colors.CYAN}#SBATCH -n{Colors.RESET} in mainFlex.sh to match --np value
-    - Updates {Colors.CYAN}OUTFREQ{Colors.RESET} variable in postFlex.sh to match --freq value
-    - Updates {Colors.CYAN}PROBLEM{Colors.RESET} variable in postFlex.sh to match problem name
+    {Colors.BOLD}The command automatically updates:{Colors.RESET}
+    - SLURM job names to {Colors.CYAN}<casename>_<pre|main|post>{Colors.RESET}
+    - Processor count ({Colors.CYAN}np{Colors.RESET}, {Colors.CYAN}nsg{Colors.RESET}) in simflow.config
+    - Output frequency ({Colors.CYAN}outFreq{Colors.RESET}) in simflow.config
+    - {Colors.CYAN}#SBATCH -n{Colors.RESET} in mainFlex.sh to match --np value
+    - Variable values in config.sh (PROBLEM, OUTFREQ, etc.)
     
-    {Colors.BOLD}YAML Configuration:{Colors.RESET}
-    - Use {Colors.YELLOW}--from-config{Colors.RESET} to load parameters from a YAML file
+    {Colors.BOLD}YAML Configuration Mode:{Colors.RESET}
+    Use {Colors.YELLOW}--from-config{Colors.RESET} to load parameters from YAML:
     - Supports single case or batch case generation
-    - Parameters in .geo files: Use {Colors.CYAN}#parameter_name{Colors.RESET} (e.g., #groove_depth)
-    - Parameters in .def files: Define under {Colors.CYAN}'def'{Colors.RESET} section (e.g., Ur, Re)
+    - Geometry parameters: {Colors.CYAN}#parameter_name{Colors.RESET} in .geo files
+    - Definition parameters: under {Colors.CYAN}'def'{Colors.RESET} section in YAML
     - Command-line flags override YAML values
     
-    {Colors.BOLD}If --problem-name is provided, the command will also:{Colors.RESET}
-    - Update the problem name in the copied simflow.config file
-    - Rename the .geo and .def files to match the new problem name
+    {Colors.BOLD}If --problem-name is specified:{Colors.RESET}
+    - Updates problem name in simflow.config
+    - Renames .geo and .def files to match new problem name
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
-    {Colors.DIM}# Create new case using default reference directory{Colors.RESET}
-    {Colors.GREEN}flexflow new myCase{Colors.RESET}
+    {Colors.DIM}# Create from standard template{Colors.RESET}
+    {Colors.GREEN}flexflow case create myCase --ref-case examples/standard{Colors.RESET}
 
-    {Colors.DIM}# Create new case with specific reference directory{Colors.RESET}
-    {Colors.GREEN}flexflow new myCase --ref-case /path/to/refCase{Colors.RESET}
+    {Colors.DIM}# Create with custom parameters{Colors.RESET}
+    {Colors.GREEN}flexflow case create CS1 --ref-case examples/standard --problem-name riser --np 80 --freq 100{Colors.RESET}
 
-    {Colors.DIM}# Create new case with custom problem name{Colors.RESET}
-    {Colors.GREEN}flexflow new myCase --problem-name custom_problem{Colors.RESET}
+    {Colors.DIM}# Create from YAML configuration{Colors.RESET}
+    {Colors.GREEN}flexflow case create --from-config case_config.yaml{Colors.RESET}
 
-    {Colors.DIM}# Create case with custom np and frequency{Colors.RESET}
-    {Colors.GREEN}flexflow new myCase --np 120 --freq 100{Colors.RESET}
+    {Colors.DIM}# Batch generation from YAML{Colors.RESET}
+    {Colors.GREEN}flexflow case create --from-config batch_cases.yaml --verbose{Colors.RESET}
 
-    {Colors.DIM}# Complete example with all options{Colors.RESET}
-    {Colors.GREEN}flexflow new myCase --problem-name cylinder --np 64 --freq 25{Colors.RESET}
+    {Colors.DIM}# Preview without creating{Colors.RESET}
+    {Colors.GREEN}flexflow case create myCase --ref-case examples/standard --dry-run{Colors.RESET}
 
-    {Colors.DIM}# Create from YAML configuration file{Colors.RESET}
-    {Colors.GREEN}flexflow new --from-config case_config.yaml{Colors.RESET}
+    {Colors.DIM}# Force overwrite existing case{Colors.RESET}
+    {Colors.GREEN}flexflow case create myCase --ref-case examples/standard --force{Colors.RESET}
 
-    {Colors.DIM}# Create with config but override some values{Colors.RESET}
-    {Colors.GREEN}flexflow new --from-config case_config.yaml --np 120 --freq 100{Colors.RESET}
-
-    {Colors.DIM}# Batch case generation from YAML{Colors.RESET}
-    {Colors.GREEN}flexflow new --from-config batch_cases.yaml --verbose{Colors.RESET}
-
-    {Colors.DIM}# Overwrite existing directory{Colors.RESET}
-    {Colors.GREEN}flexflow new myCase --force{Colors.RESET}
-
-    {Colors.DIM}# Create with verbose output{Colors.RESET}
-    {Colors.GREEN}flexflow new myCase --ref-case ./refCase --problem-name test --verbose{Colors.RESET}
+{Colors.BOLD}SEE ALSO:{Colors.RESET}
+    flexflow case create --examples    {Colors.DIM}# More detailed examples{Colors.RESET}
+    examples/standard/README.md        {Colors.DIM}# Template documentation{Colors.RESET}
 """
     print(help_text)
 
