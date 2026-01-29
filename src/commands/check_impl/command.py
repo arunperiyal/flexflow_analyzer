@@ -72,13 +72,13 @@ def check_othd_file(filepath):
         
         # Get time info
         if len(reader.times) > 0:
-            start_time = reader.times[0]
-            end_time = reader.times[-1]
+            start_tsId = reader.tsIds[0]
+            end_tsId = reader.tsIds[-1]
             num_timesteps = len(reader.times)
             time_increment = reader.times[1] - reader.times[0] if num_timesteps > 1 else 0
         else:
-            start_time = 0
-            end_time = 0
+            start_tsId = 0
+            end_tsId = 0
             num_timesteps = 0
             time_increment = 0
         
@@ -98,8 +98,8 @@ def check_othd_file(filepath):
         table.add_row("Number of Nodes", f"{num_nodes:,}")
         table.add_row("Number of Time Steps", f"{num_timesteps:,}")
         table.add_row("", "")  # Separator
-        table.add_row("Start Time", f"{start_time:.6f}")
-        table.add_row("End Time", f"{end_time:.6f}")
+        table.add_row("Start Time Step ID", str(start_tsId))
+        table.add_row("End Time Step ID", str(end_tsId))
         if num_timesteps > 1:
             table.add_row("Time Increment", f"{time_increment:.6f}")
         table.add_row("", "")  # Separator
@@ -142,13 +142,13 @@ def check_oisd_file(filepath):
         
         # Get time info
         if len(reader.times) > 0:
-            start_time = reader.times[0]
-            end_time = reader.times[-1]
+            start_tsId = reader.tsIds[0]
+            end_tsId = reader.tsIds[-1]
             num_timesteps = len(reader.times)
             time_increment = reader.times[1] - reader.times[0] if num_timesteps > 1 else 0
         else:
-            start_time = 0
-            end_time = 0
+            start_tsId = 0
+            end_tsId = 0
             num_timesteps = 0
             time_increment = 0
         
@@ -168,8 +168,8 @@ def check_oisd_file(filepath):
         table.add_row("Number of Surfaces", f"{num_surfaces:,}")
         table.add_row("Number of Time Steps", f"{num_timesteps:,}")
         table.add_row("", "")  # Separator
-        table.add_row("Start Time", f"{start_time:.6f}")
-        table.add_row("End Time", f"{end_time:.6f}")
+        table.add_row("Start Time Step ID", str(start_tsId))
+        table.add_row("End Time Step ID", str(end_tsId))
         if num_timesteps > 1:
             table.add_row("Time Increment", f"{time_increment:.6f}")
         table.add_row("", "")  # Separator
