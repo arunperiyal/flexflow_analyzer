@@ -1,127 +1,83 @@
-# FlexFlow - Simulation Analysis Tool
+# FlexFlow Manager
 
 Fast and efficient tool for analyzing FlexFlow simulation data with PyTecplot integration.
 
+## What is FlexFlow?
+
+FlexFlow Manager is a command-line tool designed for analyzing offshore riser simulation data. It provides:
+- Fast data inspection and visualization for OTHD/OISD files
+- Tecplot PLT file integration via PyTecplot
+- SLURM job submission and monitoring for simulations
+- Case management and comparison tools
+
 ## Quick Start
 
-### 1. Install (2 minutes)
-
 ```bash
+# 1. Install (creates conda environment and ff command)
 ./install.sh
-```
 
-The installer will:
-- ✅ Check for Anaconda/Miniconda
-- ✅ Create Python 3.12 environment
-- ✅ Install dependencies (numpy, matplotlib, pytecplot)
-- ✅ Setup FlexFlow command
-
-### 2. Use FlexFlow
-
-```bash
-# After installation, reload your shell:
+# 2. Reload shell
 source ~/.bashrc
 
-# Analyze a case:
-ff case show CS4SG1U1
+# 3. Start FlexFlow Interactive Shell
+ff
 
-# Get field information:
-ff field info CS4SG1U1
-
-# Plot data:
-ff plot CS4SG1U1 --node 10 --component y
-
-# Show version:
-ff -v
+# Now in interactive mode:
+flexflow → case show CS4SG1U1       # Show case information
+flexflow → check riser.othd          # Inspect data files
+flexflow → plot CS4SG1U1 --node 10   # Create plots
+flexflow → exit                      # Exit shell
 ```
 
-## Features
+## Key Features
 
-- **Fast Startup**: 0.4s command startup (7x faster than standalone)
-- **PyTecplot Integration**: 2-3x faster PLT file operations
-- **Auto Python 3.12**: Automatically uses correct Python version
-- **Easy Installation**: One command setup
-- **Domain Commands**: Intuitive command structure (case, field, data, plot)
-- **Multiple Cases**: Analyze and compare simulation cases
-
-## Command Overview
-
-```bash
-ff case show <case>          # Show case information
-ff case create <name>        # Create new case from template
-ff case run <case>           # Submit and monitor SLURM simulation jobs
-ff case list                 # List available cases
-
-ff field info <case>         # Show field information
-ff field list <case>         # List available fields
-ff field extract <case>      # Extract field data
-
-ff data compare <cases>      # Compare multiple cases
-ff data export <case>        # Export data to format
-
-ff plot <case> [options]     # Plot case data
-ff tecplot convert <file>    # Convert PLT files
-```
+- **Interactive Shell**: Always-on REPL mode - no startup overhead between commands
+- **Instant Execution**: Commands run immediately without Python reload
+- **Smart Completion**: Tab completion for commands, subcommands, and options
+- **Command History**: Persistent history across sessions with arrow key navigation
+- **Domain Commands**: Intuitive structure - `case`, `field`, `data`, `check`, `plot`
+- **SLURM Integration**: Submit and monitor simulation jobs
+- **Template System**: Quick case creation from templates
 
 ## Requirements
 
-- **Anaconda or Miniconda** (for Python 3.12 environment)
-- **Tecplot 360 EX** (for PLT file operations)
-- **Linux** (tested on Ubuntu 20.04+)
-
-## Installation Options
-
-The installer offers 4 types:
-
-1. **Fast Alias** (Recommended) - Creates `ff` command, 0.4s startup
-2. **User Install** - Installs to ~/.local/bin
-3. **System Install** - Installs to /usr/local/bin (requires sudo)
-4. **Both** - Alias + wrapper for flexibility
+- Linux (tested on Ubuntu 20.04+)
+- Anaconda or Miniconda
+- Tecplot 360 EX (for PLT file operations)
 
 ## Documentation
 
-- **Installation Guide**: `INSTALL.md`
-- **Full Documentation**: `docs/INDEX.md`
-- **Performance Guide**: `docs/technical/STARTUP_PERFORMANCE.md`
+- **[Installation Guide](INSTALL.md)** - Setup and configuration
+- **[Usage Guide](docs/USAGE.md)** - Commands, examples, and workflows
+- **[Documentation Index](docs/INDEX.md)** - Complete documentation reference
+
+## Common Commands
+
+```bash
+# Case management
+ff case show <case>          # Display case information
+ff case create <name>        # Create new case from template
+ff case run <case>           # Submit SLURM jobs
+
+# Data inspection
+ff check <file>              # Inspect OTHD/OISD files
+ff data show <case>          # Preview time-series data
+
+# Field operations
+ff field info <case>         # Show PLT file information
+
+# Visualization
+ff plot <case> [options]     # Create plots
+ff compare <case1> <case2>   # Compare cases
+```
+
+Run `ff --help` or `ff <command> --help` for detailed options.
 
 ## Version
 
-Current version: **2.0.0** (Standalone)
+Current version: **2.0.0**
 
 Check version: `ff -v`
-
-## Examples
-
-```bash
-# Analyze case
-ff case show CS4SG1U1
-
-# View available fields
-ff field info CS4SG1U1
-
-# Plot node displacement
-ff plot CS4SG1U1 --node 10 --component y --output plot.png
-
-# Compare multiple cases
-ff data compare CS4SG1U1 CS4SG2U1
-
-# Convert PLT files
-ff tecplot convert riser.1000.plt --format hdf5
-```
-
-## Project Structure
-
-```
-flexflow_manager/
-├── README.md              # This file
-├── INSTALL.md             # Installation guide
-├── install.sh             # Installation script
-├── main.py                # Main program
-├── __version__.py         # Version information
-├── src/                   # Source code
-├── docs/                  # Documentation
-└── releases/              # Release packages
-```
 
 ## Support
 
@@ -131,9 +87,3 @@ flexflow_manager/
 ## License
 
 Internal tool for simulation analysis.
-
----
-
-**Quick Install**: `./install.sh`  
-**Quick Start**: `ff case show CS4SG1U1`  
-**Version**: 2.0.0

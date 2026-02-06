@@ -2,6 +2,7 @@
 Info command implementation
 """
 
+import os
 import sys
 from ....core.case import FlexFlowCase
 from ....utils.logger import Logger
@@ -17,14 +18,24 @@ from rich import box
 def execute_info(args):
     """
     Execute the info command
-    
+
     Parameters:
     -----------
     args : argparse.Namespace
         Parsed command arguments
     """
-    from .help_messages import print_info_help
-    
+    from .help_messages import print_info_help, print_info_examples
+
+    # Handle help flag
+    if hasattr(args, 'help') and args.help:
+        print_info_help()
+        return
+
+    # Handle examples flag
+    if hasattr(args, 'examples') and args.examples:
+        print_info_examples()
+        return
+
     # Show help if no case directory provided
     if not args.case:
         print_info_help()
@@ -47,6 +58,20 @@ def execute_info(args):
         # Basic info
         table.add_row("Case Directory", case.case_directory)
         table.add_row("Problem Name", case.problem_name)
+
+        # Output directory from simflow.config
+        if 'dir' in case.config:
+            output_dir = case.config['dir']
+            # Resolve relative paths
+            if not os.path.isabs(output_dir):
+                output_dir_full = os.path.join(case.case_directory, output_dir)
+            else:
+                output_dir_full = output_dir
+
+            # Check if it exists
+            exists_marker = "✓" if os.path.exists(output_dir_full) else "✗"
+            table.add_row("Output Directory", f"{output_dir} [{exists_marker}]")
+
         if hasattr(case, 'time_increment') and case.time_increment:
             table.add_row("Time Increment", f"{case.time_increment:.6f} s")
         

@@ -1,29 +1,9 @@
 """
-Utility commands - Agent and documentation
-Commands: agent, docs
+Utility commands - Documentation
+Commands: docs
 """
 
 from ..base import BaseCommand
-
-
-class AgentCommand(BaseCommand):
-    """AI-powered assistant for FlexFlow operations"""
-
-    name = "agent"
-    description = "AI-powered assistant for FlexFlow"
-    category = "Tools"
-
-    def setup_parser(self, subparsers):
-        """Setup argument parser for agent command"""
-        from .agent import AgentCommand as AgentImpl
-        agent_impl = AgentImpl()
-        return agent_impl.setup_parser(subparsers)
-
-    def execute(self, args):
-        """Execute agent command"""
-        from .agent import AgentCommand as AgentImpl
-        agent_impl = AgentImpl()
-        agent_impl.execute(args)
 
 
 class DocsCommand(BaseCommand):
@@ -61,5 +41,4 @@ class DocsCommand(BaseCommand):
 
 
 # Create command instances - export as classes not instances
-agent_command = AgentCommand
 docs_command = DocsCommand

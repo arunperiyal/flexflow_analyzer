@@ -1,233 +1,273 @@
-# FlexFlow Documentation
+# FlexFlow Documentation Index
 
-## Getting Started
+Complete documentation for FlexFlow Manager - a tool for analyzing offshore riser simulation data.
+
+## Documentation Structure
+
+### Getting Started
+- **[README.md](../README.md)** - Project overview and quick start
+- **[INSTALL.md](../INSTALL.md)** - Complete installation guide
+- **[USAGE.md](USAGE.md)** - Comprehensive usage guide with examples
+
+### Setup Guides
+- [setup/INSTALL_INTERACTIVE.md](setup/INSTALL_INTERACTIVE.md) - Interactive installation details
+- [INSTALL_QUICKREF.md](../INSTALL_QUICKREF.md) - Installation quick reference
+
+### Technical Documentation
+- [technical/STARTUP_PERFORMANCE.md](technical/STARTUP_PERFORMANCE.md) - Performance optimization
+- [technical/STANDALONE_BUILD.md](technical/STANDALONE_BUILD.md) - Building standalone executables
+
+## Quick Navigation
+
+### For New Users
+
+**First time using FlexFlow?** Start here:
+
+1. **Installation:** [INSTALL.md](../INSTALL.md)
+2. **Quick start:** [README.md](../README.md#quick-start)
+3. **Basic usage:** [USAGE.md](USAGE.md#getting-started)
+4. **Examples:** Run `ff --examples`
+
+### For Regular Users
+
+**Looking for command help?**
+
+- **Command reference:** [USAGE.md](USAGE.md#command-structure)
+- **Case management:** [USAGE.md](USAGE.md#case-management)
+- **Data inspection:** [USAGE.md](USAGE.md#data-inspection)
+- **Plotting:** [USAGE.md](USAGE.md#visualization)
+
+### For Developers
+
+**Working on FlexFlow?**
+
+- **Performance guide:** [technical/STARTUP_PERFORMANCE.md](technical/STARTUP_PERFORMANCE.md)
+- **Build guide:** [technical/STANDALONE_BUILD.md](technical/STANDALONE_BUILD.md)
+- **Installation internals:** [setup/INSTALL_INTERACTIVE.md](setup/INSTALL_INTERACTIVE.md)
+
+## Command Quick Reference
+
+### Domain Commands
+
+```bash
+# Case Management
+ff case show <case>          # Display case information
+ff case create <name>        # Create new case from template
+ff case run <case>           # Submit and monitor SLURM jobs
+
+# Data Operations
+ff data show <case>          # Preview time-series data
+ff data stats <case>         # Calculate statistics
+
+# Field Operations (PLT files)
+ff field info <case>         # Show PLT file information
+ff field extract <case>      # Extract field data to CSV
+
+# Templates
+ff template plot             # Generate plot configuration
+ff template case             # Generate case configuration
+```
+
+### File Inspection
+
+```bash
+ff check <file>              # Inspect OTHD/OISD files
+```
+
+### Visualization
+
+```bash
+ff plot <case> [options]     # Create time-series plots
+ff compare <case1> <case2>   # Compare multiple cases
+```
+
+### Utilities
+
+```bash
+ff --help                    # Show help
+ff --version                 # Show version
+ff --examples                # Show comprehensive examples
+ff --completion <shell>      # Generate shell completion
+```
+
+## Common Tasks
 
 ### Installation
-- [INSTALL.md](../INSTALL.md) - Quick installation guide
-- [setup/INSTALL_INTERACTIVE.md](setup/INSTALL_INTERACTIVE.md) - Detailed installation
-
-### Quick Reference
 
 ```bash
-# Installation
+# Quick install
 ./install.sh
 
-# Basic usage
-ff -v                        # Version
-ff case show CS4SG1U1       # Case info
-ff field info CS4SG1U1      # Field info
-ff plot CS4SG1U1 --node 10  # Plot data
+# Verify installation
+source ~/.bashrc
+ff --version
 ```
 
-## Command Reference
+See [INSTALL.md](../INSTALL.md) for detailed installation options.
 
-### Case Commands
-
-```bash
-ff case show <case>         # Display case information
-ff case create <name>       # Create new case from template
-ff case run <case>          # Submit and monitor SLURM simulation jobs
-ff case list                # List all available cases
-```
-
-### Field Commands
+### Analyzing a Case
 
 ```bash
-ff field info <case>        # Show field information
-ff field list <case>        # List available fields
-ff field extract <case>     # Extract field data
-```
-
-### Data Commands
-
-```bash
-ff data compare <cases>     # Compare multiple cases
-ff data export <case>       # Export data
-ff data statistics <case>   # Show statistics
-```
-
-### Plot Commands
-
-```bash
-ff plot <case> [options]    # Create plots
-  --node N                  # Select node
-  --component x|y|z         # Select component
-  --output FILE             # Save to file
-  --show                    # Display plot
-```
-
-### Tecplot Commands
-
-```bash
-ff tecplot convert <file>   # Convert PLT files
-  --format hdf5|szplt       # Output format
-ff tecplot info <file>      # Show PLT file info
-```
-
-## Technical Documentation
-
-- [technical/STARTUP_PERFORMANCE.md](technical/STARTUP_PERFORMANCE.md) - Performance guide
-- [technical/STANDALONE_BUILD.md](technical/STANDALONE_BUILD.md) - Building standalone
-
-## Examples
-
-### Run a Simulation
-
-```bash
-# Submit simulation jobs (first run)
-ff case run CS4SG1U1
-
-# Monitor progress automatically
-# Press Ctrl+C to stop monitoring (jobs continue)
-
-# Submit without monitoring
-ff case run CS4SG1U1 --no-monitor
-
-# Clean start (removes existing OTHD files)
-ff case run CS4SG1U1 --clean
-
-# Restart from specific timestep
-ff case run CS4SG1U1 --from-step 5000
-
-# Dry run (preview without submitting)
-ff case run CS4SG1U1 --dry-run
-```
-
-### Analyze a Case
-
-```bash
-# Show case overview
+# Show case information
 ff case show CS4SG1U1
 
-# Expected output:
-# Loading OTHD files...
-# Loaded: 49 nodes, 4430 timesteps
-# Time range: 0.05 to 221.50
-# ...
-```
+# Inspect data files
+ff check CS4SG1U1/output/riser.othd
 
-### Extract Field Data
+# Preview data
+ff data show CS4SG1U1 --node 24 --limit 10
 
-```bash
-# Get field information
-ff field info CS4SG1U1
-
-# Extract specific field
-ff field extract CS4SG1U1 --field displacement --node 10
-```
-
-### Compare Cases
-
-```bash
-# Compare two cases
-ff data compare CS4SG1U1 CS4SG2U1 --component y
-
-# With custom output
-ff data compare CS4SG1U1 CS4SG2U1 --output comparison.png
-```
-
-### Create Plots
-
-```bash
-# Simple time series plot
+# Create plot
 ff plot CS4SG1U1 --node 10 --component y
-
-# Save to file
-ff plot CS4SG1U1 --node 10 --component y --output displacement.png
-
-# Multiple components
-ff plot CS4SG1U1 --node 10 --component xyz --show
 ```
 
-### Convert Tecplot Files
+See [USAGE.md](USAGE.md#case-management) for detailed workflow.
+
+### Running Simulations
 
 ```bash
-# Convert to HDF5
-ff tecplot convert CS4SG1U1/binary/riser.1000.plt --format hdf5
+# Create new case
+ff case create MY_SIMULATION
 
-# Convert to SZPLT
-ff tecplot convert CS4SG1U1/binary/riser.1000.plt --format szplt
+# Submit jobs
+ff case run MY_SIMULATION
+
+# Monitor progress
+# (automatic, press Ctrl+C to stop monitoring)
 ```
 
-## Tips
+See [USAGE.md](USAGE.md#run-simulations) for job management options.
 
-### Fast Startup
+### Creating Visualizations
 
-Use the alias installation for fastest startup:
 ```bash
-./install.sh
-# Choose Option 1: Fast Alias
-# Result: 0.4s startup time
+# Single case plot
+ff plot CS4SG1U1 --node 10 --component y --output plot.png
+
+# Compare cases
+ff compare CS4SG1U1 CS4SG2U1 --node 10 --output comparison.png
+
+# Multiple nodes
+ff plot CS4SG1U1 --nodes 10 20 30 --component y
 ```
 
-### Tab Completion
-
-Enable tab completion during installation for easier use:
-```bash
-ff case <TAB>       # Shows: show, create, list
-ff field <TAB>      # Shows: info, list, extract
-```
-
-### Help
-
-Get help for any command:
-```bash
-ff --help           # Main help
-ff case --help      # Case command help
-ff plot --help      # Plot command help
-```
+See [USAGE.md](USAGE.md#visualization) for advanced plotting.
 
 ## Troubleshooting
 
-### Command not found
+### Installation Issues
+
+- **Conda not found:** [INSTALL.md](../INSTALL.md#conda-not-found)
+- **Command not found:** [INSTALL.md](../INSTALL.md#command-not-found-after-installation)
+- **Import errors:** [INSTALL.md](../INSTALL.md#import-errors)
+- **Permission denied:** [INSTALL.md](../INSTALL.md#permission-denied)
+
+### Usage Issues
+
+- **Command help:** [USAGE.md](USAGE.md#troubleshooting)
+- **Performance tips:** [technical/STARTUP_PERFORMANCE.md](technical/STARTUP_PERFORMANCE.md)
+
+### Getting Help
 
 ```bash
-# Reload shell
-source ~/.bashrc
+# Command-specific help
+ff <command> --help
+ff <command> <subcommand> --help
 
-# Check if alias exists
-alias | grep ff
+# Examples
+ff --examples
+
+# Documentation
+ff docs
 ```
 
-### Import errors
+## Features by Category
 
+### Case Management
+- Create cases from templates
+- Submit SLURM jobs
+- Monitor job progress
+- Display case information
+
+### Data Analysis
+- Inspect OTHD/OISD files
+- Preview time-series data
+- Calculate statistics
+- Export to CSV
+
+### Tecplot Integration
+- Read PLT files via PyTecplot
+- Extract field data
+- Convert file formats
+- Fast binary operations
+
+### Visualization
+- Time-series plots
+- Multi-case comparison
+- Component selection
+- Custom styling
+
+### Developer Tools
+- Fast startup (0.4s)
+- Tab completion
+- Configuration templates
+- Scripting support
+
+## Version Information
+
+**Current Version:** 2.0.0
+
+**Check version:**
 ```bash
-# Activate environment manually
-conda activate flexflow_env
-
-# Check packages
-pip list | grep pytecplot
+ff --version
 ```
 
-### Tecplot errors
-
-```bash
-# Check Tecplot installation
-which tec360
-
-# Test pytecplot
-python -c "import tecplot; print('OK')"
-```
-
-## Version
-
-Current version: **2.0.0**
-
-Check version:
-```bash
-ff -v
-```
+**Release notes:** See [GitHub releases](https://github.com/arunperiyal/flexflow_analyzer/releases)
 
 ## Support
 
-- GitHub: https://github.com/arunperiyal/flexflow_analyzer
-- Issues: https://github.com/arunperiyal/flexflow_analyzer/issues
+### Documentation
+- **This index:** Overview and navigation
+- **[USAGE.md](USAGE.md):** Detailed command reference
+- **[INSTALL.md](../INSTALL.md):** Installation guide
+
+### Community
+- **Issues:** https://github.com/arunperiyal/flexflow_analyzer/issues
+- **Repository:** https://github.com/arunperiyal/flexflow_analyzer
+
+### Quick Help
+
+```bash
+# Built-in help
+ff --help
+
+# Command help
+ff case --help
+
+# Examples
+ff --examples
+
+# View this documentation
+ff docs
+```
+
+## Contributing
+
+FlexFlow is an internal tool. For feature requests or bug reports:
+
+1. Check existing issues
+2. Create detailed issue report
+3. Include version, OS, and error messages
+4. Provide minimal reproduction steps
+
+## License
+
+Internal tool for simulation analysis.
 
 ---
 
-**Documentation Structure:**
-- README.md - Project overview
-- INSTALL.md - Quick install
-- docs/INDEX.md - This file (command reference)
-- docs/setup/ - Installation guides
-- docs/technical/ - Technical details
+**Quick Links:**
+- [Installation Guide](../INSTALL.md)
+- [Usage Guide](USAGE.md)
+- [README](../README.md)
+- [GitHub](https://github.com/arunperiyal/flexflow_analyzer)
