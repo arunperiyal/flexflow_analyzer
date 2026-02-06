@@ -76,12 +76,25 @@ create_conda_env() {
 
 install_dependencies() {
     print_step "Step 3: Installing Python dependencies"
-    
+
     print_info "Activating environment: $CONDA_ENV_NAME"
+
+    # Source conda to make activation work in script
+    if [ -f "$HOME/miniconda3/etc/profile.d/conda.sh" ]; then
+        source "$HOME/miniconda3/etc/profile.d/conda.sh"
+        CONDA_BASE="$HOME/miniconda3"
+    elif [ -f "$HOME/anaconda3/etc/profile.d/conda.sh" ]; then
+        source "$HOME/anaconda3/etc/profile.d/conda.sh"
+        CONDA_BASE="$HOME/anaconda3"
+    else
+        # Try to detect conda base from conda command
+        CONDA_BASE=$(conda info --base 2>/dev/null)
+    fi
+
     conda activate "$CONDA_ENV_NAME"
-    
+
     print_info "Installing required packages..."
-    
+
     # Core dependencies
     PACKAGES=(
         "numpy"
@@ -92,9 +105,10 @@ install_dependencies() {
         "tqdm"
         "pytecplot"
     )
-    
-    pip install "${PACKAGES[@]}"
-    
+
+    # Use conda environment's pip explicitly
+    "$CONDA_BASE/envs/$CONDA_ENV_NAME/bin/pip" install "${PACKAGES[@]}"
+
     print_success "All dependencies installed"
 }
 
