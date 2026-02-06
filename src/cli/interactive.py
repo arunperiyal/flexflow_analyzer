@@ -1402,7 +1402,7 @@ class InteractiveShell:
 
         # Commands that take a case as their second or third argument
         case_commands = {
-            'case': {'show': 2, 'run': 2},  # case show <case>
+            'case': {'show': 2, 'run': 2, 'organise': 2},  # case show <case>
             'data': {'show': 2, 'stats': 2},  # data show <case>
             'field': {'info': 2, 'extract': 2},  # field info <case>
             'check': None,  # check <file> - doesn't use case

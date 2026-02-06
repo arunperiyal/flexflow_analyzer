@@ -99,6 +99,8 @@ install_dependencies() {
         "rich"
         "tqdm"
         "pytecplot"
+        "prompt_toolkit"
+        "markdown"
     )
 
     # Get the actual environment path (works for both system and user conda)
