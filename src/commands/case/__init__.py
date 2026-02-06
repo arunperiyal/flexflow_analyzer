@@ -82,6 +82,33 @@ class CaseCommand(BaseCommand):
         run_parser.add_argument('--examples', action='store_true',
                                help='Show usage examples')
 
+        # case organise
+        organise_parser = case_subparsers.add_parser('organise', add_help=False,
+                                                     help='Organize and clean up case directory')
+        organise_parser.add_argument('case', nargs='?', help='Case directory path')
+        organise_parser.add_argument('--dry-run', action='store_true',
+                                    help='Preview changes without deleting')
+        organise_parser.add_argument('--freq', type=int,
+                                    help='Override frequency from simflow.config')
+        organise_parser.add_argument('--keep-every', type=int, default=10,
+                                    help='Keep every Nth output (default: 10)')
+        organise_parser.add_argument('--clean-othd', action='store_true',
+                                    help='Clean OTHD files only')
+        organise_parser.add_argument('--clean-oisd', action='store_true',
+                                    help='Clean OISD files only')
+        organise_parser.add_argument('--clean-output', action='store_true',
+                                    help='Clean output directory only')
+        organise_parser.add_argument('--log', action='store_true',
+                                    help='Create log file of deletions')
+        organise_parser.add_argument('--no-confirm', action='store_true',
+                                    help='Skip confirmation prompts')
+        organise_parser.add_argument('-v', '--verbose', action='store_true',
+                                    help='Enable verbose output')
+        organise_parser.add_argument('-h', '--help', action='store_true',
+                                    help='Show help for organise command')
+        organise_parser.add_argument('--examples', action='store_true',
+                                    help='Show usage examples')
+
         # Main case help flags
         parser.add_argument('-h', '--help', action='store_true',
                            help='Show help for case command')
@@ -102,6 +129,10 @@ class CaseCommand(BaseCommand):
             # Delegate to run subcommand
             from .run import execute_case_run
             execute_case_run(args)
+        elif hasattr(args, 'case_subcommand') and args.case_subcommand == 'organise':
+            # Delegate to organise subcommand
+            from .organise_impl import command as organise_cmd
+            organise_cmd.execute_organise(args)
         else:
             # Show help for case group
             self.show_help()
@@ -130,6 +161,7 @@ class CaseCommand(BaseCommand):
         table.add_row("show", "Display case information (was: info)")
         table.add_row("create", "Create new case from template (was: new)")
         table.add_row("run", "Submit and monitor SLURM simulation jobs")
+        table.add_row("organise", "Organize and clean up case directory")
 
         console.print("[bold]SUBCOMMANDS:[/bold]")
         console.print(table)
@@ -139,6 +171,7 @@ class CaseCommand(BaseCommand):
         console.print("    flexflow case create myCase --problem-name test")
         console.print("    flexflow case run CS4SG1U1")
         console.print("    flexflow case run CS4SG1U1 --no-monitor")
+        console.print("    flexflow case organise CS4SG1U1 --dry-run")
         console.print()
 
 
