@@ -82,13 +82,8 @@ install_dependencies() {
     # Source conda to make activation work in script
     if [ -f "$HOME/miniconda3/etc/profile.d/conda.sh" ]; then
         source "$HOME/miniconda3/etc/profile.d/conda.sh"
-        CONDA_BASE="$HOME/miniconda3"
     elif [ -f "$HOME/anaconda3/etc/profile.d/conda.sh" ]; then
         source "$HOME/anaconda3/etc/profile.d/conda.sh"
-        CONDA_BASE="$HOME/anaconda3"
-    else
-        # Try to detect conda base from conda command
-        CONDA_BASE=$(conda info --base 2>/dev/null)
     fi
 
     conda activate "$CONDA_ENV_NAME"
@@ -106,8 +101,18 @@ install_dependencies() {
         "pytecplot"
     )
 
+    # Get the actual environment path (works for both system and user conda)
+    ENV_PATH=$(conda env list | grep "^$CONDA_ENV_NAME " | awk '{print $NF}')
+
+    if [ -z "$ENV_PATH" ]; then
+        print_error "Failed to locate conda environment: $CONDA_ENV_NAME"
+        exit 1
+    fi
+
+    print_info "Environment location: $ENV_PATH"
+
     # Use conda environment's pip explicitly
-    "$CONDA_BASE/envs/$CONDA_ENV_NAME/bin/pip" install "${PACKAGES[@]}"
+    "$ENV_PATH/bin/pip" install "${PACKAGES[@]}"
 
     print_success "All dependencies installed"
 }
