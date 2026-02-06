@@ -32,11 +32,17 @@ class FlexFlowCompleter(Completer):
     Custom completer for FlexFlow commands.
 
     Provides intelligent tab completion for commands, subcommands,
-    and command options based on the registry.
+    options, file paths, and context commands.
     """
 
-    def __init__(self):
-        """Initialize the completer with command registry."""
+    def __init__(self, shell=None):
+        """
+        Initialize the completer with command registry.
+
+        Args:
+            shell: InteractiveShell instance for context-aware completion
+        """
+        self.shell = shell
         self.commands = {}
         self._build_command_tree()
 
@@ -45,7 +51,8 @@ class FlexFlowCompleter(Completer):
         for cmd in registry.all():
             self.commands[cmd.name] = {
                 'description': cmd.description,
-                'subcommands': self._get_subcommands(cmd)
+                'subcommands': self._get_subcommands(cmd),
+                'flags': self._get_flags(cmd)
             }
 
     def _get_subcommands(self, command) -> List[str]:
@@ -58,15 +65,82 @@ class FlexFlowCompleter(Completer):
         Returns:
             List of subcommand names
         """
-        # This is a simple implementation
-        # Can be extended to parse actual subcommands from parser
         subcommands_map = {
             'case': ['show', 'create', 'run'],
             'data': ['show', 'stats'],
             'field': ['info', 'extract'],
             'template': ['plot', 'case'],
+            'check': [],
+            'plot': [],
+            'compare': [],
+            'docs': [],
         }
         return subcommands_map.get(command.name, [])
+
+    def _get_flags(self, command) -> Dict[str, str]:
+        """
+        Get common flags for commands.
+
+        Args:
+            command: Command instance
+
+        Returns:
+            Dictionary of flag -> description
+        """
+        common_flags = {
+            '--help': 'Show help message',
+            '-h': 'Show help message',
+            '--verbose': 'Enable verbose output',
+            '-v': 'Enable verbose output',
+            '--examples': 'Show usage examples',
+        }
+
+        # Command-specific flags
+        command_flags = {
+            'case': {
+                **common_flags,
+            },
+            'data': {
+                **common_flags,
+                '--node': 'Node ID',
+                '--component': 'Component (x, y, z)',
+            },
+            'field': {
+                **common_flags,
+            },
+            'plot': {
+                **common_flags,
+                '--node': 'Node ID to plot',
+                '--component': 'Component to plot',
+                '--output': 'Output file',
+            },
+        }
+
+        return command_flags.get(command.name, common_flags)
+
+    def _get_file_completions(self, word: str, directory: Path) -> List[tuple]:
+        """
+        Get file/directory completions.
+
+        Args:
+            word: Current word being completed
+            directory: Directory to search in
+
+        Returns:
+            List of (name, is_dir) tuples
+        """
+        try:
+            if not directory.exists():
+                return []
+
+            completions = []
+            for item in directory.iterdir():
+                if item.name.startswith(word):
+                    completions.append((item.name, item.is_dir()))
+
+            return sorted(completions, key=lambda x: (not x[1], x[0]))
+        except (PermissionError, OSError):
+            return []
 
     def get_completions(self, document, complete_event):
         """
@@ -82,9 +156,11 @@ class FlexFlowCompleter(Completer):
         text = document.text_before_cursor
         words = text.split()
 
-        # Complete command names
+        # Complete command names (first word)
         if len(words) == 0 or (len(words) == 1 and not text.endswith(' ')):
             word = words[0] if words else ''
+
+            # FlexFlow commands
             for cmd_name in self.commands.keys():
                 if cmd_name.startswith(word):
                     yield Completion(
@@ -93,29 +169,163 @@ class FlexFlowCompleter(Completer):
                         display_meta=self.commands[cmd_name]['description']
                     )
 
-            # Also add shell commands
-            shell_commands = ['exit', 'quit', 'help', 'clear', 'history', '?']
-            for shell_cmd in shell_commands:
+            # Shell commands
+            shell_commands = [
+                ('exit', 'Exit FlexFlow'),
+                ('quit', 'Exit FlexFlow'),
+                ('help', 'Show help message'),
+                ('?', 'Show help message'),
+                ('clear', 'Clear screen'),
+                ('history', 'Show command history'),
+                ('pwd', 'Show current directory and contexts'),
+                ('ls', 'List files'),
+                ('ll', 'List files (long format)'),
+                ('la', 'List all files'),
+                ('cd', 'Change directory'),
+                ('cat', 'View file contents'),
+                ('find', 'Find case directories'),
+                ('tree', 'Show directory tree'),
+                ('use', 'Set context'),
+                ('unuse', 'Clear context'),
+            ]
+
+            for shell_cmd, desc in shell_commands:
                 if shell_cmd.startswith(word):
                     yield Completion(
                         shell_cmd,
                         start_position=-len(word),
-                        display_meta='Shell command'
+                        display_meta=desc
                     )
 
-        # Complete subcommands
+        # Complete subcommands and flags
         elif len(words) >= 1:
             cmd_name = words[0]
+
+            # Handle context commands (use/unuse)
+            if cmd_name == 'use':
+                self._complete_use_command(words, text)
+                return
+            elif cmd_name == 'unuse':
+                self._complete_unuse_command(words, text)
+                return
+
+            # Handle file browsing commands
+            if cmd_name in ['cd', 'cat', 'ls', 'll', 'la']:
+                yield from self._complete_path(words, text)
+                return
+
+            # Handle FlexFlow commands
             if cmd_name in self.commands:
-                subcommands = self.commands[cmd_name]['subcommands']
+                # Complete subcommands
                 if len(words) == 1 or (len(words) == 2 and not text.endswith(' ')):
                     word = words[1] if len(words) == 2 else ''
+
+                    # Subcommands
+                    subcommands = self.commands[cmd_name]['subcommands']
                     for subcmd in subcommands:
                         if subcmd.startswith(word):
                             yield Completion(
                                 subcmd,
-                                start_position=-len(word)
+                                start_position=-len(word),
+                                display_meta='Subcommand'
                             )
+
+                    # Flags
+                    if word.startswith('-'):
+                        flags = self.commands[cmd_name]['flags']
+                        for flag, desc in flags.items():
+                            if flag.startswith(word):
+                                yield Completion(
+                                    flag,
+                                    start_position=-len(word),
+                                    display_meta=desc
+                                )
+
+                # Complete flags after subcommand
+                elif len(words) >= 2:
+                    word = words[-1] if not text.endswith(' ') else ''
+
+                    if word.startswith('-') or text.endswith(' '):
+                        flags = self.commands[cmd_name]['flags']
+                        for flag, desc in flags.items():
+                            if flag.startswith(word):
+                                yield Completion(
+                                    flag,
+                                    start_position=-len(word),
+                                    display_meta=desc
+                                )
+
+    def _complete_use_command(self, words: List[str], text: str):
+        """Complete use command with subcommands."""
+        if len(words) == 1 or (len(words) == 2 and not text.endswith(' ')):
+            word = words[1] if len(words) == 2 else ''
+            subcommands = [
+                ('case', 'Set case context'),
+                ('problem', 'Set problem name'),
+                ('rundir', 'Set run directory'),
+                ('dir', 'Set output directory'),
+                ('--help', 'Show help'),
+                ('-h', 'Show help'),
+            ]
+
+            for subcmd, desc in subcommands:
+                if subcmd.startswith(word):
+                    yield Completion(
+                        subcmd,
+                        start_position=-len(word),
+                        display_meta=desc
+                    )
+
+    def _complete_unuse_command(self, words: List[str], text: str):
+        """Complete unuse command with subcommands."""
+        if len(words) == 1 or (len(words) == 2 and not text.endswith(' ')):
+            word = words[1] if len(words) == 2 else ''
+            subcommands = [
+                ('case', 'Clear case context'),
+                ('problem', 'Clear problem context'),
+                ('rundir', 'Clear rundir context'),
+                ('dir', 'Clear output dir context'),
+                ('all', 'Clear all contexts'),
+                ('--help', 'Show help'),
+                ('-h', 'Show help'),
+            ]
+
+            for subcmd, desc in subcommands:
+                if subcmd.startswith(word):
+                    yield Completion(
+                        subcmd,
+                        start_position=-len(word),
+                        display_meta=desc
+                    )
+
+    def _complete_path(self, words: List[str], text: str):
+        """Complete file paths for cd, cat, ls commands."""
+        if self.shell is None:
+            return
+
+        # Get the path being completed
+        if len(words) == 1 or text.endswith(' '):
+            word = ''
+            base_dir = self.shell._current_dir
+        else:
+            word = words[-1]
+            if '/' in word:
+                # Completing within a subdirectory
+                parts = word.rsplit('/', 1)
+                base_dir = self.shell._current_dir / parts[0]
+                word = parts[1]
+            else:
+                base_dir = self.shell._current_dir
+
+        # Get completions
+        completions = self._get_file_completions(word, base_dir)
+        for name, is_dir in completions:
+            suffix = '/' if is_dir else ''
+            yield Completion(
+                name + suffix,
+                start_position=-len(word),
+                display_meta='dir' if is_dir else 'file'
+            )
 
 
 class InteractiveShell:
@@ -192,7 +402,7 @@ class InteractiveShell:
 
         return PromptSession(
             history=FileHistory(str(self.history_file)),
-            completer=FlexFlowCompleter(),
+            completer=FlexFlowCompleter(shell=self),
             style=style,
             enable_history_search=True,
             complete_while_typing=True,
@@ -804,7 +1014,7 @@ class InteractiveShell:
         self.console.print("  use case <path>         Set current case")
         self.console.print("  use problem <name>      Set current problem")
         self.console.print("  use rundir <path>       Set current run directory")
-        self.console.print("  use dir <path>          Set output directory (from simflow.config)")
+        self.console.print("  use dir <name>          Set output directory (relative to case)")
         self.console.print("  use <case>              Shortcut for 'use case <case>'")
         self.console.print("  use --help              Show this help message")
         self.console.print()
@@ -813,8 +1023,9 @@ class InteractiveShell:
         self.console.print("  use case ./cases/CS4SG1U1")
         self.console.print("  use problem RISER_ANALYSIS")
         self.console.print("  use rundir /path/to/run")
-        self.console.print("  use dir ./RUN_1")
-        self.console.print("  use CS4SG1U1              [dim]# Same as 'use case CS4SG1U1'[/dim]")
+        self.console.print("  use dir RUN_1              [dim]# Sets CS4SG1U1/RUN_1 if case is CS4SG1U1[/dim]")
+        self.console.print("  use dir ./RUN_2            [dim]# Also works with ./ prefix[/dim]")
+        self.console.print("  use CS4SG1U1               [dim]# Same as 'use case CS4SG1U1'[/dim]")
         self.console.print()
 
     def show_unuse_help(self) -> None:
@@ -883,26 +1094,36 @@ class InteractiveShell:
         """
         Set current output directory context (from simflow.config dir field).
 
+        This is for convenience when multiple output directories exist within a case.
+        The directory is relative to the case directory, not the current working directory.
+
         Args:
-            dir_input: Output directory path
+            dir_input: Output directory name/path (e.g., 'RUN_1', './RUN_2')
         """
+        # Check if case context is set
+        if not self._current_case:
+            self.console.print("[yellow]Warning:[/yellow] No case context set. Use 'use case <case>' first.")
+            self.console.print("[dim]Setting output directory anyway - will be relative to case when case is set[/dim]")
+            self._current_output_dir = dir_input
+            self.console.print(f"[green]✓[/green] Output directory set to: [cyan]{dir_input}[/cyan]")
+            return
+
         try:
-            # Resolve the directory path
+            # Output directory is relative to case directory
+            case_path = Path(self._current_case)
             dir_path = Path(dir_input)
 
+            # Remove leading ./ if present
+            if str(dir_path).startswith('./'):
+                dir_path = Path(str(dir_path)[2:])
+
+            # If not absolute, make it relative to case directory
             if not dir_path.is_absolute():
-                dir_path = self._current_dir / dir_path
+                dir_path = case_path / dir_path
 
             dir_path = dir_path.resolve()
 
-            # Check if it exists
-            if not dir_path.exists():
-                self.console.print(f"[yellow]Warning:[/yellow] Directory does not exist: {dir_path}")
-                self.console.print("[dim]Setting context anyway[/dim]")
-
-            if not dir_path.is_dir():
-                self.console.print(f"[yellow]Warning:[/yellow] Not a directory: {dir_path}")
-
+            # No existence check - this is just for convenience/context
             self._current_output_dir = str(dir_path)
             self.console.print(f"[green]✓[/green] Output directory set to: [cyan]{dir_path.name}[/cyan]")
             self.console.print(f"[dim]Path: {dir_path}[/dim]")

@@ -141,11 +141,6 @@ class FlexFlowApp:
 
         # Global options
         parser.add_argument(
-            '--completion',
-            choices=['bash', 'zsh', 'fish'],
-            help='Generate shell completion script'
-        )
-        parser.add_argument(
             '--examples',
             action='store_true',
             help='Show comprehensive usage examples'
@@ -175,7 +170,7 @@ class FlexFlowApp:
 
     def _handle_global_flags(self, args: argparse.Namespace) -> bool:
         """
-        Handle global flags (--version, --help, --completion, etc.).
+        Handle global flags (--version, --help, etc.).
 
         Args:
             args: Parsed command-line arguments
@@ -184,11 +179,6 @@ class FlexFlowApp:
             True if a global flag was handled and app should exit,
             False otherwise
         """
-        if args.completion:
-            from src.cli.completion import generate_completion_script
-            print(generate_completion_script(args.completion))
-            return True
-
         if hasattr(args, 'examples') and args.examples:
             # Only show main examples if NOT a subcommand
             if not hasattr(args, 'case_subcommand'):

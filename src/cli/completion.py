@@ -1,5 +1,9 @@
 """
 Shell completion generator for FlexFlow CLI
+
+DEPRECATED: This module is deprecated as FlexFlow now runs in interactive mode.
+Tab completion is built into the interactive shell using prompt_toolkit.
+See interactive.py FlexFlowCompleter class for current implementation.
 """
 
 import os
