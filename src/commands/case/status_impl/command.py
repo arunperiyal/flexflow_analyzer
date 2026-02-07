@@ -229,8 +229,8 @@ def get_expected_time_steps(case: FlexFlowCase, case_path: Path, freq: int) -> S
     for file in output_dir_path.glob(out_pattern):
         step = extract_step_from_filename(file.name, problem)
         if step is not None:
-            # Only include steps that are multiples of frequency
-            if step % freq == 0:
+            # Only include steps that are multiples of frequency (but not step 0)
+            if step > 0 and step % freq == 0:
                 steps.add(step)
 
     return steps
