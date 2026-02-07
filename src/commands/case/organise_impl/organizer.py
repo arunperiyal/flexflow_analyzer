@@ -95,6 +95,93 @@ class CaseOrganizer:
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             self.log_file = self.case_dir / f'organise_log_{timestamp}.txt'
 
+    def _copy_output_data_files(self):
+        """Copy OTHD/OISD files from output directory to othd_files/oisd_files."""
+        # Find output directories based on config
+        output_dir_path = None
+        if 'dir' in self.case.config:
+            output_dir_str = self.case.config['dir']
+            if not os.path.isabs(output_dir_str):
+                output_dir_path = self.case_dir / output_dir_str
+            else:
+                output_dir_path = Path(output_dir_str)
+
+        if not output_dir_path or not output_dir_path.exists():
+            self.logger.info("No output directory found in simflow.config, skipping data file copy")
+            return
+
+        self.logger.info(f"Scanning output directory for OTHD/OISD files: {output_dir_path}")
+
+        # Find OTHD and OISD files
+        othd_files_found = list(output_dir_path.glob('*.othd'))
+        oisd_files_found = list(output_dir_path.glob('*.oisd'))
+
+        if not othd_files_found and not oisd_files_found:
+            self.logger.info("No OTHD/OISD files found in output directory")
+            return
+
+        # Create destination directories if they don't exist
+        othd_dest = self.case_dir / 'othd_files'
+        oisd_dest = self.case_dir / 'oisd_files'
+        othd_dest.mkdir(exist_ok=True)
+        oisd_dest.mkdir(exist_ok=True)
+
+        # Copy files with number suffix handling
+        copied_count = 0
+        for file in othd_files_found:
+            dest_path = self._get_unique_filename(othd_dest, file.name)
+            if not self.args.dry_run:
+                import shutil
+                shutil.copy2(file, dest_path)
+            self.logger.info(f"Copied {file.name} -> {dest_path.name}")
+            copied_count += 1
+
+        for file in oisd_files_found:
+            dest_path = self._get_unique_filename(oisd_dest, file.name)
+            if not self.args.dry_run:
+                import shutil
+                shutil.copy2(file, dest_path)
+            self.logger.info(f"Copied {file.name} -> {dest_path.name}")
+            copied_count += 1
+
+        if copied_count > 0:
+            self.console.print(f"\n[green]✓[/green] Copied {copied_count} data files from output directory")
+
+    def _get_unique_filename(self, dest_dir: Path, filename: str) -> Path:
+        """Get unique filename with number suffix if file exists."""
+        # Parse filename: problem.othd or problem.oisd
+        name_parts = filename.rsplit('.', 1)
+        if len(name_parts) != 2:
+            return dest_dir / filename
+
+        base_name, extension = name_parts
+
+        # Remove any existing number suffix
+        import re
+        match = re.match(r'(.+?)(\d+)$', base_name)
+        if match:
+            base_name = match.group(1)
+
+        # Find existing files with same base name
+        existing_files = list(dest_dir.glob(f'{base_name}*.{extension}'))
+
+        if not existing_files:
+            # No conflicts, use name with 1
+            return dest_dir / f'{base_name}1.{extension}'
+
+        # Find highest number suffix
+        max_num = 0
+        for existing in existing_files:
+            existing_base = existing.stem
+            match = re.match(rf'{re.escape(base_name)}(\d+)$', existing_base)
+            if match:
+                num = int(match.group(1))
+                max_num = max(max_num, num)
+
+        # Use next available number
+        next_num = max_num + 1
+        return dest_dir / f'{base_name}{next_num}.{extension}'
+
     def organize(self):
         """Main organization workflow."""
         self.console.print()
@@ -105,6 +192,9 @@ class CaseOrganizer:
             box=box.ROUNDED
         ))
         self.console.print()
+
+        # Copy OTHD/OISD files from output directory first
+        self._copy_output_data_files()
 
         # Determine what to clean
         clean_othd = not (self.args.clean_oisd or self.args.clean_output)

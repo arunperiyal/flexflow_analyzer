@@ -183,6 +183,8 @@ class FlexFlowCompleter(Completer):
                 ('la', 'List all files'),
                 ('cd', 'Change directory'),
                 ('cat', 'View file contents'),
+                ('head', 'Show first lines of file'),
+                ('tail', 'Show last lines of file'),
                 ('grep', 'Search file contents'),
                 ('find', 'Find case directories'),
                 ('tree', 'Show directory tree'),
@@ -211,7 +213,7 @@ class FlexFlowCompleter(Completer):
                 return
 
             # Handle file browsing commands
-            if cmd_name in ['cd', 'cat', 'ls', 'll', 'la', 'grep']:
+            if cmd_name in ['cd', 'cat', 'ls', 'll', 'la', 'grep', 'head', 'tail']:
                 yield from self._complete_path(words, text)
                 return
 
@@ -654,6 +656,32 @@ class InteractiveShell:
                 self.console.print("  grep -rn 'TODO' src/")
             return True
 
+        # Show first N lines of file
+        if cmd == 'head':
+            if len(parts) > 1:
+                self.head_file(parts[1:])
+            else:
+                self.console.print("[yellow]Usage:[/yellow] head [options] <file>")
+                self.console.print("[dim]Options:[/dim]")
+                self.console.print("  -n <num>    Number of lines to show (default: 10)")
+                self.console.print("[dim]Examples:[/dim]")
+                self.console.print("  head file.txt")
+                self.console.print("  head -n 20 file.log")
+            return True
+
+        # Show last N lines of file
+        if cmd == 'tail':
+            if len(parts) > 1:
+                self.tail_file(parts[1:])
+            else:
+                self.console.print("[yellow]Usage:[/yellow] tail [options] <file>")
+                self.console.print("[dim]Options:[/dim]")
+                self.console.print("  -n <num>    Number of lines to show (default: 10)")
+                self.console.print("[dim]Examples:[/dim]")
+                self.console.print("  tail file.txt")
+                self.console.print("  tail -n 50 file.log")
+            return True
+
         return False
 
     def show_help(self) -> None:
@@ -702,6 +730,8 @@ class InteractiveShell:
             ("cd ~", "Go to home directory"),
             ("cd ..", "Go to parent directory"),
             ("cat <file>", "View file contents"),
+            ("head [-n num] <file>", "Show first lines of file (default: 10)"),
+            ("tail [-n num] <file>", "Show last lines of file (default: 10)"),
             ("grep <pattern> [files]", "Search file contents"),
             ("find [pattern]", "Find case directories"),
             ("tree [depth]", "Show directory tree (default depth: 2)"),
@@ -1299,6 +1329,121 @@ class InteractiveShell:
                 self.console.print(f"[red]Error: Permission denied: {file_path}[/red]")
             except Exception as e:
                 self.console.print(f"[red]Error reading file: {e}[/red]")
+
+    def head_file(self, args: List[str]) -> None:
+        """
+        Display first N lines of a file (like Unix head command).
+
+        Args:
+            args: List containing optional -n flag and file path
+        """
+        # Parse arguments
+        num_lines = 10  # default
+        file_path_str = None
+
+        i = 0
+        while i < len(args):
+            if args[i] == '-n' and i + 1 < len(args):
+                try:
+                    num_lines = int(args[i + 1])
+                    i += 2
+                except ValueError:
+                    self.console.print(f"[red]Error: Invalid number: {args[i + 1]}[/red]")
+                    return
+            else:
+                file_path_str = args[i]
+                i += 1
+
+        if not file_path_str:
+            self.console.print("[yellow]Error: No file specified[/yellow]")
+            return
+
+        try:
+            # Resolve path
+            file_path = Path(file_path_str)
+            if not file_path.is_absolute():
+                file_path = self._current_dir / file_path
+            file_path = file_path.resolve()
+
+            # Check if file exists
+            if not file_path.exists():
+                self.console.print(f"[red]Error: File not found: {file_path}[/red]")
+                return
+
+            if not file_path.is_file():
+                self.console.print(f"[red]Error: Not a file: {file_path}[/red]")
+                return
+
+            # Read and display first N lines
+            with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
+                for i, line in enumerate(f):
+                    if i >= num_lines:
+                        break
+                    print(line, end='')
+
+        except UnicodeDecodeError:
+            self.console.print(f"[red]Error: Cannot display binary file: {file_path}[/red]")
+        except PermissionError:
+            self.console.print(f"[red]Error: Permission denied: {file_path}[/red]")
+        except Exception as e:
+            self.console.print(f"[red]Error reading file: {e}[/red]")
+
+    def tail_file(self, args: List[str]) -> None:
+        """
+        Display last N lines of a file (like Unix tail command).
+
+        Args:
+            args: List containing optional -n flag and file path
+        """
+        # Parse arguments
+        num_lines = 10  # default
+        file_path_str = None
+
+        i = 0
+        while i < len(args):
+            if args[i] == '-n' and i + 1 < len(args):
+                try:
+                    num_lines = int(args[i + 1])
+                    i += 2
+                except ValueError:
+                    self.console.print(f"[red]Error: Invalid number: {args[i + 1]}[/red]")
+                    return
+            else:
+                file_path_str = args[i]
+                i += 1
+
+        if not file_path_str:
+            self.console.print("[yellow]Error: No file specified[/yellow]")
+            return
+
+        try:
+            # Resolve path
+            file_path = Path(file_path_str)
+            if not file_path.is_absolute():
+                file_path = self._current_dir / file_path
+            file_path = file_path.resolve()
+
+            # Check if file exists
+            if not file_path.exists():
+                self.console.print(f"[red]Error: File not found: {file_path}[/red]")
+                return
+
+            if not file_path.is_file():
+                self.console.print(f"[red]Error: Not a file: {file_path}[/red]")
+                return
+
+            # Read all lines and display last N
+            with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
+                lines = f.readlines()
+                for line in lines[-num_lines:]:
+                    print(line, end='')
+
+        except UnicodeDecodeError:
+            self.console.print(f"[red]Error: Cannot display binary file: {file_path}[/red]")
+        except PermissionError:
+            self.console.print(f"[red]Error: Permission denied: {file_path}[/red]")
+        except Exception as e:
+            self.console.print(f"[red]Error reading file: {e}[/red]")
 
     def grep_files(self, args: List[str]) -> None:
         """
