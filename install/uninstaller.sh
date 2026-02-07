@@ -15,7 +15,6 @@ uninstall_flexflow() {
     echo "This will remove:"
     echo "  • FlexFlow aliases from shell config files"
     echo "  • FlexFlow wrapper script from ~/.local/bin"
-    echo "  • FlexFlow shell completion"
     echo "  • Conda environment: $CONDA_ENV_NAME"
     echo
 
@@ -33,12 +32,6 @@ uninstall_flexflow() {
             if grep -q "FlexFlow aliases" "$rc_file" 2>/dev/null; then
                 sed -i '/# FlexFlow aliases/,/# End FlexFlow aliases/d' "$rc_file" 2>/dev/null || true
                 print_success "Removed aliases from $rc_file"
-            fi
-
-            # Remove FlexFlow completion
-            if grep -q "FlexFlow completion" "$rc_file" 2>/dev/null; then
-                sed -i '/# FlexFlow completion/,/^fi$/d' "$rc_file" 2>/dev/null || true
-                print_success "Removed completion from $rc_file"
             fi
 
             # Remove conda initialize added by FlexFlow
@@ -68,18 +61,6 @@ uninstall_flexflow() {
         sudo rm -f "/usr/local/bin/flexflow"
         print_success "Removed /usr/local/bin/flexflow"
     fi
-
-    # Remove completion files
-    print_step "Removing shell completion files"
-
-    for completion_file in "$HOME/.bash_completion.d/flexflow_completion" \
-                          "$HOME/.config/fish/completions/flexflow.fish" \
-                          "$HOME/.zsh/completion/_flexflow"; do
-        if [ -f "$completion_file" ]; then
-            rm -f "$completion_file"
-            print_success "Removed $(basename $completion_file)"
-        fi
-    done
 
     # Remove conda environment
     remove_conda_env

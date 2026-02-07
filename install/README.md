@@ -39,13 +39,12 @@ install/
 - `choose_installation_type()` - Interactive selection
 - `install_alias()` - Fast alias installation
 - `install_wrapper()` - User/system wrapper installation
-- `setup_completion()` - Shell completion setup
 - `perform_installation()` - Execute chosen method
 
 ### uninstaller.sh
 - Uninstallation functions
 - `uninstall_flexflow()` - Remove all FlexFlow components
-- Cleans up aliases, wrappers, completion, and environment
+- Cleans up aliases, wrappers, and environment
 
 ## Configuration
 

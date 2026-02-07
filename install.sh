@@ -62,7 +62,6 @@ main() {
     # Choose and perform installation
     choose_installation_type
     perform_installation
-    setup_completion
 
     # Show summary
     print_summary

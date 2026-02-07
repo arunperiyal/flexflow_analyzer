@@ -178,42 +178,6 @@ EOF
     print_success "FlexFlow wrapper installed to: $bin_dir/flexflow"
 }
 
-setup_completion() {
-    print_step "Step 5: Setting up shell completion"
-    
-    if ask_yes_no "Do you want to setup tab completion?"; then
-        print_info "Generating completion script..."
-        
-        # Create completion directory
-        mkdir -p "$HOME/.bash_completion.d"
-        
-        # Generate completion
-        conda activate "$CONDA_ENV_NAME" 2>/dev/null
-        python "$FLEXFLOW_DIR/main.py" --completion bash > "$HOME/.bash_completion.d/flexflow_completion" 2>/dev/null || true
-        
-        # Add to shell config
-        if [ -n "$ZSH_VERSION" ]; then
-            SHELL_RC="$HOME/.zshrc"
-        else
-            SHELL_RC="$HOME/.bashrc"
-        fi
-        
-        if ! grep -q "flexflow_completion" "$SHELL_RC" 2>/dev/null; then
-            cat >> "$SHELL_RC" << 'EOF'
-
-# FlexFlow completion
-if [ -f "$HOME/.bash_completion.d/flexflow_completion" ]; then
-    source "$HOME/.bash_completion.d/flexflow_completion"
-fi
-EOF
-        fi
-        
-        print_success "Completion setup complete"
-    else
-        print_info "Skipping completion setup"
-    fi
-}
-
 perform_installation() {
     case $INSTALL_TYPE in
         alias)
