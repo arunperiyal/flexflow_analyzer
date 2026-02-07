@@ -407,36 +407,22 @@ class CaseOrganizer:
             self._analyze_single_output_dir(output_dir, problem, freq, keep_interval)
 
     def _find_output_directories(self) -> List[Path]:
-        """Find output directories (RUN_*)."""
-        # Look for RUN_* directories at case level
-        run_dirs = list(self.case_dir.glob('RUN_*'))
-
-        if not run_dirs:
+        """Find output directories from simflow.config."""
+        # Get output directory from config
+        if 'dir' not in self.case.config:
             return []
 
-        if len(run_dirs) == 1:
-            return run_dirs
+        output_dir_str = self.case.config['dir']
 
-        # Multiple directories - ask user
-        self.console.print(f"\n[yellow]Found {len(run_dirs)} output directories:[/yellow]")
-        for i, dir in enumerate(run_dirs, 1):
-            self.console.print(f"  {i}. {dir.name}")
+        if not os.path.isabs(output_dir_str):
+            output_dir_path = self.case_dir / output_dir_str
+        else:
+            output_dir_path = Path(output_dir_str)
 
-        self.console.print("\n[bold]Which directories to clean?[/bold]")
-        self.console.print("  Options: all, 1, 2, 3, 1,2, etc.")
+        if not output_dir_path.exists():
+            return []
 
-        response = input("Your choice: ").strip().lower()
-
-        if response == 'all':
-            return run_dirs
-
-        try:
-            indices = [int(x.strip()) - 1 for x in response.split(',')]
-            selected = [run_dirs[i] for i in indices if 0 <= i < len(run_dirs)]
-            return selected
-        except:
-            self.logger.warning("Invalid selection, using all directories")
-            return run_dirs
+        return [output_dir_path]
 
     def _analyze_single_output_dir(self, output_dir: Path, problem: str, freq: int, keep_interval: int):
         """Analyze a single output directory."""
