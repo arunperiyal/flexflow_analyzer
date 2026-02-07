@@ -39,36 +39,37 @@ def execute_status(args):
     # Display header
     console.print()
     console.print(Panel(
-        f"[bold cyan]Case Status:[/bold cyan] {case_path.name}\n"
-        f"[dim]Path: {case_path}[/dim]",
+        f"[bold cyan]Case Status Check[/bold cyan]\n"
+        f"[white]Case:[/white] {case_path.name}\n"
+        f"[white]Problem:[/white] {case.problem_name}",
         border_style="cyan",
-        box=box.ROUNDED
+        box=box.DOUBLE
     ))
-    console.print()
 
     # Determine time step range and frequency
     freq = get_frequency(case, case_path)
     if not freq:
-        console.print("[yellow]Warning:[/yellow] Could not determine frequency from config or output files")
-        console.print("[dim]Status check requires frequency information[/dim]")
+        console.print()
+        console.print("[yellow]⚠[/yellow]  Could not determine frequency from config or output files")
+        console.print("[dim]   Status check requires frequency information[/dim]")
+        console.print()
         return
 
     # Get expected time steps for output files (at frequency intervals)
     output_time_steps = get_expected_time_steps(case, case_path, freq)
     if not output_time_steps:
-        console.print("[yellow]Warning:[/yellow] Could not determine time step range")
+        console.print()
+        console.print("[yellow]⚠[/yellow]  Could not determine time step range")
+        console.print()
         return
 
     # Get expected time steps for OTHD/OISD files (all time steps)
     all_time_steps = get_all_time_steps(case, case_path)
     if not all_time_steps:
-        console.print("[yellow]Warning:[/yellow] Could not determine full time step range")
+        console.print()
+        console.print("[yellow]⚠[/yellow]  Could not determine full time step range")
+        console.print()
         return
-
-    console.print(f"[cyan]Frequency:[/cyan] {freq}")
-    console.print(f"[cyan]Expected output steps:[/cyan] {min(output_time_steps)} to {max(output_time_steps)} ({len(output_time_steps)} steps)")
-    console.print(f"[cyan]Expected data steps:[/cyan] {min(all_time_steps)} to {max(all_time_steps)} ({len(all_time_steps)} steps)")
-    console.print()
 
     # Check each file type
     # PLT files should match frequency intervals (output steps)
@@ -83,65 +84,90 @@ def execute_status(args):
         output_dir_path, case.problem_name, output_time_steps, all_time_steps
     )
 
-    # Display results table
-    table = Table(title="Data File Status", box=box.ROUNDED, show_header=True)
-    table.add_column("File Type", style="cyan")
-    table.add_column("Status", style="white")
-    table.add_column("Coverage", justify="right", style="yellow")
+    # Display simulation info
+    console.print()
+    console.print("[bold cyan]Simulation Configuration[/bold cyan]")
+    console.print(f"  Output Frequency:  [yellow]{freq}[/yellow] steps")
+    console.print(f"  Output Steps:      [yellow]{min(output_time_steps)}[/yellow] → [yellow]{max(output_time_steps)}[/yellow]  ([dim]{len(output_time_steps)} steps[/dim])")
+    console.print(f"  Total Steps:       [yellow]{min(all_time_steps)}[/yellow] → [yellow]{max(all_time_steps)}[/yellow]  ([dim]{len(all_time_steps)} steps[/dim])")
 
-    # PLT files (binary)
+    # Display data file status
+    console.print()
+    console.print("[bold cyan]Data Files (Final Storage)[/bold cyan]")
+
+    table = Table(box=box.SIMPLE, show_header=False, padding=(0, 2))
+    table.add_column("Type", style="white", width=25)
+    table.add_column("Location", style="dim", width=20)
+    table.add_column("Status", justify="center", width=12)
+    table.add_column("Coverage", justify="right", style="yellow", width=10)
+
+    # PLT files
+    status_icon = "[green]✓[/green]" if plt_status else "[red]✗[/red]"
     status_text = "[green]Complete[/green]" if plt_status else "[red]Incomplete[/red]"
-    coverage_text = f"{plt_coverage:.1f}%"
-    table.add_row("PLT files (binary/)", status_text, coverage_text)
+    table.add_row("  Binary PLT files", "binary/", status_icon + " " + status_text, f"{plt_coverage:.1f}%")
 
     # OTHD files
+    status_icon = "[green]✓[/green]" if othd_status else "[red]✗[/red]"
     status_text = "[green]Complete[/green]" if othd_status else "[red]Incomplete[/red]"
-    coverage_text = f"{othd_coverage:.1f}%"
-    table.add_row("OTHD files (othd_files/)", status_text, coverage_text)
+    table.add_row("  OTHD files", "othd_files/", status_icon + " " + status_text, f"{othd_coverage:.1f}%")
 
     # OISD files
+    status_icon = "[green]✓[/green]" if oisd_status else "[red]✗[/red]"
     status_text = "[green]Complete[/green]" if oisd_status else "[red]Incomplete[/red]"
-    coverage_text = f"{oisd_coverage:.1f}%"
-    table.add_row("OISD files (oisd_files/)", status_text, coverage_text)
+    table.add_row("  OISD files", "oisd_files/", status_icon + " " + status_text, f"{oisd_coverage:.1f}%")
 
     console.print(table)
-    console.print()
 
     # Display output directory progress
     if output_dir_path and output_dir_path.exists():
-        console.print("[bold]Output Directory Progress:[/bold]")
-        console.print(f"[dim]Location: {output_dir_path}[/dim]")
+        console.print()
+        console.print("[bold cyan]Output Directory (Work in Progress)[/bold cyan]")
+        console.print(f"  [dim]Location: {output_dir_path.relative_to(case_path) if output_dir_path.is_relative_to(case_path) else output_dir_path}[/dim]")
         console.print()
 
-        progress_table = Table(box=box.SIMPLE, show_header=True)
-        progress_table.add_column("File Type", style="cyan")
-        progress_table.add_column("Progress", justify="right", style="yellow")
+        progress_table = Table(box=box.SIMPLE, show_header=False, padding=(0, 2))
+        progress_table.add_column("Type", style="white", width=25)
+        progress_table.add_column("Progress", justify="right", style="yellow", width=10)
+        progress_table.add_column("Bar", width=30)
 
-        progress_table.add_row("OUT files", f"{out_progress:.1f}%")
-        progress_table.add_row("RST files", f"{rst_progress:.1f}%")
-        progress_table.add_row("PLT files (ASCII)", f"{plt_out_progress:.1f}%")
-        progress_table.add_row("OTHD files", f"{othd_out_progress:.1f}%")
-        progress_table.add_row("OISD files", f"{oisd_out_progress:.1f}%")
+        # Helper function to create progress bar
+        def make_bar(percentage: float) -> str:
+            filled = int(percentage / 5)  # 20 blocks = 100%
+            empty = 20 - filled
+            if percentage == 100.0:
+                return f"[green]{'█' * filled}[/green]"
+            elif percentage >= 75.0:
+                return f"[yellow]{'█' * filled}[/yellow][dim]{'░' * empty}[/dim]"
+            elif percentage >= 50.0:
+                return f"[yellow]{'█' * filled}[/yellow][dim]{'░' * empty}[/dim]"
+            else:
+                return f"[red]{'█' * filled}[/red][dim]{'░' * empty}[/dim]"
+
+        progress_table.add_row("  OUT files", f"{out_progress:.1f}%", make_bar(out_progress))
+        progress_table.add_row("  RST files", f"{rst_progress:.1f}%", make_bar(rst_progress))
+        progress_table.add_row("  PLT files (ASCII)", f"{plt_out_progress:.1f}%", make_bar(plt_out_progress))
+        progress_table.add_row("  OTHD files", f"{othd_out_progress:.1f}%", make_bar(othd_out_progress))
+        progress_table.add_row("  OISD files", f"{oisd_out_progress:.1f}%", make_bar(oisd_out_progress))
 
         console.print(progress_table)
-        console.print()
 
     # Overall status
+    console.print()
     overall_complete = plt_status and othd_status and oisd_status
 
     if overall_complete:
         console.print(Panel(
-            "[bold green]✓ Case is COMPLETE[/bold green]\n"
-            "All data files are present for all time steps",
+            "[bold green]✓ COMPLETE[/bold green]\n"
+            "[white]All data files are present for all expected time steps[/white]",
             border_style="green",
-            box=box.ROUNDED
+            box=box.HEAVY
         ))
     else:
         console.print(Panel(
-            "[bold red]✗ Case is INCOMPLETE[/bold red]\n"
-            "Some data files are missing",
+            "[bold red]✗ INCOMPLETE[/bold red]\n"
+            "[white]Some data files are missing or incomplete[/white]",
             border_style="red",
-            box=box.ROUNDED
+            box=box.HEAVY
         ))
     console.print()
 
