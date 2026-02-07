@@ -105,6 +105,17 @@ class CaseCommand(BaseCommand):
         organise_parser.add_argument('--examples', action='store_true',
                                     help='Show usage examples')
 
+        # case status
+        status_parser = case_subparsers.add_parser('status', add_help=False,
+                                                   help='Check case data file completeness')
+        status_parser.add_argument('case', nargs='?', help='Case directory path')
+        status_parser.add_argument('-v', '--verbose', action='store_true',
+                                  help='Enable verbose output')
+        status_parser.add_argument('-h', '--help', action='store_true',
+                                  help='Show help for status command')
+        status_parser.add_argument('--examples', action='store_true',
+                                  help='Show usage examples')
+
         # Main case help flags
         parser.add_argument('-h', '--help', action='store_true',
                            help='Show help for case command')
@@ -129,6 +140,10 @@ class CaseCommand(BaseCommand):
             # Delegate to organise subcommand
             from .organise_impl import command as organise_cmd
             organise_cmd.execute_organise(args)
+        elif hasattr(args, 'case_subcommand') and args.case_subcommand == 'status':
+            # Delegate to status subcommand
+            from .status_impl import execute_status
+            execute_status(args)
         else:
             # Show help for case group
             self.show_help()
@@ -158,6 +173,7 @@ class CaseCommand(BaseCommand):
         table.add_row("create", "Create new case from template (was: new)")
         table.add_row("run", "Submit and monitor SLURM simulation jobs")
         table.add_row("organise", "Organize and clean up case directory")
+        table.add_row("status", "Check case data file completeness")
 
         console.print("[bold]SUBCOMMANDS:[/bold]")
         console.print(table)
@@ -168,6 +184,7 @@ class CaseCommand(BaseCommand):
         console.print("    flexflow case run CS4SG1U1")
         console.print("    flexflow case run CS4SG1U1 --no-monitor")
         console.print("    flexflow case organise CS4SG1U1")
+        console.print("    flexflow case status CS4SG1U1")
         console.print()
 
 
