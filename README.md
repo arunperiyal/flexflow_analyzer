@@ -1,89 +1,69 @@
 # FlexFlow Manager
 
-Fast and efficient tool for analyzing FlexFlow simulation data with PyTecplot integration.
-
-## What is FlexFlow?
-
-FlexFlow Manager is a command-line tool designed for analyzing offshore riser simulation data. It provides:
-- Fast data inspection and visualization for OTHD/OISD files
-- Tecplot PLT file integration via PyTecplot
-- SLURM job submission and monitoring for simulations
-- Case management and comparison tools
+Fast command-line tool for analyzing offshore riser simulation data.
 
 ## Quick Start
 
 ```bash
-# 1. Install (creates conda environment and ff command)
+# Install
 ./install.sh
 
-# 2. Reload shell
-source ~/.bashrc
-
-# 3. Start FlexFlow Interactive Shell
+# Start interactive shell
 ff
 
-# Now in interactive mode:
-flexflow → case show CS4SG1U1       # Show case information
-flexflow → check riser.othd          # Inspect data files
-flexflow → plot CS4SG1U1 --node 10   # Create plots
-flexflow → exit                      # Exit shell
+# Example commands
+flexflow → case show CS4SG1U1
+flexflow → check riser.othd
+flexflow → plot CS4SG1U1 --node 10
 ```
 
-## Key Features
+## Features
 
-- **Interactive Shell**: Always-on REPL mode - no startup overhead between commands
-- **Instant Execution**: Commands run immediately without Python reload
-- **Smart Completion**: Tab completion for commands, subcommands, and options
-- **Command History**: Persistent history across sessions with arrow key navigation
-- **Domain Commands**: Intuitive structure - `case`, `field`, `data`, `check`, `plot`
-- **SLURM Integration**: Submit and monitor simulation jobs
-- **Template System**: Quick case creation from templates
+- **Interactive Shell** - REPL mode with tab completion and command history
+- **Data Analysis** - Inspect OTHD/OISD files and PLT files via PyTecplot
+- **Case Management** - Create, organize, and manage simulation cases
+- **SLURM Integration** - Submit and monitor simulation jobs
+- **Visualization** - Generate time-series plots and comparisons
 
 ## Requirements
 
-- Linux (tested on Ubuntu 20.04+)
-- Anaconda or Miniconda
-- Tecplot 360 EX (for PLT file operations)
+- Linux (Ubuntu 20.04+)
+- Anaconda/Miniconda
+- Tecplot 360 EX (for PLT operations)
 
 ## Documentation
 
-- **[Installation Guide](INSTALL.md)** - Setup and configuration
-- **[Usage Guide](docs/USAGE.md)** - Commands, examples, and workflows
-- **[Documentation Index](docs/INDEX.md)** - Complete documentation reference
+- [Installation Guide](docs/INSTALL.md)
+- [Usage Guide](docs/USAGE.md)
+- [Command Reference](docs/REFERENCE.md)
+- [Changelog](CHANGELOG.md)
 
-## Common Commands
+## Main Commands
 
 ```bash
-# Case management
-ff case show <case>          # Display case information
-ff case create <name>        # Create new case from template
-ff case run <case>           # Submit SLURM jobs
+# Case operations
+case show <case>           # Show case info
+case create <name>         # Create new case
+case run <case>            # Submit jobs
+case organise <case>       # Clean up case files
 
 # Data inspection
-ff check <file>              # Inspect OTHD/OISD files
-ff data show <case>          # Preview time-series data
-
-# Field operations
-ff field info <case>         # Show PLT file information
+check <file>               # Inspect OTHD/OISD files
+data show <case>           # Preview data
+field info <case>          # Show PLT info
 
 # Visualization
-ff plot <case> [options]     # Create plots
-ff compare <case1> <case2>   # Compare cases
+plot <case> [options]      # Create plots
+compare <case1> <case2>    # Compare cases
 ```
 
-Run `ff --help` or `ff <command> --help` for detailed options.
+Run `ff --help` for all commands.
 
 ## Version
 
-Current version: **2.0.0**
+Current: **2.0.0** | Check: `ff -v`
 
-Check version: `ff -v`
+## Links
 
-## Support
-
-- **Issues**: https://github.com/arunperiyal/flexflow_analyzer/issues
-- **Repository**: https://github.com/arunperiyal/flexflow_analyzer
-
-## License
-
-Internal tool for simulation analysis.
+- [Repository](https://github.com/arunperiyal/flexflow_analyzer)
+- [Issues](https://github.com/arunperiyal/flexflow_analyzer/issues)
