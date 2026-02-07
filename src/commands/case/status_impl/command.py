@@ -53,19 +53,29 @@ def execute_status(args):
         console.print("[dim]Status check requires frequency information[/dim]")
         return
 
-    time_steps = get_expected_time_steps(case, case_path, freq)
-    if not time_steps:
+    # Get expected time steps for output files (at frequency intervals)
+    output_time_steps = get_expected_time_steps(case, case_path, freq)
+    if not output_time_steps:
         console.print("[yellow]Warning:[/yellow] Could not determine time step range")
         return
 
+    # Get expected time steps for OTHD/OISD files (all time steps)
+    all_time_steps = get_all_time_steps(case, case_path)
+    if not all_time_steps:
+        console.print("[yellow]Warning:[/yellow] Could not determine full time step range")
+        return
+
     console.print(f"[cyan]Frequency:[/cyan] {freq}")
-    console.print(f"[cyan]Expected time steps:[/cyan] {min(time_steps)} to {max(time_steps)} ({len(time_steps)} steps)")
+    console.print(f"[cyan]Expected output steps:[/cyan] {min(output_time_steps)} to {max(output_time_steps)} ({len(output_time_steps)} steps)")
+    console.print(f"[cyan]Expected data steps:[/cyan] {min(all_time_steps)} to {max(all_time_steps)} ({len(all_time_steps)} steps)")
     console.print()
 
     # Check each file type
-    plt_status, plt_coverage = check_plt_files(case_path, case.problem_name, time_steps)
-    othd_status, othd_coverage = check_othd_files(case_path, time_steps)
-    oisd_status, oisd_coverage = check_oisd_files(case_path, time_steps)
+    # PLT files should match frequency intervals (output steps)
+    plt_status, plt_coverage = check_plt_files(case_path, case.problem_name, output_time_steps)
+    # OTHD/OISD files should have all time steps
+    othd_status, othd_coverage = check_othd_files(case_path, all_time_steps)
+    oisd_status, oisd_coverage = check_oisd_files(case_path, all_time_steps)
 
     # Display results table
     table = Table(title="Data File Status", box=box.ROUNDED, show_header=True)
@@ -209,6 +219,69 @@ def get_expected_time_steps(case: FlexFlowCase, case_path: Path, freq: int) -> S
         step += freq
 
     return expected_steps
+
+
+def get_all_time_steps(case: FlexFlowCase, case_path: Path) -> Set[int]:
+    """
+    Get all time steps (for OTHD/OISD files).
+
+    OTHD/OISD files contain all time steps from the simulation,
+    not just ones at frequency intervals.
+
+    Returns a set from 1 to maxTimeSteps.
+    """
+    # Try to get maxTimeSteps from .def file
+    max_steps = get_max_timesteps_from_def(case_path, case.problem_name)
+
+    if max_steps:
+        return set(range(1, max_steps + 1))
+
+    # Fallback: get from existing OTHD/OISD files
+    return get_timesteps_from_data_files(case_path)
+
+
+def get_max_timesteps_from_def(case_path: Path, problem: str) -> Optional[int]:
+    """Get maxTimeSteps from .def file."""
+    import re
+
+    def_file = case_path / f'{problem}.def'
+    if not def_file.exists():
+        return None
+
+    try:
+        with open(def_file, 'r') as f:
+            content = f.read()
+            # Look for maxTimeSteps = value
+            match = re.search(r'maxTimeSteps\s*=\s*(\d+)', content)
+            if match:
+                return int(match.group(1))
+    except Exception:
+        pass
+
+    return None
+
+
+def get_timesteps_from_data_files(case_path: Path) -> Set[int]:
+    """Get time steps from existing OTHD files."""
+    othd_dir = case_path / 'othd_files'
+
+    if not othd_dir.exists():
+        return set()
+
+    othd_files = list(othd_dir.glob('*.othd'))
+    if not othd_files:
+        return set()
+
+    all_steps = set()
+
+    for othd_file in othd_files:
+        try:
+            reader = OTHDReader(str(othd_file))
+            all_steps.update(reader.tsIds)
+        except Exception:
+            continue
+
+    return all_steps
 
 
 def check_plt_files(case_path: Path, problem: str, expected_steps: Set[int]) -> Tuple[bool, float]:
