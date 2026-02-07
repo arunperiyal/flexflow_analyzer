@@ -1182,28 +1182,37 @@ class InteractiveShell:
 
     def use_rundir(self, rundir_input: str) -> None:
         """
-        Set current run directory context.
+        Set current run directory context (output directory within case).
+
+        This is relative to the case directory, not the current working directory.
 
         Args:
-            rundir_input: Run directory path
+            rundir_input: Run directory path (relative to case directory)
         """
+        # Check if case context is set
+        if not self._current_case:
+            self.console.print("[yellow]Warning:[/yellow] No case context set. Use 'use case <case>' first.")
+            self.console.print("[dim]Setting run directory anyway - will be relative to case when case is set[/dim]")
+            self._current_rundir = rundir_input
+            self.console.print(f"[green]✓[/green] Run directory set to: [cyan]{rundir_input}[/cyan]")
+            return
+
         try:
-            # Resolve the run directory path
+            # Run directory is relative to case directory
+            case_path = Path(self._current_case)
             rundir_path = Path(rundir_input)
 
+            # Remove leading ./ if present
+            if str(rundir_path).startswith('./'):
+                rundir_path = Path(str(rundir_path)[2:])
+
+            # If not absolute, make it relative to case directory
             if not rundir_path.is_absolute():
-                rundir_path = self._current_dir / rundir_path
+                rundir_path = case_path / rundir_path
 
             rundir_path = rundir_path.resolve()
 
-            # Check if it exists
-            if not rundir_path.exists():
-                self.console.print(f"[yellow]Warning:[/yellow] Directory does not exist: {rundir_path}")
-                self.console.print("[dim]Setting context anyway[/dim]")
-
-            if not rundir_path.is_dir():
-                self.console.print(f"[yellow]Warning:[/yellow] Not a directory: {rundir_path}")
-
+            # No existence check - this is just for convenience/context
             self._current_rundir = str(rundir_path)
             self.console.print(f"[green]✓[/green] Run directory set to: [cyan]{rundir_path.name}[/cyan]")
             self.console.print(f"[dim]Path: {rundir_path}[/dim]")
