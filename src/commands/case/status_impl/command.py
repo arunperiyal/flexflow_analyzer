@@ -214,7 +214,8 @@ def get_expected_time_steps(case: FlexFlowCase, case_path: Path, freq: int) -> S
     """
     Determine expected time steps from output files.
 
-    Returns a set of time steps that should exist based on frequency.
+    Returns the set of time steps that actually exist (multiples of frequency).
+    This represents what we expect for complete output.
     """
     # Get output directory from config
     output_dir_path = get_output_directory(case, case_path)
@@ -228,22 +229,11 @@ def get_expected_time_steps(case: FlexFlowCase, case_path: Path, freq: int) -> S
     for file in output_dir_path.glob(out_pattern):
         step = extract_step_from_filename(file.name, problem)
         if step is not None:
-            steps.add(step)
+            # Only include steps that are multiples of frequency
+            if step % freq == 0:
+                steps.add(step)
 
-    if not steps:
-        return set()
-
-    # Return all steps that are multiples of frequency
-    min_step = min(steps)
-    max_step = max(steps)
-
-    expected_steps = set()
-    step = min_step
-    while step <= max_step:
-        expected_steps.add(step)
-        step += freq
-
-    return expected_steps
+    return steps
 
 
 def get_all_time_steps(case: FlexFlowCase, case_path: Path) -> Set[int]:
