@@ -230,16 +230,20 @@ class CaseOrganizer:
         # Show summary
         self._show_summary()
 
-        # Ask for confirmation
-        if not self.args.no_confirm:
+        # Check if we have deletions to perform
+        has_deletions = len(self.files_to_delete) > 0
+
+        # Ask for confirmation only if there are deletions
+        if has_deletions and not self.args.no_confirm:
             if not self._confirm_deletion():
                 self.console.print("[yellow]Operation cancelled[/yellow]")
                 return
 
         # Perform deletions
-        self._perform_deletions()
+        if has_deletions:
+            self._perform_deletions()
 
-        # Rename files
+        # Rename files (should happen regardless of deletions)
         if clean_othd or clean_oisd:
             self._rename_files(othd_files if clean_othd else [],
                              oisd_files if clean_oisd else [])
@@ -652,10 +656,6 @@ class CaseOrganizer:
         total_space = (self.stats['othd_space_freed'] +
                       self.stats['oisd_space_freed'] +
                       self.stats['output_space_freed'])
-
-        if total_files == 0:
-            self.console.print("[green]No files to delete[/green]")
-            return False
 
         self.console.print(
             f"[bold yellow]Delete {total_files} files "
