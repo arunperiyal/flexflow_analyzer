@@ -28,6 +28,10 @@ ff                    # Start interactive shell
 | `cd <path>` | Change directory | `cd cases` |
 | `cd ~` or `cd` | Go to home | `cd ~` |
 | `cd ..` | Go to parent | `cd ..` |
+| `grep <pattern> [files]` | Search file contents | `grep error *.log` |
+| `grep -i <pattern>` | Case-insensitive search | `grep -i warning file.txt` |
+| `grep -r <pattern> <dir>` | Recursive search | `grep -r TODO src/` |
+| `grep -l <pattern>` | Show only filenames | `grep -l error logs/` |
 | `find [pattern]` | Find cases | `find CS4*` |
 | `tree [depth]` | Show directory tree | `tree 2` |
 

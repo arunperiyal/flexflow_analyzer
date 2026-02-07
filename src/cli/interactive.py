@@ -183,6 +183,7 @@ class FlexFlowCompleter(Completer):
                 ('la', 'List all files'),
                 ('cd', 'Change directory'),
                 ('cat', 'View file contents'),
+                ('grep', 'Search file contents'),
                 ('find', 'Find case directories'),
                 ('tree', 'Show directory tree'),
                 ('use', 'Set context'),
@@ -210,7 +211,7 @@ class FlexFlowCompleter(Completer):
                 return
 
             # Handle file browsing commands
-            if cmd_name in ['cd', 'cat', 'ls', 'll', 'la']:
+            if cmd_name in ['cd', 'cat', 'ls', 'll', 'la', 'grep']:
                 yield from self._complete_path(words, text)
                 return
 
@@ -636,6 +637,23 @@ class InteractiveShell:
                 self.console.print("[yellow]Usage:[/yellow] cat <file> [files...]")
             return True
 
+        # Search file contents
+        if cmd == 'grep':
+            if len(parts) > 1:
+                self.grep_files(parts[1:])
+            else:
+                self.console.print("[yellow]Usage:[/yellow] grep <pattern> [files...] [options]")
+                self.console.print("[dim]Options:[/dim]")
+                self.console.print("  -i, --ignore-case    Case-insensitive search")
+                self.console.print("  -n, --line-number    Show line numbers")
+                self.console.print("  -r, --recursive      Search recursively in directories")
+                self.console.print("  -l, --files-only     Show only filenames with matches")
+                self.console.print("[dim]Examples:[/dim]")
+                self.console.print("  grep 'error' log.txt")
+                self.console.print("  grep -i 'warning' *.log")
+                self.console.print("  grep -rn 'TODO' src/")
+            return True
+
         return False
 
     def show_help(self) -> None:
@@ -684,6 +702,7 @@ class InteractiveShell:
             ("cd ~", "Go to home directory"),
             ("cd ..", "Go to parent directory"),
             ("cat <file>", "View file contents"),
+            ("grep <pattern> [files]", "Search file contents"),
             ("find [pattern]", "Find case directories"),
             ("tree [depth]", "Show directory tree (default depth: 2)"),
         ]
@@ -1280,6 +1299,165 @@ class InteractiveShell:
                 self.console.print(f"[red]Error: Permission denied: {file_path}[/red]")
             except Exception as e:
                 self.console.print(f"[red]Error reading file: {e}[/red]")
+
+    def grep_files(self, args: List[str]) -> None:
+        """
+        Search file contents (like Unix grep command).
+
+        Args:
+            args: List containing pattern and file paths, with optional flags
+        """
+        import re
+        import glob
+
+        # Parse arguments
+        pattern = None
+        file_paths = []
+        ignore_case = False
+        show_line_numbers = True  # Default to showing line numbers
+        recursive = False
+        files_only = False
+
+        i = 0
+        while i < len(args):
+            arg = args[i]
+            if arg in ['-i', '--ignore-case']:
+                ignore_case = True
+            elif arg in ['-n', '--line-number']:
+                show_line_numbers = True
+            elif arg in ['-r', '--recursive']:
+                recursive = True
+            elif arg in ['-l', '--files-only']:
+                files_only = True
+            elif pattern is None:
+                pattern = arg
+            else:
+                file_paths.append(arg)
+            i += 1
+
+        if pattern is None:
+            self.console.print("[yellow]Error: No pattern specified[/yellow]")
+            return
+
+        # If no files specified, search in current directory
+        if not file_paths:
+            file_paths = ['*']
+
+        # Compile regex pattern
+        try:
+            flags = re.IGNORECASE if ignore_case else 0
+            regex = re.compile(pattern, flags)
+        except re.error as e:
+            self.console.print(f"[red]Error: Invalid regex pattern: {e}[/red]")
+            return
+
+        # Expand file patterns and collect files
+        files_to_search = []
+        for pattern_str in file_paths:
+            # Handle trailing slashes
+            pattern_str = pattern_str.rstrip('/')
+
+            # Check if pattern contains glob characters
+            has_glob = '*' in pattern_str or '?' in pattern_str or '[' in pattern_str
+
+            if has_glob:
+                # Use glob to expand pattern
+                if not Path(pattern_str).is_absolute():
+                    base_path = self._current_dir
+                else:
+                    # Find the first directory component that doesn't have glob chars
+                    parts = Path(pattern_str).parts
+                    base_idx = 0
+                    for i, part in enumerate(parts):
+                        if '*' in part or '?' in part or '[' in part:
+                            break
+                        base_idx = i + 1
+                    base_path = Path(*parts[:base_idx]) if base_idx > 0 else Path('/')
+                    pattern_str = str(Path(*parts[base_idx:])) if base_idx < len(parts) else '*'
+
+                # Perform glob search
+                if recursive:
+                    matched = [f for f in base_path.rglob(pattern_str) if f.is_file()]
+                else:
+                    matched = [f for f in base_path.glob(pattern_str) if f.is_file()]
+                files_to_search.extend(matched)
+            else:
+                # No glob characters - treat as literal path
+                if not Path(pattern_str).is_absolute():
+                    pattern_path = self._current_dir / pattern_str
+                else:
+                    pattern_path = Path(pattern_str)
+
+                if pattern_path.exists():
+                    if pattern_path.is_file():
+                        files_to_search.append(pattern_path)
+                    elif pattern_path.is_dir():
+                        # Search in directory
+                        if recursive:
+                            files_to_search.extend([f for f in pattern_path.rglob('*') if f.is_file()])
+                        else:
+                            files_to_search.extend([f for f in pattern_path.glob('*') if f.is_file()])
+
+        # Filter to only files
+        files_to_search = [f for f in files_to_search if f.is_file()]
+
+        if not files_to_search:
+            self.console.print("[yellow]No files found matching pattern[/yellow]")
+            return
+
+        # Search files
+        total_matches = 0
+        files_with_matches = 0
+
+        for file_path in files_to_search:
+            try:
+                # Skip binary files (simple check)
+                if file_path.suffix in ['.pyc', '.so', '.o', '.bin', '.exe', '.othd', '.oisd']:
+                    continue
+
+                matches = []
+                with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
+                    for line_num, line in enumerate(f, 1):
+                        if regex.search(line):
+                            matches.append((line_num, line.rstrip()))
+
+                if matches:
+                    files_with_matches += 1
+                    total_matches += len(matches)
+
+                    if files_only:
+                        # Just show filename
+                        self.console.print(f"[cyan]{file_path}[/cyan]")
+                    else:
+                        # Show file header if multiple files
+                        if len(files_to_search) > 1:
+                            self.console.print()
+                            self.console.print(f"[bold cyan]{file_path}[/bold cyan]")
+
+                        # Show matching lines
+                        for line_num, line in matches:
+                            if show_line_numbers:
+                                # Highlight the pattern in the line
+                                highlighted = regex.sub(lambda m: f"[yellow]{m.group()}[/yellow]", line)
+                                self.console.print(f"[green]{line_num}[/green]:{highlighted}")
+                            else:
+                                highlighted = regex.sub(lambda m: f"[yellow]{m.group()}[/yellow]", line)
+                                self.console.print(highlighted)
+
+            except UnicodeDecodeError:
+                # Skip binary files
+                continue
+            except PermissionError:
+                self.console.print(f"[dim]Permission denied: {file_path}[/dim]")
+            except Exception as e:
+                self.console.print(f"[dim]Error reading {file_path}: {e}[/dim]")
+
+        # Show summary
+        if total_matches > 0:
+            self.console.print()
+            self.console.print(f"[dim]Found {total_matches} matches in {files_with_matches} files[/dim]")
+        else:
+            self.console.print("[yellow]No matches found[/yellow]")
 
     def show_tree(self, depth: int = 2) -> None:
         """
