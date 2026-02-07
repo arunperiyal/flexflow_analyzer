@@ -95,8 +95,8 @@ class CaseOrganizer:
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             self.log_file = self.case_dir / f'organise_log_{timestamp}.txt'
 
-    def _copy_output_data_files(self):
-        """Copy OTHD/OISD files from output directory to othd_files/oisd_files."""
+    def _move_output_data_files(self):
+        """Move OTHD/OISD files from output directory to othd_files/oisd_files."""
         # Find output directories based on config
         output_dir_path = None
         if 'dir' in self.case.config:
@@ -107,7 +107,7 @@ class CaseOrganizer:
                 output_dir_path = Path(output_dir_str)
 
         if not output_dir_path or not output_dir_path.exists():
-            self.logger.info("No output directory found in simflow.config, skipping data file copy")
+            self.logger.info("No output directory found in simflow.config, skipping data file move")
             return
 
         self.logger.info(f"Scanning output directory for OTHD/OISD files: {output_dir_path}")
@@ -126,26 +126,23 @@ class CaseOrganizer:
         othd_dest.mkdir(exist_ok=True)
         oisd_dest.mkdir(exist_ok=True)
 
-        # Copy files with number suffix handling
-        copied_count = 0
+        # Move files with number suffix handling
+        import shutil
+        moved_count = 0
         for file in othd_files_found:
             dest_path = self._get_unique_filename(othd_dest, file.name)
-            if not self.args.dry_run:
-                import shutil
-                shutil.copy2(file, dest_path)
-            self.logger.info(f"Copied {file.name} -> {dest_path.name}")
-            copied_count += 1
+            shutil.move(str(file), str(dest_path))
+            self.logger.info(f"Moved {file.name} -> {dest_path.name}")
+            moved_count += 1
 
         for file in oisd_files_found:
             dest_path = self._get_unique_filename(oisd_dest, file.name)
-            if not self.args.dry_run:
-                import shutil
-                shutil.copy2(file, dest_path)
-            self.logger.info(f"Copied {file.name} -> {dest_path.name}")
-            copied_count += 1
+            shutil.move(str(file), str(dest_path))
+            self.logger.info(f"Moved {file.name} -> {dest_path.name}")
+            moved_count += 1
 
-        if copied_count > 0:
-            self.console.print(f"\n[green]✓[/green] Copied {copied_count} data files from output directory")
+        if moved_count > 0:
+            self.console.print(f"\n[green]✓[/green] Moved {moved_count} data files from output directory")
 
     def _get_unique_filename(self, dest_dir: Path, filename: str) -> Path:
         """Get unique filename with number suffix if file exists."""
@@ -193,20 +190,23 @@ class CaseOrganizer:
         ))
         self.console.print()
 
-        # Copy OTHD/OISD files from output directory first
-        self._copy_output_data_files()
+        # Move OTHD/OISD files from output directory first
+        self._move_output_data_files()
 
         # Determine what to clean
-        clean_othd = not (self.args.clean_oisd or self.args.clean_output)
-        clean_oisd = not (self.args.clean_othd or self.args.clean_output)
-        clean_output = not (self.args.clean_othd or self.args.clean_oisd)
+        # If no flags provided, clean everything
+        has_clean_flags = (self.args.clean_othd or self.args.clean_oisd or self.args.clean_output)
 
-        if self.args.clean_othd:
-            clean_othd, clean_oisd, clean_output = True, False, False
-        elif self.args.clean_oisd:
-            clean_othd, clean_oisd, clean_output = False, True, False
-        elif self.args.clean_output:
-            clean_othd, clean_oisd, clean_output = False, False, True
+        if not has_clean_flags:
+            # Default: clean everything
+            clean_othd = True
+            clean_oisd = True
+            clean_output = True
+        else:
+            # User specified specific flags
+            clean_othd = self.args.clean_othd
+            clean_oisd = self.args.clean_oisd
+            clean_output = self.args.clean_output
 
         # Analyze files
         othd_files = []
@@ -227,27 +227,24 @@ class CaseOrganizer:
             self._analyze_output_directory()
 
         # Show summary
-        if self.args.dry_run:
-            self._show_dry_run_summary()
-        else:
-            self._show_summary()
+        self._show_summary()
 
-            # Ask for confirmation
-            if not self.args.no_confirm:
-                if not self._confirm_deletion():
-                    self.console.print("[yellow]Operation cancelled[/yellow]")
-                    return
+        # Ask for confirmation
+        if not self.args.no_confirm:
+            if not self._confirm_deletion():
+                self.console.print("[yellow]Operation cancelled[/yellow]")
+                return
 
-            # Perform deletions
-            self._perform_deletions()
+        # Perform deletions
+        self._perform_deletions()
 
-            # Rename files
-            if clean_othd or clean_oisd:
-                self._rename_files(othd_files if clean_othd else [],
-                                 oisd_files if clean_oisd else [])
+        # Rename files
+        if clean_othd or clean_oisd:
+            self._rename_files(othd_files if clean_othd else [],
+                             oisd_files if clean_oisd else [])
 
-            # Show final summary
-            self._show_final_summary()
+        # Show final summary
+        self._show_final_summary()
 
     def _analyze_data_files(self, file_type: str) -> List[FileInfo]:
         """
@@ -386,8 +383,14 @@ class CaseOrganizer:
             self.logger.warning("Could not determine frequency, skipping output directory cleanup")
             return
 
-        keep_interval = freq * getattr(self.args, 'keep_every', 10)
-        self.logger.info(f"Using freq={freq}, keep_interval={keep_interval}")
+        # Calculate keep_every: use provided value or default to 10 * freq
+        if hasattr(self.args, 'keep_every') and self.args.keep_every is not None:
+            keep_every = self.args.keep_every
+        else:
+            keep_every = 10
+
+        keep_interval = freq * keep_every
+        self.logger.info(f"Using freq={freq}, keep_every={keep_every}, keep_interval={keep_interval}")
 
         # Find output directories
         output_dirs = self._find_output_directories()
@@ -468,10 +471,6 @@ class CaseOrganizer:
 
     def _get_frequency(self) -> Optional[int]:
         """Get output frequency from config or auto-detect."""
-        # Try command line override
-        if hasattr(self.args, 'freq') and self.args.freq:
-            return self.args.freq
-
         # Try simflow.config
         if 'outFreq' in self.case.config:
             try:
@@ -600,29 +599,6 @@ class CaseOrganizer:
         self.console.print()
         self.console.print(table)
         self.console.print()
-
-    def _show_dry_run_summary(self):
-        """Show dry-run summary."""
-        self.console.print()
-        self.console.print(Panel(
-            "[bold yellow]DRY RUN MODE[/bold yellow]\n"
-            "No files will be deleted. Showing what would happen:",
-            border_style="yellow",
-            box=box.ROUNDED
-        ))
-        self.console.print()
-
-        self._show_summary()
-
-        if self.files_to_delete:
-            self.console.print("[bold]Files that would be deleted:[/bold]")
-            for file in self.files_to_delete[:20]:  # Show first 20
-                self.console.print(f"  [red]✗[/red] {file}")
-            if len(self.files_to_delete) > 20:
-                self.console.print(f"  [dim]... and {len(self.files_to_delete) - 20} more[/dim]")
-
-        if self.files_to_rename:
-            self.console.print(f"\n[bold]Files that would be renamed:[/bold] {len(self.files_to_rename)}")
 
     def _confirm_deletion(self) -> bool:
         """Ask user to confirm deletion."""

@@ -86,12 +86,8 @@ class CaseCommand(BaseCommand):
         organise_parser = case_subparsers.add_parser('organise', add_help=False,
                                                      help='Organize and clean up case directory')
         organise_parser.add_argument('case', nargs='?', help='Case directory path')
-        organise_parser.add_argument('--dry-run', action='store_true',
-                                    help='Preview changes without deleting')
-        organise_parser.add_argument('--freq', type=int,
-                                    help='Override frequency from simflow.config')
-        organise_parser.add_argument('--keep-every', type=int, default=10,
-                                    help='Keep every Nth output (default: 10)')
+        organise_parser.add_argument('--keep-every', type=int,
+                                    help='Keep every Nth output (default: 10 * freq)')
         organise_parser.add_argument('--clean-othd', action='store_true',
                                     help='Clean OTHD files only')
         organise_parser.add_argument('--clean-oisd', action='store_true',
@@ -171,7 +167,7 @@ class CaseCommand(BaseCommand):
         console.print("    flexflow case create myCase --problem-name test")
         console.print("    flexflow case run CS4SG1U1")
         console.print("    flexflow case run CS4SG1U1 --no-monitor")
-        console.print("    flexflow case organise CS4SG1U1 --dry-run")
+        console.print("    flexflow case organise CS4SG1U1")
         console.print()
 
 
