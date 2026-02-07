@@ -77,13 +77,19 @@ def execute_status(args):
     othd_status, othd_coverage = check_othd_files(case_path, all_time_steps)
     oisd_status, oisd_coverage = check_oisd_files(case_path, all_time_steps)
 
+    # Check output directory progress
+    output_dir_path = get_output_directory(case, case_path)
+    out_progress, rst_progress, plt_out_progress, othd_out_progress, oisd_out_progress = check_output_directory_progress(
+        output_dir_path, case.problem_name, output_time_steps, all_time_steps
+    )
+
     # Display results table
     table = Table(title="Data File Status", box=box.ROUNDED, show_header=True)
     table.add_column("File Type", style="cyan")
     table.add_column("Status", style="white")
     table.add_column("Coverage", justify="right", style="yellow")
 
-    # PLT files
+    # PLT files (binary)
     status_text = "[green]Complete[/green]" if plt_status else "[red]Incomplete[/red]"
     coverage_text = f"{plt_coverage:.1f}%"
     table.add_row("PLT files (binary/)", status_text, coverage_text)
@@ -100,6 +106,25 @@ def execute_status(args):
 
     console.print(table)
     console.print()
+
+    # Display output directory progress
+    if output_dir_path and output_dir_path.exists():
+        console.print("[bold]Output Directory Progress:[/bold]")
+        console.print(f"[dim]Location: {output_dir_path}[/dim]")
+        console.print()
+
+        progress_table = Table(box=box.SIMPLE, show_header=True)
+        progress_table.add_column("File Type", style="cyan")
+        progress_table.add_column("Progress", justify="right", style="yellow")
+
+        progress_table.add_row("OUT files", f"{out_progress:.1f}%")
+        progress_table.add_row("RST files", f"{rst_progress:.1f}%")
+        progress_table.add_row("PLT files (ASCII)", f"{plt_out_progress:.1f}%")
+        progress_table.add_row("OTHD files", f"{othd_out_progress:.1f}%")
+        progress_table.add_row("OISD files", f"{oisd_out_progress:.1f}%")
+
+        console.print(progress_table)
+        console.print()
 
     # Overall status
     overall_complete = plt_status and othd_status and oisd_status
@@ -282,6 +307,89 @@ def get_timesteps_from_data_files(case_path: Path) -> Set[int]:
             continue
 
     return all_steps
+
+
+def check_output_directory_progress(
+    output_dir: Optional[Path],
+    problem: str,
+    output_steps: Set[int],
+    all_steps: Set[int]
+) -> Tuple[float, float, float, float, float]:
+    """
+    Check progress of files in output directory.
+
+    Returns:
+        Tuple of (out_progress, rst_progress, plt_progress, othd_progress, oisd_progress)
+    """
+    if not output_dir or not output_dir.exists():
+        return 0.0, 0.0, 0.0, 0.0, 0.0
+
+    # Check .out files (should match output_steps)
+    out_files = list(output_dir.glob(f'{problem}.*_*.out'))
+    out_steps = set()
+    for file in out_files:
+        step = extract_step_from_filename(file.name, problem)
+        if step:
+            out_steps.add(step)
+
+    out_progress = (len(out_steps & output_steps) / len(output_steps) * 100) if output_steps else 0.0
+
+    # Check .rst files (should match output_steps)
+    rst_files = list(output_dir.glob(f'{problem}.*_*.rst'))
+    rst_steps = set()
+    for file in rst_files:
+        step = extract_step_from_filename(file.name, problem)
+        if step:
+            rst_steps.add(step)
+
+    rst_progress = (len(rst_steps & output_steps) / len(output_steps) * 100) if output_steps else 0.0
+
+    # Check ASCII PLT files (should match output_steps)
+    plt_files = list(output_dir.glob(f'{problem}.*.plt'))
+    plt_steps = set()
+    for file in plt_files:
+        step = extract_plt_step(file.name, problem)
+        if step:
+            plt_steps.add(step)
+
+    plt_progress = (len(plt_steps & output_steps) / len(output_steps) * 100) if output_steps else 0.0
+
+    # Check OTHD files in output directory (should have all_steps)
+    othd_files = list(output_dir.glob('*.othd'))
+    othd_steps = set()
+    for othd_file in othd_files:
+        try:
+            reader = OTHDReader(str(othd_file))
+            othd_steps.update(reader.tsIds)
+        except Exception:
+            continue
+
+    othd_progress = (len(othd_steps & all_steps) / len(all_steps) * 100) if all_steps else 0.0
+
+    # Check OISD files in output directory (should have all_steps)
+    oisd_files = list(output_dir.glob('*.oisd'))
+    oisd_steps = set()
+    for oisd_file in oisd_files:
+        try:
+            reader = OISDReader(str(oisd_file))
+            oisd_steps.update(reader.tsIds)
+        except Exception:
+            continue
+
+    oisd_progress = (len(oisd_steps & all_steps) / len(all_steps) * 100) if all_steps else 0.0
+
+    return out_progress, rst_progress, plt_progress, othd_progress, oisd_progress
+
+
+def extract_plt_step(filename: str, problem: str) -> Optional[int]:
+    """Extract time step from PLT filename."""
+    import re
+    # Pattern: {problem}.{step}.plt
+    pattern = rf'{re.escape(problem)}\.(\d+)\.plt'
+    match = re.match(pattern, filename)
+    if match:
+        return int(match.group(1))
+    return None
 
 
 def check_plt_files(case_path: Path, problem: str, expected_steps: Set[int]) -> Tuple[bool, float]:
