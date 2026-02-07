@@ -111,6 +111,21 @@ def execute_status(args):
     console.print()
 
 
+def get_output_directory(case: FlexFlowCase, case_path: Path) -> Optional[Path]:
+    """Get output directory from case config."""
+    if 'dir' not in case.config:
+        return None
+
+    output_dir_str = case.config['dir']
+
+    if not os.path.isabs(output_dir_str):
+        output_dir_path = case_path / output_dir_str
+    else:
+        output_dir_path = Path(output_dir_str)
+
+    return output_dir_path
+
+
 def get_frequency(case: FlexFlowCase, case_path: Path) -> Optional[int]:
     """Get output frequency from config or auto-detect."""
     # Try simflow.config
@@ -121,23 +136,23 @@ def get_frequency(case: FlexFlowCase, case_path: Path) -> Optional[int]:
             pass
 
     # Auto-detect from output files
-    return auto_detect_frequency(case_path, case.problem_name)
+    return auto_detect_frequency(case_path, case.problem_name, case)
 
 
-def auto_detect_frequency(case_path: Path, problem: str) -> Optional[int]:
+def auto_detect_frequency(case_path: Path, problem: str, case: FlexFlowCase) -> Optional[int]:
     """Auto-detect frequency from output file time steps."""
-    output_dirs = list(case_path.glob('RUN_*'))
-    if not output_dirs:
+    # Get output directory from config
+    output_dir_path = get_output_directory(case, case_path)
+    if not output_dir_path or not output_dir_path.exists():
         return None
 
     out_pattern = f'{problem}.*_*.out'
 
     steps = []
-    for output_dir in output_dirs:
-        for file in output_dir.glob(out_pattern):
-            step = extract_step_from_filename(file.name, problem)
-            if step is not None:
-                steps.append(step)
+    for file in output_dir_path.glob(out_pattern):
+        step = extract_step_from_filename(file.name, problem)
+        if step is not None:
+            steps.append(step)
 
     if len(steps) < 2:
         return None
@@ -166,19 +181,19 @@ def get_expected_time_steps(case: FlexFlowCase, case_path: Path, freq: int) -> S
 
     Returns a set of time steps that should exist based on frequency.
     """
-    output_dirs = list(case_path.glob('RUN_*'))
-    if not output_dirs:
+    # Get output directory from config
+    output_dir_path = get_output_directory(case, case_path)
+    if not output_dir_path or not output_dir_path.exists():
         return set()
 
     problem = case.problem_name
     out_pattern = f'{problem}.*_*.out'
 
     steps = set()
-    for output_dir in output_dirs:
-        for file in output_dir.glob(out_pattern):
-            step = extract_step_from_filename(file.name, problem)
-            if step is not None:
-                steps.add(step)
+    for file in output_dir_path.glob(out_pattern):
+        step = extract_step_from_filename(file.name, problem)
+        if step is not None:
+            steps.add(step)
 
     if not steps:
         return set()
