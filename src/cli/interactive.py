@@ -1466,7 +1466,18 @@ class InteractiveShell:
         i = 0
         while i < len(args):
             arg = args[i]
-            if arg in ['-i', '--ignore-case']:
+            if arg.startswith('-') and not arg.startswith('--') and len(arg) > 2:
+                # Handle combined short flags like -irn
+                for char in arg[1:]:
+                    if char == 'i':
+                        ignore_case = True
+                    elif char == 'n':
+                        show_line_numbers = True
+                    elif char == 'r':
+                        recursive = True
+                    elif char == 'l':
+                        files_only = True
+            elif arg in ['-i', '--ignore-case']:
                 ignore_case = True
             elif arg in ['-n', '--line-number']:
                 show_line_numbers = True
@@ -1542,12 +1553,15 @@ class InteractiveShell:
                             files_to_search.extend([f for f in pattern_path.rglob('*') if f.is_file()])
                         else:
                             files_to_search.extend([f for f in pattern_path.glob('*') if f.is_file()])
+                else:
+                    # File/directory doesn't exist - show error
+                    self.console.print(f"[yellow]Warning: Path not found: {pattern_path}[/yellow]")
 
         # Filter to only files
         files_to_search = [f for f in files_to_search if f.is_file()]
 
         if not files_to_search:
-            self.console.print("[yellow]No files found matching pattern[/yellow]")
+            self.console.print("[yellow]No files found to search[/yellow]")
             return
 
         # Search files
