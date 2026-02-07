@@ -1412,7 +1412,7 @@ class InteractiveShell:
         for file_path in files_to_search:
             try:
                 # Skip binary files (simple check)
-                if file_path.suffix in ['.pyc', '.so', '.o', '.bin', '.exe', '.othd', '.oisd']:
+                if file_path.suffix in ['.pyc', '.so', '.o', '.bin', '.exe']:
                     continue
 
                 matches = []
