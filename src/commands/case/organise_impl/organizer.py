@@ -82,6 +82,7 @@ class CaseOrganizer:
             'oisd_space_freed': 0,
             'out_deleted': 0,
             'rst_deleted': 0,
+            'plt_deleted': 0,
             'output_space_freed': 0,
         }
 
@@ -439,16 +440,19 @@ class CaseOrganizer:
 
     def _analyze_single_output_dir(self, output_dir: Path, problem: str, freq: int, keep_interval: int):
         """Analyze a single output directory."""
-        # Find out and rst files
+        # Find out, rst, and plt files
         out_pattern = f'{problem}.*_*.out'
         rst_pattern = f'{problem}.*_*.rst'
+        plt_pattern = f'{problem}.*.plt'
 
         out_files = list(output_dir.glob(out_pattern))
         rst_files = list(output_dir.glob(rst_pattern))
+        plt_files = list(output_dir.glob(plt_pattern))
 
-        self.logger.info(f"Found {len(out_files)} .out files and {len(rst_files)} .rst files in {output_dir.name}")
+        self.logger.info(f"Found {len(out_files)} .out files, {len(rst_files)} .rst files, "
+                        f"and {len(plt_files)} .plt files in {output_dir.name}")
 
-        # Extract step numbers and check retention
+        # Extract step numbers and check retention for .out and .rst files
         for file in out_files + rst_files:
             step = self._extract_step_from_filename(file.name, problem)
             if step is None:
@@ -468,6 +472,55 @@ class CaseOrganizer:
 
                 if self.args.verbose:
                     self.logger.info(f"  Delete: {file.name} (step {step} not multiple of {keep_interval})")
+
+        # Check PLT files against binary directory
+        self._analyze_plt_files(plt_files, problem)
+
+    def _analyze_plt_files(self, plt_files: List[Path], problem: str):
+        """
+        Analyze PLT files and mark for deletion if binary version exists.
+
+        Parameters:
+        -----------
+        plt_files : List[Path]
+            List of PLT file paths in output directory
+        problem : str
+            Problem name for constructing binary paths
+        """
+        binary_dir = self.case_dir / 'binary'
+
+        if not binary_dir.exists():
+            self.logger.info("No binary directory found, skipping PLT cleanup")
+            return
+
+        for plt_file in plt_files:
+            # Extract timestep from filename: {problem}.{timestep}.plt
+            step = self._extract_plt_step(plt_file.name, problem)
+            if step is None:
+                continue
+
+            # Check if binary version exists
+            binary_plt = binary_dir / f'{problem}.{step}.plt'
+
+            if binary_plt.exists():
+                # Binary version exists, mark ASCII version for deletion
+                self.files_to_delete.append(plt_file)
+                size = plt_file.stat().st_size
+
+                self.stats['plt_deleted'] += 1
+                self.stats['output_space_freed'] += size
+
+                if self.args.verbose:
+                    self.logger.info(f"  Delete: {plt_file.name} (binary version exists)")
+
+    def _extract_plt_step(self, filename: str, problem: str) -> Optional[int]:
+        """Extract time step from PLT filename."""
+        # Pattern: {problem}.{step}.plt
+        pattern = rf'{re.escape(problem)}\.(\d+)\.plt'
+        match = re.match(pattern, filename)
+        if match:
+            return int(match.group(1))
+        return None
 
     def _get_frequency(self) -> Optional[int]:
         """Get output frequency from config or auto-detect."""
@@ -576,6 +629,13 @@ class CaseOrganizer:
             table.add_row(
                 "RST files to delete",
                 str(self.stats['rst_deleted']),
+                ""
+            )
+
+        if self.stats['plt_deleted'] > 0:
+            table.add_row(
+                "PLT files to delete",
+                str(self.stats['plt_deleted']),
                 ""
             )
 
