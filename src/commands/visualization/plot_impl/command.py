@@ -46,6 +46,11 @@ def plot_in_terminal(fig, axes, logger):
     # Clear any previous plots
     plt_terminal.clear_figure()
 
+    # Set plot size (width, height in characters)
+    # You can change these values to adjust the terminal plot size
+    # Default: width=100, height=30
+    plt_terminal.plotsize(100, 30)
+
     # Track if we actually plotted anything
     plots_added = 0
 
