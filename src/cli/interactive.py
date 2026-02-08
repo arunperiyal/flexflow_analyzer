@@ -686,13 +686,17 @@ class InteractiveShell:
 
     def show_help(self) -> None:
         """Show help information."""
-        table = Table(title="FlexFlow Commands", box=box.ROUNDED, show_header=True)
+        table = Table(title="Main Commands", box=box.ROUNDED, show_header=True)
         table.add_column("Command", style="cyan", no_wrap=True)
         table.add_column("Description", style="white")
 
         # Add FlexFlow commands from registry
         for cmd in registry.all():
             table.add_row(cmd.name, cmd.description)
+
+        # Add use and unuse commands
+        table.add_row("use", "Set context (case, problem, rundir, dir)")
+        table.add_row("unuse", "Clear context")
 
         self.console.print()
         self.console.print(table)
@@ -741,32 +745,6 @@ class InteractiveShell:
             browse_table.add_row(cmd, desc)
 
         self.console.print(browse_table)
-        self.console.print()
-
-        # Context commands
-        context_table = Table(title="Context Commands", box=box.ROUNDED, show_header=True)
-        context_table.add_column("Command", style="green", no_wrap=True)
-        context_table.add_column("Description", style="white")
-
-        context_commands = [
-            ("use case <path>", "Set current case"),
-            ("use problem <name>", "Set current problem"),
-            ("use rundir <path>", "Set run directory"),
-            ("use dir <path>", "Set output directory"),
-            ("use <case>", "Shortcut for 'use case <case>'"),
-            ("use --help", "Show detailed help for use command"),
-            ("unuse case", "Clear case context"),
-            ("unuse problem", "Clear problem context"),
-            ("unuse rundir", "Clear rundir context"),
-            ("unuse dir", "Clear output dir context"),
-            ("unuse", "Clear all contexts"),
-            ("unuse --help", "Show detailed help for unuse command"),
-        ]
-
-        for cmd, desc in context_commands:
-            context_table.add_row(cmd, desc)
-
-        self.console.print(context_table)
         self.console.print()
 
     def show_history(self) -> None:
