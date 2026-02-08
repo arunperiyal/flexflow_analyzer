@@ -66,9 +66,10 @@ class FlexFlowCompleter(Completer):
             List of subcommand names
         """
         subcommands_map = {
-            'case': ['show', 'create', 'run'],
+            'case': ['show', 'create', 'run', 'organise', 'status'],
             'data': ['show', 'stats'],
             'field': ['info', 'extract'],
+            'run': ['check', 'pre', 'main', 'post', 'sq'],
             'template': ['plot', 'case'],
             'check': [],
             'plot': [],
@@ -113,6 +114,18 @@ class FlexFlowCompleter(Completer):
                 '--node': 'Node ID to plot',
                 '--component': 'Component to plot',
                 '--output': 'Output file',
+            },
+            'run': {
+                **common_flags,
+                '--dry-run': 'Preview without submitting',
+                '--show': 'Display script content',
+                '--restart': 'Restart from timestep (main)',
+                '--dependency': 'Wait for job to complete',
+                '--cleanup': 'Cleanup before processing (post)',
+                '--cleanup-only': 'Only cleanup, no submission (post)',
+                '--upto': 'Process up to timestep (post)',
+                '--all': 'Show all users jobs (sq)',
+                '--watch': 'Live queue monitoring (sq)',
             },
         }
 
@@ -334,6 +347,8 @@ class InteractiveShell:
         app: FlexFlowApp instance for command execution
     """
 
+    _instance: Optional['InteractiveShell'] = None  # Singleton instance for context access
+
     def __init__(self, app=None):
         """
         Initialize the interactive shell.
@@ -363,6 +378,9 @@ class InteractiveShell:
             self.app = FlexFlowApp()
         else:
             self.app = app
+
+        # Set singleton instance for context access by commands
+        InteractiveShell._instance = self
 
     def _get_history_file(self) -> Path:
         """
@@ -1845,6 +1863,7 @@ class InteractiveShell:
             'case': {'show': 2, 'run': 2, 'organise': 2, 'status': 2},  # case show <case>
             'data': {'show': 2, 'stats': 2},  # data show <case>
             'field': {'info': 2, 'extract': 2},  # field info <case>
+            'run': {'check': 2, 'pre': 2, 'main': 2, 'post': 2},  # run check <case>
             'check': None,  # check <file> - doesn't use case
             'plot': 1,  # plot <case> ...
         }
@@ -1853,7 +1872,7 @@ class InteractiveShell:
 
         # Check if this command uses cases
         if cmd in case_commands:
-            if cmd in ['case', 'data', 'field']:
+            if cmd in ['case', 'data', 'field', 'run']:
                 # These have subcommands
                 if len(args) >= 2:
                     subcmd = args[1]
