@@ -364,6 +364,9 @@ class InteractiveShell:
         self._current_problem: Optional[str] = None  # Problem name/ID
         self._current_rundir: Optional[str] = None  # Run directory
         self._current_output_dir: Optional[str] = None  # Output directory (dir from simflow.config)
+        self._current_node: Optional[int] = None  # Node ID for data/field commands
+        self._current_t1: Optional[float] = None  # Start time for data/field/plot commands
+        self._current_t2: Optional[float] = None  # End time for data/field/plot commands
         self._current_dir: Path = Path.cwd()  # Track current working directory
 
         # Store app instance for command execution
@@ -444,6 +447,12 @@ class InteractiveShell:
         if self._current_output_dir:
             output_dir_name = Path(self._current_output_dir).name
             contexts.append(f'<outputdir>d:{output_dir_name}</outputdir>')
+        if self._current_node is not None:
+            contexts.append(f'<node>n:{self._current_node}</node>')
+        if self._current_t1 is not None:
+            contexts.append(f'<t1>t1:{self._current_t1}</t1>')
+        if self._current_t2 is not None:
+            contexts.append(f'<t2>t2:{self._current_t2}</t2>')
 
         # Multi-line prompt format
         if contexts:
@@ -554,6 +563,21 @@ class InteractiveShell:
                     self.use_dir(parts[2])
                 else:
                     self.console.print("[yellow]Usage:[/yellow] use dir <directory_path>")
+            elif subcommand == 'node':
+                if len(parts) > 2:
+                    self.use_node(parts[2])
+                else:
+                    self.console.print("[yellow]Usage:[/yellow] use node <node_id>")
+            elif subcommand == 't1':
+                if len(parts) > 2:
+                    self.use_t1(parts[2])
+                else:
+                    self.console.print("[yellow]Usage:[/yellow] use t1 <start_time>")
+            elif subcommand == 't2':
+                if len(parts) > 2:
+                    self.use_t2(parts[2])
+                else:
+                    self.console.print("[yellow]Usage:[/yellow] use t2 <end_time>")
             else:
                 # Backwards compatibility: use <case> without subcommand
                 self.use_case(parts[1])
@@ -580,11 +604,17 @@ class InteractiveShell:
                     self.unuse_rundir()
                 elif subcommand == 'dir':
                     self.unuse_dir()
+                elif subcommand == 'node':
+                    self.unuse_node()
+                elif subcommand == 't1':
+                    self.unuse_t1()
+                elif subcommand == 't2':
+                    self.unuse_t2()
                 elif subcommand == 'all':
                     self.unuse_all()
                 else:
                     self.console.print(f"[yellow]Unknown subcommand:[/yellow] {subcommand}")
-                    self.console.print("[dim]Use: unuse [case|problem|rundir|dir|all][/dim]")
+                    self.console.print("[dim]Use: unuse [case|problem|rundir|dir|node|t1|t2|all][/dim]")
             return True
 
         # Show current directory and all contexts
@@ -598,7 +628,14 @@ class InteractiveShell:
                 self.console.print(f"Run directory: [cyan]{self._current_rundir}[/cyan]")
             if self._current_output_dir:
                 self.console.print(f"Output directory: [cyan]{self._current_output_dir}[/cyan]")
-            if not any([self._current_case, self._current_problem, self._current_rundir, self._current_output_dir]):
+            if self._current_node is not None:
+                self.console.print(f"Node context: [cyan]{self._current_node}[/cyan]")
+            if self._current_t1 is not None:
+                self.console.print(f"Start time (t1): [cyan]{self._current_t1}[/cyan]")
+            if self._current_t2 is not None:
+                self.console.print(f"End time (t2): [cyan]{self._current_t2}[/cyan]")
+            if not any([self._current_case, self._current_problem, self._current_rundir, self._current_output_dir,
+                       self._current_node is not None, self._current_t1 is not None, self._current_t2 is not None]):
                 self.console.print("[dim]No context set[/dim]")
             return True
 
@@ -1042,6 +1079,9 @@ class InteractiveShell:
         self.console.print("  use problem <name>      Set current problem")
         self.console.print("  use rundir <path>       Set current run directory")
         self.console.print("  use dir <name>          Set output directory (relative to case)")
+        self.console.print("  use node <id>           Set node ID for data/field commands")
+        self.console.print("  use t1 <time>           Set start time for data/field/plot commands")
+        self.console.print("  use t2 <time>           Set end time for data/field/plot commands")
         self.console.print("  use <case>              Shortcut for 'use case <case>'")
         self.console.print("  use --help              Show this help message")
         self.console.print()
@@ -1052,6 +1092,9 @@ class InteractiveShell:
         self.console.print("  use rundir /path/to/run")
         self.console.print("  use dir RUN_1              [dim]# Sets CS4SG1U1/RUN_1 if case is CS4SG1U1[/dim]")
         self.console.print("  use dir ./RUN_2            [dim]# Also works with ./ prefix[/dim]")
+        self.console.print("  use node 24                [dim]# Auto-inject --node 24 in data/field commands[/dim]")
+        self.console.print("  use t1 50.0                [dim]# Auto-inject --start-time 50.0[/dim]")
+        self.console.print("  use t2 100.0               [dim]# Auto-inject --end-time 100.0[/dim]")
         self.console.print("  use CS4SG1U1               [dim]# Same as 'use case CS4SG1U1'[/dim]")
         self.console.print()
 
@@ -1065,12 +1108,16 @@ class InteractiveShell:
         self.console.print("  unuse problem           Clear problem context")
         self.console.print("  unuse rundir            Clear run directory context")
         self.console.print("  unuse dir               Clear output directory context")
+        self.console.print("  unuse node              Clear node context")
+        self.console.print("  unuse t1                Clear start time context")
+        self.console.print("  unuse t2                Clear end time context")
         self.console.print("  unuse all               Clear all contexts")
         self.console.print("  unuse                   Clear all contexts (same as 'unuse all')")
         self.console.print("  unuse --help            Show this help message")
         self.console.print()
         self.console.print("[bold]EXAMPLES:[/bold]")
         self.console.print("  unuse case              [dim]# Clear only case context[/dim]")
+        self.console.print("  unuse node              [dim]# Clear only node context[/dim]")
         self.console.print("  unuse problem           [dim]# Clear only problem context[/dim]")
         self.console.print("  unuse dir               [dim]# Clear only output directory[/dim]")
         self.console.print("  unuse                   [dim]# Clear everything[/dim]")
@@ -1198,6 +1245,54 @@ class InteractiveShell:
         except Exception as e:
             self.console.print(f"[red]Error resolving path: {e}[/red]")
 
+    def use_node(self, node_input: str) -> None:
+        """
+        Set current node context for data/field commands.
+
+        Args:
+            node_input: Node ID (integer)
+        """
+        try:
+            node_id = int(node_input)
+            if node_id < 0:
+                self.console.print("[red]Error:[/red] Node ID must be non-negative")
+                return
+            self._current_node = node_id
+            self.console.print(f"[green]✓[/green] Node set to: [cyan]{node_id}[/cyan]")
+        except ValueError:
+            self.console.print(f"[red]Error:[/red] Invalid node ID: {node_input}")
+            self.console.print("[dim]Node ID must be an integer[/dim]")
+
+    def use_t1(self, time_input: str) -> None:
+        """
+        Set start time context for data/field/plot commands.
+
+        Args:
+            time_input: Start time (float)
+        """
+        try:
+            start_time = float(time_input)
+            self._current_t1 = start_time
+            self.console.print(f"[green]✓[/green] Start time (t1) set to: [cyan]{start_time}[/cyan]")
+        except ValueError:
+            self.console.print(f"[red]Error:[/red] Invalid time value: {time_input}")
+            self.console.print("[dim]Time must be a number[/dim]")
+
+    def use_t2(self, time_input: str) -> None:
+        """
+        Set end time context for data/field/plot commands.
+
+        Args:
+            time_input: End time (float)
+        """
+        try:
+            end_time = float(time_input)
+            self._current_t2 = end_time
+            self.console.print(f"[green]✓[/green] End time (t2) set to: [cyan]{end_time}[/cyan]")
+        except ValueError:
+            self.console.print(f"[red]Error:[/red] Invalid time value: {time_input}")
+            self.console.print("[dim]Time must be a number[/dim]")
+
     def unuse_case(self) -> None:
         """Clear case context."""
         if self._current_case:
@@ -1235,6 +1330,33 @@ class InteractiveShell:
         else:
             self.console.print("[dim]No run directory context is set[/dim]")
 
+    def unuse_node(self) -> None:
+        """Clear node context."""
+        if self._current_node is not None:
+            old_node = self._current_node
+            self._current_node = None
+            self.console.print(f"[green]✓[/green] Node context cleared: [dim]{old_node}[/dim]")
+        else:
+            self.console.print("[dim]No node context is set[/dim]")
+
+    def unuse_t1(self) -> None:
+        """Clear start time context."""
+        if self._current_t1 is not None:
+            old_t1 = self._current_t1
+            self._current_t1 = None
+            self.console.print(f"[green]✓[/green] Start time (t1) context cleared: [dim]{old_t1}[/dim]")
+        else:
+            self.console.print("[dim]No start time (t1) context is set[/dim]")
+
+    def unuse_t2(self) -> None:
+        """Clear end time context."""
+        if self._current_t2 is not None:
+            old_t2 = self._current_t2
+            self._current_t2 = None
+            self.console.print(f"[green]✓[/green] End time (t2) context cleared: [dim]{old_t2}[/dim]")
+        else:
+            self.console.print("[dim]No end time (t2) context is set[/dim]")
+
     def unuse_all(self) -> None:
         """Clear all contexts."""
         cleared = []
@@ -1251,6 +1373,15 @@ class InteractiveShell:
         if self._current_output_dir:
             cleared.append(f"output dir: {Path(self._current_output_dir).name}")
             self._current_output_dir = None
+        if self._current_node is not None:
+            cleared.append(f"node: {self._current_node}")
+            self._current_node = None
+        if self._current_t1 is not None:
+            cleared.append(f"t1: {self._current_t1}")
+            self._current_t1 = None
+        if self._current_t2 is not None:
+            cleared.append(f"t2: {self._current_t2}")
+            self._current_t2 = None
 
         if cleared:
             self.console.print(f"[green]✓[/green] All contexts cleared:")
@@ -1667,8 +1798,9 @@ class InteractiveShell:
             if not args:
                 return
 
-            # Inject current case if context is set and command needs a case
+            # Inject current contexts if set and command needs them
             args = self._inject_case_context(args)
+            args = self._inject_data_context(args)
 
             # Check if it's a registered command
             cmd_name = args[0]
@@ -1753,6 +1885,66 @@ class InteractiveShell:
                 if len(args) == 1 or args[1].startswith('-'):
                     args.insert(1, self._current_case)
                     self.console.print(f"[dim]Using case: {self._current_case}[/dim]")
+
+        return args
+
+    def _inject_data_context(self, args: List[str]) -> List[str]:
+        """
+        Inject current node/time contexts into command arguments if appropriate.
+
+        Args:
+            args: Command arguments
+
+        Returns:
+            Modified arguments with node/time contexts injected if needed
+        """
+        if len(args) < 1:
+            return args
+
+        cmd = args[0]
+
+        # Commands that use node, t1, t2 contexts
+        data_commands = {
+            'data': {'show', 'stats'},
+            'field': {'info', 'extract'},
+            'plot': True,  # plot uses these directly
+        }
+
+        # Check if this command uses data contexts
+        if cmd not in data_commands:
+            return args
+
+        context_added = []
+
+        # For commands with subcommands
+        if cmd in ['data', 'field']:
+            if len(args) < 2:
+                return args
+            subcmd = args[1]
+            if subcmd not in data_commands[cmd]:
+                return args
+
+        # Inject --node if set and not already present
+        if self._current_node is not None and '--node' not in args:
+            args.append('--node')
+            args.append(str(self._current_node))
+            context_added.append(f"node: {self._current_node}")
+
+        # Inject --start-time if t1 is set and not already present
+        if self._current_t1 is not None and '--start-time' not in args:
+            args.append('--start-time')
+            args.append(str(self._current_t1))
+            context_added.append(f"t1: {self._current_t1}")
+
+        # Inject --end-time if t2 is set and not already present
+        if self._current_t2 is not None and '--end-time' not in args:
+            args.append('--end-time')
+            args.append(str(self._current_t2))
+            context_added.append(f"t2: {self._current_t2}")
+
+        # Show what was injected
+        if context_added:
+            self.console.print(f"[dim]Using: {', '.join(context_added)}[/dim]")
 
         return args
 
