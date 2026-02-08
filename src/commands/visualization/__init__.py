@@ -49,7 +49,9 @@ class PlotCommand(BaseCommand):
         parser.add_argument('--fontname', type=str, help='Font name')
 
         # Output options
-        parser.add_argument('--output', type=str, help='Output file path')
+        parser.add_argument('--output', type=str, help='Output file path (supports .png, .pdf, .svg, .eps)')
+        parser.add_argument('--gnu', action='store_true',
+                          help='Display plot in terminal (gnuplot-style, useful for HPC)')
         parser.add_argument('--no-display', action='store_true',
                           help='Do not display plot')
         parser.add_argument('-v', '--verbose', action='store_true',

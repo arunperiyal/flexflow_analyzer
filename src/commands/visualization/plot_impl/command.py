@@ -14,6 +14,65 @@ from ....utils.logger import Logger
 from ....utils.colors import Colors
 from ....utils import plot_utils
 
+try:
+    import plotext as plt_terminal
+    HAS_PLOTEXT = True
+except ImportError:
+    HAS_PLOTEXT = False
+
+
+def plot_in_terminal(fig, axes, logger):
+    """
+    Plot the data in terminal using plotext.
+
+    Parameters:
+    -----------
+    fig : matplotlib.figure.Figure
+        Matplotlib figure
+    axes : matplotlib.axes.Axes or list of Axes
+        Matplotlib axes
+    logger : Logger
+        Logger instance
+    """
+    if not HAS_PLOTEXT:
+        logger.error("plotext library not installed. Install with: pip install plotext")
+        logger.info("Falling back to regular matplotlib display")
+        return False
+
+    # Handle single or multiple axes
+    if not isinstance(axes, list):
+        axes = [axes]
+
+    # Clear any previous plots
+    plt_terminal.clear_figure()
+
+    # For each subplot
+    for idx, ax in enumerate(axes):
+        if len(axes) > 1:
+            plt_terminal.subplot(len(axes), 1, idx + 1)
+
+        # Get all lines from the matplotlib axes
+        for line in ax.get_lines():
+            xdata = line.get_xdata()
+            ydata = line.get_ydata()
+            label = line.get_label()
+
+            # Only plot if we have data and it's not internal matplotlib line
+            if len(xdata) > 0 and not label.startswith('_'):
+                plt_terminal.plot(xdata, ydata, label=label)
+
+        # Set labels
+        if ax.get_xlabel():
+            plt_terminal.xlabel(ax.get_xlabel())
+        if ax.get_ylabel():
+            plt_terminal.ylabel(ax.get_ylabel())
+        if ax.get_title():
+            plt_terminal.title(ax.get_title())
+
+    # Show the terminal plot
+    plt_terminal.show()
+    return True
+
 
 def ensure_ms_fonts_loaded():
     """
@@ -373,17 +432,21 @@ def execute_plot(args):
         
         # Apply plot properties
         apply_plot_properties(fig, axes, args)
-        
-        # Save or display
+
+        # Terminal output (--gnu flag)
+        if hasattr(args, 'gnu') and args.gnu:
+            plot_in_terminal(fig, axes, logger)
+
+        # Save to file
         if args.output:
             logger.info(f"Saving plot to: {args.output}")
             fig.savefig(args.output, dpi=300, bbox_inches='tight')
             logger.success(f"Plot saved to {args.output}")
-        
-        # Only show plot if not in output-only mode and display is not disabled
-        if not args.output and not args.no_display:
+
+        # Only show matplotlib plot if not in output-only mode and display is not disabled
+        if not args.output and not args.no_display and not (hasattr(args, 'gnu') and args.gnu):
             plt.show()
-        
+
         logger.success("Plot command completed")
         
     except Exception as e:
@@ -651,16 +714,21 @@ def execute_plot_from_yaml(config, args):
         else:
             axes.set_ylabel(ylabel)
     
+    # Terminal output (--gnu flag)
+    if hasattr(args, 'gnu') and args.gnu:
+        plot_in_terminal(fig, axes, logger)
+
     # Save or display
     output_file = config.get('output', args.output)
     if output_file:
         logger.info(f"Saving plot to: {output_file}")
         fig.savefig(output_file, dpi=300, bbox_inches='tight')
         logger.success(f"Plot saved to {output_file}")
-    
+
     # Only show if not in output-only mode and display not disabled
     no_display = args.no_display or config.get('no_display', False)
-    if not output_file and not no_display:
+    gnu_mode = hasattr(args, 'gnu') and args.gnu
+    if not output_file and not no_display and not gnu_mode:
         plt.show()
-    
+
     logger.success("Plot command completed")

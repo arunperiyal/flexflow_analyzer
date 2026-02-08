@@ -50,7 +50,8 @@ Plot displacement or force data for a specific node.
                             {Colors.DIM}Note:{Colors.RESET} 'serif' gives Times-like font
 
 {Colors.BOLD}OUTPUT OPTIONS:{Colors.RESET}
-    {Colors.YELLOW}--output{Colors.RESET} FILE        Save plot to file (auto-enables headless mode)
+    {Colors.YELLOW}--output{Colors.RESET} FILE        Save plot to file (supports .png, .pdf, .svg, .eps)
+    {Colors.YELLOW}--gnu{Colors.RESET}                 Display plot in terminal (gnuplot-style, useful for HPC)
     {Colors.YELLOW}--no-display{Colors.RESET}          Don't display plot (useful for SSH/remote)
     {Colors.YELLOW}--verbose, -v{Colors.RESET}         Show detailed information
     {Colors.YELLOW}--examples{Colors.RESET}            Show usage examples
@@ -132,15 +133,33 @@ def print_plot_examples():
     flexflow plot CS4SG1U1 --node 100 --data-type displacement \\
         --plot-type traj3d --component x y z
 
-{Colors.BOLD}Save to File:{Colors.RESET}
+{Colors.BOLD}Save to File (Multiple Formats):{Colors.RESET}
+    # PNG (default, good for presentations)
     flexflow plot CS4SG1U1 --node 100 --data-type displacement \\
         --output plot.png
+
+    # PDF (vector format, best for publications)
+    flexflow plot CS4SG1U1 --node 100 --data-type displacement \\
+        --output plot.pdf
+
+    # SVG (scalable vector graphics)
+    flexflow plot CS4SG1U1 --node 100 --data-type displacement \\
+        --output plot.svg
+
+{Colors.BOLD}Terminal Plot (HPC/SSH Usage):{Colors.RESET}
+    # Display plot directly in terminal (requires plotext)
+    flexflow plot CS4SG1U1 --node 100 --data-type displacement \\
+        --component y --gnu
+
+    # Terminal plot + save to file
+    flexflow plot CS4SG1U1 --node 100 --data-type displacement \\
+        --component y --gnu --output plot.pdf
 
 {Colors.BOLD}Remote/SSH Usage (No Display):{Colors.RESET}
     # Automatically headless when using --output
     flexflow plot CS4SG1U1 --node 100 --data-type displacement \\
         --component y --output result.png
-    
+
     # Or explicitly use --no-display
     flexflow plot CS4SG1U1 --node 100 --data-type displacement \\
         --component y --no-display
