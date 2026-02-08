@@ -65,13 +65,17 @@ def plot_in_terminal(fig, axes, logger):
 
             logger.debug(f"Line label: '{label}', data points: {len(xdata)}")
 
-            # Only plot if we have data and it's not internal matplotlib line
-            if len(xdata) > 0 and not label.startswith('_'):
+            # Only plot if we have data
+            # Note: We don't filter by label because matplotlib sometimes uses labels starting with '_'
+            if len(xdata) > 0:
                 # Convert to lists to ensure compatibility
                 x_list = xdata.tolist() if hasattr(xdata, 'tolist') else list(xdata)
                 y_list = ydata.tolist() if hasattr(ydata, 'tolist') else list(ydata)
 
-                plt_terminal.plot(x_list, y_list, label=label)
+                # Use empty label if it starts with '_' (internal matplotlib convention)
+                display_label = "" if label.startswith('_') else label
+
+                plt_terminal.plot(x_list, y_list, label=display_label)
                 plots_added += 1
                 logger.debug(f"Plotted line with {len(x_list)} points")
 
