@@ -46,28 +46,52 @@ def plot_in_terminal(fig, axes, logger):
     # Clear any previous plots
     plt_terminal.clear_figure()
 
+    # Track if we actually plotted anything
+    plots_added = 0
+
     # For each subplot
     for idx, ax in enumerate(axes):
         if len(axes) > 1:
             plt_terminal.subplot(len(axes), 1, idx + 1)
 
         # Get all lines from the matplotlib axes
-        for line in ax.get_lines():
+        lines = ax.get_lines()
+        logger.debug(f"Found {len(lines)} lines in axes")
+
+        for line in lines:
             xdata = line.get_xdata()
             ydata = line.get_ydata()
             label = line.get_label()
 
+            logger.debug(f"Line label: '{label}', data points: {len(xdata)}")
+
             # Only plot if we have data and it's not internal matplotlib line
             if len(xdata) > 0 and not label.startswith('_'):
-                plt_terminal.plot(xdata, ydata, label=label)
+                # Convert to lists to ensure compatibility
+                x_list = xdata.tolist() if hasattr(xdata, 'tolist') else list(xdata)
+                y_list = ydata.tolist() if hasattr(ydata, 'tolist') else list(ydata)
+
+                plt_terminal.plot(x_list, y_list, label=label)
+                plots_added += 1
+                logger.debug(f"Plotted line with {len(x_list)} points")
 
         # Set labels
-        if ax.get_xlabel():
-            plt_terminal.xlabel(ax.get_xlabel())
-        if ax.get_ylabel():
-            plt_terminal.ylabel(ax.get_ylabel())
-        if ax.get_title():
-            plt_terminal.title(ax.get_title())
+        xlabel = ax.get_xlabel()
+        ylabel = ax.get_ylabel()
+        title = ax.get_title()
+
+        if xlabel:
+            plt_terminal.xlabel(xlabel)
+        if ylabel:
+            plt_terminal.ylabel(ylabel)
+        if title:
+            plt_terminal.title(title)
+
+    if plots_added == 0:
+        logger.warning("No data found to plot in terminal")
+        return False
+
+    logger.info(f"Displaying {plots_added} plot(s) in terminal")
 
     # Show the terminal plot
     plt_terminal.show()
@@ -353,9 +377,9 @@ def execute_plot(args):
         return
     
     logger = Logger(verbose=args.verbose)
-    
-    # Use non-interactive backend if no display or output-only mode
-    if args.no_display or args.output:
+
+    # Use non-interactive backend if no display or output-only mode or terminal mode
+    if args.no_display or args.output or (hasattr(args, 'gnu') and args.gnu):
         matplotlib.use('Agg')
     
     try:
