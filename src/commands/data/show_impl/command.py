@@ -17,14 +17,24 @@ from rich import box
 def execute_preview(args):
     """
     Execute the preview command
-    
+
     Parameters:
     -----------
     args : argparse.Namespace
         Parsed command arguments
     """
-    from .help_messages import print_preview_help
-    
+    from .help_messages import print_preview_help, print_preview_examples
+
+    # Handle help flag
+    if hasattr(args, 'help') and args.help:
+        print_preview_help()
+        return
+
+    # Handle examples flag
+    if hasattr(args, 'examples') and args.examples:
+        print_preview_examples()
+        return
+
     # Show help if no case directory provided
     if not args.case:
         print_preview_help()

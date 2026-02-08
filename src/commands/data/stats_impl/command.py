@@ -32,14 +32,24 @@ def print_statistics_table(title, stats_dict):
 def execute_statistics(args):
     """
     Execute the statistics command
-    
+
     Parameters:
     -----------
     args : argparse.Namespace
         Parsed command arguments
     """
-    from .help_messages import print_statistics_help
-    
+    from .help_messages import print_statistics_help, print_statistics_examples
+
+    # Handle help flag
+    if hasattr(args, 'help') and args.help:
+        print_statistics_help()
+        return
+
+    # Handle examples flag
+    if hasattr(args, 'examples') and args.examples:
+        print_statistics_examples()
+        return
+
     # Show help if no case directory provided
     if not args.case:
         print_statistics_help()
