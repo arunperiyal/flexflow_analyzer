@@ -541,12 +541,11 @@ class InteractiveShell:
                 self.show_use_help()
                 return True
 
-            # Use colon syntax for single or multiple contexts
-            # Examples: use case:Case015 OR use case:Case015 node:24
+            # Use colon syntax: use case:Case015 OR use case:Case015 node:24
             for part in parts[1:]:
                 if ':' not in part:
-                    # Backward compatibility: use <case> without colon
-                    self.use_case(part)
+                    self.console.print(f"[yellow]Invalid format:[/yellow] {part}")
+                    self.console.print("[dim]Use: context:value (e.g., case:Case015)[/dim]")
                     continue
 
                 context, value = part.split(':', 1)
@@ -1085,9 +1084,6 @@ class InteractiveShell:
         self.console.print("  use case:Case015 problem:rigid node:0")
         self.console.print("  use case:Case015 node:24 t1:50.0 t2:100.0")
         self.console.print("  use node:0 t1:150.0 t2:200.0")
-        self.console.print()
-        self.console.print("  [dim]# Backward compatible (no colon)[/dim]")
-        self.console.print("  use Case015                [dim]# Same as 'use case:Case015'[/dim]")
         self.console.print()
 
     def show_unuse_help(self) -> None:
