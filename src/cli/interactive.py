@@ -541,78 +541,35 @@ class InteractiveShell:
                 self.show_use_help()
                 return True
 
-            # Check if using key:value syntax (e.g., use case:Case015 node:24)
-            if ':' in parts[1]:
-                # New multi-context syntax: use case:Case015 problem:rigid node:0
-                for part in parts[1:]:
-                    if ':' not in part:
-                        self.console.print(f"[yellow]Invalid format:[/yellow] {part}")
-                        self.console.print("[dim]Use: context:value (e.g., case:Case015)[/dim]")
-                        continue
+            # Use colon syntax for single or multiple contexts
+            # Examples: use case:Case015 OR use case:Case015 node:24
+            for part in parts[1:]:
+                if ':' not in part:
+                    # Backward compatibility: use <case> without colon
+                    self.use_case(part)
+                    continue
 
-                    context, value = part.split(':', 1)
-                    context = context.strip().lower()
-                    value = value.strip()
+                context, value = part.split(':', 1)
+                context = context.strip().lower()
+                value = value.strip()
 
-                    if context == 'case':
-                        self.use_case(value)
-                    elif context == 'problem':
-                        self.use_problem(value)
-                    elif context == 'rundir':
-                        self.use_rundir(value)
-                    elif context == 'dir':
-                        self.use_dir(value)
-                    elif context == 'node':
-                        self.use_node(value)
-                    elif context == 't1':
-                        self.use_t1(value)
-                    elif context == 't2':
-                        self.use_t2(value)
-                    else:
-                        self.console.print(f"[yellow]Unknown context:[/yellow] {context}")
-                        self.console.print("[dim]Valid contexts: case, problem, rundir, dir, node, t1, t2[/dim]")
-            else:
-                # Old subcommand syntax: use case Case015
-                subcommand = parts[1]
-
-                if subcommand == 'case':
-                    if len(parts) > 2:
-                        self.use_case(parts[2])
-                    else:
-                        self.console.print("[yellow]Usage:[/yellow] use case <case_name_or_path>")
-                elif subcommand == 'problem':
-                    if len(parts) > 2:
-                        self.use_problem(parts[2])
-                    else:
-                        self.console.print("[yellow]Usage:[/yellow] use problem <problem_name>")
-                elif subcommand == 'rundir':
-                    if len(parts) > 2:
-                        self.use_rundir(parts[2])
-                    else:
-                        self.console.print("[yellow]Usage:[/yellow] use rundir <directory_path>")
-                elif subcommand == 'dir':
-                    if len(parts) > 2:
-                        self.use_dir(parts[2])
-                    else:
-                        self.console.print("[yellow]Usage:[/yellow] use dir <directory_path>")
-                elif subcommand == 'node':
-                    if len(parts) > 2:
-                        self.use_node(parts[2])
-                    else:
-                        self.console.print("[yellow]Usage:[/yellow] use node <node_id>")
-                elif subcommand == 't1':
-                    if len(parts) > 2:
-                        self.use_t1(parts[2])
-                    else:
-                        self.console.print("[yellow]Usage:[/yellow] use t1 <start_time>")
-                elif subcommand == 't2':
-                    if len(parts) > 2:
-                        self.use_t2(parts[2])
-                    else:
-                        self.console.print("[yellow]Usage:[/yellow] use t2 <end_time>")
+                if context == 'case':
+                    self.use_case(value)
+                elif context == 'problem':
+                    self.use_problem(value)
+                elif context == 'rundir':
+                    self.use_rundir(value)
+                elif context == 'dir':
+                    self.use_dir(value)
+                elif context == 'node':
+                    self.use_node(value)
+                elif context == 't1':
+                    self.use_t1(value)
+                elif context == 't2':
+                    self.use_t2(value)
                 else:
-                    # Backwards compatibility: use <case> without subcommand
-                    self.use_case(parts[1])
+                    self.console.print(f"[yellow]Unknown context:[/yellow] {context}")
+                    self.console.print("[dim]Valid contexts: case, problem, rundir, dir, node, t1, t2[/dim]")
             return True
 
         # Clear context with subcommands
@@ -1107,35 +1064,30 @@ class InteractiveShell:
         self.console.print("[bold cyan]Use Command - Set Context[/bold cyan]")
         self.console.print()
         self.console.print("[bold]USAGE:[/bold]")
-        self.console.print("  [bold]Single context:[/bold]")
-        self.console.print("    use case <path>         Set current case")
-        self.console.print("    use problem <name>      Set current problem")
-        self.console.print("    use rundir <path>       Set current run directory")
-        self.console.print("    use dir <name>          Set output directory (relative to case)")
-        self.console.print("    use node <id>           Set node ID for data/field commands")
-        self.console.print("    use t1 <time>           Set start time for data/field/plot commands")
-        self.console.print("    use t2 <time>           Set end time for data/field/plot commands")
-        self.console.print("    use <case>              Shortcut for 'use case <case>'")
+        self.console.print("  use context:value [context:value ...]")
         self.console.print()
-        self.console.print("  [bold]Multiple contexts (key:value syntax):[/bold]")
-        self.console.print("    use context1:value1 context2:value2 ...")
-        self.console.print()
-        self.console.print("  use --help                Show this help message")
+        self.console.print("[bold]CONTEXTS:[/bold]")
+        self.console.print("  case       Case directory path")
+        self.console.print("  problem    Problem name")
+        self.console.print("  rundir     Run directory path")
+        self.console.print("  dir        Output directory (relative to case)")
+        self.console.print("  node       Node ID for data/field commands")
+        self.console.print("  t1         Start time for data/field/plot commands")
+        self.console.print("  t2         End time for data/field/plot commands")
         self.console.print()
         self.console.print("[bold]EXAMPLES:[/bold]")
         self.console.print("  [dim]# Single context[/dim]")
-        self.console.print("  use case CS4SG1U1")
-        self.console.print("  use node 24")
-        self.console.print("  use t1 50.0")
+        self.console.print("  use case:Case015")
+        self.console.print("  use node:24")
+        self.console.print("  use t1:50.0")
         self.console.print()
-        self.console.print("  [dim]# Multiple contexts at once[/dim]")
+        self.console.print("  [dim]# Multiple contexts[/dim]")
         self.console.print("  use case:Case015 problem:rigid node:0")
         self.console.print("  use case:Case015 node:24 t1:50.0 t2:100.0")
         self.console.print("  use node:0 t1:150.0 t2:200.0")
         self.console.print()
-        self.console.print("  [dim]# Other examples[/dim]")
-        self.console.print("  use dir RUN_1              [dim]# Sets CS4SG1U1/RUN_1 if case is CS4SG1U1[/dim]")
-        self.console.print("  use CS4SG1U1               [dim]# Same as 'use case CS4SG1U1'[/dim]")
+        self.console.print("  [dim]# Backward compatible (no colon)[/dim]")
+        self.console.print("  use Case015                [dim]# Same as 'use case:Case015'[/dim]")
         self.console.print()
 
     def show_unuse_help(self) -> None:
