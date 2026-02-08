@@ -107,6 +107,7 @@ class FlexFlowApp:
         from src.commands.visualization import PlotCommand, CompareCommand
         from src.commands.template import TemplateCommand
         from src.commands.utils import DocsCommand
+        from src.commands.run import RunCommand
 
         # Register all commands
         command_classes = [
@@ -114,6 +115,8 @@ class FlexFlowApp:
             CaseCommand,
             DataCommand,
             FieldCommand,
+            # Execution commands
+            RunCommand,
             # File inspection
             CheckCommand,
             # Visualization commands
