@@ -259,90 +259,10 @@ class FlexFlowCompleter(Completer):
                                 )
 
     def _complete_use_command(self, words: List[str], text: str):
-        """Complete use command with context:value syntax."""
-        if len(words) == 1 or (len(words) >= 2 and not text.endswith(' ')):
-            word = words[-1] if len(words) >= 2 else ''
-
-            # Check if we're completing after a colon (context:value)
-            if ':' in word:
-                context_name, partial_value = word.split(':', 1)
-                context_name = context_name.lower()
-
-                # Auto-complete values based on context type
-                if context_name == 'case':
-                    # Find case directories in current directory
-                    current_dir = self.shell._current_dir if self.shell else Path.cwd()
-                    try:
-                        for item in current_dir.iterdir():
-                            if item.is_dir() and item.name.startswith(partial_value):
-                                # Check if it looks like a case directory
-                                if (item / 'simflow.config').exists() or item.name.startswith('Case'):
-                                    completion_text = f"{context_name}:{item.name}"
-                                    yield Completion(
-                                        completion_text,
-                                        start_position=-len(word),
-                                        display_meta='Case directory'
-                                    )
-                    except (PermissionError, OSError):
-                        pass
-
-                elif context_name == 'problem':
-                    # Suggest common problem names
-                    problems = ['rigid', 'flexible', 'flow', 'structural']
-                    for prob in problems:
-                        if prob.startswith(partial_value):
-                            completion_text = f"{context_name}:{prob}"
-                            yield Completion(
-                                completion_text,
-                                start_position=-len(word),
-                                display_meta='Problem name'
-                            )
-
-                elif context_name == 'node':
-                    # Suggest node numbers (common ones)
-                    if not partial_value or partial_value.isdigit():
-                        for node_id in ['0', '1', '10', '24', '100']:
-                            if node_id.startswith(partial_value):
-                                completion_text = f"{context_name}:{node_id}"
-                                yield Completion(
-                                    completion_text,
-                                    start_position=-len(word),
-                                    display_meta='Node ID'
-                                )
-
-                elif context_name in ['t1', 't2']:
-                    # Suggest time values
-                    if not partial_value or partial_value.replace('.', '').isdigit():
-                        for time_val in ['0.0', '50.0', '100.0', '150.0', '200.0']:
-                            if time_val.startswith(partial_value):
-                                completion_text = f"{context_name}:{time_val}"
-                                yield Completion(
-                                    completion_text,
-                                    start_position=-len(word),
-                                    display_meta='Time value'
-                                )
-
-            else:
-                # Complete context names (before colon)
-                contexts = [
-                    ('case:', 'Case directory'),
-                    ('problem:', 'Problem name'),
-                    ('rundir:', 'Run directory'),
-                    ('dir:', 'Output directory'),
-                    ('node:', 'Node ID'),
-                    ('t1:', 'Start time'),
-                    ('t2:', 'End time'),
-                    ('--help', 'Show help'),
-                    ('-h', 'Show help'),
-                ]
-
-                for context, desc in contexts:
-                    if context.startswith(word):
-                        yield Completion(
-                            context,
-                            start_position=-len(word),
-                            display_meta=desc
-                        )
+        """Complete use command - no auto-completion needed."""
+        # No auto-completion for use command
+        return
+        yield  # Make it a generator
 
     def _complete_unuse_command(self, words: List[str], text: str):
         """Complete unuse command with subcommands."""
