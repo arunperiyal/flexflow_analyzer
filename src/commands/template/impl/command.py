@@ -20,7 +20,7 @@ def execute_template(args):
     args : argparse.Namespace
         Parsed command arguments
     """
-    from .help_messages import print_plot_help, print_case_help
+    from .help_messages import print_plot_help, print_case_help, print_script_help
 
     # Handle help flags
     if hasattr(args, 'help') and args.help:
@@ -28,6 +28,8 @@ def execute_template(args):
             print_plot_help()
         elif args.template_domain == 'case':
             print_case_help()
+        elif args.template_domain == 'script':
+            print_script_help()
         return
 
     logger = Logger(verbose=args.verbose if hasattr(args, 'verbose') else False)
@@ -35,7 +37,12 @@ def execute_template(args):
     try:
         domain = args.template_domain
 
-        if domain == 'plot':
+        if domain == 'script':
+            # Handle script template generation
+            generate_script_templates(args, logger)
+            return
+
+        elif domain == 'plot':
             # Get plot type
             if not hasattr(args, 'plot_type') or not args.plot_type:
                 print_plot_help()
@@ -133,4 +140,145 @@ def execute_template(args):
         if hasattr(args, 'verbose') and args.verbose:
             import traceback
             traceback.print_exc()
+        sys.exit(1)
+
+
+def generate_script_templates(args, logger):
+    """
+    Generate SLURM job script templates
+
+    Parameters:
+    -----------
+    args : argparse.Namespace
+        Parsed command arguments
+    logger : Logger
+        Logger instance
+    """
+    from pathlib import Path
+
+    # Get script type
+    if not hasattr(args, 'script_type') or not args.script_type:
+        from .help_messages import print_script_help
+        print_script_help()
+        return
+
+    script_type = args.script_type
+
+    # Get case directory (default to current directory)
+    if hasattr(args, 'case_dir') and args.case_dir:
+        case_dir = Path(args.case_dir)
+    else:
+        case_dir = Path.cwd()
+
+    # Create case directory if it doesn't exist
+    if not case_dir.exists():
+        logger.info(f"Creating case directory: {case_dir}")
+        case_dir.mkdir(parents=True, exist_ok=True)
+
+    # Resolve to absolute path
+    case_dir = case_dir.resolve()
+
+    # Try to get case name from simflow.config or directory name
+    config_file = case_dir / 'simflow.config'
+    case_name = ""
+
+    if config_file.exists():
+        # Try to parse case name from config
+        try:
+            with open(config_file) as f:
+                for line in f:
+                    if 'problem' in line and '=' in line:
+                        # Extract problem name
+                        parts = line.split('=')
+                        if len(parts) == 2:
+                            problem = parts[1].strip().strip('"\'')
+                            case_name = problem
+                            break
+        except Exception:
+            pass
+
+    # Fallback to directory name
+    if not case_name:
+        case_name = case_dir.name
+
+    # Determine template directory
+    template_dir = os.path.join(Config.get_install_dir(), 'templates', 'scripts')
+
+    # Scripts to generate
+    scripts_to_generate = []
+
+    if script_type == 'all':
+        scripts_to_generate = ['pre', 'main', 'post']
+    else:
+        scripts_to_generate = [script_type]
+
+    # Generate scripts
+    generated = []
+
+    for script in scripts_to_generate:
+        # Determine source and output files
+        if script == 'pre':
+            source_file = os.path.join(template_dir, 'preFlex.sh')
+            output_file = case_dir / 'preFlex.sh'
+            description = "preprocessing (mesh generation)"
+        elif script == 'main':
+            source_file = os.path.join(template_dir, 'mainFlex.sh')
+            output_file = case_dir / 'mainFlex.sh'
+            description = "main simulation"
+        elif script == 'post':
+            source_file = os.path.join(template_dir, 'postFlex.sh')
+            output_file = case_dir / 'postFlex.sh'
+            description = "postprocessing"
+        else:
+            logger.error(f"Invalid script type: {script}")
+            continue
+
+        # Check if source exists
+        if not os.path.exists(source_file):
+            logger.error(f"Template file not found: {source_file}")
+            continue
+
+        # Check if output exists
+        if output_file.exists() and not args.force:
+            logger.error(f"File already exists: {output_file}")
+            print(f"Use --force to overwrite", file=sys.stderr)
+            continue
+
+        # Read template
+        with open(source_file, 'r') as f:
+            content = f.read()
+
+        # Replace placeholders
+        content = content.replace('{CASE_NAME}', case_name)
+
+        # Write output
+        logger.info(f"Creating {script} script: {output_file}")
+        with open(output_file, 'w') as f:
+            f.write(content)
+
+        # Make executable
+        os.chmod(output_file, 0o755)
+
+        generated.append((output_file.name, description))
+
+    # Show summary
+    if generated:
+        print(f"\n{Colors.green('✓')} Generated {len(generated)} script(s) in: {Colors.bold(str(case_dir))}")
+        print()
+
+        for script_name, desc in generated:
+            print(f"  {Colors.cyan(script_name)}")
+            print(f"    {Colors.dim(desc)}")
+
+        print()
+        print(f"{Colors.bold('Next steps:')}")
+        print(f"  1. Review and customize the scripts as needed")
+        print(f"  2. Set SIMFLOW_HOME environment variable:")
+        print(f"     {Colors.cyan('export SIMFLOW_HOME=/path/to/flexflow')}")
+        print(f"  3. Submit jobs:")
+        print(f"     {Colors.cyan('run pre')}   # Preprocessing")
+        print(f"     {Colors.cyan('run main')}  # Main simulation")
+        print(f"     {Colors.cyan('run post')}  # Postprocessing")
+    else:
+        logger.error("No scripts were generated")
         sys.exit(1)

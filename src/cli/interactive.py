@@ -70,7 +70,7 @@ class FlexFlowCompleter(Completer):
             'data': ['show', 'stats'],
             'field': ['info', 'extract'],
             'run': ['check', 'pre', 'main', 'post', 'sq'],
-            'template': ['plot', 'case'],
+            'template': ['plot', 'case', 'script'],
             'check': [],
             'plot': [],
             'compare': [],

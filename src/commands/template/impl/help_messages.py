@@ -205,3 +205,95 @@ def print_template_examples():
     2. Edit:      vi my_config.yaml
     3. Use:       flexflow <command> --input-file my_config.yaml
 """)
+
+
+def print_script_help():
+    """Print template script help."""
+    print(f"""
+{Colors.BOLD}{Colors.CYAN}FlexFlow Template Script Command{Colors.RESET}
+
+Generate SLURM job script templates for FlexFlow simulations.
+
+{Colors.BOLD}USAGE:{Colors.RESET}
+    flexflow template script {Colors.YELLOW}<type>{Colors.RESET} [case_directory]
+
+{Colors.BOLD}SCRIPT TYPES:{Colors.RESET}
+    {Colors.CYAN}pre{Colors.RESET}      Preprocessing script (mesh generation with gmsh + simGmshCnvt)
+    {Colors.CYAN}main{Colors.RESET}     Main simulation script (runs mpiSimflow)
+    {Colors.CYAN}post{Colors.RESET}     Postprocessing script (simPlt + simPlt2Bin)
+    {Colors.CYAN}all{Colors.RESET}      Generate all three scripts
+
+{Colors.BOLD}OPTIONS:{Colors.RESET}
+    {Colors.YELLOW}--force{Colors.RESET}        Force overwrite if file exists
+    {Colors.YELLOW}--verbose, -v{Colors.RESET}  Enable verbose output
+    {Colors.YELLOW}--help, -h{Colors.RESET}     Show this help message
+
+{Colors.BOLD}DESCRIPTION:{Colors.RESET}
+    Creates SLURM job scripts that:
+    - Auto-detect configuration from simflow.config
+    - Use SIMFLOW_HOME environment variable for executables
+    - Support command-line arguments for flexibility
+    - Include comprehensive error handling and logging
+
+    {Colors.BOLD}Scripts generated:{Colors.RESET}
+    - preFlex.sh   : Runs gmsh and simGmshCnvt
+    - mainFlex.sh  : Runs mpiSimflow with archiving
+    - postFlex.sh  : Runs simPlt and simPlt2Bin
+
+{Colors.BOLD}EXAMPLES:{Colors.RESET}
+
+    {Colors.BOLD}Generate postprocessing script:{Colors.RESET}
+        flexflow template script post Case001
+
+    {Colors.BOLD}Generate all scripts:{Colors.RESET}
+        flexflow template script all Case001
+
+    {Colors.BOLD}Generate in current directory:{Colors.RESET}
+        cd Case001
+        flexflow template script all
+
+{Colors.BOLD}USAGE OF GENERATED SCRIPTS:{Colors.RESET}
+
+    {Colors.BOLD}preFlex.sh:{Colors.RESET}
+        sbatch preFlex.sh
+        # Auto-detects: PROBLEM, GEO_FILE from simflow.config
+
+    {Colors.BOLD}mainFlex.sh:{Colors.RESET}
+        sbatch mainFlex.sh
+        # Auto-detects: PROBLEM, RUN_DIR from simflow.config
+        # For restart: ensure riser.rcv exists first
+
+    {Colors.BOLD}postFlex.sh:{Colors.RESET}
+        sbatch postFlex.sh [FREQ] [START_TIME] [END_TIME]
+        # Auto-detects: PROBLEM, RUN_DIR, FREQ from simflow.config
+        # Arguments override config values
+
+        # Examples:
+        sbatch postFlex.sh              # Use all defaults from config
+        sbatch postFlex.sh 100          # Override frequency to 100
+        sbatch postFlex.sh 100 0 5000   # Freq=100, process 0-5000
+
+{Colors.BOLD}WORKFLOW:{Colors.RESET}
+    1. Generate scripts:     flexflow template script all Case001
+    2. Set environment:      export SIMFLOW_HOME=/path/to/flexflow
+    3. Review/customize:     vi Case001/preFlex.sh
+    4. Submit jobs:
+       - run pre             # Or: sbatch preFlex.sh
+       - run main            # Or: sbatch mainFlex.sh
+       - run post            # Or: sbatch postFlex.sh
+
+{Colors.BOLD}ENVIRONMENT:{Colors.RESET}
+    Required environment variable:
+        {Colors.CYAN}SIMFLOW_HOME{Colors.RESET}  Path to FlexFlow installation
+
+    Example:
+        export SIMFLOW_HOME=/home/user/FlexFlow
+        export PATH=$SIMFLOW_HOME/bin:$PATH
+
+{Colors.BOLD}CUSTOMIZATION:{Colors.RESET}
+    After generation, you can customize:
+    - SBATCH directives (partition, tasks, time, etc.)
+    - Module loading commands
+    - Executable paths
+    - Additional pre/post processing steps
+""")

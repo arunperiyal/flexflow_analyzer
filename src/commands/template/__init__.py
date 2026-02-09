@@ -23,7 +23,7 @@ class TemplateCommand(BaseCommand):
 
         # Create subparsers for template subcommands
         template_subparsers = parser.add_subparsers(dest='template_domain',
-                                                     help='Template domain (plot or case)')
+                                                     help='Template domain (plot, case, or script)')
 
         # template plot
         plot_parser = template_subparsers.add_parser('plot', add_help=False,
@@ -54,6 +54,21 @@ class TemplateCommand(BaseCommand):
                                 help='Enable verbose output')
         case_parser.add_argument('-h', '--help', action='store_true',
                                 help='Show help for template case command')
+
+        # template script (NEW: for job scripts)
+        script_parser = template_subparsers.add_parser('script', add_help=False,
+                                                       help='Generate SLURM job script templates')
+        script_parser.add_argument('script_type', nargs='?',
+                                   choices=['pre', 'main', 'post', 'all'],
+                                   help='Script type: pre, main, post, or all')
+        script_parser.add_argument('case_dir', nargs='?', type=str,
+                                  help='Case directory to create scripts in (optional)')
+        script_parser.add_argument('--force', action='store_true',
+                                  help='Force overwrite if file exists')
+        script_parser.add_argument('-v', '--verbose', action='store_true',
+                                  help='Enable verbose output')
+        script_parser.add_argument('-h', '--help', action='store_true',
+                                  help='Show help for template script command')
 
         # Main template help flags
         parser.add_argument('-h', '--help', action='store_true',
@@ -107,6 +122,7 @@ class TemplateCommand(BaseCommand):
 
         table.add_row("plot", "single, multi", "Plot configuration templates")
         table.add_row("case", "single, multi", "Case creation templates")
+        table.add_row("script", "pre, main, post, all", "SLURM job script templates")
 
         console.print("[bold]DOMAINS:[/bold]")
         console.print(table)
@@ -116,6 +132,8 @@ class TemplateCommand(BaseCommand):
         console.print("    flexflow template plot multi comparison.yaml")
         console.print("    flexflow template case single my_case.yaml")
         console.print("    flexflow template case multi batch_cases.yaml")
+        console.print("    flexflow template script post Case001")
+        console.print("    flexflow template script all Case001")
         console.print()
         console.print("[bold]OPTIONS:[/bold]")
         console.print("    --force         Force overwrite existing file")

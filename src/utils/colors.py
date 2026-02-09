@@ -71,3 +71,8 @@ class Colors:
     def magenta(text):
         """Make text magenta"""
         return Colors.color(text, Colors.MAGENTA)
+
+    @staticmethod
+    def dim(text):
+        """Make text dim"""
+        return f"{Colors.DIM}{text}{Colors.RESET}"
