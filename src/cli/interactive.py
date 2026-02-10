@@ -35,295 +35,398 @@ class FlexFlowCompleter(Completer):
     options, file paths, and context commands.
     """
 
-    def __init__(self, shell=None):
-        """
-        Initialize the completer with command registry.
+    # ---------------------------------------------------------------------------
+    # Static completion tables
+    # ---------------------------------------------------------------------------
 
-        Args:
-            shell: InteractiveShell instance for context-aware completion
-        """
+    _SUBCOMMANDS: Dict[str, List[str]] = {
+        'case':     ['show', 'create', 'run', 'organise', 'status'],
+        'data':     ['show', 'stats'],
+        'field':    ['info', 'extract'],
+        'run':      ['check', 'pre', 'main', 'post', 'sq'],
+        'template': ['plot', 'case', 'script'],
+        'check':    [],
+        'plot':     [],
+        'compare':  [],
+        'docs':     [],
+    }
+
+    _COMMON_FLAGS: Dict[str, str] = {
+        '--help':     'Show help message',
+        '-h':         'Show help message',
+        '--verbose':  'Enable verbose output',
+        '-v':         'Enable verbose output',
+        '--examples': 'Show usage examples',
+    }
+
+    # Flags per (command, subcommand).  Use (command, None) for the top-level
+    # command (before a subcommand is typed) and (command, subcmd) for the
+    # flags that appear after a specific subcommand.
+    _SUBCMD_FLAGS: Dict[tuple, Dict[str, str]] = {
+        # ── case ────────────────────────────────────────────────────────────
+        ('case', None):      {**_COMMON_FLAGS},
+        ('case', 'show'):    {**_COMMON_FLAGS},
+        ('case', 'create'):  {
+            **_COMMON_FLAGS,
+            '--ref-case':     'Path to reference case directory',
+            '--problem-name': 'Problem name to set in simflow.config',
+            '--np':           'Number of processors (default: 36)',
+            '--freq':         'Output frequency (default: 50)',
+            '--from-config':  'Create from YAML config file',
+            '--force':        'Force overwrite if case already exists',
+            '--list-vars':    'List available variables in reference case',
+            '--dry-run':      'Show what would be created',
+        },
+        ('case', 'run'):     {
+            **_COMMON_FLAGS,
+            '--no-monitor': 'Submit jobs without monitoring',
+            '--clean':      'Clean start (remove existing OTHD files)',
+            '--from-step':  'Restart from specific timestep',
+            '--dry-run':    'Show what would be done',
+        },
+        ('case', 'organise'): {
+            **_COMMON_FLAGS,
+            '--archive':      'Move .othd/.oisd/.rcv from run dir to archive dirs',
+            '--organise':     'Deduplicate and clean redundant OTHD/OISD files',
+            '--clean-output': 'Remove intermediate .out/.rst/.plt files',
+            '--keep-every':   'Keep every Nth output (default: 10)',
+            '--log':          'Create log file of all deletions',
+            '--no-confirm':   'Skip confirmation prompts',
+        },
+        ('case', 'status'):  {**_COMMON_FLAGS},
+
+        # ── data ────────────────────────────────────────────────────────────
+        ('data', None):      {**_COMMON_FLAGS},
+        ('data', 'show'):    {
+            **_COMMON_FLAGS,
+            '--node':       'Node ID',
+            '--start-time': 'Start time filter',
+            '--end-time':   'End time filter',
+            '--variable':   'Variable(s) to show',
+        },
+        ('data', 'stats'):   {
+            **_COMMON_FLAGS,
+            '--node': 'Node ID',
+        },
+
+        # ── field ───────────────────────────────────────────────────────────
+        ('field', None):     {**_COMMON_FLAGS},
+        ('field', 'info'):   {
+            **_COMMON_FLAGS,
+            '--basic':       'Show basic info only',
+            '--variables':   'List variables',
+            '--zones':       'List zones',
+            '--checks':      'Run consistency checks',
+            '--stats':       'Show statistics',
+            '--detailed':    'Detailed output',
+            '--sample-file': 'Sample a specific timestep',
+        },
+        ('field', 'extract'): {
+            **_COMMON_FLAGS,
+            '--variables':   'Variables to extract',
+            '--zone':        'Zone name filter',
+            '--timestep':    'Specific timestep',
+            '--output-file': 'Output file path',
+            '--xmin': 'X minimum bound',
+            '--xmax': 'X maximum bound',
+            '--ymin': 'Y minimum bound',
+            '--ymax': 'Y maximum bound',
+            '--zmin': 'Z minimum bound',
+            '--zmax': 'Z maximum bound',
+        },
+
+        # ── run ─────────────────────────────────────────────────────────────
+        ('run', None):       {**_COMMON_FLAGS},
+        ('run', 'check'):    {**_COMMON_FLAGS},
+        ('run', 'pre'):      {
+            **_COMMON_FLAGS,
+            '--dry-run': 'Preview without submitting',
+            '--show':    'Display script contents',
+        },
+        ('run', 'main'):     {
+            **_COMMON_FLAGS,
+            '--dry-run':    'Preview without submitting',
+            '--show':       'Display script contents',
+            '--restart':    'Restart from specific timestep',
+            '--dependency': 'Job dependency (job ID)',
+        },
+        ('run', 'post'):     {
+            **_COMMON_FLAGS,
+            '--dry-run':      'Preview without submitting',
+            '--show':         'Display script contents',
+            '--upto':         'Process up to timestep',
+            '--last':         'Process last N timesteps',
+            '--freq':         'Output frequency',
+            '--cleanup':      'Clean files before processing',
+            '--no-cleanup':   'Skip cleanup',
+            '--cleanup-only': 'Only run cleanup',
+            '--dependency':   'Job dependency (job ID)',
+        },
+        ('run', 'sq'):       {
+            '--all':   'Show all users jobs',
+            '--watch': 'Live queue monitoring (refresh every 10s)',
+            '--help':  'Show help message',
+            '-h':      'Show help message',
+        },
+
+        # ── template ────────────────────────────────────────────────────────
+        ('template', None):    {**_COMMON_FLAGS},
+        ('template', 'plot'):  {
+            **_COMMON_FLAGS,
+            '--force': 'Overwrite existing file',
+        },
+        ('template', 'case'):  {
+            **_COMMON_FLAGS,
+            '--force': 'Overwrite existing file',
+        },
+        ('template', 'script'): {
+            **_COMMON_FLAGS,
+            '--force': 'Overwrite existing files',
+        },
+
+        # ── top-level commands with no subcommands ─────────────────────────
+        ('plot', None):    {
+            **_COMMON_FLAGS,
+            '--node':      'Node ID to plot',
+            '--component': 'Component (x, y, z)',
+            '--output':    'Output file path',
+        },
+        ('compare', None): {**_COMMON_FLAGS},
+        ('check', None):   {**_COMMON_FLAGS},
+        ('docs', None):    {**_COMMON_FLAGS},
+    }
+
+    # Fixed argument values for specific positions
+    # key: (command, subcommand, position_after_subcommand)
+    # position 0 = first token after the subcommand
+    _POSITIONAL_CHOICES: Dict[tuple, List[tuple]] = {
+        ('template', 'plot',   0): [('simple', 'Simple time-series'), ('multi', 'Multi-node plot')],
+        ('template', 'case',   0): [('basic', 'Basic case config'), ('full', 'Full case config')],
+        ('template', 'script', 0): [
+            ('pre',  'Pre-processing script'),
+            ('main', 'Main simulation script'),
+            ('post', 'Post-processing script'),
+            ('env',  'Environment config (simflow_env.sh)'),
+            ('all',  'All scripts'),
+        ],
+    }
+
+    # Shell built-in commands and their descriptions
+    _SHELL_COMMANDS = [
+        ('exit',    'Exit FlexFlow'),
+        ('quit',    'Exit FlexFlow'),
+        ('help',    'Show help message'),
+        ('?',       'Show help message'),
+        ('clear',   'Clear screen'),
+        ('history', 'Show command history'),
+        ('pwd',     'Show current directory and contexts'),
+        ('ls',      'List files'),
+        ('ll',      'List files (long format)'),
+        ('la',      'List all files (including hidden)'),
+        ('cd',      'Change directory'),
+        ('cat',     'View file contents'),
+        ('head',    'Show first lines of file'),
+        ('tail',    'Show last lines of file'),
+        ('grep',    'Search file contents'),
+        ('find',    'Find case directories'),
+        ('tree',    'Show directory tree'),
+        ('use',     'Set context (case/problem/rundir)'),
+        ('unuse',   'Clear context'),
+    ]
+
+    # ---------------------------------------------------------------------------
+
+    def __init__(self, shell=None):
         self.shell = shell
-        self.commands = {}
+        self.commands: Dict[str, str] = {}   # name -> description
         self._build_command_tree()
 
     def _build_command_tree(self) -> None:
-        """Build command tree from registry for completion."""
+        """Build command description map from registry."""
         for cmd in registry.all():
-            self.commands[cmd.name] = {
-                'description': cmd.description,
-                'subcommands': self._get_subcommands(cmd),
-                'flags': self._get_flags(cmd)
-            }
+            self.commands[cmd.name] = cmd.description
 
-    def _get_subcommands(self, command) -> List[str]:
-        """
-        Get subcommands for a command.
+    # ---------------------------------------------------------------------------
+    # Internal helpers
+    # ---------------------------------------------------------------------------
 
-        Args:
-            command: Command instance
+    def _flags_for(self, cmd: str, subcmd: Optional[str]) -> Dict[str, str]:
+        """Return the flag dict for (cmd, subcmd), falling back to (cmd, None)."""
+        key = (cmd, subcmd)
+        if key in self._SUBCMD_FLAGS:
+            return self._SUBCMD_FLAGS[key]
+        return self._SUBCMD_FLAGS.get((cmd, None), self._COMMON_FLAGS)
 
-        Returns:
-            List of subcommand names
-        """
-        subcommands_map = {
-            'case': ['show', 'create', 'run', 'organise', 'status'],
-            'data': ['show', 'stats'],
-            'field': ['info', 'extract'],
-            'run': ['check', 'pre', 'main', 'post', 'sq'],
-            'template': ['plot', 'case', 'script'],
-            'check': [],
-            'plot': [],
-            'compare': [],
-            'docs': [],
-        }
-        return subcommands_map.get(command.name, [])
+    def _yield_flags(self, flags: Dict[str, str], word: str):
+        for flag, desc in flags.items():
+            if flag.startswith(word):
+                yield Completion(flag, start_position=-len(word), display_meta=desc)
 
-    def _get_flags(self, command) -> Dict[str, str]:
-        """
-        Get common flags for commands.
-
-        Args:
-            command: Command instance
-
-        Returns:
-            Dictionary of flag -> description
-        """
-        common_flags = {
-            '--help': 'Show help message',
-            '-h': 'Show help message',
-            '--verbose': 'Enable verbose output',
-            '-v': 'Enable verbose output',
-            '--examples': 'Show usage examples',
-        }
-
-        # Command-specific flags
-        command_flags = {
-            'case': {
-                **common_flags,
-            },
-            'data': {
-                **common_flags,
-                '--node': 'Node ID',
-                '--component': 'Component (x, y, z)',
-            },
-            'field': {
-                **common_flags,
-            },
-            'plot': {
-                **common_flags,
-                '--node': 'Node ID to plot',
-                '--component': 'Component to plot',
-                '--output': 'Output file',
-            },
-            'run': {
-                **common_flags,
-                '--dry-run': 'Preview without submitting',
-                '--show': 'Display script content',
-                '--restart': 'Restart from timestep (main)',
-                '--dependency': 'Wait for job to complete',
-                '--cleanup': 'Cleanup before processing (post)',
-                '--cleanup-only': 'Only cleanup, no submission (post)',
-                '--upto': 'Process up to timestep (post)',
-                '--all': 'Show all users jobs (sq)',
-                '--watch': 'Live queue monitoring (sq)',
-            },
-        }
-
-        return command_flags.get(command.name, common_flags)
+    def _yield_choices(self, choices: List[tuple], word: str):
+        for value, desc in choices:
+            if value.startswith(word):
+                yield Completion(value, start_position=-len(word), display_meta=desc)
 
     def _get_file_completions(self, word: str, directory: Path) -> List[tuple]:
-        """
-        Get file/directory completions.
-
-        Args:
-            word: Current word being completed
-            directory: Directory to search in
-
-        Returns:
-            List of (name, is_dir) tuples
-        """
         try:
             if not directory.exists():
                 return []
-
             completions = []
             for item in directory.iterdir():
                 if item.name.startswith(word):
                     completions.append((item.name, item.is_dir()))
-
             return sorted(completions, key=lambda x: (not x[1], x[0]))
         except (PermissionError, OSError):
             return []
 
+    # ---------------------------------------------------------------------------
+    # Main entry point
+    # ---------------------------------------------------------------------------
+
     def get_completions(self, document, complete_event):
-        """
-        Generate completions based on current input.
-
-        Args:
-            document: Current document from prompt_toolkit
-            complete_event: Completion event
-
-        Yields:
-            Completion objects for matching commands
-        """
         text = document.text_before_cursor
         words = text.split()
+        ends_with_space = text.endswith(' ')
 
-        # Complete command names (first word)
-        if len(words) == 0 or (len(words) == 1 and not text.endswith(' ')):
+        # ── First word: complete command names ──────────────────────────────
+        if len(words) == 0 or (len(words) == 1 and not ends_with_space):
             word = words[0] if words else ''
-
-            # FlexFlow commands
-            for cmd_name in self.commands.keys():
+            for cmd_name, desc in self.commands.items():
                 if cmd_name.startswith(word):
-                    yield Completion(
-                        cmd_name,
-                        start_position=-len(word),
-                        display_meta=self.commands[cmd_name]['description']
-                    )
-
-            # Shell commands
-            shell_commands = [
-                ('exit', 'Exit FlexFlow'),
-                ('quit', 'Exit FlexFlow'),
-                ('help', 'Show help message'),
-                ('?', 'Show help message'),
-                ('clear', 'Clear screen'),
-                ('history', 'Show command history'),
-                ('pwd', 'Show current directory and contexts'),
-                ('ls', 'List files'),
-                ('ll', 'List files (long format)'),
-                ('la', 'List all files'),
-                ('cd', 'Change directory'),
-                ('cat', 'View file contents'),
-                ('head', 'Show first lines of file'),
-                ('tail', 'Show last lines of file'),
-                ('grep', 'Search file contents'),
-                ('find', 'Find case directories'),
-                ('tree', 'Show directory tree'),
-                ('use', 'Set context'),
-                ('unuse', 'Clear context'),
-            ]
-
-            for shell_cmd, desc in shell_commands:
+                    yield Completion(cmd_name, start_position=-len(word), display_meta=desc)
+            for shell_cmd, desc in self._SHELL_COMMANDS:
                 if shell_cmd.startswith(word):
-                    yield Completion(
-                        shell_cmd,
-                        start_position=-len(word),
-                        display_meta=desc
-                    )
+                    yield Completion(shell_cmd, start_position=-len(word), display_meta=desc)
+            return
 
-        # Complete subcommands and flags
-        elif len(words) >= 1:
-            cmd_name = words[0]
+        cmd_name = words[0]
 
-            # Handle context commands (use/unuse)
-            if cmd_name == 'use':
-                self._complete_use_command(words, text)
+        # ── use / unuse ──────────────────────────────────────────────────────
+        if cmd_name == 'use':
+            yield from self._complete_use_command(words, ends_with_space)
+            return
+        if cmd_name == 'unuse':
+            yield from self._complete_unuse_command(words, ends_with_space)
+            return
+
+        # ── file-browsing commands ───────────────────────────────────────────
+        if cmd_name in ('cd', 'cat', 'ls', 'll', 'la', 'grep', 'head', 'tail'):
+            yield from self._complete_path(words, ends_with_space)
+            return
+
+        # ── FlexFlow commands ────────────────────────────────────────────────
+        if cmd_name not in self.commands:
+            return
+
+        subcommands = self._SUBCOMMANDS.get(cmd_name, [])
+
+        # Position within the command line
+        # words[0] = cmd, words[1] = subcmd (maybe), words[2..] = args/flags
+        has_subcmds = bool(subcommands)
+
+        # Word currently being typed (empty string when cursor follows a space)
+        current_word = '' if ends_with_space else words[-1]
+
+        if has_subcmds:
+            if len(words) == 1 or (len(words) == 2 and not ends_with_space):
+                # Completing the subcommand name
+                word = current_word
+                for subcmd in subcommands:
+                    if subcmd.startswith(word):
+                        yield Completion(subcmd, start_position=-len(word), display_meta='Subcommand')
+                # Also show top-level flags if user started typing '-'
+                if word.startswith('-'):
+                    yield from self._yield_flags(self._flags_for(cmd_name, None), word)
                 return
-            elif cmd_name == 'unuse':
-                self._complete_unuse_command(words, text)
+
+            # Subcommand is known
+            subcmd_name = words[1]
+
+            # Position of the token after the subcommand (0-based)
+            # words: [cmd, subcmd, arg0, arg1, ...]
+            # when ends_with_space, the next token position = len(words) - 2
+            # when not ends_with_space, current token is words[-1] at position len(words) - 3
+            if ends_with_space:
+                pos_after_subcmd = len(words) - 2   # how many args already typed
+            else:
+                pos_after_subcmd = len(words) - 3   # current word is being typed
+
+            # Check if there are fixed positional choices for this position
+            positional_key = (cmd_name, subcmd_name, max(pos_after_subcmd, 0))
+            if not current_word.startswith('-') and positional_key in self._POSITIONAL_CHOICES:
+                yield from self._yield_choices(self._POSITIONAL_CHOICES[positional_key], current_word)
                 return
 
-            # Handle file browsing commands
-            if cmd_name in ['cd', 'cat', 'ls', 'll', 'la', 'grep', 'head', 'tail']:
-                yield from self._complete_path(words, text)
-                return
+            # Otherwise complete flags
+            if current_word.startswith('-') or ends_with_space:
+                yield from self._yield_flags(self._flags_for(cmd_name, subcmd_name), current_word)
 
-            # Handle FlexFlow commands
-            if cmd_name in self.commands:
-                # Complete subcommands
-                if len(words) == 1 or (len(words) == 2 and not text.endswith(' ')):
-                    word = words[1] if len(words) == 2 else ''
+        else:
+            # No subcommands — complete flags directly
+            if current_word.startswith('-') or ends_with_space:
+                yield from self._yield_flags(self._flags_for(cmd_name, None), current_word)
 
-                    # Subcommands
-                    subcommands = self.commands[cmd_name]['subcommands']
-                    for subcmd in subcommands:
-                        if subcmd.startswith(word):
-                            yield Completion(
-                                subcmd,
-                                start_position=-len(word),
-                                display_meta='Subcommand'
-                            )
+    # ---------------------------------------------------------------------------
+    # Specialised completers
+    # ---------------------------------------------------------------------------
 
-                    # Flags
-                    if word.startswith('-'):
-                        flags = self.commands[cmd_name]['flags']
-                        for flag, desc in flags.items():
-                            if flag.startswith(word):
-                                yield Completion(
-                                    flag,
-                                    start_position=-len(word),
-                                    display_meta=desc
-                                )
+    def _complete_use_command(self, words: List[str], ends_with_space: bool):
+        """
+        use case <path>
+        use problem <name>
+        use rundir <path>
+        use <shortcut>
+        """
+        subcommands = [
+            ('case',    'Set current case'),
+            ('problem', 'Override problem name'),
+            ('rundir',  'Override run directory'),
+            ('--help',  'Show help'),
+            ('-h',      'Show help'),
+        ]
 
-                # Complete flags after subcommand
-                elif len(words) >= 2:
-                    word = words[-1] if not text.endswith(' ') else ''
+        if len(words) == 1 or (len(words) == 2 and not ends_with_space):
+            word = '' if ends_with_space else (words[1] if len(words) > 1 else '')
+            for val, desc in subcommands:
+                if val.startswith(word):
+                    yield Completion(val, start_position=-len(word), display_meta=desc)
+        elif len(words) >= 2 and words[1] in ('case', 'rundir'):
+            # Complete path argument
+            yield from self._complete_path(words[2:], ends_with_space)
 
-                    if word.startswith('-') or text.endswith(' '):
-                        flags = self.commands[cmd_name]['flags']
-                        for flag, desc in flags.items():
-                            if flag.startswith(word):
-                                yield Completion(
-                                    flag,
-                                    start_position=-len(word),
-                                    display_meta=desc
-                                )
-
-    def _complete_use_command(self, words: List[str], text: str):
-        """Complete use command - no auto-completion needed."""
-        # No auto-completion for use command
-        return
-        yield  # Make it a generator
-
-    def _complete_unuse_command(self, words: List[str], text: str):
-        """Complete unuse command with subcommands."""
-        if len(words) == 1 or (len(words) == 2 and not text.endswith(' ')):
-            word = words[1] if len(words) == 2 else ''
+    def _complete_unuse_command(self, words: List[str], ends_with_space: bool):
+        """Complete unuse subcommand names."""
+        if len(words) == 1 or (len(words) == 2 and not ends_with_space):
+            word = '' if ends_with_space else (words[1] if len(words) > 1 else '')
             subcommands = [
-                ('case', 'Clear case context'),
+                ('case',    'Clear case context'),
                 ('problem', 'Clear problem context'),
-                ('rundir', 'Clear rundir context'),
-                ('dir', 'Clear output dir context'),
-                ('node', 'Clear node context'),
-                ('t1', 'Clear start time context'),
-                ('t2', 'Clear end time context'),
-                ('all', 'Clear all contexts'),
-                ('--help', 'Show help'),
-                ('-h', 'Show help'),
+                ('rundir',  'Clear rundir context'),
+                ('--help',  'Show help'),
+                ('-h',      'Show help'),
             ]
+            for val, desc in subcommands:
+                if val.startswith(word):
+                    yield Completion(val, start_position=-len(word), display_meta=desc)
 
-            for subcmd, desc in subcommands:
-                if subcmd.startswith(word):
-                    yield Completion(
-                        subcmd,
-                        start_position=-len(word),
-                        display_meta=desc
-                    )
-
-    def _complete_path(self, words: List[str], text: str):
-        """Complete file paths for cd, cat, ls commands."""
+    def _complete_path(self, words: List[str], ends_with_space: bool):
+        """Complete file/directory paths."""
         if self.shell is None:
             return
 
-        # Get the path being completed
-        if len(words) == 1 or text.endswith(' '):
+        if not words or ends_with_space:
             word = ''
             base_dir = self.shell._current_dir
         else:
             word = words[-1]
             if '/' in word:
-                # Completing within a subdirectory
                 parts = word.rsplit('/', 1)
                 base_dir = self.shell._current_dir / parts[0]
                 word = parts[1]
             else:
                 base_dir = self.shell._current_dir
 
-        # Get completions
-        completions = self._get_file_completions(word, base_dir)
-        for name, is_dir in completions:
+        for name, is_dir in self._get_file_completions(word, base_dir):
             suffix = '/' if is_dir else ''
             yield Completion(
                 name + suffix,
