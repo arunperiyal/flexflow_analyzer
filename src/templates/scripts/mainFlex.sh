@@ -85,9 +85,13 @@ if [ -f "${RUN_DIR}/${PROBLEM}.othd" ]; then
 
     mv "${RUN_DIR}/${PROBLEM}.othd" "othd_files/${PROBLEM}${file_count}.othd"
     mv "${RUN_DIR}/${PROBLEM}.oisd" "oisd_files/${PROBLEM}${file_count}.oisd"
-    cp "${PROBLEM}.rcv"             "rcv_files/${PROBLEM}${file_count}.rcv"
 
-    echo "  ✓ Archived run ${file_count}: .othd, .oisd, .rcv"
+    if [ -f "${PROBLEM}.rcv" ]; then
+        cp "${PROBLEM}.rcv" "rcv_files/${PROBLEM}${file_count}.rcv"
+        echo "  ✓ Archived run ${file_count}: .othd, .oisd, .rcv"
+    else
+        echo "  ✓ Archived run ${file_count}: .othd, .oisd (no .rcv found)"
+    fi
 else
     echo "  No previous output files to archive"
 fi
