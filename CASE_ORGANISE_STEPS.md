@@ -2,104 +2,112 @@
 
 ## Overview
 
-The `case organise` command cleans up FlexFlow case directories by removing redundant data files and intermediate output files.
+The `case organise` command manages FlexFlow case directories through three independent action flags. Running without a flag shows help.
 
-## Execution Steps
+## Action Flags
 
-### 1. Initialize Variables
+### `--archive`
 
-- Determine what to clean (OTHD, OISD, output):
-  - If no --clean-* flags provided: clean everything
-  - Otherwise: clean only specified components
-- Determine frequency:
-  - Read from `simflow.config` (`outFreq` field), or
-  - Auto-detect from output file time steps
-- Calculate keep interval = freq × keep_every (default: freq × 10)
-- Initialize statistics counters
-- Create log file path if --log flag provided
+Moves output data files from the run directory (specified in `simflow.config` `dir` field) into dedicated archive directories:
 
-### 2. Move OTHD/OISD Files from Output Directory
+- `.othd` files → `othd_files/`
+- `.oisd` files → `oisd_files/`
+- `.rcv` files → `rcv_files/` (only if present)
 
-- Scans output directory (from simflow.config `dir` field)
-- Finds all `.othd` and `.oisd` files
-- Moves them to `othd_files/` and `oisd_files/` directories
-- Uses numbered suffixes if files already exist (e.g., riser1.othd, riser2.othd)
+Files are numbered using sequential suffixes (e.g., `riser1.othd`, `riser2.othd`) to avoid overwriting existing archived files.
 
-### 3. Analyze OTHD Files (if enabled)
+**No confirmation required** — archive only moves files, does not delete.
 
-- Reads all OTHD files in `othd_files/` directory
-- Extracts time step ranges from each file
-- Identifies redundant files:
-  - **Duplicates**: Same time step range (keeps larger/newer)
-  - **Subsets**: Time range covered by another file
-  - **Overlaps**: Partial overlaps are KEPT (both files retained)
+### `--organise`
 
-### 4. Analyze OISD Files (if enabled)
+Deduplicates and cleans redundant OTHD/OISD files in `othd_files/` and `oisd_files/`:
 
-- Same process as OTHD files
-- Reads all OISD files in `oisd_files/` directory
-- Identifies duplicates and subsets
+1. Reads all `.othd` / `.oisd` files and extracts their time step ranges
+2. Identifies redundant files:
+   - **Duplicates**: Same time step range → keeps larger/newer file
+   - **Subsets**: Time range fully covered by another file → marks for deletion
+   - **Overlaps**: Partial overlaps → **both kept**
+3. Shows summary and asks for confirmation
+4. Deletes redundant files
+5. Renames remaining files sequentially sorted by starting time step:
+   - `{problem}1.othd`, `{problem}2.othd`, etc.
 
-### 5. Analyze Output Directory (if enabled)
+### `--clean-output`
 
-- Finds all `.out`, `.rst`, and `.plt` files in `RUN_*` directories
-- For `.out` and `.rst` files:
-  - Marks files for deletion if time step is NOT a multiple of keep_interval
-- For `.plt` files:
-  - Checks if corresponding binary file exists in `binary/{problem}.{timestep}.plt`
-  - If binary file exists, marks ASCII PLT file for deletion
+Removes intermediate output files from the run directory:
 
-### 6. Show Summary
+- **`.out` and `.rst` files**: deleted if their time step is NOT a multiple of `freq * keep_every`
+  - Default `keep_every = 10`, so keeps steps at multiples of `freq * 10`
+- **`.plt` files**: deleted if a corresponding binary file exists in `binary/{problem}.{step}.plt`
 
-- Displays table with:
-  - Number of OTHD/OISD files to delete
-  - Number of output files (.out/.rst) to delete
-  - Number of PLT files to delete
-  - Total space to be freed
+Frequency is read from `simflow.config` (`outFreq` field) or auto-detected from existing output files.
 
-### 7. Confirmation Prompt (unless --no-confirm)
+## Execution Flow
 
-- Asks user to confirm deletion
-- Shows total file count and space to free
-- User can cancel operation
+### Running with `--archive`
 
-### 8. Perform Deletions
+1. Resolve run directory from `simflow.config['dir']`
+2. Find `.othd`, `.oisd`, `.rcv` files in run directory
+3. Create `othd_files/`, `oisd_files/`, `rcv_files/` if needed
+4. Move files with numbered suffixes
+5. Print summary of moved files
 
-- Deletes all marked redundant files
-- If --log flag provided, writes deletion log to file
-- Log includes file path, size, modification time, reason for deletion
+### Running with `--organise`
 
-### 9. Rename Files
+1. Read all files in `othd_files/` and `oisd_files/`
+2. Parse time step ranges from each file
+3. Mark duplicates and subsets as redundant
+4. Show cleanup summary table
+5. Ask for confirmation (unless `--no-confirm`)
+6. Delete redundant files
+7. Rename remaining files sequentially
 
-- Renames remaining OTHD/OISD files sequentially
-- Sorts by starting time step
-- Format: `{problem}1.othd`, `{problem}2.othd`, etc.
-- Ensures clean, sequential naming
+### Running with `--clean-output`
 
-### 10. Final Summary
+1. Determine frequency (from config or auto-detect)
+2. Calculate keep interval = `freq × keep_every`
+3. Find all `.out`, `.rst`, `.plt` files in run directory
+4. Mark for deletion:
+   - `.out`/`.rst`: if step not a multiple of keep interval
+   - `.plt`: if binary version exists in `binary/`
+5. Show summary and ask for confirmation
+6. Delete marked files
 
-- Displays completion message
-- Shows final statistics
+## Combined Usage
+
+All three flags can be combined in one command:
+
+```bash
+case organise CS4SG1U1 --archive --organise --clean-output
+```
+
+Order of execution: archive → organise → clean-output
+
+## Options
+
+```bash
+case organise --archive                    # Move data files to archive dirs
+case organise --organise                   # Deduplicate OTHD/OISD files
+case organise --clean-output               # Clean intermediate output files
+case organise --archive --organise         # Archive then deduplicate
+case organise --archive --organise --clean-output  # Full cleanup
+case organise --clean-output --keep-every 5        # Custom retention
+case organise --organise --no-confirm              # Skip confirmation
+case organise --organise --log                     # Log deletions to file
+```
 
 ## Default Behavior
 
-When run without flags:
+Running without any action flag shows help:
 
 ```bash
-case organise
+case organise          # → shows help
+case organise CS4SG1U1 # → shows help (no action flag given)
 ```
 
-- Cleans OTHD, OISD, and output directories
-- Uses keep_every = 10 (keeps files at multiples of freq × 10)
-- Requires confirmation before deleting
+## Safety
 
-## Selective Cleaning
-
-```bash
-case organise --clean-othd          # Only clean OTHD files
-case organise --clean-oisd          # Only clean OISD files
-case organise --clean-output        # Only clean output directory
-case organise --keep-every 20       # Custom retention interval
-case organise --no-confirm          # Skip confirmation prompt
-case organise --log                 # Create deletion log file
-```
+- `--archive` is non-destructive (moves, does not delete)
+- `--organise` and `--clean-output` show a summary before acting
+- Confirmation prompt can be skipped with `--no-confirm`
+- If any OTHD/OISD file cannot be read, `--organise` aborts (prevents data loss)

@@ -6,6 +6,7 @@ Handles cleaning and organizing case directories.
 
 import os
 import re
+import shutil
 from pathlib import Path
 from datetime import datetime
 from typing import List, Dict, Tuple, Optional, Set
@@ -74,6 +75,9 @@ class CaseOrganizer:
 
         # Statistics
         self.stats = {
+            'archived_othd': 0,
+            'archived_oisd': 0,
+            'archived_rcv': 0,
             'othd_total': 0,
             'othd_redundant': 0,
             'othd_space_freed': 0,
@@ -96,54 +100,72 @@ class CaseOrganizer:
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             self.log_file = self.case_dir / f'organise_log_{timestamp}.txt'
 
-    def _move_output_data_files(self):
-        """Move OTHD/OISD files from output directory to othd_files/oisd_files."""
-        # Find output directories based on config
-        output_dir_path = None
-        if 'dir' in self.case.config:
-            output_dir_str = self.case.config['dir']
-            if not os.path.isabs(output_dir_str):
-                output_dir_path = self.case_dir / output_dir_str
-            else:
-                output_dir_path = Path(output_dir_str)
+    def _get_run_dir_path(self) -> Optional[Path]:
+        """Resolve the run directory path from simflow.config."""
+        if 'dir' not in self.case.config:
+            return None
+        output_dir_str = self.case.config['dir']
+        if not os.path.isabs(output_dir_str):
+            output_dir_path = self.case_dir / output_dir_str
+        else:
+            output_dir_path = Path(output_dir_str)
+        return output_dir_path if output_dir_path.exists() else None
 
-        if not output_dir_path or not output_dir_path.exists():
-            self.logger.info("No output directory found in simflow.config, skipping data file move")
+    def _archive_run_data_files(self):
+        """
+        --archive: Move .othd, .oisd (and .rcv if present) from the run
+        directory into othd_files/, oisd_files/, rcv_files/.
+        """
+        run_dir = self._get_run_dir_path()
+        if not run_dir:
+            self.console.print("[yellow]  No run directory found in simflow.config[/yellow]")
             return
 
-        self.logger.info(f"Scanning output directory for OTHD/OISD files: {output_dir_path}")
+        self.logger.info(f"Archiving data files from: {run_dir}")
 
-        # Find OTHD and OISD files
-        othd_files_found = list(output_dir_path.glob('*.othd'))
-        oisd_files_found = list(output_dir_path.glob('*.oisd'))
+        othd_files_found = list(run_dir.glob('*.othd'))
+        oisd_files_found = list(run_dir.glob('*.oisd'))
+        rcv_files_found = list(run_dir.glob('*.rcv'))
 
-        if not othd_files_found and not oisd_files_found:
-            self.logger.info("No OTHD/OISD files found in output directory")
+        if not othd_files_found and not oisd_files_found and not rcv_files_found:
+            self.console.print("[dim]  No .othd/.oisd/.rcv files found in run directory[/dim]")
             return
 
-        # Create destination directories if they don't exist
+        # Create destination directories
         othd_dest = self.case_dir / 'othd_files'
         oisd_dest = self.case_dir / 'oisd_files'
         othd_dest.mkdir(exist_ok=True)
         oisd_dest.mkdir(exist_ok=True)
 
-        # Move files with number suffix handling
-        import shutil
         moved_count = 0
-        for file in othd_files_found:
+
+        for file in sorted(othd_files_found):
             dest_path = self._get_unique_filename(othd_dest, file.name)
             shutil.move(str(file), str(dest_path))
-            self.logger.info(f"Moved {file.name} -> {dest_path.name}")
+            self.console.print(f"  [green]↳[/green] {file.name} → othd_files/{dest_path.name}")
+            self.stats['archived_othd'] += 1
             moved_count += 1
 
-        for file in oisd_files_found:
+        for file in sorted(oisd_files_found):
             dest_path = self._get_unique_filename(oisd_dest, file.name)
             shutil.move(str(file), str(dest_path))
-            self.logger.info(f"Moved {file.name} -> {dest_path.name}")
+            self.console.print(f"  [green]↳[/green] {file.name} → oisd_files/{dest_path.name}")
+            self.stats['archived_oisd'] += 1
             moved_count += 1
 
-        if moved_count > 0:
-            self.console.print(f"\n[green]✓[/green] Moved {moved_count} data files from output directory")
+        if rcv_files_found:
+            rcv_dest = self.case_dir / 'rcv_files'
+            rcv_dest.mkdir(exist_ok=True)
+            for file in sorted(rcv_files_found):
+                dest_path = self._get_unique_filename(rcv_dest, file.name)
+                shutil.move(str(file), str(dest_path))
+                self.console.print(f"  [green]↳[/green] {file.name} → rcv_files/{dest_path.name}")
+                self.stats['archived_rcv'] += 1
+                moved_count += 1
+
+        self.console.print(
+            f"\n[green]✓[/green] Archived {moved_count} file(s) from run directory"
+        )
 
     def _get_unique_filename(self, dest_dir: Path, filename: str) -> Path:
         """Get unique filename with number suffix if file exists."""
@@ -182,6 +204,10 @@ class CaseOrganizer:
 
     def organize(self):
         """Main organization workflow."""
+        do_archive = getattr(self.args, 'archive', False)
+        do_organise = getattr(self.args, 'organise', False)
+        do_clean_output = getattr(self.args, 'clean_output', False)
+
         self.console.print()
         self.console.print(Panel(
             f"[bold cyan]Organizing Case:[/bold cyan] {self.case_dir.name}\n"
@@ -191,65 +217,54 @@ class CaseOrganizer:
         ))
         self.console.print()
 
-        # Move OTHD/OISD files from output directory first
-        self._move_output_data_files()
+        # --- ARCHIVE ---
+        if do_archive:
+            self.console.print("[bold]Step: Archive run data files[/bold]")
+            self._archive_run_data_files()
+            self.console.print()
 
-        # Determine what to clean
-        # If no flags provided, clean everything
-        has_clean_flags = (self.args.clean_othd or self.args.clean_oisd or self.args.clean_output)
-
-        if not has_clean_flags:
-            # Default: clean everything
-            clean_othd = True
-            clean_oisd = True
-            clean_output = True
-        else:
-            # User specified specific flags
-            clean_othd = self.args.clean_othd
-            clean_oisd = self.args.clean_oisd
-            clean_output = self.args.clean_output
-
-        # Analyze files
+        # --- ORGANISE (deduplicate OTHD/OISD) ---
         othd_files = []
         oisd_files = []
 
-        if clean_othd:
+        if do_organise:
+            self.console.print("[bold]Step: Deduplicate OTHD/OISD files[/bold]")
             self.logger.info("Analyzing OTHD files...")
             othd_files = self._analyze_data_files('othd')
             self._find_redundant_files(othd_files, 'OTHD')
 
-        if clean_oisd:
             self.logger.info("Analyzing OISD files...")
             oisd_files = self._analyze_data_files('oisd')
             self._find_redundant_files(oisd_files, 'OISD')
+            self.console.print()
 
-        if clean_output:
-            self.logger.info("Analyzing output directory...")
+        # --- CLEAN OUTPUT ---
+        if do_clean_output:
+            self.console.print("[bold]Step: Clean output directory[/bold]")
             self._analyze_output_directory()
+            self.console.print()
 
-        # Show summary
-        self._show_summary()
-
-        # Check if we have deletions to perform
+        # Nothing to do beyond archiving (which runs without confirmation)
         has_deletions = len(self.files_to_delete) > 0
 
-        # Ask for confirmation only if there are deletions
-        if has_deletions and not self.args.no_confirm:
-            if not self._confirm_deletion():
-                self.console.print("[yellow]Operation cancelled[/yellow]")
-                return
+        if do_organise or do_clean_output:
+            # Show summary before asking confirmation
+            self._show_summary()
 
-        # Perform deletions
-        if has_deletions:
-            self._perform_deletions()
+            if has_deletions and not self.args.no_confirm:
+                if not self._confirm_deletion():
+                    self.console.print("[yellow]Operation cancelled[/yellow]")
+                    return
 
-        # Rename files (should happen regardless of deletions)
-        if clean_othd or clean_oisd:
-            self._rename_files(othd_files if clean_othd else [],
-                             oisd_files if clean_oisd else [])
+            if has_deletions:
+                self._perform_deletions()
 
-        # Show final summary
-        self._show_final_summary()
+        # Rename OTHD/OISD files sequentially after deduplication
+        if do_organise:
+            self._rename_files(othd_files, oisd_files)
+
+        # Final summary
+        self._show_final_summary(do_archive, do_organise, do_clean_output)
 
     def _analyze_data_files(self, file_type: str) -> List[FileInfo]:
         """
@@ -412,21 +427,10 @@ class CaseOrganizer:
 
     def _find_output_directories(self) -> List[Path]:
         """Find output directories from simflow.config."""
-        # Get output directory from config
-        if 'dir' not in self.case.config:
+        run_dir = self._get_run_dir_path()
+        if run_dir is None:
             return []
-
-        output_dir_str = self.case.config['dir']
-
-        if not os.path.isabs(output_dir_str):
-            output_dir_path = self.case_dir / output_dir_str
-        else:
-            output_dir_path = Path(output_dir_str)
-
-        if not output_dir_path.exists():
-            return []
-
-        return [output_dir_path]
+        return [run_dir]
 
     def _analyze_single_output_dir(self, output_dir: Path, problem: str, freq: int, keep_interval: int):
         """Analyze a single output directory."""
@@ -720,16 +724,33 @@ class CaseOrganizer:
             log_handle.close()
             self.console.print(f"\n[dim]Log saved to: {self.log_file}[/dim]")
 
-    def _show_final_summary(self):
+    def _show_final_summary(self, do_archive: bool, do_organise: bool, do_clean_output: bool):
         """Show final summary after cleanup."""
         self.console.print()
+
+        lines = []
+        if do_archive:
+            total_archived = (self.stats['archived_othd'] + self.stats['archived_oisd'] +
+                              self.stats['archived_rcv'])
+            lines.append(f"Archived: {self.stats['archived_othd']} OTHD, "
+                         f"{self.stats['archived_oisd']} OISD, "
+                         f"{self.stats['archived_rcv']} RCV  (total {total_archived} files)")
+        if do_organise:
+            lines.append(f"Deduplicated: {self.stats['othd_redundant']} OTHD, "
+                         f"{self.stats['oisd_redundant']} OISD removed  "
+                         f"({self._format_size(self.stats['othd_space_freed'] + self.stats['oisd_space_freed'])} freed)")
+        if do_clean_output:
+            total_out = self.stats['out_deleted'] + self.stats['rst_deleted'] + self.stats['plt_deleted']
+            lines.append(f"Output cleaned: {total_out} files removed  "
+                         f"({self._format_size(self.stats['output_space_freed'])} freed)")
+
+        summary_text = "\n".join(lines) if lines else "Nothing to do"
+
         self.console.print(Panel(
-            "[bold green]Organization Complete![/bold green]",
+            f"[bold green]Organization Complete![/bold green]\n\n{summary_text}",
             border_style="green",
             box=box.ROUNDED
         ))
-
-        self._show_summary()
 
     @staticmethod
     def _format_size(size_bytes: int) -> str:

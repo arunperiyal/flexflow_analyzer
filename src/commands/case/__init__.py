@@ -86,14 +86,14 @@ class CaseCommand(BaseCommand):
         organise_parser = case_subparsers.add_parser('organise', add_help=False,
                                                      help='Organize and clean up case directory')
         organise_parser.add_argument('case', nargs='?', help='Case directory path')
+        organise_parser.add_argument('--archive', action='store_true',
+                                    help='Move .othd/.oisd/.rcv from run dir to archive dirs')
+        organise_parser.add_argument('--organise', action='store_true',
+                                    help='Deduplicate and clean redundant OTHD/OISD files')
+        organise_parser.add_argument('--clean-output', action='store_true',
+                                    help='Remove intermediate .out/.rst/.plt files from run dir')
         organise_parser.add_argument('--keep-every', type=int,
                                     help='Keep every Nth output (default: 10 * freq)')
-        organise_parser.add_argument('--clean-othd', action='store_true',
-                                    help='Clean OTHD files only')
-        organise_parser.add_argument('--clean-oisd', action='store_true',
-                                    help='Clean OISD files only')
-        organise_parser.add_argument('--clean-output', action='store_true',
-                                    help='Clean output directory only')
         organise_parser.add_argument('--log', action='store_true',
                                     help='Create log file of deletions')
         organise_parser.add_argument('--no-confirm', action='store_true',
@@ -183,7 +183,9 @@ class CaseCommand(BaseCommand):
         console.print("    flexflow case create myCase --problem-name test")
         console.print("    flexflow case run CS4SG1U1")
         console.print("    flexflow case run CS4SG1U1 --no-monitor")
-        console.print("    flexflow case organise CS4SG1U1")
+        console.print("    flexflow case organise CS4SG1U1 --archive")
+        console.print("    flexflow case organise CS4SG1U1 --organise")
+        console.print("    flexflow case organise CS4SG1U1 --clean-output")
         console.print("    flexflow case status CS4SG1U1")
         console.print()
 

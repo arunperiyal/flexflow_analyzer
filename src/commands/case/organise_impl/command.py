@@ -46,6 +46,15 @@ def execute_organise(args):
         print_organise_help()
         return
 
+    # No action flags → show help
+    do_archive = getattr(args, 'archive', False)
+    do_organise = getattr(args, 'organise', False)
+    do_clean_output = getattr(args, 'clean_output', False)
+
+    if not do_archive and not do_organise and not do_clean_output:
+        print_organise_help()
+        return
+
     logger = Logger(verbose=args.verbose)
     console = Console()
 
