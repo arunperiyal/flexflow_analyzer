@@ -1926,6 +1926,7 @@ class InteractiveShell:
             'data': {'show': 2, 'stats': 2},  # data show <case>
             'field': {'info': 2, 'extract': 2},  # field info <case>
             'run': {'check': 2, 'pre': 2, 'main': 2, 'post': 2},  # run check <case>
+            'template': {'script': 3},  # template script <type> <case>
             'check': None,  # check <file> - doesn't use case
             'plot': 1,  # plot <case> ...
         }
@@ -1934,7 +1935,7 @@ class InteractiveShell:
 
         # Check if this command uses cases
         if cmd in case_commands:
-            if cmd in ['case', 'data', 'field', 'run']:
+            if cmd in ['case', 'data', 'field', 'run', 'template']:
                 # These have subcommands
                 if len(args) >= 2:
                     subcmd = args[1]
