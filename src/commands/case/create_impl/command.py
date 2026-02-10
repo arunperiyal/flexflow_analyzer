@@ -217,9 +217,6 @@ def validate_reference_case(ref_case_path, problem_name, logger):
         'simflow.config',
         f'{problem_name}.geo',
         f'{problem_name}.def',
-        'preFlex.sh',
-        'mainFlex.sh',
-        'postFlex.sh'
     ]
     
     missing_files = []
@@ -235,92 +232,6 @@ def validate_reference_case(ref_case_path, problem_name, logger):
         return False
     
     return True
-
-
-def update_slurm_jobname(script_path, job_name):
-    """
-    Update SLURM job name in shell script
-    
-    Parameters:
-    -----------
-    script_path : Path
-        Path to shell script file
-    job_name : str
-        New job name to set
-    """
-    lines = []
-    with open(script_path, 'r') as f:
-        for line in f:
-            # Look for SLURM job name directive
-            if line.strip().startswith('#SBATCH -J'):
-                # Replace the job name
-                lines.append(f"#SBATCH -J {job_name}\n")
-            else:
-                lines.append(line)
-    
-    # Write back
-    with open(script_path, 'w') as f:
-        f.writelines(lines)
-
-
-def update_mainFlex_np(script_path, np_value):
-    """
-    Update number of processors in mainFlex.sh
-    
-    Parameters:
-    -----------
-    script_path : Path
-        Path to mainFlex.sh file
-    np_value : int
-        Number of processors
-    """
-    lines = []
-    with open(script_path, 'r') as f:
-        for line in f:
-            # Look for SBATCH -n directive
-            if line.strip().startswith('#SBATCH -n'):
-                lines.append(f"#SBATCH -n {np_value}\n")
-            else:
-                lines.append(line)
-    
-    # Write back
-    with open(script_path, 'w') as f:
-        f.writelines(lines)
-
-
-def update_postFlex_problem_freq(script_path, problem_name=None, freq_value=None):
-    """
-    Update problem name and output frequency in postFlex.sh
-    
-    Parameters:
-    -----------
-    script_path : Path
-        Path to postFlex.sh file
-    problem_name : str, optional
-        Problem name to set
-    freq_value : int, optional
-        Output frequency value
-    """
-    lines = []
-    with open(script_path, 'r') as f:
-        for line in f:
-            stripped = line.strip()
-            
-            # Update PROBLEM variable
-            if problem_name is not None and stripped.startswith('PROBLEM='):
-                lines.append(f"PROBLEM={problem_name}\n")
-            # Update OUTFREQ variable
-            elif freq_value is not None and stripped.startswith('OUTFREQ='):
-                lines.append(f"OUTFREQ={freq_value}\n")
-            # Replace ${RISER} with ${PROBLEM} for consistency
-            elif '${RISER}' in line:
-                lines.append(line.replace('${RISER}', '${PROBLEM}'))
-            else:
-                lines.append(line)
-    
-    # Write back
-    with open(script_path, 'w') as f:
-        f.writelines(lines)
 
 
 def load_yaml_config(config_path):
@@ -596,9 +507,6 @@ def create_case_from_config(case_config, ref_case_path, logger, force=False, dry
         'simflow.config',
         f'{original_problem_name}.geo',
         f'{original_problem_name}.def',
-        'preFlex.sh',
-        'mainFlex.sh',
-        'postFlex.sh'
     ]
 
     for filename in files_to_copy:
@@ -617,10 +525,6 @@ def create_case_from_config(case_config, ref_case_path, logger, force=False, dry
         if not dry_run:
             shutil.copy2(src, dest)
 
-            # Make shell scripts executable
-            if filename.endswith('.sh'):
-                os.chmod(dest, 0o755)
-    
     # Update simflow.config if problem name changed
     if problem_name != original_problem_name:
         logger.info(f"{'Would update' if dry_run else 'Updating'} problem name in simflow.config to: {problem_name}")
@@ -633,35 +537,6 @@ def create_case_from_config(case_config, ref_case_path, logger, force=False, dry
     if not dry_run:
         target_config = target_path / 'simflow.config'
         update_simflow_np_freq(target_config, np_value=np_value, freq_value=freq_value)
-
-    # Update SLURM job names in shell scripts
-    logger.info(f"{'Would update' if dry_run else 'Updating'} SLURM job names in shell scripts...")
-    slurm_scripts = {
-        'preFlex.sh': f"{case_name}_pre",
-        'mainFlex.sh': f"{case_name}_main",
-        'postFlex.sh': f"{case_name}_post"
-    }
-
-    for script_name, job_name in slurm_scripts.items():
-        script_path = target_path / script_name
-        if dry_run or script_path.exists():
-            if not dry_run:
-                update_slurm_jobname(script_path, job_name)
-            logger.info(f"  {'Would update' if dry_run else 'Updated'} {script_name}: job name set to '{job_name}'")
-
-    # Update mainFlex.sh with np value
-    mainFlex_path = target_path / 'mainFlex.sh'
-    if dry_run or mainFlex_path.exists():
-        logger.info(f"{'Would update' if dry_run else 'Updating'} mainFlex.sh: setting #SBATCH -n to {np_value}")
-        if not dry_run:
-            update_mainFlex_np(mainFlex_path, np_value)
-
-    # Update postFlex.sh with problem name and freq
-    postFlex_path = target_path / 'postFlex.sh'
-    if dry_run or postFlex_path.exists():
-        logger.info(f"{'Would update' if dry_run else 'Updating'} postFlex.sh: PROBLEM={problem_name}, OUTFREQ={freq_value}")
-        if not dry_run:
-            update_postFlex_problem_freq(postFlex_path, problem_name=problem_name, freq_value=freq_value)
 
     # Apply geometry parameter substitutions
     if dry_run:
@@ -911,11 +786,8 @@ def execute_new(args):
             'simflow.config',
             f'{original_problem_name}.geo',
             f'{original_problem_name}.def',
-            'preFlex.sh',
-            'mainFlex.sh',
-            'postFlex.sh'
         ]
-        
+
         for filename in files_to_copy:
             src = ref_case_path / filename
 
@@ -933,10 +805,6 @@ def execute_new(args):
             if not args.dry_run:
                 shutil.copy2(src, dest)
 
-                # Make shell scripts executable
-                if filename.endswith('.sh'):
-                    os.chmod(dest, 0o755)
-
         # Update simflow.config if problem name changed
         if args.problem_name:
             logger.info(f"{'Would update' if args.dry_run else 'Updating'} problem name in simflow.config to: {problem_name}")
@@ -949,35 +817,6 @@ def execute_new(args):
         if not args.dry_run:
             target_config = target_path / 'simflow.config'
             update_simflow_np_freq(target_config, np_value=args.np, freq_value=args.freq)
-        
-        # Update SLURM job names in shell scripts
-        logger.info(f"{'Would update' if args.dry_run else 'Updating'} SLURM job names in shell scripts...")
-        slurm_scripts = {
-            'preFlex.sh': f"{case_name}_pre",
-            'mainFlex.sh': f"{case_name}_main",
-            'postFlex.sh': f"{case_name}_post"
-        }
-
-        for script_name, job_name in slurm_scripts.items():
-            script_path = target_path / script_name
-            if args.dry_run or script_path.exists():
-                if not args.dry_run:
-                    update_slurm_jobname(script_path, job_name)
-                logger.info(f"  {'Would update' if args.dry_run else 'Updated'} {script_name}: job name set to '{job_name}'")
-
-        # Update mainFlex.sh with np value
-        mainFlex_path = target_path / 'mainFlex.sh'
-        if args.dry_run or mainFlex_path.exists():
-            logger.info(f"{'Would update' if args.dry_run else 'Updating'} mainFlex.sh: setting #SBATCH -n to {args.np}")
-            if not args.dry_run:
-                update_mainFlex_np(mainFlex_path, args.np)
-
-        # Update postFlex.sh with problem name and freq
-        postFlex_path = target_path / 'postFlex.sh'
-        if args.dry_run or postFlex_path.exists():
-            logger.info(f"{'Would update' if args.dry_run else 'Updating'} postFlex.sh: PROBLEM={problem_name}, OUTFREQ={args.freq}")
-            if not args.dry_run:
-                update_postFlex_problem_freq(postFlex_path, problem_name=problem_name, freq_value=args.freq)
 
         if args.dry_run:
             logger.success(f"\nDry run complete for case directory: {target_path}")
@@ -994,6 +833,8 @@ def execute_new(args):
         print(f"  {Colors.bold('Problem:')} {problem_name}")
         if not args.dry_run:
             print(f"  {Colors.bold('Files copied:')} {len(files_to_copy)}")
+            print()
+            print(f"  {Colors.dim('Run')} {Colors.bold('template script all')} {Colors.dim('to generate job scripts (preFlex.sh, mainFlex.sh, postFlex.sh).')}")
         print()
         
     except Exception as e:
