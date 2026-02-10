@@ -178,28 +178,8 @@ def generate_script_templates(args, logger):
     # Resolve to absolute path
     case_dir = case_dir.resolve()
 
-    # Try to get case name from simflow.config or directory name
-    config_file = case_dir / 'simflow.config'
-    case_name = ""
-
-    if config_file.exists():
-        # Try to parse case name from config
-        try:
-            with open(config_file) as f:
-                for line in f:
-                    if 'problem' in line and '=' in line:
-                        # Extract problem name
-                        parts = line.split('=')
-                        if len(parts) == 2:
-                            problem = parts[1].strip().strip('"\'')
-                            case_name = problem
-                            break
-        except Exception:
-            pass
-
-    # Fallback to directory name
-    if not case_name:
-        case_name = case_dir.name
+    # Use directory name as case name (for job names like preCS4SG4U1P0)
+    case_name = case_dir.name
 
     # Determine template directory
     template_dir = os.path.join(Config.get_install_dir(), 'templates', 'scripts')
