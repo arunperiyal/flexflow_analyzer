@@ -59,8 +59,8 @@ class TemplateCommand(BaseCommand):
         script_parser = template_subparsers.add_parser('script', add_help=False,
                                                        help='Generate SLURM job script templates')
         script_parser.add_argument('script_type', nargs='?',
-                                   choices=['pre', 'main', 'post', 'all'],
-                                   help='Script type: pre, main, post, or all')
+                                   choices=['pre', 'main', 'post', 'env', 'all'],
+                                   help='Script type: pre, main, post, env, or all')
         script_parser.add_argument('case_dir', nargs='?', type=str,
                                   help='Case directory to create scripts in (optional)')
         script_parser.add_argument('--force', action='store_true',
@@ -122,7 +122,7 @@ class TemplateCommand(BaseCommand):
 
         table.add_row("plot", "single, multi", "Plot configuration templates")
         table.add_row("case", "single, multi", "Case creation templates")
-        table.add_row("script", "pre, main, post, all", "SLURM job script templates")
+        table.add_row("script", "pre, main, post, env, all", "SLURM job script templates")
 
         console.print("[bold]DOMAINS:[/bold]")
         console.print(table)

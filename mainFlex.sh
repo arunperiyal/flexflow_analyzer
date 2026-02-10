@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH -J main{CASE_NAME}              # name of the job
+#SBATCH -J mainflexflow_manager              # name of the job
 #SBATCH -p medium                       # partition: standard, standard-low, gpu, hm, shared, medium
 #SBATCH -n 120                          # number of processes/tasks
 #SBATCH --ntasks-per-node=40            # tasks per node
@@ -11,18 +11,21 @@
 # This script runs the main FlexFlow simulation (mpiSimflow)
 #
 # The script auto-detects PROBLEM and RUN_DIR from simflow.config
-# Before running, it archives any previous output files (.othd, .oisd, .rcv)
-# into their respective archive directories (othd_files/, oisd_files/, rcv_files/)
+# It also handles archiving of previous output files
 #
 # Usage:
 #   sbatch mainFlex.sh
+#
+# For restart:
+#   1. Ensure restart file exists: riser.rcv (copied from riser.TSID.rcv)
+#   2. Submit job: sbatch mainFlex.sh
 # =============================================================================
 
-# -----------------------------------------------------------------------------
-# Load environment (paths to executables, modules)
-# -----------------------------------------------------------------------------
-
-source "$(dirname "$0")/simflow_env.sh"
+# Load required modules
+# Uncomment and modify based on your cluster setup
+# module load compiler/intel-mpi/mpi-2018.2.199
+# module load compiler/intel/2018.2.199
+# module load compiler/openmpi/4.0.2
 
 # -----------------------------------------------------------------------------
 # Parse simflow.config for default values
@@ -66,6 +69,16 @@ echo "Tasks/Node:   ${SLURM_NTASKS_PER_NODE:-N/A}"
 echo "=========================================="
 echo ""
 
+# Check if this is a restart
+if [ -f "${PROBLEM}.rcv" ]; then
+    echo "✓ Restart file found: ${PROBLEM}.rcv"
+    echo "  This will be a RESTART run"
+else
+    echo "ℹ No restart file found: ${PROBLEM}.rcv"
+    echo "  This will be a NEW simulation"
+fi
+echo ""
+
 # -----------------------------------------------------------------------------
 # Archive previous output files (if any exist)
 # -----------------------------------------------------------------------------
@@ -77,34 +90,69 @@ mkdir -p othd_files
 mkdir -p oisd_files
 mkdir -p rcv_files
 
-# Archive previous run's output if it exists
-# .othd, .oisd, and .rcv are all archived together as a set
+# Check if output files exist and archive them
+ARCHIVED=0
+
 if [ -f "${RUN_DIR}/${PROBLEM}.othd" ]; then
-    file_count=$(ls -p othd_files | grep -v / | wc -l)
+    # Count existing archived files
+    file_count=$(ls -1 othd_files/ 2>/dev/null | grep -v / | wc -l)
     ((file_count++))
 
     mv "${RUN_DIR}/${PROBLEM}.othd" "othd_files/${PROBLEM}${file_count}.othd"
-    mv "${RUN_DIR}/${PROBLEM}.oisd" "oisd_files/${PROBLEM}${file_count}.oisd"
-    cp "${PROBLEM}.rcv"             "rcv_files/${PROBLEM}${file_count}.rcv"
+    echo "  ✓ Archived: ${PROBLEM}.othd → othd_files/${PROBLEM}${file_count}.othd"
+    ARCHIVED=1
+fi
 
-    echo "  ✓ Archived run ${file_count}: .othd, .oisd, .rcv"
-else
+if [ -f "${RUN_DIR}/${PROBLEM}.oisd" ]; then
+    # Count existing archived files (should match othd count)
+    file_count=$(ls -1 oisd_files/ 2>/dev/null | grep -v / | wc -l)
+    ((file_count++))
+
+    mv "${RUN_DIR}/${PROBLEM}.oisd" "oisd_files/${PROBLEM}${file_count}.oisd"
+    echo "  ✓ Archived: ${PROBLEM}.oisd → oisd_files/${PROBLEM}${file_count}.oisd"
+    ARCHIVED=1
+fi
+
+if [ -f "${PROBLEM}.rcv" ]; then
+    # Count existing archived files
+    file_count=$(ls -1 rcv_files/ 2>/dev/null | grep -v / | wc -l)
+    ((file_count++))
+
+    cp "${PROBLEM}.rcv" "rcv_files/${PROBLEM}${file_count}.rcv"
+    echo "  ✓ Copied: ${PROBLEM}.rcv → rcv_files/${PROBLEM}${file_count}.rcv"
+    ARCHIVED=1
+fi
+
+if [ $ARCHIVED -eq 0 ]; then
     echo "  No previous output files to archive"
 fi
 
 echo ""
 
 # -----------------------------------------------------------------------------
-# Validate executables
+# Set environment
 # -----------------------------------------------------------------------------
 
+# FlexFlow installation directory
+if [ -z "$SIMFLOW_HOME" ]; then
+    echo "Error: SIMFLOW_HOME environment variable not set"
+    echo "Please set: export SIMFLOW_HOME=/path/to/flexflow"
+    exit 1
+fi
+
+# MPI Simflow executable
+MPISIMFLOW="${SIMFLOW_HOME}/bin/mpiSimflow"
+
+# Verify executable exists
 if [ ! -x "$MPISIMFLOW" ]; then
     echo "Error: mpiSimflow not found or not executable: $MPISIMFLOW"
     exit 1
 fi
 
-# Set OpenMP threads
-export OMP_NUM_THREADS=${OMP_NUM_THREADS:-$SLURM_CPUS_PER_TASK}
+# Set OpenMP threads (if using hybrid MPI+OpenMP)
+if [ -n "$SLURM_CPUS_PER_TASK" ]; then
+    export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
+fi
 
 # -----------------------------------------------------------------------------
 # Step 2: Run main simulation

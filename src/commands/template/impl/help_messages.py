@@ -218,10 +218,11 @@ Generate SLURM job script templates for FlexFlow simulations.
     flexflow template script {Colors.YELLOW}<type>{Colors.RESET} [case_directory]
 
 {Colors.BOLD}SCRIPT TYPES:{Colors.RESET}
+    {Colors.CYAN}env{Colors.RESET}      Environment config (executable paths, module loads)
     {Colors.CYAN}pre{Colors.RESET}      Preprocessing script (mesh generation with gmsh + simGmshCnvt)
     {Colors.CYAN}main{Colors.RESET}     Main simulation script (runs mpiSimflow)
     {Colors.CYAN}post{Colors.RESET}     Postprocessing script (simPlt + simPlt2Bin)
-    {Colors.CYAN}all{Colors.RESET}      Generate all three scripts
+    {Colors.CYAN}all{Colors.RESET}      Generate all four files (env + pre + main + post)
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
     {Colors.YELLOW}--force{Colors.RESET}        Force overwrite if file exists
@@ -229,21 +230,19 @@ Generate SLURM job script templates for FlexFlow simulations.
     {Colors.YELLOW}--help, -h{Colors.RESET}     Show this help message
 
 {Colors.BOLD}DESCRIPTION:{Colors.RESET}
-    Creates SLURM job scripts that:
-    - Auto-detect configuration from simflow.config
-    - Use SIMFLOW_HOME environment variable for executables
-    - Support command-line arguments for flexibility
-    - Include comprehensive error handling and logging
+    Creates SLURM job scripts that source simflow_env.sh for all paths.
+    Edit only simflow_env.sh to update executable paths across all scripts.
 
-    {Colors.BOLD}Scripts generated:{Colors.RESET}
-    - preFlex.sh   : Runs gmsh and simGmshCnvt
-    - mainFlex.sh  : Runs mpiSimflow with archiving
-    - postFlex.sh  : Runs simPlt and simPlt2Bin
+    {Colors.BOLD}Files generated:{Colors.RESET}
+    - simflow_env.sh : Executable paths and module loads (edit this file)
+    - preFlex.sh     : Runs gmsh and simGmshCnvt
+    - mainFlex.sh    : Runs mpiSimflow with archiving
+    - postFlex.sh    : Runs simPlt and simPlt2Bin
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
 
-    {Colors.BOLD}Generate postprocessing script:{Colors.RESET}
-        flexflow template script post Case001
+    {Colors.BOLD}Generate environment config only:{Colors.RESET}
+        flexflow template script env Case001
 
     {Colors.BOLD}Generate all scripts:{Colors.RESET}
         flexflow template script all Case001
@@ -254,6 +253,12 @@ Generate SLURM job script templates for FlexFlow simulations.
 
 {Colors.BOLD}USAGE OF GENERATED SCRIPTS:{Colors.RESET}
 
+    {Colors.BOLD}simflow_env.sh:{Colors.RESET}
+        # Edit this to set your paths - all job scripts source it
+        SIMFLOW_HOME="/path/to/flexflow"
+        GMSH="gmsh"
+        # module load compiler/openmpi/4.0.2
+
     {Colors.BOLD}preFlex.sh:{Colors.RESET}
         sbatch preFlex.sh
         # Auto-detects: PROBLEM, GEO_FILE from simflow.config
@@ -261,7 +266,6 @@ Generate SLURM job script templates for FlexFlow simulations.
     {Colors.BOLD}mainFlex.sh:{Colors.RESET}
         sbatch mainFlex.sh
         # Auto-detects: PROBLEM, RUN_DIR from simflow.config
-        # For restart: ensure riser.rcv exists first
 
     {Colors.BOLD}postFlex.sh:{Colors.RESET}
         sbatch postFlex.sh [FREQ] [START_TIME] [END_TIME]
@@ -275,25 +279,28 @@ Generate SLURM job script templates for FlexFlow simulations.
 
 {Colors.BOLD}WORKFLOW:{Colors.RESET}
     1. Generate scripts:     flexflow template script all Case001
-    2. Set environment:      export SIMFLOW_HOME=/path/to/flexflow
-    3. Review/customize:     vi Case001/preFlex.sh
-    4. Submit jobs:
+    2. Edit environment:     vi Case001/simflow_env.sh
+    3. Submit jobs:
        - run pre             # Or: sbatch preFlex.sh
        - run main            # Or: sbatch mainFlex.sh
        - run post            # Or: sbatch postFlex.sh
 
-{Colors.BOLD}ENVIRONMENT:{Colors.RESET}
-    Required environment variable:
-        {Colors.CYAN}SIMFLOW_HOME{Colors.RESET}  Path to FlexFlow installation
+{Colors.BOLD}ENVIRONMENT FILE:{Colors.RESET}
+    All paths are configured in simflow_env.sh:
+        {Colors.CYAN}SIMFLOW_HOME{Colors.RESET}   Path to FlexFlow installation
+        {Colors.CYAN}MPISIMFLOW{Colors.RESET}     mpiSimflow executable
+        {Colors.CYAN}SIMPLT{Colors.RESET}         simPlt executable
+        {Colors.CYAN}SIMPLT2BIN{Colors.RESET}     simPlt2Bin executable
+        {Colors.CYAN}SIMGMSHCNVT{Colors.RESET}    simGmshCnvt executable
+        {Colors.CYAN}GMSH{Colors.RESET}           gmsh executable
 
-    Example:
-        export SIMFLOW_HOME=/home/user/FlexFlow
-        export PATH=$SIMFLOW_HOME/bin:$PATH
+    Example simflow_env.sh:
+        export SIMFLOW_HOME="/home/user/FlexFlow"
+        export GMSH="gmsh"
+        # module load compiler/openmpi/4.0.2
 
 {Colors.BOLD}CUSTOMIZATION:{Colors.RESET}
-    After generation, you can customize:
-    - SBATCH directives (partition, tasks, time, etc.)
-    - Module loading commands
-    - Executable paths
-    - Additional pre/post processing steps
+    - simflow_env.sh  : Executable paths and module loads
+    - Job scripts     : SBATCH directives (partition, tasks, time, etc.)
+                        Additional pre/post processing steps
 """)

@@ -18,10 +18,11 @@
 #   sbatch preFlex.sh
 # =============================================================================
 
-# Load required modules
-# Uncomment and modify based on your cluster setup
-# module load compiler/openmpi/4.0.2
-# module load apps/matlab/R2022a
+# -----------------------------------------------------------------------------
+# Load environment (paths to executables, modules)
+# -----------------------------------------------------------------------------
+
+source "$(dirname "$0")/simflow_env.sh"
 
 # -----------------------------------------------------------------------------
 # Parse simflow.config for default values
@@ -73,25 +74,11 @@ echo "=========================================="
 echo ""
 
 # -----------------------------------------------------------------------------
-# Set environment
+# Validate executables
 # -----------------------------------------------------------------------------
 
-# FlexFlow installation directory
-if [ -z "$SIMFLOW_HOME" ]; then
-    echo "Error: SIMFLOW_HOME environment variable not set"
-    echo "Please set: export SIMFLOW_HOME=/path/to/flexflow"
-    exit 1
-fi
-
-# Gmsh executable (modify path as needed)
-GMSH="gmsh"
-
-# simGmshCnvt executable
-SIMGMSHCNVT="${SIMFLOW_HOME}/bin/simGmshCnvt"
-
-# Verify executables exist
 if ! command -v $GMSH &> /dev/null; then
-    echo "Error: gmsh not found in PATH"
+    echo "Error: gmsh not found: $GMSH"
     exit 1
 fi
 
@@ -101,7 +88,7 @@ if [ ! -x "$SIMGMSHCNVT" ]; then
 fi
 
 # Set OpenMP threads
-export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
+export OMP_NUM_THREADS=${OMP_NUM_THREADS:-$SLURM_CPUS_PER_TASK}
 
 # -----------------------------------------------------------------------------
 # Step 1: Generate mesh with Gmsh

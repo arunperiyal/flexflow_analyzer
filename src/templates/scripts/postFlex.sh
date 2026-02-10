@@ -24,9 +24,11 @@
 #   END_TIME   - End timestep (optional, default: process all available)
 # =============================================================================
 
-# Load required modules
-# Uncomment and modify based on your cluster setup
-# module load compiler/openmpi/4.0.2
+# -----------------------------------------------------------------------------
+# Load environment (paths to executables, modules)
+# -----------------------------------------------------------------------------
+
+source "$(dirname "$0")/simflow_env.sh"
 
 # -----------------------------------------------------------------------------
 # Parse simflow.config for default values
@@ -94,21 +96,9 @@ echo "=========================================="
 echo ""
 
 # -----------------------------------------------------------------------------
-# Set environment
+# Validate executables
 # -----------------------------------------------------------------------------
 
-# FlexFlow installation directory
-if [ -z "$SIMFLOW_HOME" ]; then
-    echo "Error: SIMFLOW_HOME environment variable not set"
-    echo "Please set: export SIMFLOW_HOME=/path/to/flexflow"
-    exit 1
-fi
-
-# Executables
-SIMPLT="${SIMFLOW_HOME}/bin/simPlt"
-SIMPLT2BIN="${SIMFLOW_HOME}/bin/simPlt2Bin"
-
-# Verify executables exist
 if [ ! -x "$SIMPLT" ]; then
     echo "Error: simPlt not found or not executable: $SIMPLT"
     exit 1
@@ -120,7 +110,7 @@ if [ ! -x "$SIMPLT2BIN" ]; then
 fi
 
 # Set OpenMP threads
-export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
+export OMP_NUM_THREADS=${OMP_NUM_THREADS:-$SLURM_CPUS_PER_TASK}
 
 # -----------------------------------------------------------------------------
 # Step 1: Convert .out files to ASCII PLT files (simPlt)

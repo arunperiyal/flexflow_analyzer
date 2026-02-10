@@ -208,7 +208,7 @@ def generate_script_templates(args, logger):
     scripts_to_generate = []
 
     if script_type == 'all':
-        scripts_to_generate = ['pre', 'main', 'post']
+        scripts_to_generate = ['env', 'pre', 'main', 'post']
     else:
         scripts_to_generate = [script_type]
 
@@ -217,7 +217,11 @@ def generate_script_templates(args, logger):
 
     for script in scripts_to_generate:
         # Determine source and output files
-        if script == 'pre':
+        if script == 'env':
+            source_file = os.path.join(template_dir, 'simflow_env.sh')
+            output_file = case_dir / 'simflow_env.sh'
+            description = "environment config (executable paths, modules)"
+        elif script == 'pre':
             source_file = os.path.join(template_dir, 'preFlex.sh')
             output_file = case_dir / 'preFlex.sh'
             description = "preprocessing (mesh generation)"
@@ -272,10 +276,9 @@ def generate_script_templates(args, logger):
 
         print()
         print(f"{Colors.bold('Next steps:')}")
-        print(f"  1. Review and customize the scripts as needed")
-        print(f"  2. Set SIMFLOW_HOME environment variable:")
-        print(f"     {Colors.cyan('export SIMFLOW_HOME=/path/to/flexflow')}")
-        print(f"  3. Submit jobs:")
+        print(f"  1. Edit {Colors.cyan('simflow_env.sh')} to set executable paths:")
+        print(f"     {Colors.cyan('SIMFLOW_HOME')}, {Colors.cyan('GMSH')}, modules, etc.")
+        print(f"  2. Submit jobs:")
         print(f"     {Colors.cyan('run pre')}   # Preprocessing")
         print(f"     {Colors.cyan('run main')}  # Main simulation")
         print(f"     {Colors.cyan('run post')}  # Postprocessing")
