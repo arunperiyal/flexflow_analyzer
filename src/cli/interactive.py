@@ -859,6 +859,8 @@ class InteractiveShell:
         Args:
             args: List of paths or options
         """
+        import glob as glob_module
+
         try:
             # Parse options
             show_all = '-a' in args or '--all' in args
@@ -868,7 +870,24 @@ class InteractiveShell:
             if not paths:
                 paths = ['.']
 
+            # Expand glob patterns (e.g. *.sh, *.geo)
+            expanded_paths = []
             for path_str in paths:
+                if any(c in path_str for c in ('*', '?', '[')):
+                    # Resolve glob relative to current directory
+                    base = self._current_dir / path_str
+                    matches = glob_module.glob(str(base))
+                    if matches:
+                        expanded_paths.extend(sorted(matches))
+                    else:
+                        self.console.print(f"[yellow]No matches: {path_str}[/yellow]")
+                else:
+                    expanded_paths.append(path_str)
+
+            # Collect all file matches to display together
+            matched_files = []
+
+            for path_str in expanded_paths:
                 target = Path(path_str)
                 if not target.is_absolute():
                     target = self._current_dir / target
@@ -877,12 +896,18 @@ class InteractiveShell:
                     self.console.print(f"[red]Error: Path not found: {target}[/red]")
                     continue
 
-                # List directory contents
                 if target.is_dir():
+                    # Flush any pending file matches first
+                    if matched_files:
+                        self._list_matched_files(matched_files, long_format)
+                        matched_files = []
                     self._list_dir_contents(target, show_all, long_format)
                 else:
-                    # Show file info
-                    self._show_file_info(target)
+                    matched_files.append(target)
+
+            # Display any remaining file matches
+            if matched_files:
+                self._list_matched_files(matched_files, long_format)
 
         except Exception as e:
             self.console.print(f"[red]Error listing directory: {e}[/red]")
@@ -1033,6 +1058,43 @@ class InteractiveShell:
         table.add_row("Modified", mtime.strftime("%Y-%m-%d %H:%M:%S"))
 
         self.console.print(table)
+
+    def _list_matched_files(self, files: List[Path], long_format: bool) -> None:
+        """
+        Display a list of matched files (from glob expansion) using compact formatting.
+
+        Args:
+            files: List of file paths to display
+            long_format: Show detailed information
+        """
+        import datetime
+        from rich.columns import Columns
+
+        if long_format:
+            table = Table(box=box.SIMPLE, show_header=True, padding=(0, 2))
+            table.add_column("Size", justify="right", style="yellow", width=10)
+            table.add_column("Modified", style="blue", width=16)
+            table.add_column("Name", style="white")
+
+            for f in files:
+                stat = f.stat()
+                size_str = self._format_size(stat.st_size)
+                mtime = datetime.datetime.fromtimestamp(stat.st_mtime)
+                mtime_str = mtime.strftime("%Y-%m-%d %H:%M")
+                name = f.name
+                if f.suffix in ['.othd', '.oisd', '.plt']:
+                    name = f"[magenta]{name}[/magenta]"
+                table.add_row(size_str, mtime_str, name)
+
+            self.console.print(table)
+        else:
+            items_formatted = []
+            for f in files:
+                if f.suffix in ['.othd', '.oisd', '.plt']:
+                    items_formatted.append(f"[magenta]{f.name}[/magenta]")
+                else:
+                    items_formatted.append(f.name)
+            self.console.print(Columns(items_formatted, equal=True, expand=False))
 
     def find_cases(self, pattern: str) -> None:
         """
