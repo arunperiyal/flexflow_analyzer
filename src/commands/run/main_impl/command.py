@@ -207,32 +207,10 @@ def parse_sbatch_directives(script_path):
 
 
 def handle_restart(case_dir, restart_tsid, console):
-    """Handle restart from specific timestep."""
-    # Check if restart file exists
-    rcv_file = case_dir / f"riser.{restart_tsid}.rcv"
-
-    if not rcv_file.exists():
-        # Try without padding
-        rcv_file = case_dir / f"riser{restart_tsid}.rcv"
-
-    if not rcv_file.exists():
-        console.print(f"[yellow]Warning: Restart file not found for TSID {restart_tsid}[/yellow]")
-        console.print(f"[dim]Expected: riser.{restart_tsid}.rcv or riser{restart_tsid}.rcv[/dim]")
-        console.print()
-        return False
-
-    # Copy restart file to riser.rcv
-    target_rcv = case_dir / "riser.rcv"
-    try:
-        import shutil
-        shutil.copy2(rcv_file, target_rcv)
-        console.print(f"[green]✓ Restart file prepared: {rcv_file.name} → riser.rcv[/green]")
-        console.print()
-        return True
-    except Exception as e:
-        console.print(f"[red]Error preparing restart file: {e}[/red]")
-        console.print()
-        return False
+    """Handle restart from specific timestep - to be implemented once restart mechanism is confirmed."""
+    console.print(f"[yellow]Note: Restart from TSID {restart_tsid} - passing to simulation script[/yellow]")
+    console.print()
+    return True
 
 
 def submit_main_job(script_path, case_dir, args, console):
@@ -395,12 +373,6 @@ This runs the primary FlexFlow simulation (mpiSimflow).
     1. mainFlex.sh
     2. submit.sh
     3. main.sh
-
-{Colors.BOLD}RESTART WORKFLOW:{Colors.RESET}
-    When using --restart TSID:
-    1. Finds restart file (riser.TSID.rcv or riserTSID.rcv)
-    2. Copies to riser.rcv in case directory
-    3. Submits job (simulation reads riser.rcv)
 
 {Colors.BOLD}JOB DEPENDENCIES:{Colors.RESET}
     Use --dependency to chain jobs:

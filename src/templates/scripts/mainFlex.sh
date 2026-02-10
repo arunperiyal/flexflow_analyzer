@@ -11,14 +11,11 @@
 # This script runs the main FlexFlow simulation (mpiSimflow)
 #
 # The script auto-detects PROBLEM and RUN_DIR from simflow.config
-# It also handles archiving of previous output files
+# Before running, it archives any previous output files (.othd, .oisd, .rcv)
+# into their respective archive directories (othd_files/, oisd_files/, rcv_files/)
 #
 # Usage:
 #   sbatch mainFlex.sh
-#
-# For restart:
-#   1. Ensure restart file exists: riser.rcv (copied from riser.TSID.rcv)
-#   2. Submit job: sbatch mainFlex.sh
 # =============================================================================
 
 # Load required modules
@@ -69,16 +66,6 @@ echo "Tasks/Node:   ${SLURM_NTASKS_PER_NODE:-N/A}"
 echo "=========================================="
 echo ""
 
-# Check if this is a restart
-if [ -f "${PROBLEM}.rcv" ]; then
-    echo "✓ Restart file found: ${PROBLEM}.rcv"
-    echo "  This will be a RESTART run"
-else
-    echo "ℹ No restart file found: ${PROBLEM}.rcv"
-    echo "  This will be a NEW simulation"
-fi
-echo ""
-
 # -----------------------------------------------------------------------------
 # Archive previous output files (if any exist)
 # -----------------------------------------------------------------------------
@@ -90,40 +77,18 @@ mkdir -p othd_files
 mkdir -p oisd_files
 mkdir -p rcv_files
 
-# Check if output files exist and archive them
-ARCHIVED=0
-
+# Archive previous run's output if it exists
+# .othd, .oisd, and .rcv are all archived together as a set
 if [ -f "${RUN_DIR}/${PROBLEM}.othd" ]; then
-    # Count existing archived files
-    file_count=$(ls -1 othd_files/ 2>/dev/null | grep -v / | wc -l)
+    file_count=$(ls -p othd_files | grep -v / | wc -l)
     ((file_count++))
 
     mv "${RUN_DIR}/${PROBLEM}.othd" "othd_files/${PROBLEM}${file_count}.othd"
-    echo "  ✓ Archived: ${PROBLEM}.othd → othd_files/${PROBLEM}${file_count}.othd"
-    ARCHIVED=1
-fi
-
-if [ -f "${RUN_DIR}/${PROBLEM}.oisd" ]; then
-    # Count existing archived files (should match othd count)
-    file_count=$(ls -1 oisd_files/ 2>/dev/null | grep -v / | wc -l)
-    ((file_count++))
-
     mv "${RUN_DIR}/${PROBLEM}.oisd" "oisd_files/${PROBLEM}${file_count}.oisd"
-    echo "  ✓ Archived: ${PROBLEM}.oisd → oisd_files/${PROBLEM}${file_count}.oisd"
-    ARCHIVED=1
-fi
+    cp "${PROBLEM}.rcv"             "rcv_files/${PROBLEM}${file_count}.rcv"
 
-if [ -f "${PROBLEM}.rcv" ]; then
-    # Count existing archived files
-    file_count=$(ls -1 rcv_files/ 2>/dev/null | grep -v / | wc -l)
-    ((file_count++))
-
-    cp "${PROBLEM}.rcv" "rcv_files/${PROBLEM}${file_count}.rcv"
-    echo "  ✓ Copied: ${PROBLEM}.rcv → rcv_files/${PROBLEM}${file_count}.rcv"
-    ARCHIVED=1
-fi
-
-if [ $ARCHIVED -eq 0 ]; then
+    echo "  ✓ Archived run ${file_count}: .othd, .oisd, .rcv"
+else
     echo "  No previous output files to archive"
 fi
 
