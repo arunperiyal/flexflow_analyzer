@@ -24,11 +24,14 @@
 #   END_TIME   - End timestep (optional, default: process all available)
 # =============================================================================
 
+# Change to the submission directory (SLURM runs scripts from a temp location)
+cd "$SLURM_SUBMIT_DIR"
+
 # -----------------------------------------------------------------------------
 # Load environment (paths to executables, modules)
 # -----------------------------------------------------------------------------
 
-source "$(dirname "$0")/simflow_env.sh"
+source "${SLURM_SUBMIT_DIR}/simflow_env.sh"
 
 # -----------------------------------------------------------------------------
 # Parse simflow.config for default values
