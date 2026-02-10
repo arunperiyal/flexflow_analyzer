@@ -39,8 +39,8 @@ if [ ! -f "$CONFIG_FILE" ]; then
 fi
 
 # Extract problem name from config
-# Looks for: problem = "riser" or problem="riser"
-PROBLEM=$(grep -oP '^\s*problem\s*=\s*"\K[^"]+' "$CONFIG_FILE")
+# Handles both: problem = riser  and  problem = "riser"
+PROBLEM=$(grep -oP '^\s*problem\s*=\s*"?\K[^"#\s]+' "$CONFIG_FILE" | head -1)
 if [ -z "$PROBLEM" ]; then
     echo "Error: Could not find 'problem' in simflow.config"
     exit 1

@@ -44,27 +44,25 @@ if [ ! -f "$CONFIG_FILE" ]; then
     exit 1
 fi
 
-# Extract problem name from config
-# Looks for: problem = "riser" or problem="riser"
-PROBLEM=$(grep -oP '^\s*problem\s*=\s*"\K[^"]+' "$CONFIG_FILE")
+# Handles both: problem = riser  and  problem = "riser"
+PROBLEM=$(grep -oP '^\s*problem\s*=\s*"?\K[^"#\s]+' "$CONFIG_FILE" | head -1)
 if [ -z "$PROBLEM" ]; then
     echo "Error: Could not find 'problem' in simflow.config"
     exit 1
 fi
 
 # Extract run directory from config
-# Looks for: dir = "RUN_1" or dir="RUN_1"
-RUN_DIR=$(grep -oP '^\s*dir\s*=\s*"\K[^"]+' "$CONFIG_FILE")
+# Handles both: dir = ./RUN_1  and  dir = "RUN_1"
+RUN_DIR=$(grep -oP '^\s*dir\s*=\s*"?\K[^"#\s]+' "$CONFIG_FILE" | head -1)
 if [ -z "$RUN_DIR" ]; then
     echo "Warning: Could not find 'dir' in simflow.config, using 'SIMFLOW_DATA'"
     RUN_DIR="SIMFLOW_DATA"
 fi
 
-# Extract output frequency from config
-# Looks for: writeFreq = 100 or writeFreq=100
-CONFIG_FREQ=$(grep -oP '^\s*writeFreq\s*=\s*\K\d+' "$CONFIG_FILE")
+# Extract output frequency from config (key is 'outFreq')
+CONFIG_FREQ=$(grep -oP '^\s*outFreq\s*=\s*\K\d+' "$CONFIG_FILE" | head -1)
 if [ -z "$CONFIG_FREQ" ]; then
-    echo "Warning: Could not find 'writeFreq' in simflow.config"
+    echo "Warning: Could not find 'outFreq' in simflow.config"
     CONFIG_FREQ=100  # Default fallback
 fi
 

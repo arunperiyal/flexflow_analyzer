@@ -39,16 +39,16 @@ if [ ! -f "$CONFIG_FILE" ]; then
 fi
 
 # Extract problem name from config
-# Looks for: problem = "riser" or problem="riser"
-PROBLEM=$(grep -oP '^\s*problem\s*=\s*"\K[^"]+' "$CONFIG_FILE")
+# Handles both: problem = riser  and  problem = "riser"
+PROBLEM=$(grep -oP '^\s*problem\s*=\s*"?\K[^"#\s]+' "$CONFIG_FILE" | head -1)
 if [ -z "$PROBLEM" ]; then
     echo "Error: Could not find 'problem' in simflow.config"
     exit 1
 fi
 
 # Extract run directory from config
-# Looks for: dir = "RUN_1" or dir="RUN_1"
-RUN_DIR=$(grep -oP '^\s*dir\s*=\s*"\K[^"]+' "$CONFIG_FILE")
+# Handles both: dir = ./RUN_1  and  dir = "RUN_1"
+RUN_DIR=$(grep -oP '^\s*dir\s*=\s*"?\K[^"#\s]+' "$CONFIG_FILE" | head -1)
 if [ -z "$RUN_DIR" ]; then
     echo "Warning: Could not find 'dir' in simflow.config, using 'SIMFLOW_DATA'"
     RUN_DIR="SIMFLOW_DATA"
