@@ -2084,7 +2084,11 @@ class InteractiveShell:
         """
         try:
             # Parse command line
-            args = shlex.split(command_line)
+            try:
+                args = shlex.split(command_line)
+            except ValueError as e:
+                print(f"Error: {e}")
+                return
             if not args:
                 return
 
