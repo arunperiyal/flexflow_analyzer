@@ -40,7 +40,7 @@ class FlexFlowCompleter(Completer):
     # ---------------------------------------------------------------------------
 
     _SUBCOMMANDS: Dict[str, List[str]] = {
-        'case':     ['show', 'create', 'run', 'organise', 'status'],
+        'case':     ['show', 'create', 'run', 'organise', 'check', 'status'],
         'data':     ['show', 'stats'],
         'field':    ['info', 'extract'],
         'run':      ['check', 'pre', 'main', 'post', 'sq'],
@@ -92,6 +92,13 @@ class FlexFlowCompleter(Completer):
             '--keep-every':   'Keep every Nth output (default: 10)',
             '--log':          'Create log file of all deletions',
             '--no-confirm':   'Skip confirmation prompts',
+        },
+        ('case', 'check'):   {
+            **_COMMON_FLAGS,
+            '--run':     'Check .othd/.oisd in the active run directory',
+            '--archive': 'Check all archived files in othd_files/oisd_files',
+            '--config':  'Validate simflow.config consistency',
+            '--all':     'Run all checks (--run + --archive + --config)',
         },
         ('case', 'status'):  {**_COMMON_FLAGS},
 
@@ -2025,7 +2032,7 @@ class InteractiveShell:
 
         # Commands that take a case as their second or third argument
         case_commands = {
-            'case': {'show': 2, 'run': 2, 'organise': 2, 'status': 2},  # case show <case>
+            'case': {'show': 2, 'run': 2, 'organise': 2, 'check': 2, 'status': 2},  # case show <case>
             'data': {'show': 2, 'stats': 2},  # data show <case>
             'field': {'info': 2, 'extract': 2},  # field info <case>
             'run': {'check': 2, 'pre': 2, 'main': 2, 'post': 2},  # run check <case>

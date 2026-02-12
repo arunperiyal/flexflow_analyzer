@@ -105,6 +105,23 @@ class CaseCommand(BaseCommand):
         organise_parser.add_argument('--examples', action='store_true',
                                     help='Show usage examples')
 
+        # case check
+        check_parser = case_subparsers.add_parser('check', add_help=False,
+                                                  help='Inspect OTHD/OISD ranges and validate config')
+        check_parser.add_argument('case', nargs='?', help='Case directory path')
+        check_parser.add_argument('--run', action='store_true',
+                                  help='Check .othd/.oisd in the active run directory')
+        check_parser.add_argument('--archive', action='store_true',
+                                  help='Check all archived files in othd_files/oisd_files')
+        check_parser.add_argument('--config', action='store_true',
+                                  help='Validate simflow.config consistency')
+        check_parser.add_argument('--all', action='store_true',
+                                  help='Run all checks (--run + --archive + --config)')
+        check_parser.add_argument('-v', '--verbose', action='store_true',
+                                  help='Enable verbose output')
+        check_parser.add_argument('-h', '--help', action='store_true',
+                                  help='Show help for check command')
+
         # case status
         status_parser = case_subparsers.add_parser('status', add_help=False,
                                                    help='Check case data file completeness')
@@ -140,6 +157,9 @@ class CaseCommand(BaseCommand):
             # Delegate to organise subcommand
             from .organise_impl import command as organise_cmd
             organise_cmd.execute_organise(args)
+        elif hasattr(args, 'case_subcommand') and args.case_subcommand == 'check':
+            from .check_impl.command import execute_case_check
+            execute_case_check(args)
         elif hasattr(args, 'case_subcommand') and args.case_subcommand == 'status':
             # Delegate to status subcommand
             from .status_impl import execute_status
@@ -173,6 +193,7 @@ class CaseCommand(BaseCommand):
         table.add_row("create", "Create new case from template (was: new)")
         table.add_row("run", "Submit and monitor SLURM simulation jobs")
         table.add_row("organise", "Organize and clean up case directory")
+        table.add_row("check", "Inspect OTHD/OISD ranges and validate config")
         table.add_row("status", "Check case data file completeness")
 
         console.print("[bold]SUBCOMMANDS:[/bold]")
@@ -186,6 +207,8 @@ class CaseCommand(BaseCommand):
         console.print("    flexflow case organise CS4SG1U1 --archive")
         console.print("    flexflow case organise CS4SG1U1 --organise")
         console.print("    flexflow case organise CS4SG1U1 --clean-output")
+        console.print("    flexflow case check CS4SG1U1 --run")
+        console.print("    flexflow case check CS4SG1U1 --all")
         console.print("    flexflow case status CS4SG1U1")
         console.print()
 
