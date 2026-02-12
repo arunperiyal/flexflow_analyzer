@@ -38,12 +38,13 @@ def execute_case_check(args):
     do_run     = getattr(args, 'run',     False)
     do_archive = getattr(args, 'archive', False)
     do_config  = getattr(args, 'config',  False)
+    do_plt     = getattr(args, 'plt',     False)
     do_all     = getattr(args, 'all',     False)
 
     if do_all:
-        do_run = do_archive = do_config = True
+        do_run = do_archive = do_config = do_plt = True
 
-    if not (do_run or do_archive or do_config):
+    if not (do_run or do_archive or do_config or do_plt):
         print_check_help()
         return
 
@@ -79,6 +80,9 @@ def execute_case_check(args):
 
     if do_archive:
         _check_archive(cfg, case_dir, console)
+
+    if do_plt:
+        _check_plt(cfg, case_dir, console)
 
     console.print()
 
@@ -369,4 +373,115 @@ def _check_archive(cfg: dict, case_dir: Path, console: Console):
 
     if not found_any:
         console.print("  [dim]No archived files found (othd_files/ and oisd_files/ are empty or missing)[/dim]")
+        console.print()
+
+
+# ---------------------------------------------------------------------------
+# --plt check
+# ---------------------------------------------------------------------------
+
+def _check_plt(cfg, case_dir: Path, console: Console):
+    """Check PLT files in binary/ and the run directory against expected set."""
+    console.print("[bold]PLT file check[/bold]")
+
+    problem = cfg.problem
+    if not problem:
+        console.print("  [yellow]⚠[/yellow]  'problem' not set in simflow.config — cannot determine PLT file names")
+        console.print()
+        return
+
+    out_freq = cfg.out_freq
+    if not out_freq:
+        console.print("  [yellow]⚠[/yellow]  'outFreq' not set in simflow.config — cannot determine expected PLT files")
+        console.print()
+        return
+
+    from ....core.def_config import DefConfig
+    def_cfg = DefConfig.find(case_dir, problem)
+    max_steps = def_cfg.max_time_steps
+    if not max_steps:
+        console.print("  [yellow]⚠[/yellow]  'maxTimeSteps' not found in .def file — cannot determine expected PLT files")
+        console.print()
+        return
+
+    # Build expected tsId set: outFreq, 2*outFreq, ..., maxTimeSteps
+    expected = set(range(out_freq, max_steps + 1, out_freq))
+    total_expected = len(expected)
+
+    # Directories to check: binary/ and run dir
+    locations = []
+
+    binary_dir = case_dir / 'binary'
+    if binary_dir.exists():
+        locations.append(('binary/', binary_dir))
+
+    run_dir = cfg.run_dir(case_dir)
+    if run_dir and run_dir.exists() and run_dir != binary_dir:
+        locations.append((cfg.run_dir_str or 'run dir', run_dir))
+
+    if not locations:
+        console.print("  [dim]Neither binary/ nor the run directory exists[/dim]")
+        console.print()
+        return
+
+    for label, directory in locations:
+        console.print(f"  [bold]{label}[/bold]")
+
+        # Find PLT files matching <problem>.<tsId>.plt
+        import re as _re
+        pattern = _re.compile(rf'^{_re.escape(problem)}\.(\d+)\.plt$')
+        found: dict = {}
+        for f in directory.iterdir():
+            m = pattern.match(f.name)
+            if m:
+                found[int(m.group(1))] = f
+
+        if not found:
+            console.print(f"    [dim]No {problem}.*.plt files found[/dim]")
+            console.print()
+            continue
+
+        present   = set(found.keys())
+        missing   = sorted(expected - present)
+        extra     = sorted(present - expected)
+        n_found   = len(present & expected)
+        total_size = sum(f.stat().st_size for f in found.values()) / 1_048_576
+
+        # Summary line
+        if not missing:
+            console.print(
+                f"    [green]✓[/green]  {n_found}/{total_expected} expected files present  "
+                f"({total_size:.1f} MB total)"
+            )
+        else:
+            console.print(
+                f"    [red]✗[/red]  {n_found}/{total_expected} expected files present  "
+                f"([red]{len(missing)} missing[/red],  {total_size:.1f} MB total)"
+            )
+
+        # tsId range of found files
+        console.print(
+            f"    Range : [cyan]{_fmt_tsid(min(present))}[/cyan]"
+            f" → [cyan]{_fmt_tsid(max(present))}[/cyan]"
+            f"  (outFreq={out_freq},  maxTimeSteps={_fmt_tsid(max_steps)})"
+        )
+
+        # Missing tsIds
+        if missing:
+            console.print(f"    [red]Missing tsIds:[/red]")
+            # Print in rows of 10 for readability
+            chunk = 10
+            for i in range(0, len(missing), chunk):
+                row = ', '.join(_fmt_tsid(t) for t in missing[i:i + chunk])
+                console.print(f"      {row}")
+
+        # Extra (not in expected set)
+        if extra:
+            console.print(
+                f"    [dim]Extra (not in expected set): "
+                + ', '.join(_fmt_tsid(t) for t in extra[:20])
+                + (f"  … ({len(extra)} total)" if len(extra) > 20 else '')
+                + "[/dim]"
+            )
+
         console.print()

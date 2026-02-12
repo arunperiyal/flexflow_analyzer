@@ -42,8 +42,16 @@ Must specify at least one action flag.
           • 'np'      — reports processor count
           • 'restartTsId' — reports restart step if set
 
+    {Colors.CYAN}--plt{Colors.RESET}
+        Check PLT files in binary/ and the active run directory:
+          • Builds the expected set from outFreq and maxTimeSteps in the .def file
+            (e.g. outFreq=50, maxTimeSteps=5000 → expects 50, 100, ..., 5000)
+          • Reports how many expected files are present / missing
+          • Lists each missing tsId explicitly
+          • Reports extra files not in the expected set
+
     {Colors.CYAN}--all{Colors.RESET}
-        Run all three checks in order: --config, --run, --archive.
+        Run all checks in order: --config, --run, --archive, --plt.
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
     -v, --verbose     Show detailed output
@@ -62,6 +70,9 @@ Must specify at least one action flag.
 
     # Validate simflow.config
     case check CS4SG1U1 --config
+
+    # Check PLT files against expected set
+    case check CS4SG1U1 --plt
 
     # Run everything
     case check CS4SG1U1 --all

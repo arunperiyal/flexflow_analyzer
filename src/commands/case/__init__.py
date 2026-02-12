@@ -115,8 +115,10 @@ class CaseCommand(BaseCommand):
                                   help='Check all archived files in othd_files/oisd_files')
         check_parser.add_argument('--config', action='store_true',
                                   help='Validate simflow.config consistency')
+        check_parser.add_argument('--plt', action='store_true',
+                                  help='Check PLT files in binary/ and run dir against expected set')
         check_parser.add_argument('--all', action='store_true',
-                                  help='Run all checks (--run + --archive + --config)')
+                                  help='Run all checks (--run + --archive + --config + --plt)')
         check_parser.add_argument('-v', '--verbose', action='store_true',
                                   help='Enable verbose output')
         check_parser.add_argument('-h', '--help', action='store_true',

@@ -98,7 +98,8 @@ class FlexFlowCompleter(Completer):
             '--run':     'Check .othd/.oisd in the active run directory',
             '--archive': 'Check all archived files in othd_files/oisd_files',
             '--config':  'Validate simflow.config consistency',
-            '--all':     'Run all checks (--run + --archive + --config)',
+            '--plt':     'Check PLT files against expected set (outFreq/maxTimeSteps)',
+            '--all':     'Run all checks (--run + --archive + --config + --plt)',
         },
         ('case', 'status'):  {**_COMMON_FLAGS},
 
