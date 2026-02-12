@@ -293,15 +293,13 @@ def check_task_consistency(script_path, case_dir, console) -> bool:
     np_mismatch  = cfg_np  is not None and script_n is not None and cfg_np  != script_n
     nsg_mismatch = expected_nsg is not None and cfg_nsg != expected_nsg
 
-    if not np_mismatch and not nsg_mismatch:
-        return True  # all good
+    # ----------------------------------------------------------------
+    # Always show consistency table
+    # ----------------------------------------------------------------
+    console.print()
 
-    # ----------------------------------------------------------------
-    # Show mismatch table
-    # ----------------------------------------------------------------
-    console.print()
-    console.print('[bold yellow]⚠  Task count mismatch between simflow.config and job script[/bold yellow]')
-    console.print()
+    def _icon(ok):
+        return '[green]✓[/green]' if ok else '[red]✗[/red]'
 
     tbl = Table(box=box.SIMPLE, show_header=True, header_style='bold')
     tbl.add_column('Parameter',      style='cyan')
@@ -309,19 +307,23 @@ def check_task_consistency(script_path, case_dir, console) -> bool:
     tbl.add_column('mainFlex.sh',    justify='right', style='blue')
     tbl.add_column('Match?',         justify='center')
 
-    def _icon(ok):
-        return '[green]✓[/green]' if ok else '[red]✗[/red]'
-
     if script_n is not None:
-        cfg_np_str = str(cfg_np) if cfg_np is not None else '[dim](not set)[/dim]'
-        tbl.add_row('np  (total tasks)',    cfg_np_str,   str(script_n),    _icon(not np_mismatch))
+        cfg_np_str  = str(cfg_np)  if cfg_np  is not None else '[dim](not set)[/dim]'
         cfg_nsg_str = str(cfg_nsg) if cfg_nsg is not None else '[dim](not set)[/dim]'
-        tbl.add_row('nsg (subgrids/nodes)', cfg_nsg_str,  str(expected_nsg), _icon(not nsg_mismatch))
+        tbl.add_row('np  (total tasks)',    cfg_np_str,  str(script_n),     _icon(not np_mismatch))
+        tbl.add_row('nsg (subgrids/nodes)', cfg_nsg_str, str(expected_nsg), _icon(not nsg_mismatch))
     if ntpn is not None:
         tbl.add_row('[dim]ntasks-per-node[/dim]', '[dim]—[/dim]', str(ntpn), '[dim]info[/dim]')
 
+    if np_mismatch or nsg_mismatch:
+        console.print('[bold yellow]⚠  Task count mismatch between simflow.config and job script[/bold yellow]')
+    else:
+        console.print('[bold]Task consistency check[/bold]')
     console.print(tbl)
     console.print()
+
+    if not np_mismatch and not nsg_mismatch:
+        return True  # all good — table shown, no prompt needed
 
     # Build the proposed fix
     fix = {}
