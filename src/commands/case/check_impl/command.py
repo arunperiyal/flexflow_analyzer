@@ -218,12 +218,18 @@ def _check_config(cfg: dict, case_dir: Path, console: Console) -> bool:
     else:
         row('⚠', 'np', '(not set)', '', 'yellow')
 
-    # restartTsId (informational)
-    restart = cfg.get('restartTsId', '')
-    if restart:
-        row('ℹ', 'restartTsId', restart, 'restart mode', 'cyan')
+    # restartFlag + restartTsId (informational)
+    restart_flag = cfg.get('restartFlag', '').strip()
+    restart_tsid = cfg.get('restartTsId', '').strip()
+    is_restart = bool(restart_flag) and restart_flag != '0'
+    if is_restart:
+        row('ℹ', 'restartFlag',  restart_flag,  'restart mode active', 'cyan')
+        if restart_tsid:
+            row('ℹ', 'restartTsId', restart_tsid, 'restart from this tsId', 'cyan')
+        else:
+            row('⚠', 'restartTsId', '(not set)', 'restartFlag active but no tsId', 'yellow')
     else:
-        row('—', 'restartTsId', '(not set)', 'fresh run (0)', 'dim')
+        row('—', 'restartFlag',  '(not set)', 'fresh run', 'dim')
 
     # Print table
     tbl = Table(box=box.SIMPLE, show_header=True, header_style="bold")
@@ -253,7 +259,8 @@ def _check_run(cfg: dict, case_dir: Path, console: Console) -> bool:
 
     problem = cfg.get('problem', '')
     run_dir_str = cfg.get('dir', '')
-    restart_tsid_str = cfg.get('restartTsId', '').strip()
+    restart_tsid_str  = cfg.get('restartTsId',  '').strip()
+    restart_flag_str  = cfg.get('restartFlag',  '').strip()
 
     if not run_dir_str:
         console.print("  [yellow]⚠[/yellow]  'dir' not set in simflow.config")
@@ -273,9 +280,11 @@ def _check_run(cfg: dict, case_dir: Path, console: Console) -> bool:
         console.print()
         return False
 
-    # Parse restartTsId
+    # restartFlag must be active (uncommented, non-zero) to trigger restart checks.
+    is_restart = bool(restart_flag_str) and restart_flag_str != '0'
+
     restart_tsid: Optional[int] = None
-    if restart_tsid_str:
+    if is_restart and restart_tsid_str:
         try:
             restart_tsid = int(restart_tsid_str)
         except ValueError:
@@ -302,26 +311,22 @@ def _check_run(cfg: dict, case_dir: Path, console: Console) -> bool:
             start_ts, end_ts = rng
             size_mb = file_path.stat().st_size / 1_048_576
 
-            # Restart consistency check (only for .othd)
+            # Restart consistency check — only for .othd and only when restartFlag is active
             restart_note = ''
             restart_ok = True
-            if ext == 'othd' and restart_tsid is not None:
-                if start_ts == restart_tsid:
-                    restart_note = f'[green]restartTsId={restart_tsid} ✓[/green]'
+            if ext == 'othd' and is_restart:
+                if restart_tsid is not None:
+                    if start_ts == restart_tsid:
+                        restart_note = f'[green]restartTsId={restart_tsid} ✓[/green]'
+                    else:
+                        restart_note = (
+                            f'[red]restartTsId mismatch: config={restart_tsid}, '
+                            f'file starts at {start_ts}[/red]'
+                        )
+                        restart_ok = False
+                        ok = False
                 else:
-                    restart_note = (
-                        f'[red]restartTsId mismatch: config={restart_tsid}, '
-                        f'file starts at {start_ts}[/red]'
-                    )
-                    restart_ok = False
-                    ok = False
-            elif ext == 'othd' and restart_tsid is None:
-                if start_ts == 0:
-                    restart_note = '[dim]fresh run (start=0)[/dim]'
-                else:
-                    restart_note = (
-                        f'[yellow]⚠ starts at {start_ts} but restartTsId not set in config[/yellow]'
-                    )
+                    restart_note = '[yellow]⚠ restartFlag=1 but restartTsId not set in config[/yellow]'
 
             icon  = '[green]✓[/green]' if restart_ok else '[red]✗[/red]'
             label = f'{file_path.name}'
