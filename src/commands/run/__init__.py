@@ -1,6 +1,6 @@
 """
 Run commands - Submit and manage SLURM jobs
-Commands: check, pre, main, post, sq
+Commands: check, pre, main, post, sq, sb, sc
 """
 
 from ..base import BaseCommand
@@ -87,9 +87,29 @@ class RunCommand(BaseCommand):
             add_help=False,
             help='Show SLURM job queue status'
         )
+        sq_parser.add_argument('job_id', nargs='?', help='Show detail for a specific job ID')
         sq_parser.add_argument('--all', action='store_true', help='Show all users jobs')
         sq_parser.add_argument('--watch', action='store_true', help='Watch mode (refresh every 10s)')
         sq_parser.add_argument('-h', '--help', action='store_true', help='Show help')
+
+        # run sb subcommand (sbatch wrapper)
+        sb_parser = run_subparsers.add_parser(
+            'sb',
+            add_help=False,
+            help='Submit a SLURM job script'
+        )
+        sb_parser.add_argument('script', nargs='?', help='Path to the batch script')
+        sb_parser.add_argument('extra', nargs='*', help='Extra arguments passed to sbatch')
+        sb_parser.add_argument('-h', '--help', action='store_true', help='Show help')
+
+        # run sc subcommand (scancel wrapper)
+        sc_parser = run_subparsers.add_parser(
+            'sc',
+            add_help=False,
+            help='Cancel a SLURM job by ID or name'
+        )
+        sc_parser.add_argument('target', nargs='?', help='Job ID or job name to cancel')
+        sc_parser.add_argument('-h', '--help', action='store_true', help='Show help')
 
         # General help for run command
         parser.add_argument('-h', '--help', action='store_true', help='Show help')
@@ -125,6 +145,12 @@ class RunCommand(BaseCommand):
         elif subcommand == 'sq':
             from .sq_impl import command as sq_cmd
             sq_cmd.execute_sq(args)
+        elif subcommand == 'sb':
+            from .sb_impl import command as sb_cmd
+            sb_cmd.execute_sb(args)
+        elif subcommand == 'sc':
+            from .sc_impl import command as sc_cmd
+            sc_cmd.execute_sc(args)
         else:
             print(f"Unknown subcommand: {subcommand}")
             self.show_help()

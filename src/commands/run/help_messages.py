@@ -19,6 +19,8 @@ Submit and manage SLURM jobs for FlexFlow simulations.
     {Colors.YELLOW}main{Colors.RESET}     Submit main simulation job
     {Colors.YELLOW}post{Colors.RESET}     Submit postprocessing job (PLT generation)
     {Colors.YELLOW}sq{Colors.RESET}       Show SLURM job queue status
+    {Colors.YELLOW}sb{Colors.RESET}       Submit any SLURM batch script
+    {Colors.YELLOW}sc{Colors.RESET}       Cancel a SLURM job by ID or name
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
     # Validate case structure
@@ -41,6 +43,18 @@ Submit and manage SLURM jobs for FlexFlow simulations.
 
     # Watch job queue
     run sq --watch
+
+    # Show detail for a specific job
+    run sq 1258586
+
+    # Submit a script directly
+    run sb postFlex.sh
+
+    # Cancel job by ID
+    run sc 1258586
+
+    # Cancel all jobs named 'postCase005'
+    run sc postCase005
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
     -h, --help     Show help for specific subcommand

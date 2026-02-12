@@ -43,7 +43,7 @@ class FlexFlowCompleter(Completer):
         'case':     ['show', 'create', 'run', 'organise', 'check', 'status'],
         'data':     ['show', 'stats'],
         'field':    ['info', 'extract'],
-        'run':      ['check', 'pre', 'main', 'post', 'sq'],
+        'run':      ['check', 'pre', 'main', 'post', 'sq', 'sb', 'sc'],
         'template': ['plot', 'case', 'script'],
         'check':    [],
         'plot':     [],
@@ -174,6 +174,14 @@ class FlexFlowCompleter(Completer):
         ('run', 'sq'):       {
             '--all':   'Show all users jobs',
             '--watch': 'Live queue monitoring (refresh every 10s)',
+            '--help':  'Show help message',
+            '-h':      'Show help message',
+        },
+        ('run', 'sb'):       {
+            '--help':  'Show help message',
+            '-h':      'Show help message',
+        },
+        ('run', 'sc'):       {
             '--help':  'Show help message',
             '-h':      'Show help message',
         },
