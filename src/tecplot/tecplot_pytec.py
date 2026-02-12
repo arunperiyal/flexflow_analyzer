@@ -100,18 +100,8 @@ def extract_data_pytecplot(case_dir, timestep, zone=None, variables=None, output
     case_path = Path(case_dir)
     
     # Parse simflow.config to get problem name
-    config_file = case_path / 'simflow.config'
-    problem_name = 'riser'  # default
-    if config_file.exists():
-        try:
-            with open(config_file, 'r') as f:
-                for line in f:
-                    line = line.strip()
-                    if line.startswith('problem') and '=' in line and not line.startswith('#'):
-                        problem_name = line.split('=')[1].strip()
-                        break
-        except Exception:
-            pass
+    from src.core.simflow_config import SimflowConfig
+    problem_name = SimflowConfig.find(case_path).problem or 'riser'
     
     # Find PLT file
     plt_file = case_path / "binary" / f"{problem_name}.{timestep}.plt"

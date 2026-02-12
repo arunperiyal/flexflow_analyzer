@@ -11,6 +11,7 @@ import glob
 from .readers.othd_reader import OTHDReader
 from .readers.oisd_reader import OISDReader
 from .parsers.def_parser import parse_def_file
+from .simflow_config import SimflowConfig
 from tqdm import tqdm
 
 
@@ -79,48 +80,12 @@ class FlexFlowCase:
     
     def _parse_config(self):
         """Parse configuration files."""
-        # Parse simflow.config
-        simflow_config = os.path.join(self.case_directory, 'simflow.config')
-        self.config = self._parse_simflow_config(simflow_config)
-        
-        # Get problem name
-        self.problem_name = self.config.get('problem', None)
-        
+        cfg = SimflowConfig.find(self.case_directory)
+        self.config = cfg.as_dict()
+        self.problem_name = cfg.problem
+
         # Parse .def file using problem name
         self.def_config = parse_def_file(self.case_directory, self.problem_name)
-    
-    def _parse_simflow_config(self, config_file):
-        """
-        Parse simflow.config file.
-        
-        Parameters:
-        -----------
-        config_file : str
-            Path to simflow.config file
-            
-        Returns:
-        --------
-        dict : Parsed configuration
-        """
-        config = {}
-        try:
-            with open(config_file, 'r') as f:
-                for line in f:
-                    line = line.strip()
-                    # Skip comments and empty lines
-                    if not line or line.startswith('#'):
-                        continue
-                    
-                    # Parse key = value pairs
-                    if '=' in line:
-                        parts = line.split('=', 1)
-                        key = parts[0].strip()
-                        value = parts[1].strip()
-                        config[key] = value
-        except Exception as e:
-            print(f"Warning: Could not parse simflow.config: {e}")
-        
-        return config
     
     def find_othd_files(self, pattern='*.othd'):
         """

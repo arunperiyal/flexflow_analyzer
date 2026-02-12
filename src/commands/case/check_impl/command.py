@@ -5,7 +5,6 @@ Checks OTHD/OISD file time step ranges in the run directory and/or
 archive directories, and validates simflow.config consistency.
 """
 
-import re
 import sys
 from pathlib import Path
 from typing import Optional, List, Tuple
@@ -17,6 +16,7 @@ from rich import box
 
 from ....utils.logger import Logger
 from ....utils.colors import Colors
+from ....core.simflow_config import SimflowConfig
 
 
 # ---------------------------------------------------------------------------
@@ -65,7 +65,7 @@ def execute_case_check(args):
     console.print()
 
     # Parse config once — used by all checks
-    cfg = _parse_config(case_dir)
+    cfg = SimflowConfig.find(case_dir)
 
     any_error = False
 
@@ -110,27 +110,6 @@ def _get_case_dir(args) -> Optional[Path]:
     return p.resolve()
 
 
-def _parse_config(case_dir: Path) -> dict:
-    """Parse simflow.config into a plain dict.  Returns {} on error."""
-    config_file = case_dir / 'simflow.config'
-    cfg: dict = {}
-    if not config_file.exists():
-        return cfg
-    try:
-        with open(config_file) as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith('#'):
-                    continue
-                if '=' in line:
-                    key, _, val = line.partition('=')
-                    # Strip inline comments and quotes
-                    val = re.split(r'\s*#', val, maxsplit=1)[0].strip().strip('"').strip("'")
-                    cfg[key.strip()] = val
-    except Exception:
-        pass
-    return cfg
-
 
 def _read_data_file_range(file_path: Path) -> Optional[Tuple[int, int]]:
     """Return (min_tsId, max_tsId) for an OTHD or OISD file, or None on error."""
@@ -173,12 +152,10 @@ def _check_config(cfg: dict, case_dir: Path, console: Console) -> bool:
         rows.append((icon, key, value, note, color))
 
     # problem
-    problem = cfg.get('problem', '')
+    problem = cfg.problem
     if problem:
-        geo  = list(case_dir.glob(f'{problem}.geo'))
-        defn = list(case_dir.glob(f'{problem}.def'))
-        geo_ok  = bool(geo)
-        defn_ok = bool(defn)
+        geo_ok  = bool(list(case_dir.glob(f'{problem}.geo')))
+        defn_ok = bool(list(case_dir.glob(f'{problem}.def')))
         if geo_ok and defn_ok:
             row('✓', 'problem', problem, '.geo and .def found')
         else:
@@ -192,44 +169,34 @@ def _check_config(cfg: dict, case_dir: Path, console: Console) -> bool:
         ok = False
 
     # dir (run directory)
-    run_dir_str = cfg.get('dir', '')
-    if run_dir_str:
-        run_dir = (case_dir / run_dir_str).resolve() if not Path(run_dir_str).is_absolute() \
-                  else Path(run_dir_str)
-        exists = run_dir.exists()
-        row('✓' if exists else '⚠',
-            'dir', run_dir_str,
-            'exists' if exists else 'directory not yet created',
-            'green' if exists else 'yellow')
+    run_dir = cfg.run_dir(case_dir)
+    if run_dir:
+        row('✓' if run_dir.exists() else '⚠',
+            'dir', cfg.run_dir_str or '',
+            'exists' if run_dir.exists() else 'directory not yet created',
+            'green' if run_dir.exists() else 'yellow')
     else:
         row('⚠', 'dir', '(not set)', 'run directory unspecified', 'yellow')
 
     # outFreq
-    freq = cfg.get('outFreq', '')
-    if freq:
-        row('✓', 'outFreq', freq, '')
-    else:
-        row('⚠', 'outFreq', '(not set)', '', 'yellow')
+    freq = cfg.out_freq
+    row('✓' if freq else '⚠', 'outFreq', str(freq) if freq else '(not set)', '',
+        'green' if freq else 'yellow')
 
     # np
-    np_val = cfg.get('np', '')
-    if np_val:
-        row('✓', 'np', np_val, '')
-    else:
-        row('⚠', 'np', '(not set)', '', 'yellow')
+    np_val = cfg.np
+    row('✓' if np_val else '⚠', 'np', str(np_val) if np_val else '(not set)', '',
+        'green' if np_val else 'yellow')
 
     # restartFlag + restartTsId (informational)
-    restart_flag = cfg.get('restartFlag', '').strip()
-    restart_tsid = cfg.get('restartTsId', '').strip()
-    is_restart = bool(restart_flag) and restart_flag != '0'
-    if is_restart:
-        row('ℹ', 'restartFlag',  restart_flag,  'restart mode active', 'cyan')
-        if restart_tsid:
-            row('ℹ', 'restartTsId', restart_tsid, 'restart from this tsId', 'cyan')
+    if cfg.restart_flag:
+        row('ℹ', 'restartFlag', cfg.get('restartFlag', ''), 'restart mode active', 'cyan')
+        if cfg.restart_tsid is not None:
+            row('ℹ', 'restartTsId', str(cfg.restart_tsid), 'restart from this tsId', 'cyan')
         else:
             row('⚠', 'restartTsId', '(not set)', 'restartFlag active but no tsId', 'yellow')
     else:
-        row('—', 'restartFlag',  '(not set)', 'fresh run', 'dim')
+        row('—', 'restartFlag', '(not set)', 'fresh run', 'dim')
 
     # Print table
     tbl = Table(box=box.SIMPLE, show_header=True, header_style="bold")

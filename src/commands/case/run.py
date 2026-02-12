@@ -165,32 +165,15 @@ class CaseRunCommand:
     
     def parse_configs(self):
         """Parse simflow.config and .def files"""
-        # Parse simflow.config
-        config_file = self.case_dir / 'simflow.config'
-        try:
-            with open(config_file) as f:
-                for line in f:
-                    line = line.split('#')[0].strip()
-                    if not line:
-                        continue
-                    
-                    if '=' in line:
-                        key, value = line.split('=', 1)
-                        key = key.strip()
-                        value = value.strip()
-                        
-                        if key == 'problem':
-                            self.problem_name = value
-                        elif key == 'dir':
-                            self.output_dir = value.replace('./', '')
-                        elif key == 'outFreq':
-                            self.out_freq = int(value)
-                        elif key == 'nsg':
-                            self.nsg = int(value)
-        except Exception as e:
-            print(f"Error parsing simflow.config: {e}")
-            return False
-        
+        from src.core.simflow_config import SimflowConfig
+        cfg = SimflowConfig.find(self.case_dir)
+
+        self.problem_name = cfg.problem
+        run_dir = cfg.run_dir(self.case_dir)
+        self.output_dir = run_dir.name if run_dir else None
+        self.out_freq = cfg.out_freq
+        self.nsg = cfg.nsg
+
         if not self.problem_name or not self.output_dir:
             print("Error: Could not parse problem name or output directory from simflow.config")
             return False

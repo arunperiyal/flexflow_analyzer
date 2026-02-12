@@ -231,21 +231,8 @@ def execute_info(args):
         sys.exit(1)
 
     # Get problem name from simflow.config
-    simflow_config = case_dir / 'simflow.config'
-    problem_name = None
-    if simflow_config.exists():
-        try:
-            with open(simflow_config, 'r') as f:
-                for line in f:
-                    line = line.strip()
-                    if line.startswith('problem'):
-                        parts = line.split('=')
-                        if len(parts) == 2:
-                            problem_name = parts[1].strip()
-                            break
-        except Exception as e:
-            if args.verbose:
-                logger.warning(f"Could not read simflow.config: {e}")
+    from src.core.simflow_config import SimflowConfig
+    problem_name = SimflowConfig.find(case_dir).problem
 
     # Find all PLT files
     plt_files = sorted(binary_dir.glob('*.plt'))

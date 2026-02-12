@@ -128,21 +128,12 @@ def check_required_directories(case_dir, verbose, console):
     }
 
     # Check for rundir in simflow.config
-    config_file = case_dir / 'simflow.config'
-    if config_file.exists():
-        try:
-            with open(config_file) as f:
-                for line in f:
-                    if 'dir' in line and '=' in line:
-                        key, value = line.split('=', 1)
-                        key = key.strip()
-                        if key == 'dir':
-                            output_dir = value.strip().strip('"').strip("'")
-                            output_dir = output_dir.replace('./', '')
-                            if output_dir and output_dir != 'dir':
-                                required_dirs[output_dir] = 'Output directory (from simflow.config)'
-        except Exception:
-            pass
+    from src.core.simflow_config import SimflowConfig
+    cfg = SimflowConfig.find(case_dir)
+    if cfg.run_dir_str:
+        output_dir = cfg.run_dir_str.replace('./', '')
+        if output_dir:
+            required_dirs[output_dir] = 'Output directory (from simflow.config)'
 
     results = []
 

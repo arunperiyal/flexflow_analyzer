@@ -98,33 +98,12 @@ def detect_def_variables(def_file_path):
 
 
 def parse_simflow_config(config_path):
-    """
-    Parse simflow.config file to extract problem name
-    
-    Parameters:
-    -----------
-    config_path : str or Path
-        Path to simflow.config file
-    
-    Returns:
-    --------
-    str
-        Problem name from config file
-    """
-    with open(config_path, 'r') as f:
-        for line in f:
-            line = line.strip()
-            # Skip comments and empty lines
-            if line.startswith('#') or not line:
-                continue
-            # Look for problem = <name>
-            if line.startswith('problem'):
-                parts = line.split('=')
-                if len(parts) == 2:
-                    problem_name = parts[1].strip()
-                    return problem_name
-    
-    raise ValueError("Could not find 'problem' definition in simflow.config")
+    """Return the problem name from a simflow.config file."""
+    from src.core.simflow_config import SimflowConfig
+    cfg = SimflowConfig(config_path)
+    if cfg.problem is None:
+        raise ValueError("Could not find 'problem' definition in simflow.config")
+    return cfg.problem
 
 
 def update_simflow_config(config_path, new_problem_name):
