@@ -21,7 +21,7 @@
 # Arguments:
 #   FREQ       - Output frequency (optional, reads from config if not provided)
 #   START_TIME - Start timestep (optional, default: 0)
-#   END_TIME   - End timestep (optional, default: process all available)
+#   END_TIME   - End timestep (optional, default: maxTimeSteps from .def file)
 # =============================================================================
 
 # Change to the submission directory (SLURM runs scripts from a temp location)
@@ -66,6 +66,17 @@ if [ -z "$CONFIG_FREQ" ]; then
     CONFIG_FREQ=100  # Default fallback
 fi
 
+# Extract maxTimeSteps from the .def file (simPlt requires -last)
+DEF_FILE="${PROBLEM}.def"
+MAX_STEPS=""
+if [ -f "$DEF_FILE" ]; then
+    MAX_STEPS=$(grep -oP 'maxTimeSteps\s*=\s*\K\d+' "$DEF_FILE" | head -1)
+fi
+if [ -z "$MAX_STEPS" ]; then
+    echo "Error: Could not find 'maxTimeSteps' in ${DEF_FILE} — simPlt requires -last"
+    exit 1
+fi
+
 # -----------------------------------------------------------------------------
 # Parse command-line arguments (override config values)
 # -----------------------------------------------------------------------------
@@ -76,8 +87,8 @@ FREQ=${1:-$CONFIG_FREQ}
 # START_TIME: Use argument if provided, otherwise default to 0
 START_TIME=${2:-0}
 
-# END_TIME: Use argument if provided, otherwise empty (process all)
-END_TIME=${3:-}
+# END_TIME: Use argument if provided, otherwise default to maxTimeSteps from .def
+END_TIME=${3:-$MAX_STEPS}
 
 # -----------------------------------------------------------------------------
 # Display job configuration
@@ -90,7 +101,7 @@ echo "Problem:      $PROBLEM"
 echo "Run Dir:      $RUN_DIR"
 echo "Frequency:    $FREQ"
 echo "Start Time:   $START_TIME"
-echo "End Time:     ${END_TIME:-<all available>}"
+echo "End Time:     $END_TIME"
 echo "Processes:    $SLURM_NTASKS"
 echo "CPUs/Task:    $SLURM_CPUS_PER_TASK"
 echo "=========================================="
@@ -118,17 +129,10 @@ export OMP_NUM_THREADS=${OMP_NUM_THREADS:-$SLURM_CPUS_PER_TASK}
 # -----------------------------------------------------------------------------
 
 echo "Step 1: Running simPlt to generate ASCII PLT files..."
-echo "Command: $SIMPLT -n $SLURM_NTASKS -pb $PROBLEM -outFreq $FREQ"
+echo "Command: $SIMPLT -n $SLURM_NTASKS -pb $PROBLEM -outFreq $FREQ -last $END_TIME"
 
-if [ -n "$END_TIME" ]; then
-    # If END_TIME is specified
-    $SIMPLT -n $SLURM_NTASKS -pb $PROBLEM -outFreq $FREQ -last $END_TIME
-    SIMPLT_EXIT=$?
-else
-    # Process all available timesteps
-    $SIMPLT -n $SLURM_NTASKS -pb $PROBLEM -outFreq $FREQ
-    SIMPLT_EXIT=$?
-fi
+$SIMPLT -n $SLURM_NTASKS -pb $PROBLEM -outFreq $FREQ -last $END_TIME
+SIMPLT_EXIT=$?
 
 if [ $SIMPLT_EXIT -ne 0 ]; then
     echo "Error: simPlt failed with exit code $SIMPLT_EXIT"
@@ -143,17 +147,10 @@ echo ""
 # -----------------------------------------------------------------------------
 
 echo "Step 2: Running simPlt2Bin to convert to binary format..."
-echo "Command: $SIMPLT2BIN -n $SLURM_NTASKS -w $RUN_DIR -f $FREQ -p $PROBLEM"
+echo "Command: $SIMPLT2BIN -n $SLURM_NTASKS -w $RUN_DIR -f $FREQ -p $PROBLEM -l $END_TIME"
 
-if [ -n "$END_TIME" ]; then
-    # If END_TIME is specified
-    $SIMPLT2BIN -n $SLURM_NTASKS -w $RUN_DIR -f $FREQ -p $PROBLEM -l $END_TIME
-    SIMPLT2BIN_EXIT=$?
-else
-    # Process all available timesteps
-    $SIMPLT2BIN -n $SLURM_NTASKS -w $RUN_DIR -f $FREQ -p $PROBLEM
-    SIMPLT2BIN_EXIT=$?
-fi
+$SIMPLT2BIN -n $SLURM_NTASKS -w $RUN_DIR -f $FREQ -p $PROBLEM -l $END_TIME
+SIMPLT2BIN_EXIT=$?
 
 if [ $SIMPLT2BIN_EXIT -ne 0 ]; then
     echo "Error: simPlt2Bin failed with exit code $SIMPLT2BIN_EXIT"
