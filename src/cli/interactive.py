@@ -238,6 +238,7 @@ class FlexFlowCompleter(Completer):
         ('grep',    'Search file contents'),
         ('find',    'Find case directories'),
         ('tree',    'Show directory tree'),
+        ('rm',      'Remove files or directories'),
         ('use',     'Set context (case/problem/rundir)'),
         ('unuse',   'Clear context'),
     ]
@@ -826,6 +827,22 @@ class InteractiveShell:
                 self.console.print("  tail -n 50 file.log")
             return True
 
+        # Remove files or directories
+        if cmd == 'rm':
+            if len(parts) > 1:
+                self.remove_files(parts[1:])
+            else:
+                self.console.print("[yellow]Usage:[/yellow] rm [-r] [-f] <path> [paths...]")
+                self.console.print("[dim]Options:[/dim]")
+                self.console.print("  -r, --recursive    Remove directories recursively")
+                self.console.print("  -f, --force        Skip confirmation prompts")
+                self.console.print("[dim]Examples:[/dim]")
+                self.console.print("  rm old_output.othd")
+                self.console.print("  rm -r SIMFLOW_DATA/")
+                self.console.print("  rm -rf tmp_dir/")
+                self.console.print("  rm file1.plt file2.plt file3.plt")
+            return True
+
         return False
 
     def show_help(self) -> None:
@@ -889,6 +906,7 @@ class InteractiveShell:
             ("grep <pattern> [files]", "Search file contents"),
             ("find [pattern]", "Find case directories"),
             ("tree [depth]", "Show directory tree (default depth: 2)"),
+            ("rm [-r] [-f] <path>", "Remove files or directories"),
         ]
 
         for cmd, desc in browse_commands:
@@ -1737,6 +1755,89 @@ class InteractiveShell:
             self.console.print(f"[red]Error: Permission denied: {file_path}[/red]")
         except Exception as e:
             self.console.print(f"[red]Error reading file: {e}[/red]")
+
+    def remove_files(self, args: List[str]) -> None:
+        """
+        Remove files or directories (like Unix rm command).
+
+        Args:
+            args: List containing optional flags and one or more paths.
+                  Flags: -r/--recursive, -f/--force, or combined -rf/-fr.
+        """
+        import shutil
+
+        recursive = False
+        force = False
+        raw_paths: List[str] = []
+
+        for arg in args:
+            # Combined short flags like -rf or -fr
+            if arg.startswith('-') and not arg.startswith('--') and len(arg) > 2:
+                flags = arg[1:]
+                if all(c in 'rf' for c in flags):
+                    recursive = 'r' in flags
+                    force = 'f' in flags
+                    continue
+            if arg in ('-r', '--recursive'):
+                recursive = True
+            elif arg in ('-f', '--force'):
+                force = True
+            else:
+                raw_paths.append(arg)
+
+        if not raw_paths:
+            self.console.print("[yellow]Error: no paths specified[/yellow]")
+            return
+
+        removed: List[str] = []
+        errors:  List[str] = []
+
+        for raw in raw_paths:
+            target = Path(raw)
+            if not target.is_absolute():
+                target = self._current_dir / target
+            target = target.resolve()
+
+            if not target.exists():
+                errors.append(f"not found: {raw}")
+                continue
+
+            is_dir = target.is_dir()
+
+            if is_dir and not recursive:
+                errors.append(f"is a directory (use -r to remove): {raw}")
+                continue
+
+            # Confirm unless -f
+            if not force:
+                kind = "directory and all its contents" if is_dir else "file"
+                self.console.print(
+                    f"  Remove {kind} [cyan]{target.name}[/cyan]? [dim](y/N)[/dim] ",
+                    end='',
+                )
+                try:
+                    answer = input().strip().lower()
+                except (EOFError, KeyboardInterrupt):
+                    answer = ''
+                if answer != 'y':
+                    self.console.print("  [dim]skipped[/dim]")
+                    continue
+
+            try:
+                if is_dir:
+                    shutil.rmtree(target)
+                else:
+                    target.unlink()
+                removed.append(str(raw))
+            except PermissionError:
+                errors.append(f"permission denied: {raw}")
+            except Exception as e:
+                errors.append(f"{raw}: {e}")
+
+        for r in removed:
+            self.console.print(f"  [green]removed[/green]  {r}")
+        for e in errors:
+            self.console.print(f"  [red]error[/red]    {e}")
 
     def grep_files(self, args: List[str]) -> None:
         """
