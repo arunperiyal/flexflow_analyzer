@@ -198,9 +198,11 @@ def _show_task_consistency_info(script_path, case_dir, console):
     ntpn     = sbatch['ntasks_per_node']
 
     expected_nsg = None
-    if script_n is not None and ntpn is not None and ntpn > 0:
-        if script_n % ntpn == 0:
+    if script_n is not None:
+        if ntpn is not None and ntpn > 0 and script_n % ntpn == 0:
             expected_nsg = script_n // ntpn
+        else:
+            expected_nsg = script_n
 
     tbl = Table(box=box.SIMPLE, show_header=True, header_style='bold')
     tbl.add_column('Parameter',      style='cyan')
@@ -213,12 +215,12 @@ def _show_task_consistency_info(script_path, case_dir, console):
             return '[dim]—[/dim]'
         return '[green]✓[/green]' if a == b else '[red]✗[/red]'
 
-    if cfg_np is not None:
+    if script_n is not None:
+        cfg_np_str = str(cfg_np) if cfg_np is not None else '[dim](not set)[/dim]'
         tbl.add_row('np  (total tasks)',
-                    str(cfg_np),
-                    str(script_n) if script_n is not None else '[dim]—[/dim]',
+                    cfg_np_str,
+                    str(script_n),
                     _icon(cfg_np, script_n))
-    if expected_nsg is not None:
         cfg_nsg_str = str(cfg_nsg) if cfg_nsg is not None else '[dim](not set)[/dim]'
         tbl.add_row('nsg (subgrids/nodes)',
                     cfg_nsg_str,
@@ -273,19 +275,22 @@ def check_task_consistency(script_path, case_dir, console) -> bool:
     script_n   = sbatch['n']
     ntpn       = sbatch['ntasks_per_node']  # ntasks-per-node (None if not set)
 
-    # Derive expected nsg from script values
+    # Derive expected nsg from script values:
+    #   - with ntasks-per-node (medium/large): nsg = n / ntpn  (nodes = subgrids)
+    #   - without ntasks-per-node (shared):    nsg = n         (each task = 1 subgrid)
     expected_nsg = None
-    if script_n is not None and ntpn is not None and ntpn > 0:
-        if script_n % ntpn == 0:
+    if script_n is not None:
+        if ntpn is not None and ntpn > 0 and script_n % ntpn == 0:
             expected_nsg = script_n // ntpn
+        else:
+            expected_nsg = script_n
 
     # Nothing to compare
     if cfg_np is None and cfg_nsg is None:
         return True
 
-    # Check for mismatches
-    # nsg_mismatch: wrong value OR missing from config entirely (when derivable)
-    np_mismatch  = cfg_np  is not None and script_n    is not None and cfg_np  != script_n
+    # Check for mismatches (covers both wrong value and missing key)
+    np_mismatch  = cfg_np  is not None and script_n is not None and cfg_np  != script_n
     nsg_mismatch = expected_nsg is not None and cfg_nsg != expected_nsg
 
     if not np_mismatch and not nsg_mismatch:
@@ -307,11 +312,11 @@ def check_task_consistency(script_path, case_dir, console) -> bool:
     def _icon(ok):
         return '[green]✓[/green]' if ok else '[red]✗[/red]'
 
-    if cfg_np is not None and script_n is not None:
-        tbl.add_row('np  (total tasks)',    str(cfg_np),  str(script_n),   _icon(not np_mismatch))
-    if expected_nsg is not None:
+    if script_n is not None:
+        cfg_np_str = str(cfg_np) if cfg_np is not None else '[dim](not set)[/dim]'
+        tbl.add_row('np  (total tasks)',    cfg_np_str,   str(script_n),    _icon(not np_mismatch))
         cfg_nsg_str = str(cfg_nsg) if cfg_nsg is not None else '[dim](not set)[/dim]'
-        tbl.add_row('nsg (subgrids/nodes)', cfg_nsg_str, str(expected_nsg), _icon(not nsg_mismatch))
+        tbl.add_row('nsg (subgrids/nodes)', cfg_nsg_str,  str(expected_nsg), _icon(not nsg_mismatch))
     if ntpn is not None:
         tbl.add_row('[dim]ntasks-per-node[/dim]', '[dim]—[/dim]', str(ntpn), '[dim]info[/dim]')
 
