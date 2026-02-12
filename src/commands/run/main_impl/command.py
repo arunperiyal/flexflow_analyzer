@@ -328,16 +328,22 @@ def check_task_consistency(script_path, case_dir, console) -> bool:
         fix_parts = ', '.join(f'{k} = {v}' for k, v in fix.items())
         console.print(f'[bold]Auto-fix:[/bold] set {fix_parts} in simflow.config')
         console.print()
-        console.print('  [bold cyan][f][/bold cyan] Fix simflow.config and submit')
-        console.print('  [bold yellow][s][/bold yellow] Submit anyway (keep config as-is)')
-        console.print('  [bold red][a][/bold red] Abort')
+        console.print('  1. Fix simflow.config and submit')
+        console.print('  2. Submit anyway (keep config as-is)')
+        console.print('  3. Abort')
         console.print()
-        console.print('Choice [f/s/a]: ', end='')
+        console.print('Choice [1/2/3]: ', end='')
+        valid = {'1', 'f', '2', 's', '3', 'a'}
+        fix_choices  = {'1', 'f'}
+        sub_choices  = {'2', 's'}
     else:
-        console.print('  [bold yellow][s][/bold yellow] Submit anyway')
-        console.print('  [bold red][a][/bold red] Abort')
+        console.print('  1. Submit anyway')
+        console.print('  2. Abort')
         console.print()
-        console.print('Choice [s/a]: ', end='')
+        console.print('Choice [1/2]: ', end='')
+        valid = {'1', 's', '2', 'a'}
+        fix_choices  = set()
+        sub_choices  = {'1', 's'}
 
     try:
         answer = input().strip().lower()
@@ -346,7 +352,12 @@ def check_task_consistency(script_path, case_dir, console) -> bool:
         console.print('[yellow]Aborted[/yellow]')
         return False
 
-    if answer == 'f' and fix:
+    if answer not in valid:
+        console.print('[yellow]Invalid choice — aborted[/yellow]')
+        console.print()
+        return False
+
+    if answer in fix_choices:
         try:
             cfg.update_values(fix)
             fix_parts = ', '.join(f'{k} = {v}' for k, v in fix.items())
@@ -358,7 +369,7 @@ def check_task_consistency(script_path, case_dir, console) -> bool:
             return False
         return True
 
-    if answer == 's':
+    if answer in sub_choices:
         return True
 
     console.print('[yellow]Aborted[/yellow]')
@@ -396,6 +407,8 @@ def parse_sbatch_directives(script_path):
                         }
 
                         readable_name = flag_names.get(flag, flag)
+                        # Strip inline comments (e.g. "medium   # partition: ...")
+                        value = value.split('#')[0].strip()
                         directives[readable_name] = value
     except Exception:
         pass

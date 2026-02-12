@@ -193,6 +193,7 @@ def parse_sbatch_directives(script_path):
                         }
 
                         readable_name = flag_names.get(flag, flag)
+                        value = value.split('#')[0].strip()
                         directives[readable_name] = value
     except Exception:
         pass
