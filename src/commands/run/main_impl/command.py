@@ -185,7 +185,6 @@ def show_dry_run(script_path, case_dir, args, console):
 def _show_task_consistency_info(script_path, case_dir, console):
     """Print a task-count comparison table (no prompt). Used by dry-run."""
     from src.core.simflow_config import SimflowConfig
-    import re
 
     cfg = SimflowConfig.find(case_dir)
     cfg_np  = cfg.np
@@ -194,19 +193,14 @@ def _show_task_consistency_info(script_path, case_dir, console):
     if cfg_np is None and cfg_nsg is None:
         return
 
-    script_n = None
-    try:
-        with open(script_path) as f:
-            for line in f:
-                line = line.strip()
-                if not line.startswith('#SBATCH'):
-                    continue
-                m = re.match(r'#SBATCH\s+-n\s+(\d+)', line)
-                if m:
-                    script_n = int(m.group(1))
-                    break
-    except Exception:
-        return
+    sbatch = _parse_script_sbatch(script_path)
+    script_n = sbatch['n']
+    ntpn     = sbatch['ntasks_per_node']
+
+    expected_nsg = None
+    if script_n is not None and ntpn is not None and ntpn > 0:
+        if script_n % ntpn == 0:
+            expected_nsg = script_n // ntpn
 
     tbl = Table(box=box.SIMPLE, show_header=True, header_style='bold')
     tbl.add_column('Parameter',      style='cyan')
@@ -214,40 +208,34 @@ def _show_task_consistency_info(script_path, case_dir, console):
     tbl.add_column('mainFlex.sh',    justify='right', style='blue')
     tbl.add_column('Match?',         justify='center')
 
-    def _match(a, b):
+    def _icon(a, b):
         if a is None or b is None:
             return '[dim]—[/dim]'
         return '[green]✓[/green]' if a == b else '[red]✗[/red]'
 
     if cfg_np is not None:
-        tbl.add_row('np (total tasks)', str(cfg_np),
+        tbl.add_row('np  (total tasks)',
+                    str(cfg_np),
                     str(script_n) if script_n is not None else '[dim]—[/dim]',
-                    _match(cfg_np, script_n))
+                    _icon(cfg_np, script_n))
     if cfg_nsg is not None:
-        tbl.add_row('nsg (subgrids)', str(cfg_nsg), '[dim]—[/dim]', '[dim]info[/dim]')
+        exp_str = str(expected_nsg) if expected_nsg is not None else '[dim]—[/dim]'
+        tbl.add_row('nsg (subgrids/nodes)',
+                    str(cfg_nsg),
+                    exp_str,
+                    _icon(cfg_nsg, expected_nsg))
+    if ntpn is not None:
+        tbl.add_row('[dim]ntasks-per-node[/dim]', '[dim]—[/dim]', str(ntpn), '[dim]info[/dim]')
 
     console.print('[bold]Task consistency check:[/bold]')
     console.print(tbl)
     console.print()
 
 
-def check_task_consistency(script_path, case_dir, console) -> bool:
-    """
-    Compare np/nsg in simflow.config with #SBATCH -n in the job script.
-
-    Returns True if the caller should proceed, False if the user chose to abort.
-    If values are consistent, prints nothing.  If they differ, shows a table
-    and asks the user to confirm or abort.
-    """
-    from src.core.simflow_config import SimflowConfig
-
-    cfg = SimflowConfig.find(case_dir)
-    cfg_np  = cfg.np   # total MPI tasks from simflow.config
-    cfg_nsg = cfg.nsg  # subgrids from simflow.config
-
-    # Read #SBATCH -n from the script
-    script_n = None
-    script_nsg = None
+def _parse_script_sbatch(script_path) -> dict:
+    """Parse #SBATCH -n and --ntasks-per-node from a job script."""
+    import re
+    result = {'n': None, 'ntasks_per_node': None}
     try:
         with open(script_path) as f:
             for line in f:
@@ -255,57 +243,101 @@ def check_task_consistency(script_path, case_dir, console) -> bool:
                 if not line.startswith('#SBATCH'):
                     continue
                 body = line[7:].strip()
-                # -n <value>  (total tasks)
-                import re
                 m = re.match(r'-n\s+(\d+)', body)
                 if m:
-                    script_n = int(m.group(1))
-                # --ntasks-per-node=<value> or --ntasks-per-node <value>
-                m2 = re.match(r'--ntasks(?:-per-node)?[=\s]+(\d+)', body)
-                if m2 and 'ntasks-per-node' in body:
-                    pass  # we don't need this for the check
+                    result['n'] = int(m.group(1))
+                m2 = re.match(r'--ntasks-per-node[=\s]+(\d+)', body)
+                if m2:
+                    result['ntasks_per_node'] = int(m2.group(1))
     except Exception:
         pass
+    return result
 
-    # Nothing to compare if config has no np/nsg
+
+def check_task_consistency(script_path, case_dir, console) -> bool:
+    """
+    Compare np/nsg in simflow.config with #SBATCH directives in the job script.
+
+    - Derives expected nsg = script_n / ntasks_per_node (when ntasks-per-node
+      is set, i.e. medium/large partitions).
+    - On mismatch offers: [f]ix config automatically, [s]ubmit anyway, [a]bort.
+    - Returns True to proceed with submission, False to abort.
+    """
+    from src.core.simflow_config import SimflowConfig
+
+    cfg = SimflowConfig.find(case_dir)
+    cfg_np  = cfg.np
+    cfg_nsg = cfg.nsg
+
+    sbatch = _parse_script_sbatch(script_path)
+    script_n   = sbatch['n']
+    ntpn       = sbatch['ntasks_per_node']  # ntasks-per-node (None if not set)
+
+    # Derive expected nsg from script values
+    expected_nsg = None
+    if script_n is not None and ntpn is not None and ntpn > 0:
+        if script_n % ntpn == 0:
+            expected_nsg = script_n // ntpn
+
+    # Nothing to compare
     if cfg_np is None and cfg_nsg is None:
         return True
 
-    # Build mismatch list
-    issues = []
-    if cfg_np is not None and script_n is not None and cfg_np != script_n:
-        issues.append(('np (total tasks)', str(cfg_np), str(script_n)))
+    # Check for mismatches
+    np_mismatch  = cfg_np  is not None and script_n is not None and cfg_np  != script_n
+    nsg_mismatch = cfg_nsg is not None and expected_nsg is not None and cfg_nsg != expected_nsg
 
-    if not issues:
-        return True  # all consistent
+    if not np_mismatch and not nsg_mismatch:
+        return True  # all good
 
+    # ----------------------------------------------------------------
     # Show mismatch table
-    from rich.table import Table
-    from rich import box
-
+    # ----------------------------------------------------------------
     console.print()
     console.print('[bold yellow]⚠  Task count mismatch between simflow.config and job script[/bold yellow]')
     console.print()
 
     tbl = Table(box=box.SIMPLE, show_header=True, header_style='bold')
-    tbl.add_column('Parameter',     style='cyan')
+    tbl.add_column('Parameter',      style='cyan')
     tbl.add_column('simflow.config', justify='right', style='yellow')
     tbl.add_column('mainFlex.sh',    justify='right', style='blue')
-    tbl.add_column('Match?',        justify='center')
+    tbl.add_column('Match?',         justify='center')
 
-    for label, cfg_val, script_val in issues:
-        match_icon = '[red]✗[/red]'
-        tbl.add_row(label, cfg_val, script_val, match_icon)
+    def _icon(ok):
+        return '[green]✓[/green]' if ok else '[red]✗[/red]'
 
-    # Also show nsg as info (no script counterpart to compare, just informational)
+    if cfg_np is not None and script_n is not None:
+        tbl.add_row('np  (total tasks)',    str(cfg_np),  str(script_n),   _icon(not np_mismatch))
     if cfg_nsg is not None:
-        tbl.add_row('nsg (subgrids)', str(cfg_nsg), '[dim]—[/dim]', '[dim]info[/dim]')
+        exp_str = str(expected_nsg) if expected_nsg is not None else '[dim]—[/dim]'
+        tbl.add_row('nsg (subgrids/nodes)', str(cfg_nsg), exp_str, _icon(not nsg_mismatch))
+    if ntpn is not None:
+        tbl.add_row('[dim]ntasks-per-node[/dim]', '[dim]—[/dim]', str(ntpn), '[dim]info[/dim]')
 
     console.print(tbl)
     console.print()
-    console.print('[dim]Edit simflow.config to match the script, or edit mainFlex.sh to match the config.[/dim]')
-    console.print()
-    console.print('Submit anyway? [y/N] ', end='')
+
+    # Build the proposed fix
+    fix = {}
+    if np_mismatch:
+        fix['np'] = script_n
+    if nsg_mismatch and expected_nsg is not None:
+        fix['nsg'] = expected_nsg
+
+    if fix:
+        fix_parts = ', '.join(f'{k} = {v}' for k, v in fix.items())
+        console.print(f'[bold]Auto-fix:[/bold] set {fix_parts} in simflow.config')
+        console.print()
+        console.print('  [bold cyan][f][/bold cyan] Fix simflow.config and submit')
+        console.print('  [bold yellow][s][/bold yellow] Submit anyway (keep config as-is)')
+        console.print('  [bold red][a][/bold red] Abort')
+        console.print()
+        console.print('Choice [f/s/a]: ', end='')
+    else:
+        console.print('  [bold yellow][s][/bold yellow] Submit anyway')
+        console.print('  [bold red][a][/bold red] Abort')
+        console.print()
+        console.print('Choice [s/a]: ', end='')
 
     try:
         answer = input().strip().lower()
@@ -314,12 +346,24 @@ def check_task_consistency(script_path, case_dir, console) -> bool:
         console.print('[yellow]Aborted[/yellow]')
         return False
 
-    if answer != 'y':
-        console.print('[yellow]Aborted — fix the mismatch and re-run[/yellow]')
-        console.print()
-        return False
+    if answer == 'f' and fix:
+        try:
+            cfg.update_values(fix)
+            fix_parts = ', '.join(f'{k} = {v}' for k, v in fix.items())
+            console.print(f'[green]✓ simflow.config updated:[/green] {fix_parts}')
+            console.print()
+        except Exception as e:
+            console.print(f'[red]Failed to update simflow.config: {e}[/red]')
+            console.print('[yellow]Aborting — fix the file manually and re-run[/yellow]')
+            return False
+        return True
 
-    return True
+    if answer == 's':
+        return True
+
+    console.print('[yellow]Aborted[/yellow]')
+    console.print()
+    return False
 
 
 def parse_sbatch_directives(script_path):

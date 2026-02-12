@@ -184,6 +184,67 @@ class SimflowConfig:
             return None
 
     # ------------------------------------------------------------------
+    # Write support
+    # ------------------------------------------------------------------
+
+    def update_values(self, updates: dict) -> None:
+        """
+        Update one or more key values in the simflow.config file in-place,
+        preserving all comments, blank lines, and the original formatting of
+        unchanged lines.
+
+        For each key in *updates*:
+        - If the key exists in the file, its value is replaced on that line.
+        - If the key does not exist, a new ``key = value`` line is appended.
+
+        Parameters
+        ----------
+        updates:
+            Mapping of {key: new_value}.  Values are converted to str.
+        """
+        if not updates:
+            return
+
+        if not self._path.exists():
+            raise FileNotFoundError(f"simflow.config not found: {self._path}")
+
+        with open(self._path, 'r') as f:
+            lines = f.readlines()
+
+        remaining = dict(updates)  # keys yet to be written
+        new_lines = []
+
+        for line in lines:
+            stripped = line.rstrip('\n')
+            # Check if this line defines one of the keys we want to update
+            if '=' in stripped and not stripped.lstrip().startswith('#'):
+                key_part, _, rest = stripped.partition('=')
+                key = key_part.strip()
+                if key in remaining:
+                    new_val = remaining.pop(key)
+                    # Preserve any inline comment that was after the value
+                    comment = ''
+                    m = re.search(r'(\s*#.*)$', rest)
+                    if m:
+                        comment = m.group(1)
+                    # Preserve leading whitespace of the key
+                    indent = len(key_part) - len(key_part.lstrip())
+                    new_line = ' ' * indent + f'{key} = {new_val}{comment}\n'
+                    new_lines.append(new_line)
+                    # Keep in-memory data in sync
+                    self._data[key] = str(new_val)
+                    continue
+            new_lines.append(line if line.endswith('\n') else line + '\n')
+
+        # Append any keys that didn't exist yet
+        for key, val in remaining.items():
+            new_lines.append(f'{key} = {val}\n')
+            self._data[key] = str(val)
+
+        with open(self._path, 'w') as f:
+            f.writelines(new_lines)
+
+    # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
 
