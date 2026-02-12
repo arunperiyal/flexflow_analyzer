@@ -44,6 +44,7 @@ class RunCommand(BaseCommand):
             help='Submit preprocessing job'
         )
         pre_parser.add_argument('case', nargs='?', help='Case directory')
+        pre_parser.add_argument('--gmsh', type=str, metavar='PATH', help='Override gmsh executable path (passed to sbatch, does not modify script)')
         pre_parser.add_argument('--dry-run', action='store_true', help='Show what would be submitted')
         pre_parser.add_argument('--show', action='store_true', help='Display script contents')
         pre_parser.add_argument('-v', '--verbose', action='store_true', help='Verbose output')

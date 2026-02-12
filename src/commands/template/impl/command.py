@@ -246,6 +246,17 @@ def generate_script_templates(args, logger):
                 flags=re.MULTILINE,
             )
 
+        # Apply --gmsh-path override (env script only)
+        gmsh_path = getattr(args, 'gmsh_path', None)
+        if script == 'env' and gmsh_path:
+            import re
+            content = re.sub(
+                r'^(export GMSH=).*$',
+                f'\\1"{gmsh_path}"',
+                content,
+                flags=re.MULTILINE,
+            )
+
         # Apply --partition override (main script only)
         partition_override = getattr(args, 'partition', None)
         if script == 'main' and partition_override:
@@ -279,6 +290,8 @@ def generate_script_templates(args, logger):
         # Annotate description with active overrides
         if script == 'env' and getattr(args, 'simflow_home', None):
             description += f' [SIMFLOW_HOME={args.simflow_home}]'
+        if script == 'env' and getattr(args, 'gmsh_path', None):
+            description += f' [GMSH={args.gmsh_path}]'
         if script == 'main' and getattr(args, 'partition', None):
             description += f' [partition={args.partition}]'
 

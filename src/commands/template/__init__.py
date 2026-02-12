@@ -67,6 +67,8 @@ class TemplateCommand(BaseCommand):
                                   help='Set SIMFLOW_HOME path in the generated simflow_env.sh')
         script_parser.add_argument('--partition', type=str, metavar='NAME',
                                   help='Override partition in the generated mainFlex.sh')
+        script_parser.add_argument('--gmsh-path', type=str, metavar='PATH',
+                                  help='Set GMSH path in the generated simflow_env.sh')
         script_parser.add_argument('--force', action='store_true',
                                   help='Force overwrite if file exists')
         script_parser.add_argument('-v', '--verbose', action='store_true',

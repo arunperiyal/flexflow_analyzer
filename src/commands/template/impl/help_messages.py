@@ -227,6 +227,8 @@ Generate SLURM job script templates for FlexFlow simulations.
 {Colors.BOLD}OPTIONS:{Colors.RESET}
     {Colors.YELLOW}--simflow-home PATH{Colors.RESET}   Set SIMFLOW_HOME in the generated simflow_env.sh
                           (applies when type is 'env' or 'all')
+    {Colors.YELLOW}--gmsh-path PATH{Colors.RESET}      Set GMSH executable path in the generated simflow_env.sh
+                          (applies when type is 'env' or 'all')
     {Colors.YELLOW}--partition NAME{Colors.RESET}      Override #SBATCH -p in the generated mainFlex.sh
                           (applies when type is 'main' or 'all')
     {Colors.YELLOW}--force{Colors.RESET}               Force overwrite if file exists
@@ -251,11 +253,14 @@ Generate SLURM job script templates for FlexFlow simulations.
     {Colors.BOLD}Generate env with custom SIMFLOW_HOME:{Colors.RESET}
         flexflow template script env Case001 --simflow-home /opt/simflow/2024.1
 
+    {Colors.BOLD}Generate env with custom gmsh path:{Colors.RESET}
+        flexflow template script env Case001 --gmsh-path /usr/local/bin/gmsh
+
     {Colors.BOLD}Generate main script for shared partition:{Colors.RESET}
         flexflow template script main Case001 --partition shared
 
-    {Colors.BOLD}Generate all scripts (env + partition in one go):{Colors.RESET}
-        flexflow template script all Case001 --simflow-home /opt/simflow/2024.1 --partition medium
+    {Colors.BOLD}Generate all scripts with all overrides:{Colors.RESET}
+        flexflow template script all Case001 --simflow-home /opt/simflow/2024.1 --gmsh-path /usr/local/bin/gmsh --partition medium
 
     {Colors.BOLD}Generate in current directory:{Colors.RESET}
         cd Case001

@@ -149,6 +149,7 @@ class FlexFlowCompleter(Completer):
         ('run', 'check'):    {**_COMMON_FLAGS},
         ('run', 'pre'):      {
             **_COMMON_FLAGS,
+            '--gmsh':    'Override gmsh executable path (sbatch --export, script unchanged)',
             '--dry-run': 'Preview without submitting',
             '--show':    'Display script contents',
         },
@@ -201,6 +202,7 @@ class FlexFlowCompleter(Completer):
             **_COMMON_FLAGS,
             '--force':        'Overwrite existing files',
             '--simflow-home': 'Set SIMFLOW_HOME in generated simflow_env.sh',
+            '--gmsh-path':    'Set GMSH executable path in generated simflow_env.sh',
             '--partition':    'Override partition in generated mainFlex.sh',
         },
 

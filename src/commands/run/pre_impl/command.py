@@ -52,11 +52,11 @@ def execute_pre(args):
 
     # Handle --dry-run flag
     if hasattr(args, 'dry_run') and args.dry_run:
-        show_dry_run(script_path, case_dir, console)
+        show_dry_run(script_path, case_dir, args, console)
         return
 
     # Submit the job
-    submit_preprocessing_job(script_path, case_dir, console)
+    submit_preprocessing_job(script_path, case_dir, args, console)
 
 
 def get_case_directory(args):
@@ -126,7 +126,7 @@ def show_script_content(script_path, console):
         console.print()
 
 
-def show_dry_run(script_path, case_dir, console):
+def show_dry_run(script_path, case_dir, args, console):
     """Show what would be submitted without actually submitting."""
     console.print()
     console.print("[bold cyan]Dry Run - Preprocessing Job[/bold cyan]")
@@ -141,6 +141,10 @@ def show_dry_run(script_path, case_dir, console):
     table.add_row("Script", script_path.name)
     table.add_row("Working Directory", str(case_dir))
 
+    gmsh_override = getattr(args, 'gmsh', None)
+    if gmsh_override:
+        table.add_row("gmsh Override", f"[bold yellow]{gmsh_override}[/bold yellow] (via --export GMSH)")
+
     # Parse SBATCH directives from script
     sbatch_info = parse_sbatch_directives(script_path)
     if sbatch_info:
@@ -151,7 +155,12 @@ def show_dry_run(script_path, case_dir, console):
     console.print()
     console.print("[dim]Command that would be executed:[/dim]")
     console.print(f"[dim]  cd {case_dir}[/dim]")
-    console.print(f"[dim]  sbatch {script_path.name}[/dim]")
+
+    cmd_parts = ['sbatch']
+    if gmsh_override:
+        cmd_parts.append(f'--export=GMSH={gmsh_override}')
+    cmd_parts.append(script_path.name)
+    console.print(f"[dim]  {' '.join(cmd_parts)}[/dim]")
     console.print()
 
 
@@ -191,7 +200,7 @@ def parse_sbatch_directives(script_path):
     return directives
 
 
-def submit_preprocessing_job(script_path, case_dir, console):
+def submit_preprocessing_job(script_path, case_dir, args, console):
     """Submit preprocessing job to SLURM."""
 
     # Check if SLURM is available
@@ -205,6 +214,8 @@ def submit_preprocessing_job(script_path, case_dir, console):
     console.print()
     console.print("[bold cyan]Submitting Preprocessing Job[/bold cyan]")
     console.print()
+
+    gmsh_override = getattr(args, 'gmsh', None)
 
     # Display job info
     table = Table(box=box.SIMPLE, show_header=False)
@@ -220,14 +231,22 @@ def submit_preprocessing_job(script_path, case_dir, console):
         table.add_row("Job Name", sbatch_info['Job Name'])
     if sbatch_info.get('Partition'):
         table.add_row("Partition", sbatch_info['Partition'])
+    if gmsh_override:
+        table.add_row("gmsh Override", f"[bold yellow]{gmsh_override}[/bold yellow] (via --export GMSH)")
 
     console.print(table)
     console.print()
 
     try:
+        # Build sbatch command
+        cmd = ['sbatch']
+        if gmsh_override:
+            cmd.append(f'--export=GMSH={gmsh_override}')
+        cmd.append(script_path.name)
+
         # Submit job using sbatch
         result = subprocess.run(
-            ['sbatch', script_path.name],
+            cmd,
             cwd=case_dir,
             capture_output=True,
             text=True,
@@ -291,9 +310,10 @@ This typically runs mesh generation (gmsh) and mesh conversion (simGmshCnvt).
     run pre [case_directory] [options]
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
-    {Colors.YELLOW}--dry-run{Colors.RESET}  Show what would be submitted without actually submitting
-    {Colors.YELLOW}--show{Colors.RESET}     Display the script content
-    {Colors.YELLOW}-h, --help{Colors.RESET} Show this help message
+    {Colors.YELLOW}--gmsh PATH{Colors.RESET}   Override gmsh executable (sbatch --export=GMSH=PATH, script unchanged)
+    {Colors.YELLOW}--dry-run{Colors.RESET}     Show what would be submitted without actually submitting
+    {Colors.YELLOW}--show{Colors.RESET}        Display the script content
+    {Colors.YELLOW}-h, --help{Colors.RESET}    Show this help message
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
     # Submit preprocessing for specific case
@@ -302,6 +322,9 @@ This typically runs mesh generation (gmsh) and mesh conversion (simGmshCnvt).
     # Submit from context
     use case:Case001
     run pre
+
+    # Override gmsh path at submit time (does not modify preFlex.sh)
+    run pre Case001 --gmsh /usr/local/bin/gmsh
 
     # Preview what will be submitted
     run pre Case001 --dry-run
