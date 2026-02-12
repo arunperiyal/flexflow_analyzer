@@ -88,6 +88,8 @@ class CaseOrganizer:
             'rst_deleted': 0,
             'plt_deleted': 0,
             'output_space_freed': 0,
+            'plt_clean_deleted': 0,
+            'plt_clean_space_freed': 0,
         }
 
         # Files to delete/rename
@@ -207,6 +209,7 @@ class CaseOrganizer:
         do_archive = getattr(self.args, 'archive', False)
         do_organise = getattr(self.args, 'organise', False)
         do_clean_output = getattr(self.args, 'clean_output', False)
+        do_clean_plt = getattr(self.args, 'clean_plt', False)
 
         self.console.print()
         self.console.print(Panel(
@@ -244,10 +247,16 @@ class CaseOrganizer:
             self._analyze_output_directory()
             self.console.print()
 
+        # --- CLEAN PLT ---
+        if do_clean_plt:
+            self.console.print("[bold]Step: Clean PLT files from run directory[/bold]")
+            self._analyze_clean_plt()
+            self.console.print()
+
         # Nothing to do beyond archiving (which runs without confirmation)
         has_deletions = len(self.files_to_delete) > 0
 
-        if do_organise or do_clean_output:
+        if do_organise or do_clean_output or do_clean_plt:
             # Show summary before asking confirmation
             self._show_summary()
 
@@ -264,7 +273,7 @@ class CaseOrganizer:
             self._rename_files(othd_files, oisd_files)
 
         # Final summary
-        self._show_final_summary(do_archive, do_organise, do_clean_output)
+        self._show_final_summary(do_archive, do_organise, do_clean_output, do_clean_plt)
 
     def _analyze_data_files(self, file_type: str) -> List[FileInfo]:
         """
@@ -394,6 +403,71 @@ class CaseOrganizer:
 
                 if self.args.verbose:
                     self.logger.info(f"  Redundant: {file.path.name} ({file.redundant_reason})")
+
+    def _analyze_clean_plt(self):
+        """
+        --clean-plt: Mark PLT files in the run directory for deletion where
+        binary/ has a corresponding file (same name) with a newer mtime.
+        Skips files with no binary copy or where the binary copy is older.
+        """
+        run_dir = self._get_run_dir_path()
+        if not run_dir:
+            self.console.print("  [yellow]⚠[/yellow]  No run directory found in simflow.config")
+            return
+
+        binary_dir = self.case_dir / 'binary'
+        if not binary_dir.exists():
+            self.console.print("  [dim]—[/dim]  binary/ directory not found — no archived PLT files to compare against")
+            return
+
+        problem = self.case.problem_name
+        if not problem:
+            self.console.print("  [yellow]⚠[/yellow]  'problem' not set — cannot determine PLT file names")
+            return
+
+        pattern = re.compile(rf'^{re.escape(problem)}\.(\d+)\.plt$')
+
+        safe_to_delete = []    # run PLT files with a newer binary copy
+        skip_no_binary  = []   # run PLT files with no corresponding binary copy
+        skip_older      = []   # run PLT files where binary copy is same age or older
+
+        for run_plt in sorted(run_dir.glob(f'{problem}.*.plt')):
+            if not pattern.match(run_plt.name):
+                continue
+            binary_plt = binary_dir / run_plt.name
+            if not binary_plt.exists():
+                skip_no_binary.append(run_plt)
+            elif binary_plt.stat().st_mtime <= run_plt.stat().st_mtime:
+                skip_older.append(run_plt)
+            else:
+                safe_to_delete.append(run_plt)
+
+        if not safe_to_delete and not skip_no_binary and not skip_older:
+            self.console.print(f"  [dim]No {problem}.*.plt files found in {run_dir.name}/[/dim]")
+            return
+
+        # Show what will happen
+        from rich.table import Table as _Table
+        tbl = _Table(box=box.SIMPLE, show_header=True, header_style="bold")
+        tbl.add_column("", width=2)
+        tbl.add_column("File", style="cyan")
+        tbl.add_column("Action")
+
+        for f in safe_to_delete:
+            tbl.add_row("[green]✓[/green]", f.name, "will delete  (binary copy is newer)")
+        for f in skip_no_binary:
+            tbl.add_row("[dim]—[/dim]", f.name, "[dim]skip — no binary copy[/dim]")
+        for f in skip_older:
+            tbl.add_row("[yellow]⚠[/yellow]", f.name,
+                        "[yellow]skip — binary copy is same age or older[/yellow]")
+
+        self.console.print(tbl)
+
+        # Add safe files to deletion list
+        for f in safe_to_delete:
+            self.files_to_delete.append(f)
+            self.stats['plt_clean_deleted'] += 1
+            self.stats['plt_clean_space_freed'] += f.stat().st_size
 
     def _analyze_output_directory(self):
         """Analyze output directory and find files to delete."""
@@ -633,6 +707,13 @@ class CaseOrganizer:
                 ""
             )
 
+        if self.stats['plt_clean_deleted'] > 0:
+            table.add_row(
+                "PLT files to clean (run dir)",
+                str(self.stats['plt_clean_deleted']),
+                self._format_size(self.stats['plt_clean_space_freed'])
+            )
+
         if self.stats['output_space_freed'] > 0:
             table.add_row(
                 "Output space to free",
@@ -642,7 +723,8 @@ class CaseOrganizer:
 
         total_space = (self.stats['othd_space_freed'] +
                       self.stats['oisd_space_freed'] +
-                      self.stats['output_space_freed'])
+                      self.stats['output_space_freed'] +
+                      self.stats['plt_clean_space_freed'])
 
         table.add_row(
             "[bold]Total space to free[/bold]",
@@ -659,7 +741,8 @@ class CaseOrganizer:
         total_files = len(self.files_to_delete)
         total_space = (self.stats['othd_space_freed'] +
                       self.stats['oisd_space_freed'] +
-                      self.stats['output_space_freed'])
+                      self.stats['output_space_freed'] +
+                      self.stats['plt_clean_space_freed'])
 
         self.console.print(
             f"[bold yellow]Delete {total_files} files "
@@ -724,7 +807,8 @@ class CaseOrganizer:
             log_handle.close()
             self.console.print(f"\n[dim]Log saved to: {self.log_file}[/dim]")
 
-    def _show_final_summary(self, do_archive: bool, do_organise: bool, do_clean_output: bool):
+    def _show_final_summary(self, do_archive: bool, do_organise: bool, do_clean_output: bool,
+                            do_clean_plt: bool = False):
         """Show final summary after cleanup."""
         self.console.print()
 
@@ -743,6 +827,10 @@ class CaseOrganizer:
             total_out = self.stats['out_deleted'] + self.stats['rst_deleted'] + self.stats['plt_deleted']
             lines.append(f"Output cleaned: {total_out} files removed  "
                          f"({self._format_size(self.stats['output_space_freed'])} freed)")
+        if do_clean_plt:
+            n = self.stats['plt_clean_deleted']
+            lines.append(f"PLT cleaned: {n} file{'s' if n != 1 else ''} removed from run dir  "
+                         f"({self._format_size(self.stats['plt_clean_space_freed'])} freed)")
 
         summary_text = "\n".join(lines) if lines else "Nothing to do"
 

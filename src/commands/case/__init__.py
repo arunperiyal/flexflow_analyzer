@@ -92,6 +92,8 @@ class CaseCommand(BaseCommand):
                                     help='Deduplicate and clean redundant OTHD/OISD files')
         organise_parser.add_argument('--clean-output', action='store_true',
                                     help='Remove intermediate .out/.rst/.plt files from run dir')
+        organise_parser.add_argument('--clean-plt', action='store_true',
+                                    help='Delete PLT files from run dir where binary/ has a newer copy')
         organise_parser.add_argument('--keep-every', type=int,
                                     help='Keep every Nth output (default: 10 * freq)')
         organise_parser.add_argument('--log', action='store_true',

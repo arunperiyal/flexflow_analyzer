@@ -50,8 +50,9 @@ def execute_organise(args):
     do_archive = getattr(args, 'archive', False)
     do_organise = getattr(args, 'organise', False)
     do_clean_output = getattr(args, 'clean_output', False)
+    do_clean_plt = getattr(args, 'clean_plt', False)
 
-    if not do_archive and not do_organise and not do_clean_output:
+    if not do_archive and not do_organise and not do_clean_output and not do_clean_plt:
         print_organise_help()
         return
 

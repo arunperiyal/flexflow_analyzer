@@ -40,6 +40,14 @@ Organize and clean up case directories. Must specify at least one action flag.
           • Deletes ASCII .plt files if binary version exists in binary/
           • Uses outFreq from simflow.config or auto-detects
 
+    {Colors.CYAN}--clean-plt{Colors.RESET}
+        Delete PLT files from the run directory where binary/ has a
+        corresponding file (exact filename match) with a newer mtime:
+          • Safe: only deletes if the binary copy is confirmed newer
+          • Skips files with no binary copy (prints with —)
+          • Skips files where the binary copy is same age or older (prints with ⚠)
+          • Shows a per-file table before asking confirmation
+
 {Colors.BOLD}OPTIONS:{Colors.RESET}
     --keep-every N            Keep every Nth output (default: 10, means freq*10)
     --log                     Create log file of all deletions
@@ -54,7 +62,7 @@ Organize and clean up case directories. Must specify at least one action flag.
 
 {Colors.BOLD}SAFETY:{Colors.RESET}
     • --archive does not delete anything; it only moves files
-    • --organise and --clean-output show summary and ask for confirmation
+    • --organise, --clean-output and --clean-plt show summary and ask for confirmation
     • Use --no-confirm to skip confirmation
     • Fails if any OTHD/OISD file cannot be read (prevents data loss)
 
@@ -68,8 +76,11 @@ Organize and clean up case directories. Must specify at least one action flag.
     # Remove intermediate output files
     flexflow case organise CS4SG1U1 --clean-output
 
-    # Full workflow: archive first, then organise, then clean output
-    flexflow case organise CS4SG1U1 --archive --organise --clean-output
+    # Delete PLT files from run dir where binary/ has a newer copy
+    flexflow case organise CS4SG1U1 --clean-plt
+
+    # Full workflow: archive first, then organise, then clean output and PLT
+    flexflow case organise CS4SG1U1 --archive --organise --clean-output --clean-plt
 
     # Use context
     use case CS4SG1U1

@@ -87,6 +87,7 @@ class FlexFlowCompleter(Completer):
         ('case', 'organise'): {
             **_COMMON_FLAGS,
             '--archive':      'Move .othd/.oisd/.rcv from run dir to archive dirs',
+            '--clean-plt':    'Delete PLT files from run dir where binary/ has a newer copy',
             '--organise':     'Deduplicate and clean redundant OTHD/OISD files',
             '--clean-output': 'Remove intermediate .out/.rst/.plt files',
             '--keep-every':   'Keep every Nth output (default: 10)',
