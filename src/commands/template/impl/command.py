@@ -235,6 +235,39 @@ def generate_script_templates(args, logger):
         # Replace placeholders
         content = content.replace('{CASE_NAME}', case_name)
 
+        # Apply --simflow-home override (env script only)
+        simflow_home = getattr(args, 'simflow_home', None)
+        if script == 'env' and simflow_home:
+            import re
+            content = re.sub(
+                r'^(export SIMFLOW_HOME=).*$',
+                f'\\1"{simflow_home}"',
+                content,
+                flags=re.MULTILINE,
+            )
+
+        # Apply --partition override (main script only)
+        partition_override = getattr(args, 'partition', None)
+        if script == 'main' and partition_override:
+            from src.core.hpc_partition import HpcPartition
+            import re
+            # Replace #SBATCH -p <value>
+            content = re.sub(
+                r'^(#SBATCH\s+-p\s+)\S+',
+                f'\\g<1>{partition_override}',
+                content,
+                flags=re.MULTILINE,
+            )
+            # If partition has a fixed ntasks-per-node, update that line too
+            cfg = HpcPartition.get(partition_override)
+            if cfg and cfg.ntasks_per_node_fixed is not None:
+                content = re.sub(
+                    r'^(#SBATCH\s+--ntasks-per-node=)\S+',
+                    f'\\g<1>{cfg.ntasks_per_node_fixed}',
+                    content,
+                    flags=re.MULTILINE,
+                )
+
         # Write output
         logger.info(f"Creating {script} script: {output_file}")
         with open(output_file, 'w') as f:
@@ -242,6 +275,12 @@ def generate_script_templates(args, logger):
 
         # Make executable
         os.chmod(output_file, 0o755)
+
+        # Annotate description with active overrides
+        if script == 'env' and getattr(args, 'simflow_home', None):
+            description += f' [SIMFLOW_HOME={args.simflow_home}]'
+        if script == 'main' and getattr(args, 'partition', None):
+            description += f' [partition={args.partition}]'
 
         generated.append((output_file.name, description))
 

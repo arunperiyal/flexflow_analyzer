@@ -149,11 +149,19 @@ def show_dry_run(script_path, case_dir, args, console):
     if hasattr(args, 'dependency') and args.dependency:
         table.add_row("Job Dependency", args.dependency)
 
+    # Check for partition override
+    if hasattr(args, 'partition') and args.partition:
+        table.add_row("Partition Override", f"[bold yellow]{args.partition}[/bold yellow] (via sbatch CLI)")
+
     # Parse SBATCH directives from script
     sbatch_info = parse_sbatch_directives(script_path)
     if sbatch_info:
         for key, value in sbatch_info.items():
-            table.add_row(key, value)
+            # Mark partition as overridden if --partition was specified
+            if key == 'Partition' and hasattr(args, 'partition') and args.partition:
+                table.add_row(f'{key} (script)', f'[dim]{value}[/dim]')
+            else:
+                table.add_row(key, value)
 
     console.print(table)
     console.print()
@@ -163,6 +171,8 @@ def show_dry_run(script_path, case_dir, args, console):
     cmd_parts = ["sbatch"]
     if hasattr(args, 'dependency') and args.dependency:
         cmd_parts.append(f"--dependency=afterok:{args.dependency}")
+    if hasattr(args, 'partition') and args.partition:
+        cmd_parts.append(f"--partition={args.partition}")
     cmd_parts.append(script_path.name)
 
     console.print(f"[dim]  {' '.join(cmd_parts)}[/dim]")
@@ -257,8 +267,14 @@ def submit_main_job(script_path, case_dir, args, console):
     sbatch_info = parse_sbatch_directives(script_path)
     if sbatch_info.get('Job Name'):
         table.add_row("Job Name", sbatch_info['Job Name'])
-    if sbatch_info.get('Partition'):
+
+    partition_override = getattr(args, 'partition', None)
+    if partition_override:
+        script_partition = sbatch_info.get('Partition', '—')
+        table.add_row("Partition", f"[bold yellow]{partition_override}[/bold yellow] [dim](script: {script_partition})[/dim]")
+    elif sbatch_info.get('Partition'):
         table.add_row("Partition", sbatch_info['Partition'])
+
     if sbatch_info.get('Tasks'):
         table.add_row("Tasks", sbatch_info['Tasks'])
 
@@ -272,6 +288,10 @@ def submit_main_job(script_path, case_dir, args, console):
         # Add dependency if specified
         if hasattr(args, 'dependency') and args.dependency:
             cmd.append(f'--dependency=afterok:{args.dependency}')
+
+        # Add partition override if specified
+        if partition_override:
+            cmd.append(f'--partition={partition_override}')
 
         cmd.append(script_path.name)
 
@@ -345,11 +365,12 @@ This runs the primary FlexFlow simulation (mpiSimflow).
     run main [case_directory] [options]
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
-    {Colors.YELLOW}--restart TSID{Colors.RESET}      Restart from specific timestep ID
-    {Colors.YELLOW}--dependency JOB_ID{Colors.RESET} Wait for another job to complete first
-    {Colors.YELLOW}--dry-run{Colors.RESET}           Show what would be submitted
-    {Colors.YELLOW}--show{Colors.RESET}              Display the script content
-    {Colors.YELLOW}-h, --help{Colors.RESET}          Show this help message
+    {Colors.YELLOW}--restart TSID{Colors.RESET}        Restart from specific timestep ID
+    {Colors.YELLOW}--dependency JOB_ID{Colors.RESET}   Wait for another job to complete first
+    {Colors.YELLOW}--partition NAME{Colors.RESET}       Override partition at submit time (sbatch CLI, script unchanged)
+    {Colors.YELLOW}--dry-run{Colors.RESET}             Show what would be submitted
+    {Colors.YELLOW}--show{Colors.RESET}                Display the script content
+    {Colors.YELLOW}-h, --help{Colors.RESET}            Show this help message
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
     # Submit main simulation
@@ -364,6 +385,9 @@ This runs the primary FlexFlow simulation (mpiSimflow).
 
     # Chain after preprocessing
     run main Case001 --dependency 12345
+
+    # Override partition at submit time (does not modify mainFlex.sh)
+    run main Case001 --partition shared
 
     # Preview what will be submitted
     run main Case001 --dry-run

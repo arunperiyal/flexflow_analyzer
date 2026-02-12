@@ -63,6 +63,10 @@ class TemplateCommand(BaseCommand):
                                    help='Script type: pre, main, post, env, or all')
         script_parser.add_argument('case_dir', nargs='?', type=str,
                                   help='Case directory to create scripts in (optional)')
+        script_parser.add_argument('--simflow-home', type=str, metavar='PATH',
+                                  help='Set SIMFLOW_HOME path in the generated simflow_env.sh')
+        script_parser.add_argument('--partition', type=str, metavar='NAME',
+                                  help='Override partition in the generated mainFlex.sh')
         script_parser.add_argument('--force', action='store_true',
                                   help='Force overwrite if file exists')
         script_parser.add_argument('-v', '--verbose', action='store_true',

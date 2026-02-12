@@ -158,6 +158,7 @@ class FlexFlowCompleter(Completer):
             '--show':       'Display script contents',
             '--restart':    'Restart from specific timestep',
             '--dependency': 'Job dependency (job ID)',
+            '--partition':  'Override partition (sbatch CLI, does not edit script)',
         },
         ('run', 'post'):     {
             **_COMMON_FLAGS,
@@ -198,7 +199,9 @@ class FlexFlowCompleter(Completer):
         },
         ('template', 'script'): {
             **_COMMON_FLAGS,
-            '--force': 'Overwrite existing files',
+            '--force':        'Overwrite existing files',
+            '--simflow-home': 'Set SIMFLOW_HOME in generated simflow_env.sh',
+            '--partition':    'Override partition in generated mainFlex.sh',
         },
 
         # ── top-level commands with no subcommands ─────────────────────────

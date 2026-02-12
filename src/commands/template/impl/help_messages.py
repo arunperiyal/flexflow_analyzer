@@ -225,9 +225,13 @@ Generate SLURM job script templates for FlexFlow simulations.
     {Colors.CYAN}all{Colors.RESET}      Generate all four files (env + pre + main + post)
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
-    {Colors.YELLOW}--force{Colors.RESET}        Force overwrite if file exists
-    {Colors.YELLOW}--verbose, -v{Colors.RESET}  Enable verbose output
-    {Colors.YELLOW}--help, -h{Colors.RESET}     Show this help message
+    {Colors.YELLOW}--simflow-home PATH{Colors.RESET}   Set SIMFLOW_HOME in the generated simflow_env.sh
+                          (applies when type is 'env' or 'all')
+    {Colors.YELLOW}--partition NAME{Colors.RESET}      Override #SBATCH -p in the generated mainFlex.sh
+                          (applies when type is 'main' or 'all')
+    {Colors.YELLOW}--force{Colors.RESET}               Force overwrite if file exists
+    {Colors.YELLOW}--verbose, -v{Colors.RESET}         Enable verbose output
+    {Colors.YELLOW}--help, -h{Colors.RESET}            Show this help message
 
 {Colors.BOLD}DESCRIPTION:{Colors.RESET}
     Creates SLURM job scripts that source simflow_env.sh for all paths.
@@ -244,8 +248,14 @@ Generate SLURM job script templates for FlexFlow simulations.
     {Colors.BOLD}Generate environment config only:{Colors.RESET}
         flexflow template script env Case001
 
-    {Colors.BOLD}Generate all scripts:{Colors.RESET}
-        flexflow template script all Case001
+    {Colors.BOLD}Generate env with custom SIMFLOW_HOME:{Colors.RESET}
+        flexflow template script env Case001 --simflow-home /opt/simflow/2024.1
+
+    {Colors.BOLD}Generate main script for shared partition:{Colors.RESET}
+        flexflow template script main Case001 --partition shared
+
+    {Colors.BOLD}Generate all scripts (env + partition in one go):{Colors.RESET}
+        flexflow template script all Case001 --simflow-home /opt/simflow/2024.1 --partition medium
 
     {Colors.BOLD}Generate in current directory:{Colors.RESET}
         cd Case001

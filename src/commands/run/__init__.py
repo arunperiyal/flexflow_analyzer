@@ -58,6 +58,7 @@ class RunCommand(BaseCommand):
         main_parser.add_argument('case', nargs='?', help='Case directory')
         main_parser.add_argument('--restart', type=int, metavar='TSID', help='Restart from specific timestep')
         main_parser.add_argument('--dependency', type=str, metavar='JOB_ID', help='Job dependency')
+        main_parser.add_argument('--partition', type=str, metavar='NAME', help='Override partition (passed to sbatch, does not modify script)')
         main_parser.add_argument('--dry-run', action='store_true', help='Show what would be submitted')
         main_parser.add_argument('--show', action='store_true', help='Display script contents')
         main_parser.add_argument('-v', '--verbose', action='store_true', help='Verbose output')
