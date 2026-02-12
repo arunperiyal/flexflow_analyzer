@@ -197,12 +197,8 @@ def _show_task_consistency_info(script_path, case_dir, console):
     script_n = sbatch['n']
     ntpn     = sbatch['ntasks_per_node']
 
-    expected_nsg = None
-    if script_n is not None:
-        if ntpn is not None and ntpn > 0 and script_n % ntpn == 0:
-            expected_nsg = script_n // ntpn
-        else:
-            expected_nsg = script_n
+    # expected nsg == np == #SBATCH -n
+    expected_nsg = script_n
 
     tbl = Table(box=box.SIMPLE, show_header=True, header_style='bold')
     tbl.add_column('Parameter',      style='cyan')
@@ -260,9 +256,9 @@ def check_task_consistency(script_path, case_dir, console) -> bool:
     """
     Compare np/nsg in simflow.config with #SBATCH directives in the job script.
 
-    - Derives expected nsg = script_n / ntasks_per_node (when ntasks-per-node
-      is set, i.e. medium/large partitions).
-    - On mismatch offers: [f]ix config automatically, [s]ubmit anyway, [a]bort.
+    - expected np  = #SBATCH -n
+    - expected nsg = #SBATCH -n  (nsg is domain decomposition, must equal np)
+    - On mismatch offers: fix config automatically, submit anyway, or abort.
     - Returns True to proceed with submission, False to abort.
     """
     from src.core.simflow_config import SimflowConfig
@@ -275,15 +271,8 @@ def check_task_consistency(script_path, case_dir, console) -> bool:
     script_n   = sbatch['n']
     ntpn       = sbatch['ntasks_per_node']  # ntasks-per-node (None if not set)
 
-    # Derive expected nsg from script values:
-    #   - with ntasks-per-node (medium/large): nsg = n / ntpn  (nodes = subgrids)
-    #   - without ntasks-per-node (shared):    nsg = n         (each task = 1 subgrid)
-    expected_nsg = None
-    if script_n is not None:
-        if ntpn is not None and ntpn > 0 and script_n % ntpn == 0:
-            expected_nsg = script_n // ntpn
-        else:
-            expected_nsg = script_n
+    # expected nsg == np == #SBATCH -n  (nsg is domain decomposition, not node count)
+    expected_nsg = script_n
 
     # Nothing to compare
     if cfg_np is None and cfg_nsg is None:
