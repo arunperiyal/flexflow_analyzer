@@ -178,6 +178,149 @@ def show_dry_run(script_path, case_dir, args, console):
     console.print(f"[dim]  {' '.join(cmd_parts)}[/dim]")
     console.print()
 
+    # Show consistency check (informational only in dry-run)
+    _show_task_consistency_info(script_path, case_dir, console)
+
+
+def _show_task_consistency_info(script_path, case_dir, console):
+    """Print a task-count comparison table (no prompt). Used by dry-run."""
+    from src.core.simflow_config import SimflowConfig
+    import re
+
+    cfg = SimflowConfig.find(case_dir)
+    cfg_np  = cfg.np
+    cfg_nsg = cfg.nsg
+
+    if cfg_np is None and cfg_nsg is None:
+        return
+
+    script_n = None
+    try:
+        with open(script_path) as f:
+            for line in f:
+                line = line.strip()
+                if not line.startswith('#SBATCH'):
+                    continue
+                m = re.match(r'#SBATCH\s+-n\s+(\d+)', line)
+                if m:
+                    script_n = int(m.group(1))
+                    break
+    except Exception:
+        return
+
+    tbl = Table(box=box.SIMPLE, show_header=True, header_style='bold')
+    tbl.add_column('Parameter',      style='cyan')
+    tbl.add_column('simflow.config', justify='right', style='yellow')
+    tbl.add_column('mainFlex.sh',    justify='right', style='blue')
+    tbl.add_column('Match?',         justify='center')
+
+    def _match(a, b):
+        if a is None or b is None:
+            return '[dim]—[/dim]'
+        return '[green]✓[/green]' if a == b else '[red]✗[/red]'
+
+    if cfg_np is not None:
+        tbl.add_row('np (total tasks)', str(cfg_np),
+                    str(script_n) if script_n is not None else '[dim]—[/dim]',
+                    _match(cfg_np, script_n))
+    if cfg_nsg is not None:
+        tbl.add_row('nsg (subgrids)', str(cfg_nsg), '[dim]—[/dim]', '[dim]info[/dim]')
+
+    console.print('[bold]Task consistency check:[/bold]')
+    console.print(tbl)
+    console.print()
+
+
+def check_task_consistency(script_path, case_dir, console) -> bool:
+    """
+    Compare np/nsg in simflow.config with #SBATCH -n in the job script.
+
+    Returns True if the caller should proceed, False if the user chose to abort.
+    If values are consistent, prints nothing.  If they differ, shows a table
+    and asks the user to confirm or abort.
+    """
+    from src.core.simflow_config import SimflowConfig
+
+    cfg = SimflowConfig.find(case_dir)
+    cfg_np  = cfg.np   # total MPI tasks from simflow.config
+    cfg_nsg = cfg.nsg  # subgrids from simflow.config
+
+    # Read #SBATCH -n from the script
+    script_n = None
+    script_nsg = None
+    try:
+        with open(script_path) as f:
+            for line in f:
+                line = line.strip()
+                if not line.startswith('#SBATCH'):
+                    continue
+                body = line[7:].strip()
+                # -n <value>  (total tasks)
+                import re
+                m = re.match(r'-n\s+(\d+)', body)
+                if m:
+                    script_n = int(m.group(1))
+                # --ntasks-per-node=<value> or --ntasks-per-node <value>
+                m2 = re.match(r'--ntasks(?:-per-node)?[=\s]+(\d+)', body)
+                if m2 and 'ntasks-per-node' in body:
+                    pass  # we don't need this for the check
+    except Exception:
+        pass
+
+    # Nothing to compare if config has no np/nsg
+    if cfg_np is None and cfg_nsg is None:
+        return True
+
+    # Build mismatch list
+    issues = []
+    if cfg_np is not None and script_n is not None and cfg_np != script_n:
+        issues.append(('np (total tasks)', str(cfg_np), str(script_n)))
+
+    if not issues:
+        return True  # all consistent
+
+    # Show mismatch table
+    from rich.table import Table
+    from rich import box
+
+    console.print()
+    console.print('[bold yellow]⚠  Task count mismatch between simflow.config and job script[/bold yellow]')
+    console.print()
+
+    tbl = Table(box=box.SIMPLE, show_header=True, header_style='bold')
+    tbl.add_column('Parameter',     style='cyan')
+    tbl.add_column('simflow.config', justify='right', style='yellow')
+    tbl.add_column('mainFlex.sh',    justify='right', style='blue')
+    tbl.add_column('Match?',        justify='center')
+
+    for label, cfg_val, script_val in issues:
+        match_icon = '[red]✗[/red]'
+        tbl.add_row(label, cfg_val, script_val, match_icon)
+
+    # Also show nsg as info (no script counterpart to compare, just informational)
+    if cfg_nsg is not None:
+        tbl.add_row('nsg (subgrids)', str(cfg_nsg), '[dim]—[/dim]', '[dim]info[/dim]')
+
+    console.print(tbl)
+    console.print()
+    console.print('[dim]Edit simflow.config to match the script, or edit mainFlex.sh to match the config.[/dim]')
+    console.print()
+    console.print('Submit anyway? [y/N] ', end='')
+
+    try:
+        answer = input().strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        console.print()
+        console.print('[yellow]Aborted[/yellow]')
+        return False
+
+    if answer != 'y':
+        console.print('[yellow]Aborted — fix the mismatch and re-run[/yellow]')
+        console.print()
+        return False
+
+    return True
+
 
 def parse_sbatch_directives(script_path):
     """Parse SBATCH directives from script."""
@@ -280,6 +423,10 @@ def submit_main_job(script_path, case_dir, args, console):
 
     console.print(table)
     console.print()
+
+    # Check np/nsg consistency; abort if user declines
+    if not check_task_consistency(script_path, case_dir, console):
+        return
 
     try:
         # Build sbatch command
