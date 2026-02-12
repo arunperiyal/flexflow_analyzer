@@ -283,23 +283,8 @@ def get_all_time_steps(case: FlexFlowCase, case_path: Path) -> Set[int]:
 
 def get_max_timesteps_from_def(case_path: Path, problem: str) -> Optional[int]:
     """Get maxTimeSteps from .def file."""
-    import re
-
-    def_file = case_path / f'{problem}.def'
-    if not def_file.exists():
-        return None
-
-    try:
-        with open(def_file, 'r') as f:
-            content = f.read()
-            # Look for maxTimeSteps = value
-            match = re.search(r'maxTimeSteps\s*=\s*(\d+)', content)
-            if match:
-                return int(match.group(1))
-    except Exception:
-        pass
-
-    return None
+    from src.core.def_config import DefConfig
+    return DefConfig.find(case_path, problem).max_time_steps
 
 
 def get_timesteps_from_data_files(case_path: Path) -> Set[int]:

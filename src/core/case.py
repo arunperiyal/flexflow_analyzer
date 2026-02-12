@@ -10,8 +10,8 @@ import glob
 
 from .readers.othd_reader import OTHDReader
 from .readers.oisd_reader import OISDReader
-from .parsers.def_parser import parse_def_file
 from .simflow_config import SimflowConfig
+from .def_config import DefConfig
 from tqdm import tqdm
 
 
@@ -85,7 +85,7 @@ class FlexFlowCase:
         self.problem_name = cfg.problem
 
         # Parse .def file using problem name
-        self.def_config = parse_def_file(self.case_directory, self.problem_name)
+        self.def_config = DefConfig.find(self.case_directory, self.problem_name)
     
     def find_othd_files(self, pattern='*.othd'):
         """
@@ -157,11 +157,11 @@ class FlexFlowCase:
         reader = OTHDReader(othd_files, tsId_filter=tsId_filter)
         
         # Recalculate times if requested and initialTimeIncrement is available
-        if use_def_time and 'initialTimeIncrement' in self.def_config:
-            dt = self.def_config['initialTimeIncrement']
+        dt = self.def_config.initial_time_increment
+        if use_def_time and dt is not None:
             reader.recalculate_times(dt)
             print(f"Using initialTimeIncrement from .def: {dt}")
-        
+
         self._othd_reader = reader
         
         print(f"Loaded: {reader.num_nodes} nodes, {len(reader.times)} timesteps")
@@ -195,11 +195,11 @@ class FlexFlowCase:
         reader = OISDReader(oisd_files, tsId_filter=tsId_filter)
         
         # Recalculate times if requested and initialTimeIncrement is available
-        if use_def_time and 'initialTimeIncrement' in self.def_config:
-            dt = self.def_config['initialTimeIncrement']
+        dt = self.def_config.initial_time_increment
+        if use_def_time and dt is not None:
             reader.recalculate_times(dt)
             print(f"Using initialTimeIncrement from .def: {dt}")
-        
+
         self._oisd_reader = reader
         
         print(f"Loaded: {len(reader.times)} timesteps")
@@ -256,11 +256,11 @@ class FlexFlowCase:
     
     def get_time_increment(self):
         """Get time increment from .def file."""
-        return self.def_config.get('initialTimeIncrement', None)
-    
+        return self.def_config.initial_time_increment
+
     def get_max_timesteps(self):
         """Get maximum timesteps from .def file."""
-        return self.def_config.get('maxTimeSteps', None)
+        return self.def_config.max_time_steps
     
     def __repr__(self):
         return f"FlexFlowCase('{self.case_directory}')"

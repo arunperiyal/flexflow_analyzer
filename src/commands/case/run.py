@@ -179,17 +179,10 @@ class CaseRunCommand:
             return False
         
         # Parse .def file for maxTimeSteps
-        def_files = list(self.case_dir.glob('*.def'))
-        try:
-            with open(def_files[0]) as f:
-                content = f.read()
-                match = re.search(r'maxTimeSteps\s*=\s*(\d+)', content)
-                if match:
-                    self.max_timesteps = int(match.group(1))
-        except Exception as e:
-            print(f"Error parsing .def file: {e}")
-            return False
-        
+        from src.core.def_config import DefConfig
+        def_cfg = DefConfig.find(self.case_dir, self.problem_name)
+        self.max_timesteps = def_cfg.max_time_steps
+
         if not self.max_timesteps:
             print("Error: Could not find maxTimeSteps in .def file")
             return False

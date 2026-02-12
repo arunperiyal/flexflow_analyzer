@@ -42,61 +42,6 @@ def detect_geo_placeholders(geo_file_path):
     return placeholders
 
 
-def detect_def_variables(def_file_path):
-    """
-    Detect all variables defined in define{} blocks in a .def file
-
-    Parameters:
-    -----------
-    def_file_path : Path
-        Path to .def file
-
-    Returns:
-    --------
-    dict
-        Dictionary of variable_name: current_value pairs
-    """
-    variables = {}
-
-    if not def_file_path.exists():
-        return variables
-
-    in_define_block = False
-    current_variable = None
-
-    with open(def_file_path, 'r') as f:
-        for line in f:
-            stripped = line.strip()
-
-            # Detect define block start
-            if stripped.startswith('define{'):
-                in_define_block = True
-                continue
-
-            # Detect define block end
-            if in_define_block and stripped == '}':
-                in_define_block = False
-                current_variable = None
-                continue
-
-            # Inside define block, look for variable definitions
-            if in_define_block:
-                if stripped.startswith('variable'):
-                    # Extract variable name
-                    parts = stripped.split('=')
-                    if len(parts) == 2:
-                        current_variable = parts[1].strip()
-                elif stripped.startswith('value') and current_variable:
-                    # Extract value
-                    parts = stripped.split('=')
-                    if len(parts) == 2:
-                        value = parts[1].strip()
-                        variables[current_variable] = value
-                        current_variable = None
-
-    return variables
-
-
 def parse_simflow_config(config_path):
     """Return the problem name from a simflow.config file."""
     from src.core.simflow_config import SimflowConfig
@@ -387,8 +332,8 @@ def list_reference_case_variables(ref_case_path, logger):
     geo_placeholders = detect_geo_placeholders(geo_file) if geo_file.exists() else set()
 
     # Detect .def variables
-    def_file = ref_case_path / f"{problem_name}.def"
-    def_variables = detect_def_variables(def_file) if def_file.exists() else {}
+    from src.core.def_config import DefConfig
+    def_variables = DefConfig.find(ref_case_path, problem_name).variables
 
     return geo_placeholders, def_variables, problem_name
 
