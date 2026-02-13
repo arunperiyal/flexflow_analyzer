@@ -109,7 +109,7 @@ def execute_template(args):
         output_file = args.output if hasattr(args, 'output') and args.output else default_output
 
         # Check if output exists
-        if os.path.exists(output_file) and not args.force:
+        if os.path.exists(output_file) and not getattr(args, 'force', False):
             logger.error(f"File already exists: {output_file}")
             print(f"Use --force to overwrite", file=sys.stderr)
             sys.exit(1)
@@ -223,7 +223,7 @@ def generate_script_templates(args, logger):
             continue
 
         # Check if output exists
-        if output_file.exists() and not args.force:
+        if output_file.exists() and not getattr(args, 'force', False):
             logger.error(f"File already exists: {output_file}")
             print(f"Use --force to overwrite", file=sys.stderr)
             continue

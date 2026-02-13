@@ -253,6 +253,7 @@ class FlexFlowCompleter(Completer):
         ('find',    'Find case directories'),
         ('tree',    'Show directory tree'),
         ('rm',      'Remove files or directories'),
+        ('cp',      'Copy files or directories'),
         ('use',     'Set context (case/problem/rundir)'),
         ('unuse',   'Clear context'),
     ]
@@ -857,6 +858,20 @@ class InteractiveShell:
                 self.console.print("  rm file1.plt file2.plt file3.plt")
             return True
 
+        # Copy files or directories
+        if cmd == 'cp':
+            if len(parts) > 2:
+                self.copy_files(parts[1:])
+            else:
+                self.console.print("[yellow]Usage:[/yellow] cp [-r] <source> [sources...] <dest>")
+                self.console.print("[dim]Options:[/dim]")
+                self.console.print("  -r, --recursive    Copy directories recursively")
+                self.console.print("[dim]Examples:[/dim]")
+                self.console.print("  cp simflow_env.sh Case002/")
+                self.console.print("  cp -r Case001/ Case001_backup/")
+                self.console.print("  cp file1.sh file2.sh scripts/")
+            return True
+
         return False
 
     def show_help(self) -> None:
@@ -921,6 +936,7 @@ class InteractiveShell:
             ("find [pattern]", "Find case directories"),
             ("tree [depth]", "Show directory tree (default depth: 2)"),
             ("rm [-r] [-f] <path>", "Remove files or directories"),
+            ("cp [-r] <src> [src...] <dest>", "Copy files or directories"),
         ]
 
         for cmd, desc in browse_commands:
@@ -1850,6 +1866,91 @@ class InteractiveShell:
 
         for r in removed:
             self.console.print(f"  [green]removed[/green]  {r}")
+        for e in errors:
+            self.console.print(f"  [red]error[/red]    {e}")
+
+    def copy_files(self, args: List[str]) -> None:
+        """
+        Copy files or directories (like Unix cp command).
+
+        Args:
+            args: List containing optional flags, one or more sources, and a destination.
+                  Flags: -r/--recursive for directories.
+        """
+        import shutil
+
+        recursive = False
+        raw_args: List[str] = []
+
+        for arg in args:
+            if arg in ('-r', '--recursive'):
+                recursive = True
+            else:
+                raw_args.append(arg)
+
+        if len(raw_args) < 2:
+            self.console.print("[yellow]Error: specify at least one source and a destination[/yellow]")
+            return
+
+        sources = raw_args[:-1]
+        dest_raw = raw_args[-1]
+
+        dest = Path(dest_raw)
+        if not dest.is_absolute():
+            dest = self._current_dir / dest
+
+        # Resolve sources
+        src_paths = []
+        for s in sources:
+            p = Path(s)
+            if not p.is_absolute():
+                p = self._current_dir / p
+            if not p.exists():
+                self.console.print(f"  [red]error[/red]    not found: {s}")
+                return
+            src_paths.append((s, p))
+
+        # Multiple sources require dest to be (or become) a directory
+        if len(src_paths) > 1 and dest.exists() and not dest.is_dir():
+            self.console.print(f"  [red]error[/red]    destination must be a directory when copying multiple sources")
+            return
+
+        copied: List[str] = []
+        errors: List[str] = []
+
+        for label, src in src_paths:
+            if src.is_dir():
+                if not recursive:
+                    errors.append(f"is a directory (use -r to copy): {label}")
+                    continue
+                # Destination handling: if dest exists as dir, copy inside it
+                if dest.is_dir():
+                    target = dest / src.name
+                else:
+                    target = dest
+                try:
+                    shutil.copytree(src, target)
+                    copied.append(f"{label}  →  {target}")
+                except Exception as e:
+                    errors.append(f"{label}: {e}")
+            else:
+                # File copy
+                if dest.is_dir():
+                    target = dest / src.name
+                else:
+                    if len(src_paths) > 1:
+                        errors.append(f"destination is not a directory: {dest_raw}")
+                        break
+                    target = dest
+                try:
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(src, target)
+                    copied.append(f"{label}  →  {target}")
+                except Exception as e:
+                    errors.append(f"{label}: {e}")
+
+        for c in copied:
+            self.console.print(f"  [green]copied[/green]   {c}")
         for e in errors:
             self.console.print(f"  [red]error[/red]    {e}")
 
