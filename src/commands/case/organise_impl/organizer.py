@@ -754,10 +754,14 @@ class CaseOrganizer:
         return response in ['y', 'yes']
 
     def _perform_deletions(self):
-        """Perform actual file deletions."""
-        if not self.files_to_delete:
+        """Perform actual file deletions and renames."""
+        if not self.files_to_delete and not self.files_to_rename:
             self.console.print("[green]No files to delete[/green]")
             return
+
+        if not self.files_to_delete:
+            # Nothing to delete, fall through to renames below
+            pass
 
         self.logger.info(f"Deleting {len(self.files_to_delete)} files...")
 
