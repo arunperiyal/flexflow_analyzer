@@ -243,7 +243,6 @@ class FlexFlowCompleter(Completer):
         ('history', 'Show command history'),
         ('pwd',     'Show current directory and contexts'),
         ('ls',      'List files'),
-        ('la',      'List all files (including hidden)'),
         ('alias',   'Define or list command aliases'),
         ('unalias', 'Remove a command alias'),
         ('cd',      'Change directory'),
@@ -335,7 +334,7 @@ class FlexFlowCompleter(Completer):
             return
 
         # ── file-browsing commands ───────────────────────────────────────────
-        if cmd_name in ('cd', 'cat', 'ls', 'la', 'grep', 'head', 'tail'):
+        if cmd_name in ('cd', 'cat', 'ls', 'grep', 'head', 'tail'):
             yield from self._complete_path(words, ends_with_space)
             return
 
@@ -802,45 +801,80 @@ class InteractiveShell:
 
         # Change directory
         if cmd == 'cd':
-            self.change_directory(parts[1] if len(parts) > 1 else str(Path.home()))
+            if '--help' in parts or '-h' in parts:
+                self.console.print("[bold]Usage:[/bold] cd [path]")
+                self.console.print("[dim]Change the current working directory.[/dim]")
+                self.console.print("[dim]Examples:[/dim]")
+                self.console.print("  cd Case001/")
+                self.console.print("  cd ..        # parent directory")
+                self.console.print("  cd ~         # home directory")
+            else:
+                self.change_directory(parts[1] if len(parts) > 1 else str(Path.home()))
             return True
 
         # List files and directories
-        if cmd in ['ls', 'la']:
-            # la is a built-in alias for ls -a
-            if cmd == 'la':
-                args = ['-a'] + (parts[1:] if len(parts) > 1 else ['.'])
+        if cmd == 'ls':
+            flags = parts[1:]
+            if '--help' in flags or '-h' in flags:
+                self.console.print("[bold]Usage:[/bold] ls [options] [path]")
+                self.console.print("[dim]Options:[/dim]")
+                self.console.print("  -l          Long format (size, date, name)")
+                self.console.print("  -a          Show hidden files")
+                self.console.print("  -v          Natural sort (numbers ordered numerically)")
+                self.console.print("  -h, --help  Show this help")
+                self.console.print("[dim]Examples:[/dim]")
+                self.console.print("  ls")
+                self.console.print("  ls -l")
+                self.console.print("  ls -lv RUN_1/")
+                self.console.print("  ls *.plt")
             else:
-                args = parts[1:] if len(parts) > 1 else ['.']
-            self.list_directory(args)
+                self.list_directory(flags if flags else ['.'])
             return True
 
         # Find cases
         if cmd == 'find':
-            pattern = parts[1] if len(parts) > 1 else '*'
-            self.find_cases(pattern)
+            if '--help' in parts or '-h' in parts:
+                self.console.print("[bold]Usage:[/bold] find [pattern]")
+                self.console.print("[dim]Finds case directories matching the given pattern.[/dim]")
+                self.console.print("[dim]Examples:[/dim]")
+                self.console.print("  find           # list all cases")
+                self.console.print("  find CS4*      # cases starting with CS4")
+            else:
+                pattern = parts[1] if len(parts) > 1 else '*'
+                self.find_cases(pattern)
             return True
 
         # Show tree structure
         if cmd == 'tree':
-            depth = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 2
-            self.show_tree(depth)
+            if '--help' in parts or '-h' in parts:
+                self.console.print("[bold]Usage:[/bold] tree [depth]")
+                self.console.print("[dim]Show directory tree. depth defaults to 2.[/dim]")
+                self.console.print("[dim]Examples:[/dim]")
+                self.console.print("  tree")
+                self.console.print("  tree 3")
+            else:
+                depth = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 2
+                self.show_tree(depth)
             return True
 
         # View file contents
         if cmd == 'cat':
-            if len(parts) > 1:
+            if '--help' in parts or '-h' in parts:
+                self.console.print("[bold]Usage:[/bold] cat <file> [files...]")
+                self.console.print("[dim]Display file contents with syntax highlighting.[/dim]")
+                self.console.print("[dim]Examples:[/dim]")
+                self.console.print("  cat simflow.config")
+                self.console.print("  cat mainFlex.sh postFlex.sh")
+            elif len(parts) > 1:
                 self.cat_file(parts[1:])
             else:
-                self.console.print("[yellow]Usage:[/yellow] cat <file> [files...]")
+                self.console.print("[yellow]Usage:[/yellow] cat <file> [files...]  |  cat --help")
             return True
 
         # Search file contents
         if cmd == 'grep':
-            if len(parts) > 1:
-                self.grep_files(parts[1:])
-            else:
-                self.console.print("[yellow]Usage:[/yellow] grep <pattern> [files...] [options]")
+            if '--help' in parts or '-h' in parts:
+                self.console.print("[bold]Usage:[/bold] grep [options] <pattern> [files...]")
                 self.console.print("[dim]Options:[/dim]")
                 self.console.print("  -i, --ignore-case    Case-insensitive search")
                 self.console.print("  -n, --line-number    Show line numbers")
@@ -850,40 +884,46 @@ class InteractiveShell:
                 self.console.print("  grep 'error' log.txt")
                 self.console.print("  grep -i 'warning' *.log")
                 self.console.print("  grep -rn 'TODO' src/")
+            elif len(parts) > 1:
+                self.grep_files(parts[1:])
+            else:
+                self.console.print("[yellow]Usage:[/yellow] grep [options] <pattern> [files...]  |  grep --help")
             return True
 
         # Show first N lines of file
         if cmd == 'head':
-            if len(parts) > 1:
-                self.head_file(parts[1:])
-            else:
-                self.console.print("[yellow]Usage:[/yellow] head [options] <file>")
+            if '--help' in parts or '-h' in parts:
+                self.console.print("[bold]Usage:[/bold] head [options] <file>")
                 self.console.print("[dim]Options:[/dim]")
                 self.console.print("  -n <num>    Number of lines to show (default: 10)")
                 self.console.print("[dim]Examples:[/dim]")
                 self.console.print("  head file.txt")
                 self.console.print("  head -n 20 file.log")
+            elif len(parts) > 1:
+                self.head_file(parts[1:])
+            else:
+                self.console.print("[yellow]Usage:[/yellow] head [options] <file>  |  head --help")
             return True
 
         # Show last N lines of file
         if cmd == 'tail':
-            if len(parts) > 1:
-                self.tail_file(parts[1:])
-            else:
-                self.console.print("[yellow]Usage:[/yellow] tail [options] <file>")
+            if '--help' in parts or '-h' in parts:
+                self.console.print("[bold]Usage:[/bold] tail [options] <file>")
                 self.console.print("[dim]Options:[/dim]")
                 self.console.print("  -n <num>    Number of lines to show (default: 10)")
                 self.console.print("[dim]Examples:[/dim]")
                 self.console.print("  tail file.txt")
                 self.console.print("  tail -n 50 file.log")
+            elif len(parts) > 1:
+                self.tail_file(parts[1:])
+            else:
+                self.console.print("[yellow]Usage:[/yellow] tail [options] <file>  |  tail --help")
             return True
 
         # Remove files or directories
         if cmd == 'rm':
-            if len(parts) > 1:
-                self.remove_files(parts[1:])
-            else:
-                self.console.print("[yellow]Usage:[/yellow] rm [-r] [-f] <path> [paths...]")
+            if '--help' in parts or '-h' in parts:
+                self.console.print("[bold]Usage:[/bold] rm [options] <path> [paths...]")
                 self.console.print("[dim]Options:[/dim]")
                 self.console.print("  -r, --recursive    Remove directories recursively")
                 self.console.print("  -f, --force        Skip confirmation prompts")
@@ -892,20 +932,26 @@ class InteractiveShell:
                 self.console.print("  rm -r SIMFLOW_DATA/")
                 self.console.print("  rm -rf tmp_dir/")
                 self.console.print("  rm file1.plt file2.plt file3.plt")
+            elif len(parts) > 1:
+                self.remove_files(parts[1:])
+            else:
+                self.console.print("[yellow]Usage:[/yellow] rm [options] <path> [paths...]  |  rm --help")
             return True
 
         # Copy files or directories
         if cmd == 'cp':
-            if len(parts) > 2:
-                self.copy_files(parts[1:])
-            else:
-                self.console.print("[yellow]Usage:[/yellow] cp [-r] <source> [sources...] <dest>")
+            if '--help' in parts or '-h' in parts:
+                self.console.print("[bold]Usage:[/bold] cp [options] <source> [sources...] <dest>")
                 self.console.print("[dim]Options:[/dim]")
                 self.console.print("  -r, --recursive    Copy directories recursively")
                 self.console.print("[dim]Examples:[/dim]")
                 self.console.print("  cp simflow_env.sh Case002/")
                 self.console.print("  cp -r Case001/ Case001_backup/")
                 self.console.print("  cp file1.sh file2.sh scripts/")
+            elif len(parts) > 2:
+                self.copy_files(parts[1:])
+            else:
+                self.console.print("[yellow]Usage:[/yellow] cp [options] <source> [sources...] <dest>  |  cp --help")
             return True
 
         return False
@@ -959,24 +1005,22 @@ class InteractiveShell:
         browse_table.add_column("Description", style="white")
 
         browse_commands = [
-            ("ls [path]", "List files and directories"),
-            ("ls -l", "List in long format with details"),
-            ("ls -a", "Show hidden files"),
-            ("ls -v", "Natural sort (numbers within names ordered numerically)"),
-            ("alias", "List all defined aliases"),
-            ("alias sq='run sq'", "Define alias: sq expands to 'run sq'"),
-            ("unalias sq", "Remove alias 'sq'"),
-            ("cd <path>", "Change directory"),
-            ("cd ~", "Go to home directory"),
-            ("cd ..", "Go to parent directory"),
-            ("cat <file>", "View file contents"),
-            ("head [-n num] <file>", "Show first lines of file (default: 10)"),
-            ("tail [-n num] <file>", "Show last lines of file (default: 10)"),
-            ("grep <pattern> [files]", "Search file contents"),
-            ("find [pattern]", "Find case directories"),
-            ("tree [depth]", "Show directory tree (default depth: 2)"),
-            ("rm [-r] [-f] <path>", "Remove files or directories"),
-            ("cp [-r] <src> [src...] <dest>", "Copy files or directories"),
+            ("ls [path]",              "List files and directories  (ls --help for options)"),
+            ("ls -l",                  "Long format with size and date"),
+            ("ls -a",                  "Show hidden files"),
+            ("ls -v",                  "Natural sort (numbers ordered numerically)"),
+            ("cd <path>",              "Change directory  (cd --help for examples)"),
+            ("cat <file>",             "View file contents  (cat --help)"),
+            ("head [-n N] <file>",     "Show first N lines (default 10)  (head --help)"),
+            ("tail [-n N] <file>",     "Show last N lines (default 10)  (tail --help)"),
+            ("grep <pattern> [files]", "Search file contents  (grep --help for options)"),
+            ("find [pattern]",         "Find case directories  (find --help)"),
+            ("tree [depth]",           "Show directory tree  (tree --help)"),
+            ("rm [-r] [-f] <path>",    "Remove files or directories  (rm --help)"),
+            ("cp [-r] <src> <dest>",   "Copy files or directories  (cp --help)"),
+            ("alias",                  "List all defined aliases"),
+            ("alias sq='run sq'",      "Define alias: sq expands to 'run sq'"),
+            ("unalias sq",             "Remove alias 'sq'"),
         ]
 
         for cmd, desc in browse_commands:
