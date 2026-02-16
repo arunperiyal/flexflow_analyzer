@@ -548,6 +548,21 @@ class InteractiveShell:
         with open(path, 'w') as f:
             json.dump(self._aliases, f, indent=2)
 
+    def _expand_alias_str(self, command_line: str) -> str:
+        """
+        If the first token of command_line is an alias, return the expanded
+        command line string.  Used at the top of the run loop so that aliases
+        to shell built-ins (e.g. alias lv='ls -v -l') are routed correctly.
+        """
+        stripped = command_line.strip()
+        if not stripped or not self._aliases:
+            return command_line
+        first, _, rest = stripped.partition(' ')
+        if first in self._aliases:
+            expansion = self._aliases[first]
+            return (expansion + ' ' + rest).strip() if rest else expansion
+        return command_line
+
     def _create_session(self) -> PromptSession:
         """
         Create prompt_toolkit session with history and completion.
@@ -2347,15 +2362,6 @@ class InteractiveShell:
             if not args:
                 return
 
-            # Expand alias: replace the first token with its expansion
-            first = args[0]
-            if first in self._aliases:
-                try:
-                    expansion = shlex.split(self._aliases[first])
-                except ValueError:
-                    expansion = self._aliases[first].split()
-                args = expansion + args[1:]
-
             # Inject current contexts if set and command needs them
             args = self._inject_case_context(args)
             args = self._inject_data_context(args)
@@ -2528,6 +2534,9 @@ class InteractiveShell:
                 # Skip empty input
                 if not user_input:
                     continue
+
+                # Expand alias before routing (so aliases to shell built-ins work)
+                user_input = self._expand_alias_str(user_input)
 
                 # Handle shell commands
                 if self.handle_shell_command(user_input):
