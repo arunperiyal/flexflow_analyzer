@@ -508,17 +508,15 @@ class CaseOrganizer:
 
     def _analyze_single_output_dir(self, output_dir: Path, problem: str, freq: int, keep_interval: int):
         """Analyze a single output directory."""
-        # Find out, rst, and plt files
+        # Find out and rst files (plt files are handled by --clean-plt, not --clean-output)
         out_pattern = f'{problem}.*_*.out'
         rst_pattern = f'{problem}.*_*.rst'
-        plt_pattern = f'{problem}.*.plt'
 
         out_files = list(output_dir.glob(out_pattern))
         rst_files = list(output_dir.glob(rst_pattern))
-        plt_files = list(output_dir.glob(plt_pattern))
 
-        self.logger.info(f"Found {len(out_files)} .out files, {len(rst_files)} .rst files, "
-                        f"and {len(plt_files)} .plt files in {output_dir.name}")
+        self.logger.info(f"Found {len(out_files)} .out files, {len(rst_files)} .rst files "
+                        f"in {output_dir.name}")
 
         # Extract step numbers and check retention for .out and .rst files
         for file in out_files + rst_files:
@@ -541,8 +539,7 @@ class CaseOrganizer:
                 if self.args.verbose:
                     self.logger.info(f"  Delete: {file.name} (step {step} not multiple of {keep_interval})")
 
-        # Check PLT files against binary directory
-        self._analyze_plt_files(plt_files, problem)
+        # PLT files are handled exclusively by --clean-plt, not --clean-output
 
     def _analyze_plt_files(self, plt_files: List[Path], problem: str):
         """
