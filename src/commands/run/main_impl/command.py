@@ -414,9 +414,33 @@ def parse_sbatch_directives(script_path):
 
 
 def handle_restart(case_dir, restart_tsid, console):
-    """Handle restart from specific timestep - to be implemented once restart mechanism is confirmed."""
-    console.print(f"[yellow]Note: Restart from TSID {restart_tsid} - passing to simulation script[/yellow]")
-    console.print()
+    """
+    Update simflow.config with restartTsId and restartFlag = 1.
+
+    Uncomments #restartTsId / #restartFlag if they are commented out,
+    or appends them if absent entirely.
+    """
+    from src.core.simflow_config import SimflowConfig
+
+    try:
+        cfg = SimflowConfig.find(case_dir)
+    except FileNotFoundError as e:
+        console.print(f"[red]Error: {e}[/red]")
+        return False
+
+    updates = {
+        'restartTsId': restart_tsid,
+        'restartFlag': 1,
+    }
+
+    try:
+        cfg.update_values(updates)
+        console.print(f"[green]✓ simflow.config updated:[/green] restartTsId = {restart_tsid}, restartFlag = 1")
+        console.print()
+    except Exception as e:
+        console.print(f"[red]Error updating simflow.config: {e}[/red]")
+        return False
+
     return True
 
 
@@ -437,8 +461,7 @@ def submit_main_job(script_path, case_dir, args, console):
         console.print(f"[bold cyan]Preparing restart from TSID {args.restart}[/bold cyan]")
         console.print()
         if not handle_restart(case_dir, args.restart, console):
-            console.print("[yellow]Continue with submission anyway? (Ctrl+C to cancel)[/yellow]")
-            console.print()
+            return
 
     console.print()
     console.print("[bold cyan]Submitting Main Simulation Job[/bold cyan]")

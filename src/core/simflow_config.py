@@ -234,6 +234,18 @@ class SimflowConfig:
                     # Keep in-memory data in sync
                     self._data[key] = str(new_val)
                     continue
+            # Check for commented-out key=value lines (e.g. #restartTsId = 2100)
+            # If the key is in updates, uncomment the line and set the new value
+            elif '=' in stripped:
+                cm = re.match(r'^(\s*)#\s*(\w+)\s*=', stripped)
+                if cm:
+                    key = cm.group(2)
+                    if key in remaining:
+                        new_val = remaining.pop(key)
+                        indent = cm.group(1)
+                        new_lines.append(f'{indent}{key} = {new_val}\n')
+                        self._data[key] = str(new_val)
+                        continue
             new_lines.append(line if line.endswith('\n') else line + '\n')
 
         # Append any keys that didn't exist yet
