@@ -81,14 +81,14 @@ fi
 # Parse command-line arguments (override config values)
 # -----------------------------------------------------------------------------
 
-# FREQ: Use argument if provided, otherwise use config value
-FREQ=${1:-$CONFIG_FREQ}
+# FREQ: env var (from sbatch --export) > positional arg > config value
+FREQ=${FREQ:-${1:-$CONFIG_FREQ}}
 
-# START_TIME: Use argument if provided, otherwise default to 0
-START_TIME=${2:-0}
+# START_TIME: env var > positional arg > 0
+START_TIME=${START_TIME:-${2:-0}}
 
-# END_TIME: Use argument if provided, otherwise default to maxTimeSteps from .def
-END_TIME=${3:-$MAX_STEPS}
+# END_TIME: env var > positional arg > maxTimeSteps from .def
+END_TIME=${END_TIME:-${3:-$MAX_STEPS}}
 
 # -----------------------------------------------------------------------------
 # Display job configuration
@@ -100,7 +100,7 @@ echo "=========================================="
 echo "Problem:      $PROBLEM"
 echo "Run Dir:      $RUN_DIR"
 echo "Frequency:    $FREQ"
-echo "Start Time:   $START_TIME"
+echo "Start Time:   $START_TIME (0 = beginning)"
 echo "End Time:     $END_TIME"
 echo "Processes:    $SLURM_NTASKS"
 echo "CPUs/Task:    $SLURM_CPUS_PER_TASK"
@@ -129,9 +129,16 @@ export OMP_NUM_THREADS=${OMP_NUM_THREADS:-$SLURM_CPUS_PER_TASK}
 # -----------------------------------------------------------------------------
 
 echo "Step 1: Running simPlt to generate ASCII PLT files..."
-echo "Command: $SIMPLT -n $SLURM_NTASKS -pb $PROBLEM -outFreq $FREQ -last $END_TIME"
 
-$SIMPLT -n $SLURM_NTASKS -pb $PROBLEM -outFreq $FREQ -last $END_TIME
+# Add -first only when processing from a non-zero start (e.g. after restart)
+FIRST_ARG=""
+if [ "${START_TIME}" -gt 0 ] 2>/dev/null; then
+    FIRST_ARG="-first ${START_TIME}"
+fi
+
+echo "Command: $SIMPLT -n $SLURM_NTASKS -pb $PROBLEM -outFreq $FREQ ${FIRST_ARG} -last $END_TIME"
+
+$SIMPLT -n $SLURM_NTASKS -pb $PROBLEM -outFreq $FREQ ${FIRST_ARG} -last $END_TIME
 SIMPLT_EXIT=$?
 
 if [ $SIMPLT_EXIT -ne 0 ]; then

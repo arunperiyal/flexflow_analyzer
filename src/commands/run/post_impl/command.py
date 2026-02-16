@@ -151,9 +151,16 @@ def show_dry_run(script_path, case_dir, args, console):
     table.add_row("Script", script_path.name)
     table.add_row("Working Directory", str(case_dir))
 
-    # Check for upto option
-    if hasattr(args, 'upto') and args.upto:
-        table.add_row("Process up to TSID", str(args.upto))
+    start_tsid = getattr(args, 'start', None)
+    upto_tsid  = getattr(args, 'upto',  None)
+    freq_arg   = getattr(args, 'freq',  None)
+
+    if start_tsid:
+        table.add_row("Process from TSID", str(start_tsid))
+    if upto_tsid:
+        table.add_row("Process up to TSID", str(upto_tsid))
+    if freq_arg:
+        table.add_row("Frequency override", str(freq_arg))
 
     # Check for cleanup option
     if hasattr(args, 'cleanup') and args.cleanup:
@@ -177,6 +184,15 @@ def show_dry_run(script_path, case_dir, args, console):
     cmd_parts = ["sbatch"]
     if hasattr(args, 'dependency') and args.dependency:
         cmd_parts.append(f"--dependency=afterok:{args.dependency}")
+    export_parts = []
+    if start_tsid is not None:
+        export_parts.append(f'START_TIME={start_tsid}')
+    if upto_tsid is not None:
+        export_parts.append(f'END_TIME={upto_tsid}')
+    if freq_arg is not None:
+        export_parts.append(f'FREQ={freq_arg}')
+    if export_parts:
+        cmd_parts.append(f'--export=ALL,{",".join(export_parts)}')
     cmd_parts.append(script_path.name)
 
     console.print(f"[dim]  {' '.join(cmd_parts)}[/dim]")
@@ -355,8 +371,16 @@ def submit_postprocessing_job(script_path, case_dir, args, console):
     table.add_row("Case", case_dir.name)
     table.add_row("Script", script_path.name)
 
-    if hasattr(args, 'upto') and args.upto:
-        table.add_row("Process up to TSID", str(args.upto))
+    start_tsid = getattr(args, 'start', None)
+    upto_tsid  = getattr(args, 'upto',  None)
+    freq_arg   = getattr(args, 'freq',  None)
+
+    if start_tsid:
+        table.add_row("Process from TSID", str(start_tsid))
+    if upto_tsid:
+        table.add_row("Process up to TSID", str(upto_tsid))
+    if freq_arg:
+        table.add_row("Frequency override", str(freq_arg))
 
     if hasattr(args, 'dependency') and args.dependency:
         table.add_row("Dependency", f"Wait for job {args.dependency}")
@@ -378,6 +402,17 @@ def submit_postprocessing_job(script_path, case_dir, args, console):
         # Add dependency if specified
         if hasattr(args, 'dependency') and args.dependency:
             cmd.append(f'--dependency=afterok:{args.dependency}')
+
+        # Pass time range overrides via --export so postFlex.sh picks them up
+        export_parts = []
+        if start_tsid is not None:
+            export_parts.append(f'START_TIME={start_tsid}')
+        if upto_tsid is not None:
+            export_parts.append(f'END_TIME={upto_tsid}')
+        if freq_arg is not None:
+            export_parts.append(f'FREQ={freq_arg}')
+        if export_parts:
+            cmd.append(f'--export=ALL,{",".join(export_parts)}')
 
         cmd.append(script_path.name)
 
