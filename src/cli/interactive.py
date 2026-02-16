@@ -245,6 +245,8 @@ class FlexFlowCompleter(Completer):
         ('ls',      'List files'),
         ('ll',      'List files (long format)'),
         ('la',      'List all files (including hidden)'),
+        ('alias',   'Define or list command aliases'),
+        ('unalias', 'Remove a command alias'),
         ('cd',      'Change directory'),
         ('cat',     'View file contents'),
         ('head',    'Show first lines of file'),
@@ -486,6 +488,7 @@ class InteractiveShell:
         self.console = Console()
         self.running = True
         self.history_file = self._get_history_file()
+        self._aliases: dict = self._load_aliases()
         self.session = self._create_session()
 
         # Context tracking
@@ -519,6 +522,33 @@ class InteractiveShell:
         history_dir = Path.home() / '.flexflow'
         history_dir.mkdir(exist_ok=True)
         return history_dir / 'history'
+
+    def _get_aliases_file(self) -> Path:
+        """Return path to the persistent aliases file (~/.flexflow/aliases)."""
+        aliases_dir = Path.home() / '.flexflow'
+        aliases_dir.mkdir(exist_ok=True)
+        return aliases_dir / 'aliases'
+
+    def _load_aliases(self) -> dict:
+        """Load aliases from disk, returning an empty dict if the file is absent or corrupt."""
+        import json
+        path = self._get_aliases_file()
+        if path.exists():
+            try:
+                with open(path) as f:
+                    data = json.load(f)
+                if isinstance(data, dict):
+                    return data
+            except Exception:
+                pass
+        return {}
+
+    def _save_aliases(self) -> None:
+        """Persist the current alias table to disk."""
+        import json
+        path = self._get_aliases_file()
+        with open(path, 'w') as f:
+            json.dump(self._aliases, f, indent=2)
 
     def _create_session(self) -> PromptSession:
         """
@@ -762,6 +792,15 @@ class InteractiveShell:
                 self.console.print("[dim]No context set[/dim]")
             return True
 
+        # alias / unalias
+        if cmd == 'alias':
+            self._handle_alias(command)
+            return True
+
+        if cmd == 'unalias':
+            self._handle_unalias(parts[1:])
+            return True
+
         # Change directory
         if cmd == 'cd':
             self.change_directory(parts[1] if len(parts) > 1 else str(Path.home()))
@@ -927,6 +966,9 @@ class InteractiveShell:
             ("ls -l", "List in long format with details"),
             ("ls -a", "Show hidden files"),
             ("ls -v", "Natural sort (numbers within names ordered numerically)"),
+            ("alias", "List all defined aliases"),
+            ("alias sq='run sq'", "Define alias: sq expands to 'run sq'"),
+            ("unalias sq", "Remove alias 'sq'"),
             ("cd <path>", "Change directory"),
             ("cd ~", "Go to home directory"),
             ("cd ..", "Go to parent directory"),
@@ -968,6 +1010,58 @@ class InteractiveShell:
 
         except Exception as e:
             self.console.print(f"[red]Error reading history: {e}[/red]")
+
+    def _handle_alias(self, raw_command: str) -> None:
+        """
+        Handle the alias built-in.
+
+          alias               — list all aliases
+          alias name          — show one alias
+          alias name=value    — define alias (quotes around value are supported)
+        """
+        import re
+        # Strip leading 'alias' keyword and surrounding whitespace
+        body = raw_command.strip()
+        body = re.sub(r'^alias\s*', '', body)
+
+        if not body:
+            # List all aliases
+            if not self._aliases:
+                self.console.print("[dim]No aliases defined[/dim]")
+            else:
+                for name, value in sorted(self._aliases.items()):
+                    self.console.print(f"alias [cyan]{name}[/cyan]=[yellow]'{value}'[/yellow]")
+            return
+
+        # Check for name=value definition
+        m = re.match(r'^(\w+)=(.+)$', body)
+        if m:
+            name = m.group(1)
+            value = m.group(2).strip().strip("'\"")
+            self._aliases[name] = value
+            self._save_aliases()
+            self.console.print(f"[green]alias[/green] [cyan]{name}[/cyan]=[yellow]'{value}'[/yellow]")
+            return
+
+        # Show a single alias
+        name = body.strip()
+        if name in self._aliases:
+            self.console.print(f"alias [cyan]{name}[/cyan]=[yellow]'{self._aliases[name]}'[/yellow]")
+        else:
+            self.console.print(f"[yellow]alias: {name}: not found[/yellow]")
+
+    def _handle_unalias(self, args: list) -> None:
+        """Remove one or more aliases."""
+        if not args:
+            self.console.print("[dim]Usage: unalias <name> [name ...][/dim]")
+            return
+        for name in args:
+            if name in self._aliases:
+                del self._aliases[name]
+                self._save_aliases()
+                self.console.print(f"[green]Removed alias:[/green] {name}")
+            else:
+                self.console.print(f"[yellow]unalias: {name}: not found[/yellow]")
 
     def change_directory(self, path: str) -> None:
         """
@@ -2211,6 +2305,15 @@ class InteractiveShell:
                 return
             if not args:
                 return
+
+            # Expand alias: replace the first token with its expansion
+            first = args[0]
+            if first in self._aliases:
+                try:
+                    expansion = shlex.split(self._aliases[first])
+                except ValueError:
+                    expansion = self._aliases[first].split()
+                args = expansion + args[1:]
 
             # Inject current contexts if set and command needs them
             args = self._inject_case_context(args)
