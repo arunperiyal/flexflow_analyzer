@@ -2,7 +2,7 @@
 #SBATCH -J post{CASE_NAME}              # name of the job
 #SBATCH -p shared                       # partition: standard, standard-low, gpu, hm, shared
 #SBATCH -n 30                           # number of processes/tasks
-#SBATCH --cpus-per-task=4               # number of threads per process/task
+#SBATCH --cpus-per-task=1               # number of threads per process/task
 #SBATCH -t 24:00:00                     # walltime in HH:MM:SS (Max: 72:00:00)
 
 # =============================================================================
