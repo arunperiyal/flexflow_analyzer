@@ -26,7 +26,8 @@ Must specify at least one action flag.
         (resolved from simflow.config 'dir' field).
           • Shows file name, start tsId, end tsId, step count and size
           • Checks restartTsId in simflow.config against first tsId in .othd:
-              - If restartTsId is set and matches → ✓
+              - FlexFlow resumes from restartTsId+1, so file start is expected to be restartTsId+1
+              - If restartTsId+1 matches file start → ✓
               - If mismatch → ✗ (restart config may be wrong)
               - If restartTsId not set but file starts >0 → ⚠
 

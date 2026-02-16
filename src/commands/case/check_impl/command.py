@@ -287,12 +287,12 @@ def _check_run(cfg: dict, case_dir: Path, console: Console) -> bool:
             restart_ok = True
             if ext == 'othd' and is_restart:
                 if restart_tsid is not None:
-                    if start_ts == restart_tsid:
+                    if start_ts == restart_tsid + 1:
                         restart_note = f'[green]restartTsId={restart_tsid} ✓[/green]'
                     else:
                         restart_note = (
                             f'[red]restartTsId mismatch: config={restart_tsid}, '
-                            f'file starts at {start_ts}[/red]'
+                            f'file starts at {start_ts} (expected {restart_tsid + 1})[/red]'
                         )
                         restart_ok = False
                         ok = False
