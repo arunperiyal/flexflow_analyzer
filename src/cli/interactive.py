@@ -243,7 +243,6 @@ class FlexFlowCompleter(Completer):
         ('history', 'Show command history'),
         ('pwd',     'Show current directory and contexts'),
         ('ls',      'List files'),
-        ('ll',      'List files (long format)'),
         ('la',      'List all files (including hidden)'),
         ('alias',   'Define or list command aliases'),
         ('unalias', 'Remove a command alias'),
@@ -336,7 +335,7 @@ class FlexFlowCompleter(Completer):
             return
 
         # ── file-browsing commands ───────────────────────────────────────────
-        if cmd_name in ('cd', 'cat', 'ls', 'll', 'la', 'grep', 'head', 'tail'):
+        if cmd_name in ('cd', 'cat', 'ls', 'la', 'grep', 'head', 'tail'):
             yield from self._complete_path(words, ends_with_space)
             return
 
@@ -807,11 +806,9 @@ class InteractiveShell:
             return True
 
         # List files and directories
-        if cmd in ['ls', 'll', 'la']:
-            # Aliases: ll = ls -l, la = ls -a
-            if cmd == 'll':
-                args = ['-l'] + (parts[1:] if len(parts) > 1 else ['.'])
-            elif cmd == 'la':
+        if cmd in ['ls', 'la']:
+            # la is a built-in alias for ls -a
+            if cmd == 'la':
                 args = ['-a'] + (parts[1:] if len(parts) > 1 else ['.'])
             else:
                 args = parts[1:] if len(parts) > 1 else ['.']
