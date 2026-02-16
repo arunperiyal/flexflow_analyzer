@@ -64,7 +64,12 @@ def submit_job(script: str, extra_args: list):
         console.print(f'[red]Error: Script not readable: {script}[/red]')
         return
 
-    cmd = ['sbatch'] + extra_args + [script_path]
+    # sbatch flags (start with -) must precede the script;
+    # script positional args must follow it.
+    sbatch_flags = [a for a in extra_args if a.startswith('-')]
+    script_args  = [a for a in extra_args if not a.startswith('-')]
+
+    cmd = ['sbatch'] + sbatch_flags + [script_path] + script_args
     console.print()
     console.print(f'[dim]Submitting: {" ".join(cmd)}[/dim]')
 
@@ -153,7 +158,9 @@ def show_sb_help():
     {Colors.YELLOW}-h, --help{Colors.RESET}  Show this help message
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
-    run sb postFlex.sh                  # Submit script in current directory
-    run sb /path/to/case/runFlex.sh     # Submit with absolute path
-    run sb postFlex.sh --dependency afterok:1258586
+    run sb postFlex.sh                      # Submit script in current directory
+    run sb /path/to/case/runFlex.sh         # Submit with absolute path
+    run sb postFlex.sh 50 50 950            # Script positional args (FREQ START END)
+    run sb postFlex.sh --dependency afterok:1258586  # sbatch flag
+    run sb postFlex.sh --partition shared 50 0 2000  # mixed: flag + positional args
 """)
