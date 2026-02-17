@@ -260,21 +260,30 @@ def generate_script_templates(args, logger):
         # Apply --partition override (main script only)
         partition_override = getattr(args, 'partition', None)
         if script == 'main' and partition_override:
-            from src.core.hpc_partition import HpcPartition
-            import re
-            # Replace #SBATCH -p <value>
-            content = re.sub(
-                r'^(#SBATCH\s+-p\s+)\S+',
-                f'\\g<1>{partition_override}',
-                content,
-                flags=re.MULTILINE,
-            )
-            # If partition has a fixed ntasks-per-node, update that line too
-            cfg = HpcPartition.get(partition_override)
-            if cfg and cfg.ntasks_per_node_fixed is not None:
+            headers_dir = Path(__file__).parent.parent.parent.parent / 'templates' / 'scripts' / 'headers'
+            header_file = headers_dir / f'{partition_override}.header'
+            if header_file.exists():
+                # Replace the full #SBATCH block with the header template
+                header_block = header_file.read_text().replace('{CASE_NAME}', case_name)
+                lines = content.splitlines(keepends=True)
+                sbatch_start = sbatch_end = None
+                for i, line in enumerate(lines):
+                    if line.strip().startswith('#SBATCH'):
+                        if sbatch_start is None:
+                            sbatch_start = i
+                        sbatch_end = i
+                if sbatch_start is not None:
+                    content = ''.join(
+                        lines[:sbatch_start]
+                        + [header_block if header_block.endswith('\n') else header_block + '\n']
+                        + lines[sbatch_end + 1:]
+                    )
+            else:
+                # No header file: fall back to replacing just the -p line
+                import re
                 content = re.sub(
-                    r'^(#SBATCH\s+--ntasks-per-node=)\S+',
-                    f'\\g<1>{cfg.ntasks_per_node_fixed}',
+                    r'^(#SBATCH\s+-p\s+)\S+',
+                    f'\\g<1>{partition_override}',
                     content,
                     flags=re.MULTILINE,
                 )
