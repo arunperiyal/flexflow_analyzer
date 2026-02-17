@@ -84,7 +84,7 @@ Must specify at least one action flag.
     case check --all
 
 {Colors.BOLD}SEE ALSO:{Colors.RESET}
-    case organise  - Archive and deduplicate output files
+    case organise  - Archive and clean output files
     case status    - Check data file completeness
     run check      - Validate case directory structure
 """)

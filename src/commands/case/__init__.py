@@ -88,7 +88,7 @@ class CaseCommand(BaseCommand):
         organise_parser.add_argument('case', nargs='?', help='Case directory path')
         organise_parser.add_argument('--archive', action='store_true',
                                     help='Move .othd/.oisd/.rcv from run dir to archive dirs')
-        organise_parser.add_argument('--organise', action='store_true',
+        organise_parser.add_argument('--clean-archive', action='store_true',
                                     help='Deduplicate and clean redundant OTHD/OISD files')
         organise_parser.add_argument('--clean-output', action='store_true',
                                     help='Remove intermediate .out/.rst/.plt files from run dir')
@@ -236,7 +236,7 @@ class CaseCommand(BaseCommand):
         console.print("    flexflow case run CS4SG1U1")
         console.print("    flexflow case run CS4SG1U1 --no-monitor")
         console.print("    flexflow case organise CS4SG1U1 --archive")
-        console.print("    flexflow case organise CS4SG1U1 --organise")
+        console.print("    flexflow case organise CS4SG1U1 --clean-archive")
         console.print("    flexflow case organise CS4SG1U1 --clean-output")
         console.print("    flexflow case check CS4SG1U1 --run")
         console.print("    flexflow case check CS4SG1U1 --all")

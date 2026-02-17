@@ -207,7 +207,7 @@ class CaseOrganizer:
     def organize(self):
         """Main organization workflow."""
         do_archive = getattr(self.args, 'archive', False)
-        do_organise = getattr(self.args, 'organise', False)
+        do_organise = getattr(self.args, 'clean_archive', False)
         do_clean_output = getattr(self.args, 'clean_output', False)
         do_clean_plt = getattr(self.args, 'clean_plt', False)
 

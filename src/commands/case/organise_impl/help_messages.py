@@ -26,7 +26,7 @@ Organize and clean up case directories. Must specify at least one action flag.
         Uses numbered suffixes to avoid overwriting existing files.
         No confirmation required — safe archive operation.
 
-    {Colors.CYAN}--organise{Colors.RESET}
+    {Colors.CYAN}--clean-archive{Colors.RESET}
         Deduplicate and clean redundant OTHD/OISD files in othd_files/
         and oisd_files/:
           • Removes duplicate files (same time step range)
@@ -64,7 +64,7 @@ Organize and clean up case directories. Must specify at least one action flag.
 
 {Colors.BOLD}SAFETY:{Colors.RESET}
     • --archive does not delete anything; it only moves files
-    • --organise, --clean-output and --clean-plt show summary and ask for confirmation
+    • --clean-archive, --clean-output and --clean-plt show summary and ask for confirmation
     • Use --no-confirm to skip confirmation
     • Fails if any OTHD/OISD file cannot be read (prevents data loss)
 
@@ -73,7 +73,7 @@ Organize and clean up case directories. Must specify at least one action flag.
     flexflow case organise CS4SG1U1 --archive
 
     # Deduplicate/clean OTHD and OISD files
-    flexflow case organise CS4SG1U1 --organise
+    flexflow case organise CS4SG1U1 --clean-archive
 
     # Remove intermediate output files
     flexflow case organise CS4SG1U1 --clean-output
@@ -81,8 +81,8 @@ Organize and clean up case directories. Must specify at least one action flag.
     # Delete PLT files from run dir where binary/ has a newer copy
     flexflow case organise CS4SG1U1 --clean-plt
 
-    # Full workflow: archive first, then organise, then clean output and PLT
-    flexflow case organise CS4SG1U1 --archive --organise --clean-output --clean-plt
+    # Full workflow: archive first, then clean-archive, then clean output and PLT
+    flexflow case organise CS4SG1U1 --archive --clean-archive --clean-output --clean-plt
 
     # Use context
     use case CS4SG1U1
@@ -112,10 +112,10 @@ def print_organise_examples():
 {Colors.BOLD}Deduplicating OTHD/OISD Files:{Colors.RESET}
 
     # Remove duplicate/subset OTHD and OISD files
-    flexflow case organise CS4SG1U1 --organise
+    flexflow case organise CS4SG1U1 --clean-archive
 
     # Skip confirmation
-    flexflow case organise CS4SG1U1 --organise --no-confirm
+    flexflow case organise CS4SG1U1 --clean-archive --no-confirm
 
 {Colors.BOLD}Cleaning Output Directory:{Colors.RESET}
 
@@ -131,10 +131,10 @@ def print_organise_examples():
 {Colors.BOLD}Combined Operations:{Colors.RESET}
 
     # Run all three in sequence
-    flexflow case organise CS4SG1U1 --archive --organise --clean-output
+    flexflow case organise CS4SG1U1 --archive --clean-archive --clean-output
 
-    # Archive and organise only
-    flexflow case organise CS4SG1U1 --archive --organise
+    # Archive and clean-archive only
+    flexflow case organise CS4SG1U1 --archive --clean-archive
 
 {Colors.BOLD}Using Context:{Colors.RESET}
 
@@ -143,10 +143,10 @@ def print_organise_examples():
 
     # Run operations
     case organise --archive
-    case organise --organise
+    case organise --clean-archive
     case organise --clean-output
 
-{Colors.BOLD}What --organise Does:{Colors.RESET}
+{Colors.BOLD}What --clean-archive Does:{Colors.RESET}
 
     Before:
     • riser1.othd [0-1000]    → Keep (unique range)
@@ -168,6 +168,6 @@ def print_organise_examples():
 
 {Colors.BOLD}Notes:{Colors.RESET}
     • --archive runs immediately, no confirmation needed
-    • --organise and --clean-output ask for confirmation unless --no-confirm
+    • --clean-archive and --clean-output ask for confirmation unless --no-confirm
     • Binary PLT files in binary/ are never deleted
 """)

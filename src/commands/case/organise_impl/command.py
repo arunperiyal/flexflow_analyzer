@@ -48,7 +48,7 @@ def execute_organise(args):
 
     # No action flags → show help
     do_archive = getattr(args, 'archive', False)
-    do_organise = getattr(args, 'organise', False)
+    do_organise = getattr(args, 'clean_archive', False)
     do_clean_output = getattr(args, 'clean_output', False)
     do_clean_plt = getattr(args, 'clean_plt', False)
 
