@@ -270,6 +270,9 @@ class FlexFlowCompleter(Completer):
         ('unuse',   'Clear context'),
         ('quota',   'Show disk quota for /home and /scratch'),
         ('du',      'Show disk usage of files and directories'),
+        ('vi',      'Edit a file in vi'),
+        ('vim',     'Edit a file in vim'),
+        ('nano',    'Edit a file in nano'),
     ]
 
     # ---------------------------------------------------------------------------
@@ -1039,6 +1042,15 @@ class InteractiveShell:
             self._show_du(parts[1:])
             return True
 
+        # Terminal editors — hand control of the terminal directly to the editor
+        if cmd in ('vi', 'vim', 'nano'):
+            import subprocess
+            try:
+                subprocess.run([cmd] + parts[1:])
+            except FileNotFoundError:
+                self.console.print(f"[red]{cmd} not found[/red]")
+            return True
+
         return False
 
     def _show_quota(self) -> None:
@@ -1194,6 +1206,9 @@ class InteractiveShell:
             ("rm",      "Remove files or directories"),
             ("cp",      "Copy files or directories"),
             ("du",      "Show disk usage of directory entries"),
+            ("vi",      "Edit a file in vi"),
+            ("vim",     "Edit a file in vim"),
+            ("nano",    "Edit a file in nano"),
             ("alias",   "Define or list command aliases"),
             ("unalias", "Remove a command alias"),
         ]
