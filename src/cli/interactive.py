@@ -269,6 +269,7 @@ class FlexFlowCompleter(Completer):
         ('use',     'Set context (case/problem/rundir)'),
         ('unuse',   'Clear context'),
         ('quota',   'Show disk quota for /home and /scratch'),
+        ('du',      'Show disk usage of files and directories'),
     ]
 
     # ---------------------------------------------------------------------------
@@ -1033,6 +1034,11 @@ class InteractiveShell:
             self._show_quota()
             return True
 
+        # Disk usage
+        if cmd == 'du':
+            self._show_du(parts[1:])
+            return True
+
         return False
 
     def _show_quota(self) -> None:
@@ -1061,6 +1067,71 @@ class InteractiveShell:
             except Exception as e:
                 self.console.print(f"[red]Error running lfs quota: {e}[/red]")
             self.console.print()
+
+    def _show_du(self, args: list) -> None:
+        """Show disk usage of entries in the current (or given) directory."""
+        from rich.table import Table as RichTable
+        from rich import box as rich_box
+
+        # Determine target directory
+        target = Path(args[0]).expanduser() if args else Path(self.current_dir)
+        if not target.is_dir():
+            self.console.print(f"[red]Not a directory: {target}[/red]")
+            return
+
+        # Collect entries with sizes
+        entries = []
+        try:
+            with os.scandir(target) as it:
+                for entry in it:
+                    try:
+                        if entry.is_dir(follow_symlinks=False):
+                            # sum all files recursively
+                            size = sum(
+                                f.stat().st_size
+                                for f in Path(entry.path).rglob('*')
+                                if Path(f).is_file()
+                            )
+                            label = entry.name + '/'
+                        else:
+                            size = entry.stat(follow_symlinks=False).st_size
+                            label = entry.name
+                        entries.append((size, label))
+                    except OSError:
+                        entries.append((0, entry.name))
+        except OSError as e:
+            self.console.print(f"[red]Error reading directory: {e}[/red]")
+            return
+
+        if not entries:
+            self.console.print("[dim]Empty directory.[/dim]")
+            return
+
+        # Sort largest first
+        entries.sort(key=lambda x: x[0], reverse=True)
+
+        tbl = RichTable(
+            title=f"Disk Usage  ({target})",
+            box=rich_box.ROUNDED,
+            show_header=True,
+            header_style='bold',
+        )
+        tbl.add_column('Size', justify='right', style='green', no_wrap=True)
+        tbl.add_column('Name', style='cyan')
+
+        def _fmt(n: int) -> str:
+            for unit in ('B', 'KB', 'MB', 'GB', 'TB'):
+                if n < 1024:
+                    return f"{n:.1f} {unit}" if unit != 'B' else f"{n} B"
+                n /= 1024
+            return f"{n:.1f} PB"
+
+        for size, label in entries:
+            tbl.add_row(_fmt(size), label)
+
+        self.console.print()
+        self.console.print(tbl)
+        self.console.print()
 
     def show_help(self) -> None:
         """Show help information."""
@@ -1122,6 +1193,7 @@ class InteractiveShell:
             ("tree",    "Show directory tree"),
             ("rm",      "Remove files or directories"),
             ("cp",      "Copy files or directories"),
+            ("du",      "Show disk usage of directory entries"),
             ("alias",   "Define or list command aliases"),
             ("unalias", "Remove a command alias"),
         ]
