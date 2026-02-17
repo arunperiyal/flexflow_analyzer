@@ -53,9 +53,9 @@ def check_slurm_available():
 # ---------------------------------------------------------------------------
 
 # squeue format fields (pipe-delimited to allow spaces in Reason)
-_SQUEUE_FMT = '%i|%j|%T|%M|%D|%P|%C|%m|%V|%R'
+_SQUEUE_FMT = '%i|%j|%T|%M|%D|%P|%C|%m|%V|%R|%E'
 _SQUEUE_COLS = ['jobid', 'name', 'state', 'time', 'nodes',
-                'partition', 'cpus', 'memory', 'submit', 'reason']
+                'partition', 'cpus', 'memory', 'submit', 'reason', 'dependency']
 
 
 def get_queue_data(show_all=False):
@@ -83,6 +83,7 @@ def parse_queue_output(output: str) -> list:
             job = {k: v.strip() for k, v in zip(_SQUEUE_COLS, parts)}
             job['memory'] = _fmt_memory(job['memory'])
             job['submit'] = _fmt_submit_time(job['submit'])
+            job['dependency'] = _fmt_dependency(job['dependency'])
             jobs.append(job)
     return jobs
 
@@ -102,6 +103,15 @@ def _fmt_memory(raw: str) -> str:
         return f'{mb}M'
     except ValueError:
         return raw
+
+
+def _fmt_dependency(raw: str) -> str:
+    """Shorten dependency string: afterok:12345 → 12345, N/A → —."""
+    if not raw or raw in ('N/A', '(null)', 'None'):
+        return '—'
+    # Strip afterok:/afterany:/etc. prefix, keep just the job ID(s)
+    raw = re.sub(r'\b(afterok|afterany|afternotok|after):', '', raw)
+    return raw
 
 
 def _fmt_submit_time(raw: str) -> str:
@@ -152,11 +162,12 @@ def create_queue_table(jobs: list) -> Table:
     table.add_column('Partition', style='cyan')
     table.add_column('CPUs',      style='white',   justify='right')
     table.add_column('Memory',    style='white',   justify='right')
-    table.add_column('Submitted', style='dim')
-    table.add_column('Reason',    style='dim')
+    table.add_column('Submitted',  style='dim')
+    table.add_column('Reason',     style='dim')
+    table.add_column('Dependency', style='dim', justify='right')
 
     if not jobs:
-        table.add_row('—', 'No jobs in queue', '—', '—', '—', '—', '—', '—', '—', '—')
+        table.add_row('—', 'No jobs in queue', '—', '—', '—', '—', '—', '—', '—', '—', '—')
         return table
 
     for job in jobs:
@@ -171,6 +182,7 @@ def create_queue_table(jobs: list) -> Table:
             job['memory'],
             job['submit'],
             job['reason'],
+            job['dependency'],
         )
     return table
 
