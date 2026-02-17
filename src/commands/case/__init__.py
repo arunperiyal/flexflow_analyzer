@@ -141,6 +141,22 @@ class CaseCommand(BaseCommand):
         status_parser.add_argument('--examples', action='store_true',
                                   help='Show usage examples')
 
+        # case add
+        add_parser = case_subparsers.add_parser('add', add_help=False,
+                                                help='Scan a directory and build the .cases registry')
+        add_parser.add_argument('--dir', type=str, metavar='PATH',
+                               help='Directory to scan (default: current directory)')
+        add_parser.add_argument('-h', '--help', action='store_true',
+                               help='Show help for add command')
+
+        # case report
+        report_parser = case_subparsers.add_parser('report', add_help=False,
+                                                   help='Print a compact status table for all registered cases')
+        report_parser.add_argument('--dir', type=str, metavar='PATH',
+                                  help='Directory containing .cases file (default: current directory)')
+        report_parser.add_argument('-h', '--help', action='store_true',
+                                  help='Show help for report command')
+
         # Main case help flags
         parser.add_argument('-h', '--help', action='store_true',
                            help='Show help for case command')
@@ -169,9 +185,14 @@ class CaseCommand(BaseCommand):
             from .check_impl.command import execute_case_check
             execute_case_check(args)
         elif hasattr(args, 'case_subcommand') and args.case_subcommand == 'status':
-            # Delegate to status subcommand
             from .status_impl import execute_status
             execute_status(args)
+        elif hasattr(args, 'case_subcommand') and args.case_subcommand == 'add':
+            from .add_impl import execute_add
+            execute_add(args)
+        elif hasattr(args, 'case_subcommand') and args.case_subcommand == 'report':
+            from .report_impl import execute_report
+            execute_report(args)
         else:
             # Show help for case group
             self.show_help()
@@ -203,6 +224,8 @@ class CaseCommand(BaseCommand):
         table.add_row("organise", "Organize and clean up case directory")
         table.add_row("check", "Inspect OTHD/OISD ranges and validate config")
         table.add_row("status", "Check case data file completeness")
+        table.add_row("add", "Scan a directory and build the .cases registry")
+        table.add_row("report", "Print a compact status table for all registered cases")
 
         console.print("[bold]SUBCOMMANDS:[/bold]")
         console.print(table)
@@ -218,6 +241,8 @@ class CaseCommand(BaseCommand):
         console.print("    flexflow case check CS4SG1U1 --run")
         console.print("    flexflow case check CS4SG1U1 --all")
         console.print("    flexflow case status CS4SG1U1")
+        console.print("    flexflow case add --dir /scratch/me/project")
+        console.print("    flexflow case report")
         console.print()
 
 

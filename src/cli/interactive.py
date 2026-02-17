@@ -40,7 +40,7 @@ class FlexFlowCompleter(Completer):
     # ---------------------------------------------------------------------------
 
     _SUBCOMMANDS: Dict[str, List[str]] = {
-        'case':     ['show', 'create', 'run', 'organise', 'check', 'status'],
+        'case':     ['show', 'create', 'run', 'organise', 'check', 'status', 'add', 'report'],
         'data':     ['show', 'stats'],
         'field':    ['info', 'extract'],
         'run':      ['check', 'pre', 'main', 'post', 'sq', 'sb', 'sc'],
@@ -103,6 +103,14 @@ class FlexFlowCompleter(Completer):
             '--config':  'Validate simflow.config consistency',
             '--plt':     'Check PLT files against expected set (outFreq/maxTimeSteps)',
             '--all':     'Run all checks (--run + --archive + --config + --plt)',
+        },
+        ('case', 'add'):    {
+            **_COMMON_FLAGS,
+            '--dir':  'Directory to scan (default: current directory)',
+        },
+        ('case', 'report'): {
+            **_COMMON_FLAGS,
+            '--dir':  'Directory containing .cases file (default: current directory)',
         },
         ('case', 'status'):  {**_COMMON_FLAGS},
 
