@@ -1,0 +1,5 @@
+#SBATCH -J main{CASE_NAME}              # name of the job
+#SBATCH -p medium                       # partition: standard, standard-low, gpu, hm, shared, medium
+#SBATCH -n 120                          # number of processes/tasks
+#SBATCH --ntasks-per-node=40            # tasks per node
+#SBATCH -t 72:00:00                     # walltime in HH:MM:SS (Max: 72:00:00)

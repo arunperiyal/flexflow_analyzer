@@ -9,6 +9,51 @@ from rich.table import Table
 from rich import box
 
 
+def _apply_partition_header(script_path: Path, partition: str, console) -> bool:
+    """
+    Replace the #SBATCH header block in *script_path* with the contents of
+    src/templates/scripts/headers/<partition>.header.
+
+    Returns True if a header file was found and applied, False otherwise.
+    """
+    # Locate the header file relative to this source file
+    headers_dir = Path(__file__).parent.parent.parent.parent / 'templates' / 'scripts' / 'headers'
+    header_file = headers_dir / f'{partition}.header'
+
+    if not header_file.exists():
+        return False
+
+    # Read header template and substitute {CASE_NAME}
+    case_name = script_path.parent.name
+    header_lines = header_file.read_text().format(CASE_NAME=case_name)
+
+    # Read the script and replace its #SBATCH block
+    script_text = script_path.read_text()
+    lines = script_text.splitlines(keepends=True)
+
+    # Find the span of #SBATCH lines (may start after #!/bin/bash)
+    sbatch_start = None
+    sbatch_end = None
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith('#SBATCH'):
+            if sbatch_start is None:
+                sbatch_start = i
+            sbatch_end = i
+
+    if sbatch_start is None:
+        console.print(f"[yellow]Warning: no #SBATCH lines found in {script_path.name} — header not applied[/yellow]")
+        return False
+
+    new_lines = (
+        lines[:sbatch_start]
+        + [header_lines if header_lines.endswith('\n') else header_lines + '\n']
+        + lines[sbatch_end + 1:]
+    )
+    script_path.write_text(''.join(new_lines))
+    return True
+
+
 def execute_main(args):
     """Execute run main command to submit main simulation job."""
 
@@ -163,16 +208,21 @@ def show_dry_run(script_path, case_dir, args, console):
         table.add_row("Job Dependency", args.dependency)
 
     # Check for partition override
-    if hasattr(args, 'partition') and args.partition:
-        table.add_row("Partition Override", f"[bold yellow]{args.partition}[/bold yellow] (via sbatch CLI)")
+    partition_override = getattr(args, 'partition', None)
+    if partition_override:
+        headers_dir = Path(__file__).parent.parent.parent.parent / 'templates' / 'scripts' / 'headers'
+        has_header = (headers_dir / f'{partition_override}.header').exists()
+        if has_header:
+            table.add_row("Partition", f"[bold yellow]{partition_override}[/bold yellow] [dim](header will be applied to {script_path.name})[/dim]")
+        else:
+            table.add_row("Partition Override", f"[bold yellow]{partition_override}[/bold yellow] (via sbatch CLI)")
 
     # Parse SBATCH directives from script
     sbatch_info = parse_sbatch_directives(script_path)
     if sbatch_info:
         for key, value in sbatch_info.items():
-            # Mark partition as overridden if --partition was specified
-            if key == 'Partition' and hasattr(args, 'partition') and args.partition:
-                table.add_row(f'{key} (script)', f'[dim]{value}[/dim]')
+            if key == 'Partition' and partition_override:
+                pass  # already shown above
             else:
                 table.add_row(key, value)
 
@@ -184,8 +234,8 @@ def show_dry_run(script_path, case_dir, args, console):
     cmd_parts = ["sbatch"]
     if hasattr(args, 'dependency') and args.dependency:
         cmd_parts.append(f"--dependency=afterok:{args.dependency}")
-    if hasattr(args, 'partition') and args.partition:
-        cmd_parts.append(f"--partition={args.partition}")
+    if partition_override and not (headers_dir / f'{partition_override}.header').exists():
+        cmd_parts.append(f"--partition={partition_override}")
     cmd_parts.append(script_path.name)
 
     console.print(f"[dim]  {' '.join(cmd_parts)}[/dim]")
@@ -550,6 +600,14 @@ def submit_main_job(script_path, case_dir, args, console):
     if not check_task_consistency(script_path, case_dir, console):
         return
 
+    # Apply partition header if a template exists for the requested partition
+    header_applied = False
+    if partition_override:
+        header_applied = _apply_partition_header(script_path, partition_override, console)
+        if header_applied:
+            console.print(f"[dim]Applied {partition_override}.header to {script_path.name}[/dim]")
+            console.print()
+
     try:
         # Build sbatch command
         cmd = ['sbatch']
@@ -558,8 +616,8 @@ def submit_main_job(script_path, case_dir, args, console):
         if hasattr(args, 'dependency') and args.dependency:
             cmd.append(f'--dependency=afterok:{args.dependency}')
 
-        # Add partition override if specified
-        if partition_override:
+        # Fall back to --partition CLI flag only when no header file was applied
+        if partition_override and not header_applied:
             cmd.append(f'--partition={partition_override}')
 
         cmd.append(script_path.name)
