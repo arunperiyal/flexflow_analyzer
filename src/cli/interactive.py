@@ -396,27 +396,69 @@ class FlexFlowCompleter(Completer):
 
     def _complete_use_command(self, words: List[str], ends_with_space: bool):
         """
-        use case <path>
-        use problem <name>
-        use rundir <path>
-        use <shortcut>
+        Complete the `use` command which uses colon syntax:
+          use case:Case001 rundir:RUN_2 node:24 t1:0.0 t2:100.0
+        Each token after `use` is context:value.
         """
-        subcommands = [
-            ('case',    'Set current case'),
-            ('problem', 'Override problem name'),
-            ('rundir',  'Override run directory'),
-            ('--help',  'Show help'),
-            ('-h',      'Show help'),
-        ]
+        # Contexts whose value is a filesystem path (directories)
+        _PATH_CONTEXTS = {'case', 'rundir', 'dir'}
+        # All supported context keys
+        _ALL_CONTEXTS = ['case', 'problem', 'rundir', 'dir', 'node', 't1', 't2']
+        _CONTEXT_DESCS = {
+            'case':    'Set current case directory',
+            'problem': 'Override problem name',
+            'rundir':  'Override run directory',
+            'dir':     'Override output directory',
+            'node':    'Set node ID for data/field commands',
+            't1':      'Set start time',
+            't2':      'Set end time',
+        }
 
-        if len(words) == 1 or (len(words) == 2 and not ends_with_space):
-            word = '' if ends_with_space else (words[1] if len(words) > 1 else '')
-            for val, desc in subcommands:
-                if val.startswith(word):
-                    yield Completion(val, start_position=-len(word), display_meta=desc)
-        elif len(words) >= 2 and words[1] in ('case', 'rundir'):
-            # Complete path argument
-            yield from self._complete_path(words[2:], ends_with_space)
+        if self.shell is None:
+            return
+
+        # Determine the token currently being typed
+        if ends_with_space:
+            current_word = ''
+        else:
+            current_word = words[-1] if len(words) > 1 else ''
+
+        if ':' in current_word:
+            # User is typing  context:partial_value  — complete the value part
+            ctx, partial_val = current_word.split(':', 1)
+            if ctx in _PATH_CONTEXTS:
+                # Complete path relative to shell's current dir
+                if '/' in partial_val:
+                    dir_part, name_part = partial_val.rsplit('/', 1)
+                    base = self.shell._current_dir / dir_part
+                else:
+                    dir_part = ''
+                    name_part = partial_val
+                    base = self.shell._current_dir
+                for name, is_dir in self._get_file_completions(name_part, base):
+                    full_val = (dir_part + '/' + name) if dir_part else name
+                    suffix = '/' if is_dir else ''
+                    display = f'{ctx}:{full_val}{suffix}'
+                    yield Completion(
+                        display,
+                        start_position=-len(current_word),
+                        display_meta='dir' if is_dir else 'file',
+                    )
+            # For non-path contexts (node, t1, t2, problem) nothing to complete
+        else:
+            # User is typing the context key prefix (or nothing yet)
+            # Suggest all context keys not already present in the line
+            used = {w.split(':')[0] for w in words[1:] if ':' in w}
+            for ctx in _ALL_CONTEXTS:
+                if ctx in used:
+                    continue
+                token = ctx + ':'
+                if token.startswith(current_word):
+                    yield Completion(
+                        token,
+                        start_position=-len(current_word),
+                        display_meta=_CONTEXT_DESCS[ctx],
+                    )
 
     def _complete_unuse_command(self, words: List[str], ends_with_space: bool):
         """Complete unuse subcommand names."""
@@ -425,9 +467,12 @@ class FlexFlowCompleter(Completer):
             subcommands = [
                 ('case',    'Clear case context'),
                 ('problem', 'Clear problem context'),
-                ('rundir',  'Clear rundir context'),
-                ('--help',  'Show help'),
-                ('-h',      'Show help'),
+                ('rundir',  'Clear run directory context'),
+                ('dir',     'Clear output directory context'),
+                ('node',    'Clear node context'),
+                ('t1',      'Clear start time'),
+                ('t2',      'Clear end time'),
+                ('all',     'Clear all contexts'),
             ]
             for val, desc in subcommands:
                 if val.startswith(word):
