@@ -90,6 +90,9 @@ START_TIME=${START_TIME:-${2:-0}}
 # END_TIME: env var > positional arg > maxTimeSteps from .def
 END_TIME=${END_TIME:-${3:-$MAX_STEPS}}
 
+# CONVERT_ONLY: skip simPlt and run only simPlt2Bin (env var, default: 0)
+CONVERT_ONLY=${CONVERT_ONLY:-0}
+
 # -----------------------------------------------------------------------------
 # Display job configuration
 # -----------------------------------------------------------------------------
@@ -104,6 +107,9 @@ echo "Start Time:   $START_TIME (0 = beginning)"
 echo "End Time:     $END_TIME"
 echo "Processes:    $SLURM_NTASKS"
 echo "CPUs/Task:    $SLURM_CPUS_PER_TASK"
+if [ "$CONVERT_ONLY" = "1" ]; then
+    echo "Mode:         convert-only (simPlt2Bin only, skipping simPlt)"
+fi
 echo "=========================================="
 echo ""
 
@@ -111,7 +117,7 @@ echo ""
 # Validate executables
 # -----------------------------------------------------------------------------
 
-if [ ! -x "$SIMPLT" ]; then
+if [ "$CONVERT_ONLY" != "1" ] && [ ! -x "$SIMPLT" ]; then
     echo "Error: simPlt not found or not executable: $SIMPLT"
     exit 1
 fi
@@ -128,36 +134,41 @@ export OMP_NUM_THREADS=${OMP_NUM_THREADS:-$SLURM_CPUS_PER_TASK}
 # Step 1: Convert .out files to ASCII PLT files (simPlt)
 # -----------------------------------------------------------------------------
 
-echo "Step 1: Running simPlt to generate ASCII PLT files..."
+if [ "$CONVERT_ONLY" = "1" ]; then
+    echo "Step 1: Skipping simPlt (--convert mode)"
+    echo ""
+else
+    echo "Step 1: Running simPlt to generate ASCII PLT files..."
 
-# Add -first only when processing from a non-zero start (e.g. after restart)
-FIRST_ARG=""
-if [ "${START_TIME}" -gt 0 ] 2>/dev/null; then
-    FIRST_ARG="-first ${START_TIME}"
-fi
-
-echo "Command: $SIMPLT -n $SLURM_NTASKS -pb $PROBLEM -outFreq $FREQ ${FIRST_ARG} -last $END_TIME"
-
-$SIMPLT -n $SLURM_NTASKS -pb $PROBLEM -outFreq $FREQ ${FIRST_ARG} -last $END_TIME
-SIMPLT_EXIT=$?
-
-if [ $SIMPLT_EXIT -ne 0 ]; then
-    # simPlt looks one outFreq step beyond the last processed timestep to check
-    # for more files.  When --upto is used the next step won't exist, causing a
-    # non-zero exit even though all requested files were created successfully.
-    # Treat this as success if the expected last plt file is present.
-    EXPECTED_LAST="${PROBLEM}.${END_TIME}.plt"
-    if [ -f "$EXPECTED_LAST" ]; then
-        echo "Note: simPlt exited with code $SIMPLT_EXIT but $EXPECTED_LAST exists."
-        echo "      Lookahead beyond END_TIME=$END_TIME is expected when using --upto."
-    else
-        echo "Error: simPlt failed with exit code $SIMPLT_EXIT"
-        exit $SIMPLT_EXIT
+    # Add -first only when processing from a non-zero start (e.g. after restart)
+    FIRST_ARG=""
+    if [ "${START_TIME}" -gt 0 ] 2>/dev/null; then
+        FIRST_ARG="-first ${START_TIME}"
     fi
-fi
 
-echo "✓ simPlt completed successfully"
-echo ""
+    echo "Command: $SIMPLT -n $SLURM_NTASKS -pb $PROBLEM -outFreq $FREQ ${FIRST_ARG} -last $END_TIME"
+
+    $SIMPLT -n $SLURM_NTASKS -pb $PROBLEM -outFreq $FREQ ${FIRST_ARG} -last $END_TIME
+    SIMPLT_EXIT=$?
+
+    if [ $SIMPLT_EXIT -ne 0 ]; then
+        # simPlt looks one outFreq step beyond the last processed timestep to check
+        # for more files.  When --upto is used the next step won't exist, causing a
+        # non-zero exit even though all requested files were created successfully.
+        # Treat this as success if the expected last plt file is present.
+        EXPECTED_LAST="${PROBLEM}.${END_TIME}.plt"
+        if [ -f "$EXPECTED_LAST" ]; then
+            echo "Note: simPlt exited with code $SIMPLT_EXIT but $EXPECTED_LAST exists."
+            echo "      Lookahead beyond END_TIME=$END_TIME is expected when using --upto."
+        else
+            echo "Error: simPlt failed with exit code $SIMPLT_EXIT"
+            exit $SIMPLT_EXIT
+        fi
+    fi
+
+    echo "✓ simPlt completed successfully"
+    echo ""
+fi
 
 # -----------------------------------------------------------------------------
 # Step 2: Convert ASCII PLT to binary format (simPlt2Bin)

@@ -151,9 +151,10 @@ def show_dry_run(script_path, case_dir, args, console):
     table.add_row("Script", script_path.name)
     table.add_row("Working Directory", str(case_dir))
 
-    start_tsid = getattr(args, 'start', None)
-    upto_tsid  = getattr(args, 'upto',  None)
-    freq_arg   = getattr(args, 'freq',  None)
+    start_tsid   = getattr(args, 'start',   None)
+    upto_tsid    = getattr(args, 'upto',    None)
+    freq_arg     = getattr(args, 'freq',    None)
+    convert_only = getattr(args, 'convert', False)
 
     start_tsid = _validate_start(start_tsid, freq_arg, case_dir, console)
     upto_tsid  = _validate_upto(upto_tsid, freq_arg, case_dir, console)
@@ -166,6 +167,8 @@ def show_dry_run(script_path, case_dir, args, console):
         table.add_row("Process up to TSID", str(upto_tsid))
     if freq_arg:
         table.add_row("Frequency override", str(freq_arg))
+    if convert_only:
+        table.add_row("Mode", "convert-only (simPlt2Bin only)")
 
     # Check for cleanup option
     if hasattr(args, 'cleanup') and args.cleanup:
@@ -196,6 +199,8 @@ def show_dry_run(script_path, case_dir, args, console):
         export_parts.append(f'END_TIME={upto_tsid}')
     if freq_arg is not None:
         export_parts.append(f'FREQ={freq_arg}')
+    if convert_only:
+        export_parts.append('CONVERT_ONLY=1')
     if export_parts:
         cmd_parts.append(f'--export=ALL,{",".join(export_parts)}')
     cmd_parts.append(script_path.name)
@@ -454,9 +459,10 @@ def submit_postprocessing_job(script_path, case_dir, args, console):
     table.add_row("Case", case_dir.name)
     table.add_row("Script", script_path.name)
 
-    start_tsid = getattr(args, 'start', None)
-    upto_tsid  = getattr(args, 'upto',  None)
-    freq_arg   = getattr(args, 'freq',  None)
+    start_tsid   = getattr(args, 'start',   None)
+    upto_tsid    = getattr(args, 'upto',    None)
+    freq_arg     = getattr(args, 'freq',    None)
+    convert_only = getattr(args, 'convert', False)
 
     start_tsid = _validate_start(start_tsid, freq_arg, case_dir, console)
     upto_tsid  = _validate_upto(upto_tsid, freq_arg, case_dir, console)
@@ -469,6 +475,8 @@ def submit_postprocessing_job(script_path, case_dir, args, console):
         table.add_row("Process up to TSID", str(upto_tsid))
     if freq_arg:
         table.add_row("Frequency override", str(freq_arg))
+    if convert_only:
+        table.add_row("Mode", "convert-only (simPlt2Bin only)")
 
     if hasattr(args, 'dependency') and args.dependency:
         table.add_row("Dependency", f"Wait for job {args.dependency}")
@@ -491,7 +499,7 @@ def submit_postprocessing_job(script_path, case_dir, args, console):
         if hasattr(args, 'dependency') and args.dependency:
             cmd.append(f'--dependency=afterok:{args.dependency}')
 
-        # Pass time range overrides via --export so postFlex.sh picks them up
+        # Pass overrides via --export so postFlex.sh picks them up
         export_parts = []
         if start_tsid is not None:
             export_parts.append(f'START_TIME={start_tsid}')
@@ -499,6 +507,8 @@ def submit_postprocessing_job(script_path, case_dir, args, console):
             export_parts.append(f'END_TIME={upto_tsid}')
         if freq_arg is not None:
             export_parts.append(f'FREQ={freq_arg}')
+        if convert_only:
+            export_parts.append('CONVERT_ONLY=1')
         if export_parts:
             cmd.append(f'--export=ALL,{",".join(export_parts)}')
 
