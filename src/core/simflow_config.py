@@ -256,6 +256,41 @@ class SimflowConfig:
         with open(self._path, 'w') as f:
             f.writelines(new_lines)
 
+    def comment_out_keys(self, keys: list) -> None:
+        """
+        Comment out active key=value lines for the given keys, leaving any
+        already-commented lines untouched.
+
+        For example, ``restartFlag = 1`` becomes ``#restartFlag = 1``.
+        """
+        if not keys:
+            return
+
+        if not self._path.exists():
+            raise FileNotFoundError(f"simflow.config not found: {self._path}")
+
+        with open(self._path, 'r') as f:
+            lines = f.readlines()
+
+        keys_set = set(keys)
+        new_lines = []
+
+        for line in lines:
+            stripped = line.rstrip('\n')
+            if '=' in stripped and not stripped.lstrip().startswith('#'):
+                key_part, _, _ = stripped.partition('=')
+                key = key_part.strip()
+                if key in keys_set:
+                    # Preserve indentation, prepend #
+                    indent = len(key_part) - len(key_part.lstrip())
+                    new_lines.append(' ' * indent + '#' + stripped.lstrip() + '\n')
+                    self._data.pop(key, None)
+                    continue
+            new_lines.append(line if line.endswith('\n') else line + '\n')
+
+        with open(self._path, 'w') as f:
+            f.writelines(new_lines)
+
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------

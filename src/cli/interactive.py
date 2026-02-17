@@ -160,6 +160,7 @@ class FlexFlowCompleter(Completer):
             '--dry-run':    'Preview without submitting',
             '--show':       'Display script contents',
             '--restart':    'Restart from specific timestep',
+            '--reset':      'Comment out restartFlag/restartTsId and start fresh',
             '--dependency': 'Job dependency (job ID)',
             '--partition':  'Override partition (sbatch CLI, does not edit script)',
         },

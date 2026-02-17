@@ -55,6 +55,17 @@ def execute_main(args):
         show_dry_run(script_path, case_dir, args, console)
         return
 
+    # Handle --reset flag: comment out restart keys then submit fresh
+    if hasattr(args, 'reset') and args.reset:
+        if hasattr(args, 'restart') and args.restart:
+            console.print("[red]Error:[/red] --reset and --restart cannot be used together.")
+            return
+        console.print()
+        console.print("[bold cyan]Resetting restart configuration[/bold cyan]")
+        console.print()
+        if not handle_reset(case_dir, console):
+            return
+
     # Submit the job
     submit_main_job(script_path, case_dir, args, console)
 
@@ -141,8 +152,10 @@ def show_dry_run(script_path, case_dir, args, console):
     table.add_row("Script", script_path.name)
     table.add_row("Working Directory", str(case_dir))
 
-    # Check for restart option
-    if hasattr(args, 'restart') and args.restart:
+    # Check for restart/reset option
+    if hasattr(args, 'reset') and args.reset:
+        table.add_row("Mode", "Reset (restartFlag/restartTsId will be commented out)")
+    elif hasattr(args, 'restart') and args.restart:
         table.add_row("Restart from TSID", str(args.restart))
 
     # Check for dependency option
@@ -413,6 +426,38 @@ def parse_sbatch_directives(script_path):
     return directives
 
 
+def handle_reset(case_dir, console):
+    """
+    Comment out restartFlag and restartTsId in simflow.config so the
+    simulation starts fresh from the beginning.
+    """
+    from src.core.simflow_config import SimflowConfig
+
+    try:
+        cfg = SimflowConfig.find(case_dir)
+    except FileNotFoundError as e:
+        console.print(f"[red]Error: {e}[/red]")
+        return False
+
+    # Check whether either key is actually active (uncommented)
+    active_keys = [k for k in ('restartFlag', 'restartTsId') if k in cfg]
+
+    if not active_keys:
+        console.print("[dim]restartFlag and restartTsId are already commented out — nothing to reset.[/dim]")
+        return True
+
+    try:
+        cfg.comment_out_keys(active_keys)
+        commented = ', '.join(active_keys)
+        console.print(f"[green]✓ simflow.config reset:[/green] {commented} commented out")
+        console.print()
+    except Exception as e:
+        console.print(f"[red]Error updating simflow.config: {e}[/red]")
+        return False
+
+    return True
+
+
 def handle_restart(case_dir, restart_tsid, console):
     """
     Update simflow.config with restartTsId and restartFlag = 1.
@@ -590,6 +635,7 @@ This runs the primary FlexFlow simulation (mpiSimflow).
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
     {Colors.YELLOW}--restart TSID{Colors.RESET}        Restart from specific timestep ID
+    {Colors.YELLOW}--reset{Colors.RESET}               Comment out restartFlag/restartTsId and start fresh
     {Colors.YELLOW}--dependency JOB_ID{Colors.RESET}   Wait for another job to complete first
     {Colors.YELLOW}--partition NAME{Colors.RESET}       Override partition at submit time (sbatch CLI, script unchanged)
     {Colors.YELLOW}--dry-run{Colors.RESET}             Show what would be submitted
