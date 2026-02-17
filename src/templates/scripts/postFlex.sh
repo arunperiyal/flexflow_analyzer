@@ -140,15 +140,15 @@ if [ "$CONVERT_ONLY" = "1" ]; then
 else
     echo "Step 1: Running simPlt to generate ASCII PLT files..."
 
-    # Add -first only when processing from a non-zero start (e.g. after restart)
-    FIRST_ARG=""
+    # Add -min only when processing from a non-zero start (e.g. after restart)
+    MIN_ARG=""
     if [ "${START_TIME}" -gt 0 ] 2>/dev/null; then
-        FIRST_ARG="-first ${START_TIME}"
+        MIN_ARG="-min ${START_TIME}"
     fi
 
-    echo "Command: $SIMPLT -n $SLURM_NTASKS -pb $PROBLEM -outFreq $FREQ ${FIRST_ARG} -last $END_TIME"
+    echo "Command: $SIMPLT -n $SLURM_NTASKS -pb $PROBLEM -outFreq $FREQ ${MIN_ARG} -last $END_TIME"
 
-    $SIMPLT -n $SLURM_NTASKS -pb $PROBLEM -outFreq $FREQ ${FIRST_ARG} -last $END_TIME
+    $SIMPLT -n $SLURM_NTASKS -pb $PROBLEM -outFreq $FREQ ${MIN_ARG} -last $END_TIME
     SIMPLT_EXIT=$?
 
     if [ $SIMPLT_EXIT -ne 0 ]; then
