@@ -96,6 +96,8 @@ class CaseCommand(BaseCommand):
                                     help='Delete PLT files from run dir where binary/ has a newer copy')
         organise_parser.add_argument('--keep-every', type=int,
                                     help='Keep every Nth output (default: 10 * freq)')
+        organise_parser.add_argument('--upto', type=int, metavar='TSID',
+                                    help='Only clean output files up to this timestep (inclusive)')
         organise_parser.add_argument('--log', action='store_true',
                                     help='Create log file of deletions')
         organise_parser.add_argument('--no-confirm', action='store_true',

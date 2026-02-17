@@ -495,6 +495,10 @@ class CaseOrganizer:
         keep_interval = freq * keep_every
         self.logger.info(f"Using freq={freq}, keep_every={keep_every}, keep_interval={keep_interval}")
 
+        upto = getattr(self.args, 'upto', None)
+        if upto is not None:
+            self.logger.info(f"Limiting cleanup to timesteps <= {upto}")
+
         # Find output directories
         output_dirs = self._find_output_directories()
         if not output_dirs:
@@ -506,7 +510,7 @@ class CaseOrganizer:
 
         # Analyze each directory
         for output_dir in output_dirs:
-            self._analyze_single_output_dir(output_dir, problem, freq, keep_interval)
+            self._analyze_single_output_dir(output_dir, problem, freq, keep_interval, upto)
 
     def _find_output_directories(self) -> List[Path]:
         """Find output directories from simflow.config."""
@@ -515,7 +519,8 @@ class CaseOrganizer:
             return []
         return [run_dir]
 
-    def _analyze_single_output_dir(self, output_dir: Path, problem: str, freq: int, keep_interval: int):
+    def _analyze_single_output_dir(self, output_dir: Path, problem: str, freq: int,
+                                   keep_interval: int, upto: int = None):
         """Analyze a single output directory."""
         # Find out and rst files (plt files are handled by --clean-plt, not --clean-output)
         out_pattern = f'{problem}.*_*.out'
@@ -531,6 +536,10 @@ class CaseOrganizer:
         for file in out_files + rst_files:
             step = self._extract_step_from_filename(file.name, problem)
             if step is None:
+                continue
+
+            # Skip files beyond --upto (leave them untouched)
+            if upto is not None and step > upto:
                 continue
 
             # Keep if multiple of keep_interval
