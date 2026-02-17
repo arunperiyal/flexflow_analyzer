@@ -50,6 +50,8 @@ Organize and clean up case directories. Must specify at least one action flag.
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
     --keep-every N            Keep every Nth output (default: 10, means freq*10)
+    --upto TSID               Only clean output files up to this timestep (inclusive)
+    --dry-run                 Show what would be deleted without deleting anything
     --log                     Create log file of all deletions
     --no-confirm              Skip confirmation prompts
     -v, --verbose             Show detailed information

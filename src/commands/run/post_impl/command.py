@@ -584,9 +584,12 @@ This typically runs simPlt (PLT generation) and simPlt2Bin (binary conversion).
     run post [case_directory] [options]
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
-    {Colors.YELLOW}--cleanup{Colors.RESET}          Clean up files with binary PLT before submitting
+    {Colors.YELLOW}--start TSID{Colors.RESET}      Process from this timestep (rounds up to nearest outFreq multiple)
+    {Colors.YELLOW}--upto TSID{Colors.RESET}       Process up to this timestep (rounds down to nearest outFreq multiple)
+    {Colors.YELLOW}--freq N{Colors.RESET}          Override output frequency from simflow.config
+    {Colors.YELLOW}--convert{Colors.RESET}         Run simPlt2Bin only (skip simPlt; .plt files must already exist)
+    {Colors.YELLOW}--cleanup{Colors.RESET}         Clean up files with binary PLT before submitting
     {Colors.YELLOW}--cleanup-only{Colors.RESET}    Only perform cleanup, don't submit job
-    {Colors.YELLOW}--upto TSID{Colors.RESET}       Process up to specific timestep ID
     {Colors.YELLOW}--dependency JOB_ID{Colors.RESET} Wait for another job to complete first
     {Colors.YELLOW}--dry-run{Colors.RESET}         Show what would be submitted
     {Colors.YELLOW}--show{Colors.RESET}            Display the script content
