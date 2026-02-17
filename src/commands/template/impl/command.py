@@ -260,7 +260,7 @@ def generate_script_templates(args, logger):
         # Apply --partition override (main script only)
         partition_override = getattr(args, 'partition', None)
         if script == 'main' and partition_override:
-            headers_dir = Path(__file__).parent.parent.parent.parent / 'templates' / 'scripts' / 'headers'
+            headers_dir = Path(template_dir) / 'headers'
             header_file = headers_dir / f'{partition_override}.header'
             if header_file.exists():
                 # Replace the full #SBATCH block with the header template
