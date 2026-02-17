@@ -155,6 +155,10 @@ def show_dry_run(script_path, case_dir, args, console):
     upto_tsid  = getattr(args, 'upto',  None)
     freq_arg   = getattr(args, 'freq',  None)
 
+    upto_tsid = _validate_upto(upto_tsid, freq_arg, case_dir, console)
+    if upto_tsid is None and getattr(args, 'upto', None) is not None:
+        return  # corrected to invalid (below freq); abort
+
     if start_tsid:
         table.add_row("Process from TSID", str(start_tsid))
     if upto_tsid:
@@ -348,6 +352,48 @@ def perform_cleanup(case_dir, args, console):
         console.print()
 
 
+def _validate_upto(upto_tsid, freq_arg, case_dir, console):
+    """Validate --upto against output frequency and return a corrected value.
+
+    Returns the (possibly adjusted) upto value, or None if upto was None.
+    Prints a warning if the value was not a multiple of the frequency.
+    """
+    if upto_tsid is None:
+        return None
+
+    # Determine frequency: explicit --freq flag wins, then simflow.config
+    freq = freq_arg
+    if freq is None:
+        try:
+            from src.core.simflow_config import SimflowConfig
+            cfg = SimflowConfig.find(case_dir)
+            freq = cfg.out_freq
+        except Exception:
+            freq = None
+
+    if freq is None or freq <= 0:
+        # Can't validate without a known frequency
+        return upto_tsid
+
+    if upto_tsid % freq == 0:
+        return upto_tsid
+
+    # Round down to nearest valid multiple
+    corrected = (upto_tsid // freq) * freq
+    console.print(
+        f"[yellow]Warning:[/yellow] --upto {upto_tsid} is not a multiple of "
+        f"outFreq={freq}. No .out file exists at that step."
+    )
+    if corrected > 0:
+        console.print(
+            f"[yellow]         Using nearest valid timestep: {corrected}[/yellow]"
+        )
+        return corrected
+    else:
+        console.print("[red]Error:[/red] --upto is smaller than the output frequency. Nothing to process.")
+        return None
+
+
 def submit_postprocessing_job(script_path, case_dir, args, console):
     """Submit postprocessing job to SLURM."""
 
@@ -374,6 +420,10 @@ def submit_postprocessing_job(script_path, case_dir, args, console):
     start_tsid = getattr(args, 'start', None)
     upto_tsid  = getattr(args, 'upto',  None)
     freq_arg   = getattr(args, 'freq',  None)
+
+    upto_tsid = _validate_upto(upto_tsid, freq_arg, case_dir, console)
+    if upto_tsid is None and getattr(args, 'upto', None) is not None:
+        return  # corrected to invalid (below freq); abort
 
     if start_tsid:
         table.add_row("Process from TSID", str(start_tsid))
