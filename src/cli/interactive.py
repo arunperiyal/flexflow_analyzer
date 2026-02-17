@@ -256,6 +256,7 @@ class FlexFlowCompleter(Completer):
         ('cp',      'Copy files or directories'),
         ('use',     'Set context (case/problem/rundir)'),
         ('unuse',   'Clear context'),
+        ('quota',   'Show disk quota for /home and /scratch'),
     ]
 
     # ---------------------------------------------------------------------------
@@ -1015,7 +1016,39 @@ class InteractiveShell:
                 self.console.print("[yellow]Usage:[/yellow] cp [options] <source> [sources...] <dest>  |  cp --help")
             return True
 
+        # Disk quota
+        if cmd == 'quota':
+            self._show_quota()
+            return True
+
         return False
+
+    def _show_quota(self) -> None:
+        """Show disk quota for /home and /scratch using lfs quota."""
+        import subprocess
+        user = os.environ.get('USER', '')
+        if not user:
+            self.console.print("[red]Error: $USER not set[/red]")
+            return
+
+        for fs in ['/home', '/scratch']:
+            self.console.print(f"[bold cyan]{fs}[/bold cyan]")
+            try:
+                result = subprocess.run(
+                    ['lfs', 'quota', '-u', user, fs, '-h'],
+                    capture_output=True, text=True
+                )
+                output = (result.stdout or '') + (result.stderr or '')
+                if output.strip():
+                    self.console.print(output.rstrip())
+                else:
+                    self.console.print("[dim]No output[/dim]")
+            except FileNotFoundError:
+                self.console.print("[yellow]lfs not found — not on a Lustre filesystem[/yellow]")
+                break
+            except Exception as e:
+                self.console.print(f"[red]Error running lfs quota: {e}[/red]")
+            self.console.print()
 
     def show_help(self) -> None:
         """Show help information."""
@@ -1052,6 +1085,7 @@ class InteractiveShell:
             ("clear", "Clear the screen"),
             ("history", "Show command history"),
             ("pwd", "Show current directory and contexts"),
+            ("quota", "Show disk quota for /home and /scratch"),
         ]
 
         for cmd, desc in shell_commands:
@@ -1066,23 +1100,18 @@ class InteractiveShell:
         browse_table.add_column("Description", style="white")
 
         browse_commands = [
-            ("ls [path]",              "List files and directories  (ls --help for options)"),
-            ("ls -l",                  "Long format with size and date"),
-            ("ls -a",                  "Show hidden files"),
-            ("ls -t",                  "Sort by modification time (newest first)"),
-            ("ls -v",                  "Natural sort (numbers ordered numerically)"),
-            ("cd <path>",              "Change directory  (cd --help for examples)"),
-            ("cat <file>",             "View file contents  (cat --help)"),
-            ("head [-n N] <file>",     "Show first N lines (default 10)  (head --help)"),
-            ("tail [-n N] <file>",     "Show last N lines (default 10)  (tail --help)"),
-            ("grep <pattern> [files]", "Search file contents  (grep --help for options)"),
-            ("find [pattern]",         "Find case directories  (find --help)"),
-            ("tree [depth]",           "Show directory tree  (tree --help)"),
-            ("rm [-r] [-f] <path>",    "Remove files or directories  (rm --help)"),
-            ("cp [-r] <src> <dest>",   "Copy files or directories  (cp --help)"),
-            ("alias",                  "List all defined aliases"),
-            ("alias sq='run sq'",      "Define alias: sq expands to 'run sq'"),
-            ("unalias sq",             "Remove alias 'sq'"),
+            ("ls",      "List files and directories  (ls --help for flags)"),
+            ("cd",      "Change directory"),
+            ("cat",     "View file contents"),
+            ("head",    "Show first N lines of a file"),
+            ("tail",    "Show last N lines of a file"),
+            ("grep",    "Search file contents"),
+            ("find",    "Find case directories"),
+            ("tree",    "Show directory tree"),
+            ("rm",      "Remove files or directories"),
+            ("cp",      "Copy files or directories"),
+            ("alias",   "Define or list command aliases"),
+            ("unalias", "Remove a command alias"),
         ]
 
         for cmd, desc in browse_commands:
