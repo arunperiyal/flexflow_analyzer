@@ -449,6 +449,15 @@ def create_case_from_config(case_config, ref_case_path, logger, force=False, dry
         if not dry_run:
             shutil.copy2(src, dest)
 
+    # Copy job scripts from ref case if present
+    for script in ('simflow_env.sh', 'preFlex.sh', 'mainFlex.sh', 'postFlex.sh'):
+        src = ref_case_path / script
+        if src.exists():
+            dest = target_path / script
+            logger.info(f"  {'Would copy' if dry_run else 'Copying'}: {script}")
+            if not dry_run:
+                shutil.copy2(src, dest)
+
     # Update simflow.config if problem name changed
     if problem_name != original_problem_name:
         logger.info(f"{'Would update' if dry_run else 'Updating'} problem name in simflow.config to: {problem_name}")
@@ -728,6 +737,15 @@ def execute_new(args):
 
             if not args.dry_run:
                 shutil.copy2(src, dest)
+
+        # Copy job scripts from ref case if present
+        for script in ('simflow_env.sh', 'preFlex.sh', 'mainFlex.sh', 'postFlex.sh'):
+            src = ref_case_path / script
+            if src.exists():
+                dest = target_path / script
+                logger.info(f"  {'Would copy' if args.dry_run else 'Copying'}: {script}")
+                if not args.dry_run:
+                    shutil.copy2(src, dest)
 
         # Update simflow.config if problem name changed
         if args.problem_name:
