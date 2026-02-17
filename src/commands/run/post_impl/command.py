@@ -155,7 +155,8 @@ def show_dry_run(script_path, case_dir, args, console):
     upto_tsid  = getattr(args, 'upto',  None)
     freq_arg   = getattr(args, 'freq',  None)
 
-    upto_tsid = _validate_upto(upto_tsid, freq_arg, case_dir, console)
+    start_tsid = _validate_start(start_tsid, freq_arg, case_dir, console)
+    upto_tsid  = _validate_upto(upto_tsid, freq_arg, case_dir, console)
     if upto_tsid is None and getattr(args, 'upto', None) is not None:
         return  # corrected to invalid (below freq); abort
 
@@ -352,6 +353,42 @@ def perform_cleanup(case_dir, args, console):
         console.print()
 
 
+def _validate_start(start_tsid, freq_arg, case_dir, console):
+    """Validate --start against output frequency and return a corrected value.
+
+    Rounds up to the nearest valid multiple so we don't skip available files.
+    Returns the (possibly adjusted) start value, or None if start was None.
+    """
+    if start_tsid is None:
+        return None
+
+    freq = freq_arg
+    if freq is None:
+        try:
+            from src.core.simflow_config import SimflowConfig
+            cfg = SimflowConfig.find(case_dir)
+            freq = cfg.out_freq
+        except Exception:
+            freq = None
+
+    if freq is None or freq <= 0:
+        return start_tsid
+
+    if start_tsid % freq == 0:
+        return start_tsid
+
+    # Round up to nearest valid multiple
+    corrected = ((start_tsid + freq - 1) // freq) * freq
+    console.print(
+        f"[yellow]Warning:[/yellow] --start {start_tsid} is not a multiple of "
+        f"outFreq={freq}. No .out file exists at that step."
+    )
+    console.print(
+        f"[yellow]         Using nearest valid timestep: {corrected}[/yellow]"
+    )
+    return corrected
+
+
 def _validate_upto(upto_tsid, freq_arg, case_dir, console):
     """Validate --upto against output frequency and return a corrected value.
 
@@ -421,7 +458,8 @@ def submit_postprocessing_job(script_path, case_dir, args, console):
     upto_tsid  = getattr(args, 'upto',  None)
     freq_arg   = getattr(args, 'freq',  None)
 
-    upto_tsid = _validate_upto(upto_tsid, freq_arg, case_dir, console)
+    start_tsid = _validate_start(start_tsid, freq_arg, case_dir, console)
+    upto_tsid  = _validate_upto(upto_tsid, freq_arg, case_dir, console)
     if upto_tsid is None and getattr(args, 'upto', None) is not None:
         return  # corrected to invalid (below freq); abort
 
