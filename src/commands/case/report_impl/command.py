@@ -110,12 +110,13 @@ def _last_binary_plt_timestep(case_path: Path, problem: str):
     if not plt_files:
         return None
 
-    # Pick the file with the latest modification time
-    newest = max(plt_files, key=lambda f: f.stat().st_mtime)
-
-    # Extract timestep from filename
-    ts = _extract_plt_step(newest.name, problem)
-    return ts
+    # Pick the file with the highest timestep number extracted from the filename
+    best_ts = None
+    for f in plt_files:
+        ts = _extract_plt_step(f.name, problem)
+        if ts is not None and (best_ts is None or ts > best_ts):
+            best_ts = ts
+    return best_ts
 
 
 def _extract_plt_step(filename: str, problem: str) -> 'int | None':
