@@ -142,8 +142,18 @@ $SIMPLT -n $SLURM_NTASKS -pb $PROBLEM -outFreq $FREQ ${FIRST_ARG} -last $END_TIM
 SIMPLT_EXIT=$?
 
 if [ $SIMPLT_EXIT -ne 0 ]; then
-    echo "Error: simPlt failed with exit code $SIMPLT_EXIT"
-    exit $SIMPLT_EXIT
+    # simPlt looks one outFreq step beyond the last processed timestep to check
+    # for more files.  When --upto is used the next step won't exist, causing a
+    # non-zero exit even though all requested files were created successfully.
+    # Treat this as success if the expected last plt file is present.
+    EXPECTED_LAST="${PROBLEM}.${END_TIME}.plt"
+    if [ -f "$EXPECTED_LAST" ]; then
+        echo "Note: simPlt exited with code $SIMPLT_EXIT but $EXPECTED_LAST exists."
+        echo "      Lookahead beyond END_TIME=$END_TIME is expected when using --upto."
+    else
+        echo "Error: simPlt failed with exit code $SIMPLT_EXIT"
+        exit $SIMPLT_EXIT
+    fi
 fi
 
 echo "✓ simPlt completed successfully"
