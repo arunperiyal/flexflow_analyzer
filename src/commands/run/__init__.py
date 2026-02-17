@@ -77,6 +77,7 @@ class RunCommand(BaseCommand):
         post_parser.add_argument('--upto', type=int, metavar='TSID', help='Process up to this timestep')
         post_parser.add_argument('--freq', type=int, metavar='N', help='Override output frequency')
         post_parser.add_argument('--convert', action='store_true', help='Run simPlt2Bin only (skip simPlt)')
+        post_parser.add_argument('--dependency', type=str, metavar='JOB_ID', help='Job dependency')
         post_parser.add_argument('--cleanup', action='store_true', help='Clean files before processing')
         post_parser.add_argument('--no-cleanup', action='store_true', help='Skip cleanup')
         post_parser.add_argument('--cleanup-only', action='store_true', help='Only run cleanup')
