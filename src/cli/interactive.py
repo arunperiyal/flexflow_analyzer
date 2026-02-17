@@ -880,13 +880,14 @@ class InteractiveShell:
                 self.console.print("[dim]Options:[/dim]")
                 self.console.print("  -l          Long format (size, date, name)")
                 self.console.print("  -a          Show hidden files")
+                self.console.print("  -t          Sort by modification time (newest first)")
                 self.console.print("  -v          Natural sort (numbers ordered numerically)")
                 self.console.print("  -h, --help  Show this help")
                 self.console.print("[dim]Examples:[/dim]")
                 self.console.print("  ls")
-                self.console.print("  ls -l")
+                self.console.print("  ls -lt")
                 self.console.print("  ls -lv RUN_1/")
-                self.console.print("  ls *.plt")
+                self.console.print("  ls -t *.plt")
             else:
                 self.list_directory(flags if flags else ['.'])
             return True
@@ -1068,6 +1069,7 @@ class InteractiveShell:
             ("ls [path]",              "List files and directories  (ls --help for options)"),
             ("ls -l",                  "Long format with size and date"),
             ("ls -a",                  "Show hidden files"),
+            ("ls -t",                  "Sort by modification time (newest first)"),
             ("ls -v",                  "Natural sort (numbers ordered numerically)"),
             ("cd <path>",              "Change directory  (cd --help for examples)"),
             ("cat <file>",             "View file contents  (cat --help)"),
@@ -1221,6 +1223,7 @@ class InteractiveShell:
             show_all = '-a' in args or '--all' in args
             long_format = '-l' in args or '--long' in args
             natural_sort = '-v' in args
+            sort_by_time = '-t' in args
             paths = [arg for arg in args if not arg.startswith('-')]
 
             if not paths:
@@ -1255,15 +1258,15 @@ class InteractiveShell:
                 if target.is_dir():
                     # Flush any pending file matches first
                     if matched_files:
-                        self._list_matched_files(matched_files, long_format, natural_sort)
+                        self._list_matched_files(matched_files, long_format, natural_sort, sort_by_time)
                         matched_files = []
-                    self._list_dir_contents(target, show_all, long_format, natural_sort)
+                    self._list_dir_contents(target, show_all, long_format, natural_sort, sort_by_time)
                 else:
                     matched_files.append(target)
 
             # Display any remaining file matches
             if matched_files:
-                self._list_matched_files(matched_files, long_format, natural_sort)
+                self._list_matched_files(matched_files, long_format, natural_sort, sort_by_time)
 
         except Exception as e:
             self.console.print(f"[red]Error listing directory: {e}[/red]")
@@ -1276,7 +1279,7 @@ class InteractiveShell:
         return (not path.is_dir(), [int(p) if p.isdigit() else p.lower() for p in parts])
 
     def _list_dir_contents(self, directory: Path, show_all: bool, long_format: bool,
-                           natural_sort: bool = False) -> None:
+                           natural_sort: bool = False, sort_by_time: bool = False) -> None:
         """
         List directory contents with formatting.
 
@@ -1285,9 +1288,12 @@ class InteractiveShell:
             show_all: Show hidden files
             long_format: Show detailed information
             natural_sort: Sort numbers within names numerically (-v)
+            sort_by_time: Sort by modification time, newest first (-t)
         """
         try:
-            if natural_sort:
+            if sort_by_time:
+                items = sorted(directory.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True)
+            elif natural_sort:
                 items = sorted(directory.iterdir(), key=self._natural_sort_key)
             else:
                 items = sorted(directory.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower()))
@@ -1428,7 +1434,7 @@ class InteractiveShell:
         self.console.print(table)
 
     def _list_matched_files(self, files: List[Path], long_format: bool,
-                            natural_sort: bool = False) -> None:
+                            natural_sort: bool = False, sort_by_time: bool = False) -> None:
         """
         Display a list of matched files (from glob expansion) using compact formatting.
 
@@ -1436,11 +1442,14 @@ class InteractiveShell:
             files: List of file paths to display
             long_format: Show detailed information
             natural_sort: Sort numbers within names numerically (-v)
+            sort_by_time: Sort by modification time, newest first (-t)
         """
         import datetime
         from rich.columns import Columns
 
-        if natural_sort:
+        if sort_by_time:
+            files = sorted(files, key=lambda x: x.stat().st_mtime, reverse=True)
+        elif natural_sort:
             files = sorted(files, key=self._natural_sort_key)
 
         if long_format:
