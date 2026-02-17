@@ -1618,8 +1618,8 @@ class InteractiveShell:
 
             # Check if it exists
             if not case_path.exists():
-                self.console.print(f"[yellow]Warning:[/yellow] Case directory does not exist: {case_path}")
-                self.console.print("[dim]Setting context anyway - you can still use it with commands[/dim]")
+                self.console.print(f"[red]Error:[/red] Case directory does not exist: {case_path}")
+                return
 
             self._current_case = str(case_path)
             self._current_case_name = case_path.name  # Show just the name in prompt
