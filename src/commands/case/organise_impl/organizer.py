@@ -256,9 +256,18 @@ class CaseOrganizer:
         # Nothing to do beyond archiving (which runs without confirmation)
         has_deletions = len(self.files_to_delete) > 0
 
+        dry_run = getattr(self.args, 'dry_run', False)
+
         if do_organise or do_clean_output or do_clean_plt:
             # Show summary before asking confirmation
             self._show_summary()
+
+            if dry_run:
+                self.console.print(
+                    f"[bold cyan]Dry run:[/bold cyan] {len(self.files_to_delete)} files "
+                    f"would be deleted. No changes made."
+                )
+                return
 
             if has_deletions and not self.args.no_confirm:
                 if not self._confirm_deletion():

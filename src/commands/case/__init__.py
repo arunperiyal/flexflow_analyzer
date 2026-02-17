@@ -100,6 +100,8 @@ class CaseCommand(BaseCommand):
                                     help='Create log file of deletions')
         organise_parser.add_argument('--no-confirm', action='store_true',
                                     help='Skip confirmation prompts')
+        organise_parser.add_argument('--dry-run', action='store_true',
+                                    help='Show what would be deleted without deleting anything')
         organise_parser.add_argument('-v', '--verbose', action='store_true',
                                     help='Enable verbose output')
         organise_parser.add_argument('-h', '--help', action='store_true',
