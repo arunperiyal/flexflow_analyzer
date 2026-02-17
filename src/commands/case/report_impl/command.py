@@ -1,7 +1,6 @@
 """case report — compact table of all cases listed in .cases."""
 
 import re
-import os
 from pathlib import Path
 
 from rich.console import Console
@@ -41,24 +40,18 @@ def execute_report(args):
     tbl.add_column('Case',              style='cyan',   no_wrap=True)
     tbl.add_column('Last (archive)',    justify='right')
     tbl.add_column('Last (binary PLT)', justify='right')
-    tbl.add_column('Rundir size',       justify='right')
 
     for entry in entries:
         case_path = Path(entry['path'])
         name      = entry['name']
 
         if not case_path.is_dir():
-            tbl.add_row(name, '[red]missing[/red]', '—', '—')
+            tbl.add_row(name, '[red]missing[/red]', '—')
             continue
 
-        # --- simflow.config (need problem name and run dir) ---
-        cfg          = _parse_config(case_path / 'simflow.config')
-        problem      = cfg.get('problem', '').strip().strip('"').strip("'") or None
-        raw_dir      = cfg.get('dir', '').strip().strip('"').strip("'")
-        run_dir_path = None
-        if raw_dir:
-            rd = Path(raw_dir)
-            run_dir_path = rd if rd.is_absolute() else (case_path / rd).resolve()
+        # --- simflow.config (need problem name) ---
+        cfg     = _parse_config(case_path / 'simflow.config')
+        problem = cfg.get('problem', '').strip().strip('"').strip("'") or None
 
         # --- Column 1: last timestep from othd_files/ archive ---
         archive_last = _last_othd_timestep(case_path)
@@ -68,13 +61,7 @@ def execute_report(args):
         binary_last = _last_binary_plt_timestep(case_path, problem)
         binary_str  = str(binary_last) if binary_last is not None else '[dim]—[/dim]'
 
-        # --- Column 3: rundir size ---
-        size_str = '[dim]—[/dim]'
-        if run_dir_path and run_dir_path.is_dir():
-            size_bytes = _dir_size(run_dir_path)
-            size_str   = _fmt_size(size_bytes)
-
-        tbl.add_row(name, archive_str, binary_str, size_str)
+        tbl.add_row(name, archive_str, binary_str)
 
     console.print(tbl)
     console.print()
@@ -150,31 +137,6 @@ def _extract_plt_step(filename: str, problem: str) -> 'int | None':
     return None
 
 
-def _dir_size(directory: Path) -> int:
-    """Return total size in bytes of all files directly inside *directory* (non-recursive)."""
-    total = 0
-    try:
-        with os.scandir(directory) as it:
-            for entry in it:
-                if entry.is_file(follow_symlinks=False):
-                    try:
-                        total += entry.stat().st_size
-                    except OSError:
-                        pass
-    except OSError:
-        pass
-    return total
-
-
-def _fmt_size(n: int) -> str:
-    """Human-readable file size."""
-    for unit in ('B', 'KB', 'MB', 'GB', 'TB'):
-        if n < 1024:
-            return f"{n:.1f} {unit}" if unit != 'B' else f"{n} B"
-        n /= 1024
-    return f"{n:.1f} PB"
-
-
 # ---------------------------------------------------------------------------
 # Config parser
 # ---------------------------------------------------------------------------
@@ -219,7 +181,6 @@ def _show_help(console):
     console.print("    Case              Case directory name")
     console.print("    Last (archive)    Highest timestep across all .othd files in othd_files/")
     console.print("    Last (binary PLT) Timestep of the most recently modified PLT in binary/")
-    console.print("    Rundir size       Total size of files in the active run directory")
     console.print()
     console.print("[bold]EXAMPLES:[/bold]")
     console.print("    case report")
