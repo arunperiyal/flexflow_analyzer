@@ -217,6 +217,11 @@ def show_dry_run(script_path, case_dir, args, console):
         else:
             table.add_row("Partition Override", f"[bold yellow]{partition_override}[/bold yellow] (via sbatch CLI)")
 
+    # Check for wall-time override
+    wall_time_dry = getattr(args, 'wall_time', None)
+    if wall_time_dry:
+        table.add_row("Wall Time", f"[bold yellow]{wall_time_dry}[/bold yellow] [dim](this submission only)[/dim]")
+
     # Parse SBATCH directives from script
     sbatch_info = parse_sbatch_directives(script_path)
     if sbatch_info:
@@ -236,6 +241,8 @@ def show_dry_run(script_path, case_dir, args, console):
         cmd_parts.append(f"--dependency=afterok:{args.dependency}")
     if partition_override and not (headers_dir / f'{partition_override}.header').exists():
         cmd_parts.append(f"--partition={partition_override}")
+    if wall_time_dry:
+        cmd_parts.append(f"--time={wall_time_dry}")
     cmd_parts.append(script_path.name)
 
     console.print(f"[dim]  {' '.join(cmd_parts)}[/dim]")
@@ -593,6 +600,10 @@ def submit_main_job(script_path, case_dir, args, console):
     if sbatch_info.get('Tasks'):
         table.add_row("Tasks", sbatch_info['Tasks'])
 
+    wall_time = getattr(args, 'wall_time', None)
+    if wall_time:
+        table.add_row("Wall Time", f"[bold yellow]{wall_time}[/bold yellow] [dim](this submission only)[/dim]")
+
     console.print(table)
     console.print()
 
@@ -619,6 +630,10 @@ def submit_main_job(script_path, case_dir, args, console):
         # Fall back to --partition CLI flag only when no header file was applied
         if partition_override and not header_applied:
             cmd.append(f'--partition={partition_override}')
+
+        # Wall-time override — temporary, does not modify the script
+        if wall_time:
+            cmd.append(f'--time={wall_time}')
 
         cmd.append(script_path.name)
 

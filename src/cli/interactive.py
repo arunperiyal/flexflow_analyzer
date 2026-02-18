@@ -171,6 +171,7 @@ class FlexFlowCompleter(Completer):
             '--reset':      'Comment out restartFlag/restartTsId and start fresh',
             '--dependency': 'Job dependency (job ID)',
             '--partition':  'Override partition (sbatch CLI, does not edit script)',
+            '--wall-time':  'Override wall time for this submission only (HH:MM:SS)',
         },
         ('run', 'post'):     {
             **_COMMON_FLAGS,
@@ -216,6 +217,7 @@ class FlexFlowCompleter(Completer):
             '--simflow-home': 'Set SIMFLOW_HOME in generated simflow_env.sh',
             '--gmsh-path':    'Set GMSH executable path in generated simflow_env.sh',
             '--partition':    'Override partition in generated mainFlex.sh',
+            '--wall-time':    'Override wall time in generated mainFlex.sh (HH:MM:SS)',
         },
 
         # ── top-level commands with no subcommands ─────────────────────────

@@ -288,6 +288,17 @@ def generate_script_templates(args, logger):
                     flags=re.MULTILINE,
                 )
 
+        # Apply --wall-time override (main script only) — rewrite #SBATCH -t line
+        wall_time = getattr(args, 'wall_time', None)
+        if script == 'main' and wall_time:
+            import re
+            content = re.sub(
+                r'^(#SBATCH\s+-t\s+)\S+',
+                f'\\g<1>{wall_time}',
+                content,
+                flags=re.MULTILINE,
+            )
+
         # Write output
         logger.info(f"Creating {script} script: {output_file}")
         with open(output_file, 'w') as f:
@@ -303,6 +314,8 @@ def generate_script_templates(args, logger):
             description += f' [GMSH={args.gmsh_path}]'
         if script == 'main' and getattr(args, 'partition', None):
             description += f' [partition={args.partition}]'
+        if script == 'main' and wall_time:
+            description += f' [wall-time={wall_time}]'
 
         generated.append((output_file.name, description))
 

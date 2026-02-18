@@ -61,6 +61,7 @@ class RunCommand(BaseCommand):
         main_parser.add_argument('--reset', action='store_true', help='Comment out restartFlag/restartTsId and start fresh')
         main_parser.add_argument('--dependency', type=str, metavar='JOB_ID', help='Job dependency')
         main_parser.add_argument('--partition', type=str, metavar='NAME', help='Override partition (passed to sbatch, does not modify script)')
+        main_parser.add_argument('--wall-time', type=str, metavar='HH:MM:SS', help='Override wall time for this submission only (passed to sbatch)')
         main_parser.add_argument('--dry-run', action='store_true', help='Show what would be submitted')
         main_parser.add_argument('--show', action='store_true', help='Display script contents')
         main_parser.add_argument('-v', '--verbose', action='store_true', help='Verbose output')
