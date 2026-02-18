@@ -12,13 +12,13 @@ from rich import box
 def _apply_partition_header(script_path: Path, partition: str, console) -> bool:
     """
     Replace the #SBATCH header block in *script_path* with the contents of
-    src/templates/scripts/headers/<partition>.header.
+    src/templates/scripts/headers/main/<partition>.header.
 
     Returns True if a header file was found and applied, False otherwise.
     """
     # Locate the header file relative to this source file
     headers_dir = Path(__file__).parent.parent.parent.parent / 'templates' / 'scripts' / 'headers'
-    header_file = headers_dir / f'{partition}.header'
+    header_file = headers_dir / 'main' / f'{partition}.header'
 
     if not header_file.exists():
         return False
@@ -211,7 +211,7 @@ def show_dry_run(script_path, case_dir, args, console):
     partition_override = getattr(args, 'partition', None)
     if partition_override:
         headers_dir = Path(__file__).parent.parent.parent.parent / 'templates' / 'scripts' / 'headers'
-        has_header = (headers_dir / f'{partition_override}.header').exists()
+        has_header = (headers_dir / 'main' / f'{partition_override}.header').exists()
         if has_header:
             table.add_row("Partition", f"[bold yellow]{partition_override}[/bold yellow] [dim](header will be applied to {script_path.name})[/dim]")
         else:
@@ -239,7 +239,7 @@ def show_dry_run(script_path, case_dir, args, console):
     cmd_parts = ["sbatch"]
     if hasattr(args, 'dependency') and args.dependency:
         cmd_parts.append(f"--dependency=afterok:{args.dependency}")
-    if partition_override and not (headers_dir / f'{partition_override}.header').exists():
+    if partition_override and not (headers_dir / 'main' / f'{partition_override}.header').exists():
         cmd_parts.append(f"--partition={partition_override}")
     if wall_time_dry:
         cmd_parts.append(f"--time={wall_time_dry}")

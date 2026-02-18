@@ -185,12 +185,7 @@ def generate_script_templates(args, logger):
     template_dir = os.path.join(Config.get_install_dir(), 'templates', 'scripts')
 
     # Scripts to generate
-    scripts_to_generate = []
-
-    if script_type == 'all':
-        scripts_to_generate = ['env', 'pre', 'main', 'post']
-    else:
-        scripts_to_generate = [script_type]
+    scripts_to_generate = [script_type]
 
     # Generate scripts
     generated = []
@@ -257,11 +252,10 @@ def generate_script_templates(args, logger):
                 flags=re.MULTILINE,
             )
 
-        # Apply --partition override (main script only)
+        # Apply --partition override (all scripts except env)
         partition_override = getattr(args, 'partition', None)
-        if script == 'main' and partition_override:
-            headers_dir = Path(template_dir) / 'headers'
-            header_file = headers_dir / f'{partition_override}.header'
+        if script != 'env' and partition_override:
+            header_file = Path(template_dir) / 'headers' / script / f'{partition_override}.header'
             if header_file.exists():
                 # Replace the full #SBATCH block with the header template
                 header_block = header_file.read_text().replace('{CASE_NAME}', case_name)
@@ -279,21 +273,21 @@ def generate_script_templates(args, logger):
                         + lines[sbatch_end + 1:]
                     )
             else:
-                # No header file: fall back to replacing just the -p line
+                # No header file: fall back to replacing just the -p / --partition line
                 import re
                 content = re.sub(
-                    r'^(#SBATCH\s+-p\s+)\S+',
+                    r'^(#SBATCH\s+(?:-p\s+|--partition[=\s]+))\S+',
                     f'\\g<1>{partition_override}',
                     content,
                     flags=re.MULTILINE,
                 )
 
-        # Apply --wall-time override (main script only) — rewrite #SBATCH -t line
+        # Apply --wall-time override (all scripts except env) — rewrite #SBATCH -t / --time line
         wall_time = getattr(args, 'wall_time', None)
-        if script == 'main' and wall_time:
+        if script != 'env' and wall_time:
             import re
             content = re.sub(
-                r'^(#SBATCH\s+-t\s+)\S+',
+                r'^(#SBATCH\s+(?:-t\s+|--time[=\s]+))\S+',
                 f'\\g<1>{wall_time}',
                 content,
                 flags=re.MULTILINE,
@@ -312,9 +306,9 @@ def generate_script_templates(args, logger):
             description += f' [SIMFLOW_HOME={args.simflow_home}]'
         if script == 'env' and getattr(args, 'gmsh_path', None):
             description += f' [GMSH={args.gmsh_path}]'
-        if script == 'main' and getattr(args, 'partition', None):
+        if script != 'env' and getattr(args, 'partition', None):
             description += f' [partition={args.partition}]'
-        if script == 'main' and wall_time:
+        if script != 'env' and wall_time:
             description += f' [wall-time={wall_time}]'
 
         generated.append((output_file.name, description))

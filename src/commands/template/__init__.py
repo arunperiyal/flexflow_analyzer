@@ -59,16 +59,16 @@ class TemplateCommand(BaseCommand):
         script_parser = template_subparsers.add_parser('script', add_help=False,
                                                        help='Generate SLURM job script templates')
         script_parser.add_argument('script_type', nargs='?',
-                                   choices=['pre', 'main', 'post', 'env', 'all'],
-                                   help='Script type: pre, main, post, env, or all')
+                                   choices=['pre', 'main', 'post', 'env'],
+                                   help='Script type: pre, main, post, or env')
         script_parser.add_argument('case_dir', nargs='?', type=str,
                                   help='Case directory to create scripts in (optional)')
         script_parser.add_argument('--simflow-home', type=str, metavar='PATH',
                                   help='Set SIMFLOW_HOME path in the generated simflow_env.sh')
         script_parser.add_argument('--partition', type=str, metavar='NAME',
-                                  help='Override partition in the generated mainFlex.sh')
+                                  help='Override partition header in the generated script')
         script_parser.add_argument('--wall-time', type=str, metavar='HH:MM:SS',
-                                  help='Override wall time in the generated mainFlex.sh')
+                                  help='Override wall time in the generated script')
         script_parser.add_argument('--gmsh-path', type=str, metavar='PATH',
                                   help='Set GMSH path in the generated simflow_env.sh')
         script_parser.add_argument('--force', action='store_true',
@@ -130,7 +130,7 @@ class TemplateCommand(BaseCommand):
 
         table.add_row("plot", "single, multi", "Plot configuration templates")
         table.add_row("case", "single, multi", "Case creation templates")
-        table.add_row("script", "pre, main, post, env, all", "SLURM job script templates")
+        table.add_row("script", "pre, main, post, env", "SLURM job script templates")
 
         console.print("[bold]DOMAINS:[/bold]")
         console.print(table)
@@ -141,7 +141,8 @@ class TemplateCommand(BaseCommand):
         console.print("    flexflow template case single my_case.yaml")
         console.print("    flexflow template case multi batch_cases.yaml")
         console.print("    flexflow template script post Case001")
-        console.print("    flexflow template script all Case001")
+        console.print("    flexflow template script post Case001 --partition shared")
+        console.print("    flexflow template script main Case001 --partition medium")
         console.print()
         console.print("[bold]OPTIONS:[/bold]")
         console.print("    --force         Force overwrite existing file")
