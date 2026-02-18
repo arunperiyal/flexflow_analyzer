@@ -1,0 +1,5 @@
+#SBATCH --job-name=main{CASE_NAME}      # name of the job
+#SBATCH --partition=part1               # partition (max CPUs: 32, max time: 03:00:00)
+#SBATCH --ntasks=32                     # number of MPI processes
+#SBATCH --mem=4G                        # memory per node
+#SBATCH --time=03:00:00                 # walltime in HH:MM:SS (Max: 03:00:00)

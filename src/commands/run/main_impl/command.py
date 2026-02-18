@@ -311,7 +311,7 @@ def _parse_script_sbatch(script_path) -> dict:
                 if not line.startswith('#SBATCH'):
                     continue
                 body = line[7:].strip()
-                m = re.match(r'-n\s+(\d+)', body)
+                m = re.match(r'(?:-n|--ntasks)[=\s]+(\d+)', body)
                 if m:
                     result['n'] = int(m.group(1))
                 m2 = re.match(r'--ntasks-per-node[=\s]+(\d+)', body)
@@ -459,18 +459,18 @@ def parse_sbatch_directives(script_path):
                         flag, value = parts
                         flag = flag.lstrip('-')
 
-                        # Map common flags to readable names
+                        # Map common flags to readable names (short and long forms)
                         flag_names = {
-                            'J': 'Job Name',
-                            'p': 'Partition',
-                            'n': 'Tasks',
-                            'N': 'Nodes',
-                            't': 'Time Limit',
+                            'J': 'Job Name',       'job-name': 'Job Name',
+                            'p': 'Partition',      'partition': 'Partition',
+                            'n': 'Tasks',          'ntasks': 'Tasks',
+                            'N': 'Nodes',          'nodes': 'Nodes',
+                            't': 'Time Limit',     'time': 'Time Limit',
                             'cpus-per-task': 'CPUs per Task',
                             'ntasks-per-node': 'Tasks per Node',
-                            'mem': 'Memory',
-                            'o': 'Output File',
-                            'e': 'Error File',
+                            'mem': 'Memory',       'mem-per-cpu': 'Memory/CPU',
+                            'o': 'Output File',    'output': 'Output File',
+                            'e': 'Error File',     'error': 'Error File',
                         }
 
                         readable_name = flag_names.get(flag, flag)
