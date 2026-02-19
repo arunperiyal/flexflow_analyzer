@@ -1,4 +1,4 @@
-#SBATCH --job-name=main{CASE_NAME}      # name of the job
+#SBATCH --job-name={SCRIPT_TYPE}{CASE_NAME}      # name of the job
 #SBATCH --partition=part3               # partition (max CPUs: 128, max time: 72:00:00)
 #SBATCH --ntasks=128                    # number of MPI processes
 #SBATCH --mem=16G                       # memory per node
