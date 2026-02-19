@@ -7,6 +7,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from rich import box
+from ..shared_helpers import apply_partition_header
 
 
 def execute_pre(args):
@@ -141,6 +142,16 @@ def show_dry_run(script_path, case_dir, args, console):
     table.add_row("Script", script_path.name)
     table.add_row("Working Directory", str(case_dir))
 
+    # Check if partition header will be applied
+    partition_override = getattr(args, 'partition', None)
+    if partition_override:
+        headers_dir = Path(__file__).parent.parent.parent / 'templates' / 'scripts' / 'headers'
+        header_file = headers_dir / f'{partition_override}.header'
+        if header_file.exists():
+            table.add_row("Partition Header", f"[bold yellow]{partition_override}.header will be applied[/bold yellow]")
+        else:
+            table.add_row("Partition Header", f"[bold red]{partition_override}.header not found[/bold red]")
+
     gmsh_override = getattr(args, 'gmsh', None)
     if gmsh_override:
         table.add_row("gmsh Override", f"[bold yellow]{gmsh_override}[/bold yellow] (via --export GMSH)")
@@ -211,6 +222,13 @@ def submit_preprocessing_job(script_path, case_dir, args, console):
         console.print("[dim]Cannot submit job without SLURM[/dim]")
         console.print()
         return
+
+    # Apply partition header if requested
+    partition_override = getattr(args, 'partition', None)
+    if partition_override:
+        if not apply_partition_header(script_path, partition_override, 'pre', console):
+            console.print(f"[yellow]Warning: Partition header '{partition_override}.header' not found — proceeding with existing script[/yellow]")
+            console.print()
 
     console.print()
     console.print("[bold cyan]Submitting Preprocessing Job[/bold cyan]")
@@ -311,10 +329,11 @@ This typically runs mesh generation (gmsh) and mesh conversion (simGmshCnvt).
     run pre [case_directory] [options]
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
-    {Colors.YELLOW}--gmsh PATH{Colors.RESET}   Override gmsh executable (sbatch --export=GMSH=PATH, script unchanged)
-    {Colors.YELLOW}--dry-run{Colors.RESET}     Show what would be submitted without actually submitting
-    {Colors.YELLOW}--show{Colors.RESET}        Display the script content
-    {Colors.YELLOW}-h, --help{Colors.RESET}    Show this help message
+    {Colors.YELLOW}--gmsh PATH{Colors.RESET}      Override gmsh executable (sbatch --export=GMSH=PATH, script unchanged)
+    {Colors.YELLOW}--partition NAME{Colors.RESET} Apply partition header to script
+    {Colors.YELLOW}--dry-run{Colors.RESET}        Show what would be submitted without actually submitting
+    {Colors.YELLOW}--show{Colors.RESET}           Display the script content
+    {Colors.YELLOW}-h, --help{Colors.RESET}       Show this help message
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
     # Submit preprocessing for specific case
@@ -326,6 +345,9 @@ This typically runs mesh generation (gmsh) and mesh conversion (simGmshCnvt).
 
     # Override gmsh path at submit time (does not modify preFlex.sh)
     run pre Case001 --gmsh /usr/local/bin/gmsh
+
+    # Apply partition header before submission
+    run pre Case001 --partition shared
 
     # Preview what will be submitted
     run pre Case001 --dry-run

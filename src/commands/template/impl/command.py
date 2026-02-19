@@ -255,10 +255,16 @@ def generate_script_templates(args, logger):
         # Apply --partition override (all scripts except env)
         partition_override = getattr(args, 'partition', None)
         if script != 'env' and partition_override:
-            header_file = Path(template_dir) / 'headers' / script / f'{partition_override}.header'
+            header_file = Path(template_dir) / 'headers' / f'{partition_override}.header'
             if header_file.exists():
+                # Determine script_type for {SCRIPT_TYPE} substitution
+                script_type_placeholder = script  # 'pre', 'main', 'post'
+
                 # Replace the full #SBATCH block with the header template
-                header_block = header_file.read_text().replace('{CASE_NAME}', case_name)
+                header_block = header_file.read_text()
+                header_block = header_block.replace('{CASE_NAME}', case_name)
+                header_block = header_block.replace('{SCRIPT_TYPE}', script_type_placeholder)
+
                 lines = content.splitlines(keepends=True)
                 sbatch_start = sbatch_end = None
                 for i, line in enumerate(lines):

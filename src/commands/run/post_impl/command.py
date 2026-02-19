@@ -7,6 +7,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from rich import box
+from ..shared_helpers import apply_partition_header
 
 
 def execute_post(args):
@@ -150,6 +151,16 @@ def show_dry_run(script_path, case_dir, args, console):
     table.add_row("Case Directory", str(case_dir))
     table.add_row("Script", script_path.name)
     table.add_row("Working Directory", str(case_dir))
+
+    # Check if partition header will be applied
+    partition_override = getattr(args, 'partition', None)
+    if partition_override:
+        headers_dir = Path(__file__).parent.parent.parent / 'templates' / 'scripts' / 'headers'
+        header_file = headers_dir / f'{partition_override}.header'
+        if header_file.exists():
+            table.add_row("Partition Header", f"[bold yellow]{partition_override}.header will be applied[/bold yellow]")
+        else:
+            table.add_row("Partition Header", f"[bold red]{partition_override}.header not found[/bold red]")
 
     start_tsid   = getattr(args, 'start',   None)
     upto_tsid    = getattr(args, 'upto',    None)
@@ -447,6 +458,13 @@ def submit_postprocessing_job(script_path, case_dir, args, console):
         console.print()
         return
 
+    # Apply partition header if requested
+    partition_override = getattr(args, 'partition', None)
+    if partition_override:
+        if not apply_partition_header(script_path, partition_override, 'post', console):
+            console.print(f"[yellow]Warning: Partition header '{partition_override}.header' not found — proceeding with existing script[/yellow]")
+            console.print()
+
     console.print()
     console.print("[bold cyan]Submitting Postprocessing Job[/bold cyan]")
     console.print()
@@ -584,16 +602,17 @@ This typically runs simPlt (PLT generation) and simPlt2Bin (binary conversion).
     run post [case_directory] [options]
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
-    {Colors.YELLOW}--start TSID{Colors.RESET}      Process from this timestep (rounds up to nearest outFreq multiple)
-    {Colors.YELLOW}--upto TSID{Colors.RESET}       Process up to this timestep (rounds down to nearest outFreq multiple)
-    {Colors.YELLOW}--freq N{Colors.RESET}          Override output frequency from simflow.config
-    {Colors.YELLOW}--convert{Colors.RESET}         Run simPlt2Bin only (skip simPlt; .plt files must already exist)
-    {Colors.YELLOW}--cleanup{Colors.RESET}         Clean up files with binary PLT before submitting
-    {Colors.YELLOW}--cleanup-only{Colors.RESET}    Only perform cleanup, don't submit job
-    {Colors.YELLOW}--dependency JOB_ID{Colors.RESET} Wait for another job to complete first
-    {Colors.YELLOW}--dry-run{Colors.RESET}         Show what would be submitted
-    {Colors.YELLOW}--show{Colors.RESET}            Display the script content
-    {Colors.YELLOW}-h, --help{Colors.RESET}        Show this help message
+    {Colors.YELLOW}--start TSID{Colors.RESET}         Process from this timestep (rounds up to nearest outFreq multiple)
+    {Colors.YELLOW}--upto TSID{Colors.RESET}          Process up to this timestep (rounds down to nearest outFreq multiple)
+    {Colors.YELLOW}--freq N{Colors.RESET}             Override output frequency from simflow.config
+    {Colors.YELLOW}--convert{Colors.RESET}            Run simPlt2Bin only (skip simPlt; .plt files must already exist)
+    {Colors.YELLOW}--partition NAME{Colors.RESET}     Apply partition header to script
+    {Colors.YELLOW}--cleanup{Colors.RESET}            Clean up files with binary PLT before submitting
+    {Colors.YELLOW}--cleanup-only{Colors.RESET}       Only perform cleanup, don't submit job
+    {Colors.YELLOW}--dependency JOB_ID{Colors.RESET}  Wait for another job to complete first
+    {Colors.YELLOW}--dry-run{Colors.RESET}            Show what would be submitted
+    {Colors.YELLOW}--show{Colors.RESET}               Display the script content
+    {Colors.YELLOW}-h, --help{Colors.RESET}           Show this help message
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
     # Submit postprocessing
@@ -614,6 +633,9 @@ This typically runs simPlt (PLT generation) and simPlt2Bin (binary conversion).
 
     # Chain after main simulation
     run post Case001 --dependency 12345
+
+    # Apply partition header before submission
+    run post Case001 --partition shared
 
 {Colors.BOLD}SCRIPT PRIORITY:{Colors.RESET}
     The command looks for scripts in this order:

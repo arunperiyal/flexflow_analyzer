@@ -159,9 +159,10 @@ class FlexFlowCompleter(Completer):
         ('run', 'check'):    {**_COMMON_FLAGS},
         ('run', 'pre'):      {
             **_COMMON_FLAGS,
-            '--gmsh':    'Override gmsh executable path (sbatch --export, script unchanged)',
-            '--dry-run': 'Preview without submitting',
-            '--show':    'Display script contents',
+            '--gmsh':      'Override gmsh executable path (sbatch --export, script unchanged)',
+            '--partition': 'Apply partition header to script',
+            '--dry-run':   'Preview without submitting',
+            '--show':      'Display script contents',
         },
         ('run', 'main'):     {
             **_COMMON_FLAGS,
@@ -170,7 +171,7 @@ class FlexFlowCompleter(Completer):
             '--restart':    'Restart from specific timestep',
             '--reset':      'Comment out restartFlag/restartTsId and start fresh',
             '--dependency': 'Job dependency (job ID)',
-            '--partition':  'Override partition (sbatch CLI, does not edit script)',
+            '--partition':  'Apply partition header to script',
             '--wall-time':  'Override wall time for this submission only (HH:MM:SS)',
         },
         ('run', 'post'):     {
@@ -181,6 +182,7 @@ class FlexFlowCompleter(Completer):
             '--upto':         'Process up to this timestep',
             '--freq':         'Override output frequency',
             '--convert':      'Run simPlt2Bin only (skip simPlt)',
+            '--partition':    'Apply partition header to script',
             '--cleanup':      'Clean files before processing',
             '--no-cleanup':   'Skip cleanup',
             '--cleanup-only': 'Only run cleanup',

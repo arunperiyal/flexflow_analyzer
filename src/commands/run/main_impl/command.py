@@ -8,6 +8,8 @@ from rich.panel import Panel
 from rich.table import Table
 from rich import box
 
+from ..shared_helpers import apply_partition_header
+
 
 def _apply_partition_header(script_path: Path, partition: str, console) -> bool:
     """
@@ -211,7 +213,7 @@ def show_dry_run(script_path, case_dir, args, console):
     partition_override = getattr(args, 'partition', None)
     if partition_override:
         headers_dir = Path(__file__).parent.parent.parent.parent / 'templates' / 'scripts' / 'headers'
-        has_header = (headers_dir / 'main' / f'{partition_override}.header').exists()
+        has_header = (headers_dir / f'{partition_override}.header').exists()
         if has_header:
             table.add_row("Partition", f"[bold yellow]{partition_override}[/bold yellow] [dim](header will be applied to {script_path.name})[/dim]")
         else:
@@ -239,7 +241,7 @@ def show_dry_run(script_path, case_dir, args, console):
     cmd_parts = ["sbatch"]
     if hasattr(args, 'dependency') and args.dependency:
         cmd_parts.append(f"--dependency=afterok:{args.dependency}")
-    if partition_override and not (headers_dir / 'main' / f'{partition_override}.header').exists():
+    if partition_override and not (headers_dir / f'{partition_override}.header').exists():
         cmd_parts.append(f"--partition={partition_override}")
     if wall_time_dry:
         cmd_parts.append(f"--time={wall_time_dry}")
@@ -614,7 +616,7 @@ def submit_main_job(script_path, case_dir, args, console):
     # Apply partition header if a template exists for the requested partition
     header_applied = False
     if partition_override:
-        header_applied = _apply_partition_header(script_path, partition_override, console)
+        header_applied = apply_partition_header(script_path, partition_override, 'main', console)
         if header_applied:
             console.print(f"[dim]Applied {partition_override}.header to {script_path.name}[/dim]")
             console.print()
