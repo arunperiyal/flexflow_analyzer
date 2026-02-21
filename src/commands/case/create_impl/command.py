@@ -428,6 +428,14 @@ def create_case_from_config(case_config, ref_case_path, logger, force=False, dry
     geo_params = case_config.get('geo', {})
     def_params = case_config.get('def', {})
     time_params = case_config.get('time', {})
+
+    # Map time parameters to .def file parameter names
+    # time.maxsteps -> maxTimeSteps, time.dt -> initialTimeIncrement
+    if time_params:
+        if 'maxsteps' in time_params:
+            def_params['maxTimeSteps'] = time_params['maxsteps']
+        if 'dt' in time_params:
+            def_params['initialTimeIncrement'] = time_params['dt']
     
     if dry_run:
         logger.info(f"\n{Colors.bold(Colors.cyan('[DRY RUN]'))} Preview for case: {case_name}")
@@ -529,13 +537,6 @@ def create_case_from_config(case_config, ref_case_path, logger, force=False, dry
     if not dry_run:
         target_config = target_path / 'simflow.config'
         update_simflow_np_freq(target_config, np_value=np_value, freq_value=freq_value)
-
-    # Update time parameters in simflow.config
-    if time_params:
-        logger.info(f"{'Would update' if dry_run else 'Updating'} simflow.config time parameters: {time_params}")
-        if not dry_run:
-            target_config = target_path / 'simflow.config'
-            update_simflow_params(target_config, time_params)
 
     # Apply geometry parameter substitutions
     if dry_run:
