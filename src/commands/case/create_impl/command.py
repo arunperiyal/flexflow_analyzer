@@ -479,6 +479,10 @@ def create_case_from_config(case_config, ref_case_path, logger, force=False, dry
             def_params['maxTimeSteps'] = time_params['maxsteps']
         if 'dt' in time_params:
             def_params['initialTimeIncrement'] = time_params['dt']
+
+    # Map output_frequency to out_Freq variable in define{} block
+    # This variable is referenced in outputSimulation and outputRestart blocks
+    def_params['out_Freq'] = freq_value
     
     if dry_run:
         logger.info(f"\n{Colors.bold(Colors.cyan('[DRY RUN]'))} Preview for case: {case_name}")
