@@ -215,12 +215,13 @@ class FlexFlowCompleter(Completer):
         },
         ('template', 'script'): {
             **_COMMON_FLAGS,
-            '--force':          'Overwrite existing files',
-            '--simflow-home':   'Set SIMFLOW_HOME in generated simflow_env.sh',
-            '--gmsh-path':      'Set GMSH executable path in generated simflow_env.sh',
-            '--load-by-module': 'Uncomment and set module load in simflow_env.sh (e.g., flexflow)',
-            '--partition':      'Override partition header in generated script',
-            '--wall-time':      'Override wall time in generated script (HH:MM:SS)',
+            '--force':            'Overwrite existing files',
+            '--simflow-home':     'Set SIMFLOW_HOME in generated simflow_env.sh',
+            '--gmsh-path':        'Set GMSH executable path in generated simflow_env.sh',
+            '--load-ff-module':   'Uncomment and set module load for FlexFlow',
+            '--load-gmsh-module': 'Uncomment and set module load for gmsh',
+            '--partition':        'Override partition header in generated script',
+            '--wall-time':        'Override wall time in generated script (HH:MM:SS)',
         },
 
         # ── top-level commands with no subcommands ─────────────────────────

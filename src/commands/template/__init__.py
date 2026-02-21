@@ -71,8 +71,10 @@ class TemplateCommand(BaseCommand):
                                   help='Override wall time in the generated script')
         script_parser.add_argument('--gmsh-path', type=str, metavar='PATH',
                                   help='Set GMSH path in the generated simflow_env.sh')
-        script_parser.add_argument('--load-by-module', type=str, metavar='MODULE',
-                                  help='Uncomment and set module load in simflow_env.sh (e.g., flexflow)')
+        script_parser.add_argument('--load-ff-module', type=str, metavar='MODULE',
+                                  help='Uncomment and set module load for FlexFlow in simflow_env.sh')
+        script_parser.add_argument('--load-gmsh-module', type=str, metavar='MODULE',
+                                  help='Uncomment and set module load for gmsh in simflow_env.sh')
         script_parser.add_argument('--force', action='store_true',
                                   help='Force overwrite if file exists')
         script_parser.add_argument('-v', '--verbose', action='store_true',

@@ -156,6 +156,14 @@ def generate_script_templates(args, logger):
     """
     from pathlib import Path
 
+    # Validate conflicting flags
+    gmsh_path = getattr(args, 'gmsh_path', None)
+    load_gmsh_module = getattr(args, 'load_gmsh_module', None)
+    if gmsh_path and load_gmsh_module:
+        logger.error("Cannot use both --gmsh-path and --load-gmsh-module together")
+        print("Error: --gmsh-path and --load-gmsh-module are mutually exclusive", file=sys.stderr)
+        sys.exit(1)
+
     # Get script type
     if not hasattr(args, 'script_type') or not args.script_type:
         from .help_messages import print_script_help
@@ -252,14 +260,26 @@ def generate_script_templates(args, logger):
                 flags=re.MULTILINE,
             )
 
-        # Apply --load-by-module override (env script only)
-        load_by_module = getattr(args, 'load_by_module', None)
-        if script == 'env' and load_by_module:
+        # Apply --load-ff-module override (env script only)
+        load_ff_module = getattr(args, 'load_ff_module', None)
+        if script == 'env' and load_ff_module:
             import re
             # Uncomment the module load line and replace with specified module
             content = re.sub(
                 r'^# (module load )flexflow$',
-                f'\\1{load_by_module}',
+                f'\\1{load_ff_module}',
+                content,
+                flags=re.MULTILINE,
+            )
+
+        # Apply --load-gmsh-module override (env script only)
+        load_gmsh_module = getattr(args, 'load_gmsh_module', None)
+        if script == 'env' and load_gmsh_module:
+            import re
+            # Uncomment the module load line and replace with specified module
+            content = re.sub(
+                r'^# (module load )gmsh$',
+                f'\\1{load_gmsh_module}',
                 content,
                 flags=re.MULTILINE,
             )
@@ -324,8 +344,10 @@ def generate_script_templates(args, logger):
             description += f' [SIMFLOW_HOME={args.simflow_home}]'
         if script == 'env' and getattr(args, 'gmsh_path', None):
             description += f' [GMSH={args.gmsh_path}]'
-        if script == 'env' and getattr(args, 'load_by_module', None):
-            description += f' [module load {args.load_by_module}]'
+        if script == 'env' and getattr(args, 'load_ff_module', None):
+            description += f' [module load {args.load_ff_module}]'
+        if script == 'env' and getattr(args, 'load_gmsh_module', None):
+            description += f' [module load {args.load_gmsh_module}]'
         if script != 'env' and getattr(args, 'partition', None):
             description += f' [partition={args.partition}]'
         if script != 'env' and wall_time:
