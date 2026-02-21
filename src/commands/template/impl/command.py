@@ -271,6 +271,13 @@ def generate_script_templates(args, logger):
                 content,
                 flags=re.MULTILINE,
             )
+            # Comment out SIMFLOW_HOME export since module will set it
+            content = re.sub(
+                r'^(export SIMFLOW_HOME=.*)$',
+                r'# \1  # Commented: using module load instead',
+                content,
+                flags=re.MULTILINE,
+            )
 
         # Apply --load-gmsh-module override (env script only)
         load_gmsh_module = getattr(args, 'load_gmsh_module', None)
@@ -280,6 +287,13 @@ def generate_script_templates(args, logger):
             content = re.sub(
                 r'^# (module load )gmsh$',
                 f'\\1{load_gmsh_module}',
+                content,
+                flags=re.MULTILINE,
+            )
+            # Comment out GMSH export since module will set it
+            content = re.sub(
+                r'^(export GMSH=.*)$',
+                r'# \1  # Commented: using module load instead',
                 content,
                 flags=re.MULTILINE,
             )

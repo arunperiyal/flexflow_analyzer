@@ -229,9 +229,9 @@ Generate SLURM job script templates for FlexFlow simulations.
     {Colors.YELLOW}--gmsh-path PATH{Colors.RESET}           Set GMSH executable path in the generated simflow_env.sh
                                    (applies to type 'env'; conflicts with --load-gmsh-module)
     {Colors.YELLOW}--load-ff-module MODULE{Colors.RESET}    Uncomment and set 'module load' for FlexFlow in simflow_env.sh
-                                   (applies to type 'env')
+                                   (applies to type 'env'; comments out SIMFLOW_HOME export)
     {Colors.YELLOW}--load-gmsh-module MODULE{Colors.RESET}  Uncomment and set 'module load' for gmsh in simflow_env.sh
-                                   (applies to type 'env'; conflicts with --gmsh-path)
+                                   (applies to type 'env'; conflicts with --gmsh-path, comments out GMSH export)
     {Colors.YELLOW}--partition NAME{Colors.RESET}           Apply partition header to the generated script
                                    (applies to types 'pre', 'main', 'post')
     {Colors.YELLOW}--wall-time HH:MM:SS{Colors.RESET}       Override wall time in the generated script
