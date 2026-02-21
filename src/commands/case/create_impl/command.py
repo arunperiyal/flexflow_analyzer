@@ -344,7 +344,9 @@ def substitute_def_parameters(def_file_path, parameters):
                 # Check each time control parameter
                 updated = False
                 for param, value in time_control_params.items():
-                    if stripped.startswith(param) and '=' in line:
+                    # Use word boundary check: parameter name must be followed by whitespace or =
+                    import re
+                    if re.match(rf'^{re.escape(param)}\s*=', stripped):
                         # Update this parameter
                         indent = len(line) - len(line.lstrip())
                         lines.append(' ' * indent + f"{param:30s} = {value}\n")
