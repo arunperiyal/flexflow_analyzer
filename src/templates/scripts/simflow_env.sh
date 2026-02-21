@@ -19,7 +19,6 @@ export SIMFLOW_HOME="/path/to/flexflow"
 
 # Uncomment if FlexFlow is available as a module
 # module load flexflow
-# module load gmsh
 
 source ${SIMFLOW_HOME}/config
 
