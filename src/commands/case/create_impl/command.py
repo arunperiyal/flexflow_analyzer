@@ -123,6 +123,9 @@ def update_simflow_params(config_path, params_dict, ref_config_path=None):
     """
     Update arbitrary parameters in simflow.config file
 
+    If a parameter exists in the file, it will be updated.
+    If it doesn't exist, it will be appended to the end of the file.
+
     Parameters:
     -----------
     config_path : str or Path
@@ -130,27 +133,9 @@ def update_simflow_params(config_path, params_dict, ref_config_path=None):
     params_dict : dict
         Dictionary of parameter names and values to update
     ref_config_path : str or Path, optional
-        Path to reference simflow.config to validate against
-        If provided, will error if parameter doesn't exist in reference
-
-    Raises:
-    -------
-    ValueError
-        If ref_config_path is provided and a parameter doesn't exist in reference
+        Not used - kept for backward compatibility
     """
-    from src.core.simflow_config import SimflowConfig
-
-    # If reference provided, validate parameters exist
-    if ref_config_path:
-        ref_cfg = SimflowConfig(ref_config_path)
-        for param in params_dict.keys():
-            if param not in ref_cfg:
-                raise ValueError(
-                    f"Parameter '{param}' not found in reference simflow.config. "
-                    f"Cannot add new parameters during case creation."
-                )
-
-    # Read and update
+    # Read and update existing parameters
     lines = []
     updated_params = set()
 
@@ -171,15 +156,23 @@ def update_simflow_params(config_path, params_dict, ref_config_path=None):
             if not updated_line:
                 lines.append(line)
 
+    # Append parameters that weren't found in the file
+    not_found = set(params_dict.keys()) - updated_params
+    if not_found:
+        # Add a blank line before new parameters
+        if lines and not lines[-1].strip():
+            pass  # Already has blank line
+        else:
+            lines.append('\n')
+
+        # Append new parameters
+        for param in sorted(not_found):
+            value = params_dict[param]
+            lines.append(f"{param}\t= {value}\n")
+
     # Write back
     with open(config_path, 'w') as f:
         f.writelines(lines)
-
-    # Check if all parameters were updated
-    not_found = set(params_dict.keys()) - updated_params
-    if not_found:
-        # This shouldn't happen if validation passed, but guard anyway
-        raise ValueError(f"Parameters not found in config file: {', '.join(not_found)}")
 
 
 def validate_reference_case(ref_case_path, problem_name, logger):
@@ -542,12 +535,7 @@ def create_case_from_config(case_config, ref_case_path, logger, force=False, dry
         logger.info(f"{'Would update' if dry_run else 'Updating'} simflow.config time parameters: {time_params}")
         if not dry_run:
             target_config = target_path / 'simflow.config'
-            ref_config = ref_case_path / 'simflow.config'
-            try:
-                update_simflow_params(target_config, time_params, ref_config_path=ref_config)
-            except ValueError as e:
-                logger.error(str(e))
-                return False
+            update_simflow_params(target_config, time_params)
 
     # Apply geometry parameter substitutions
     if dry_run:
