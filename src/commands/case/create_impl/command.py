@@ -306,6 +306,8 @@ def substitute_def_parameters(def_file_path, parameters):
         Can include both define{} variables (Ur, etc.) and
         timeSteppingControl parameters (maxTimeSteps, initialTimeIncrement)
     """
+    import re
+
     if not parameters:
         return
 
@@ -345,7 +347,6 @@ def substitute_def_parameters(def_file_path, parameters):
                 updated = False
                 for param, value in time_control_params.items():
                     # Use word boundary check: parameter name must be followed by whitespace or =
-                    import re
                     if re.match(rf'^{re.escape(param)}\s*=', stripped):
                         # Update this parameter
                         indent = len(line) - len(line.lstrip())
