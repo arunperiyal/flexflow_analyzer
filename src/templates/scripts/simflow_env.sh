@@ -42,6 +42,9 @@ export GMSH="gmsh"                   # Use 'which gmsh' to find the path
 # Cluster Modules (optional)
 # -----------------------------------------------------------------------------
 
+# Uncomment if FlexFlow is available as a module
+# module load flexflow
+
 # Uncomment and modify based on your cluster setup
 # module load compiler/openmpi/4.0.2
 # module load compiler/intel-mpi/mpi-2018.2.199

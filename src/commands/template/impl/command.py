@@ -252,6 +252,18 @@ def generate_script_templates(args, logger):
                 flags=re.MULTILINE,
             )
 
+        # Apply --load-by-module override (env script only)
+        load_by_module = getattr(args, 'load_by_module', None)
+        if script == 'env' and load_by_module:
+            import re
+            # Uncomment the module load line and replace with specified module
+            content = re.sub(
+                r'^# (module load )flexflow$',
+                f'\\1{load_by_module}',
+                content,
+                flags=re.MULTILINE,
+            )
+
         # Apply --partition override (all scripts except env)
         partition_override = getattr(args, 'partition', None)
         if script != 'env' and partition_override:
@@ -312,6 +324,8 @@ def generate_script_templates(args, logger):
             description += f' [SIMFLOW_HOME={args.simflow_home}]'
         if script == 'env' and getattr(args, 'gmsh_path', None):
             description += f' [GMSH={args.gmsh_path}]'
+        if script == 'env' and getattr(args, 'load_by_module', None):
+            description += f' [module load {args.load_by_module}]'
         if script != 'env' and getattr(args, 'partition', None):
             description += f' [partition={args.partition}]'
         if script != 'env' and wall_time:
