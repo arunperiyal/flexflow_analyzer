@@ -295,38 +295,78 @@ def substitute_geo_parameters(geo_file_path, parameters, logger=None):
 def substitute_def_parameters(def_file_path, parameters):
     """
     Substitute parameters in .def file
-    Updates variable definitions
-    
+    Updates both define{} block variables and timeSteppingControl{} parameters
+
     Parameters:
     -----------
     def_file_path : Path
         Path to .def file
     parameters : dict
         Dictionary of variable_name: value pairs
+        Can include both define{} variables (Ur, etc.) and
+        timeSteppingControl parameters (maxTimeSteps, initialTimeIncrement)
     """
     if not parameters:
         return
-    
+
+    # Separate timeSteppingControl params from define{} variables
+    time_control_params = {}
+    define_params = {}
+
+    for key, value in parameters.items():
+        if key in ['maxTimeSteps', 'initialTimeIncrement', 'order', 'highFrequencyDampingFactor']:
+            time_control_params[key] = value
+        else:
+            define_params[key] = value
+
     lines = []
     in_define_block = False
+    in_time_control_block = False
     current_variable = None
-    
+
     with open(def_file_path, 'r') as f:
         for line in f:
             stripped = line.strip()
-            
+
+            # Detect timeSteppingControl block
+            if stripped.startswith('timeSteppingControl{'):
+                in_time_control_block = True
+                lines.append(line)
+                continue
+
+            # Inside timeSteppingControl block
+            if in_time_control_block:
+                if stripped == '}':
+                    in_time_control_block = False
+                    lines.append(line)
+                    continue
+
+                # Check each time control parameter
+                updated = False
+                for param, value in time_control_params.items():
+                    if stripped.startswith(param) and '=' in line:
+                        # Update this parameter
+                        indent = len(line) - len(line.lstrip())
+                        lines.append(' ' * indent + f"{param:30s} = {value}\n")
+                        updated = True
+                        break
+
+                if not updated:
+                    lines.append(line)
+                continue
+
             # Detect define block start
             if stripped.startswith('define{'):
                 in_define_block = True
                 lines.append(line)
                 continue
-            
+
             # Detect define block end
             if in_define_block and stripped == '}':
                 in_define_block = False
                 lines.append(line)
                 continue
-            
+
             # Inside define block, look for variable definitions
             if in_define_block:
                 if stripped.startswith('variable'):
@@ -337,10 +377,10 @@ def substitute_def_parameters(def_file_path, parameters):
                     lines.append(line)
                 elif stripped.startswith('value') and current_variable:
                     # Check if we need to replace this variable's value
-                    if current_variable in parameters:
+                    if current_variable in define_params:
                         # Replace the value
                         indent = len(line) - len(line.lstrip())
-                        lines.append(' ' * indent + f"value    = {parameters[current_variable]}\n")
+                        lines.append(' ' * indent + f"value    = {define_params[current_variable]}\n")
                         current_variable = None
                     else:
                         lines.append(line)
@@ -349,7 +389,7 @@ def substitute_def_parameters(def_file_path, parameters):
                     lines.append(line)
             else:
                 lines.append(line)
-    
+
     # Write back
     with open(def_file_path, 'w') as f:
         f.writelines(lines)
