@@ -119,6 +119,69 @@ def update_simflow_np_freq(config_path, np_value=None, freq_value=None):
         f.writelines(lines)
 
 
+def update_simflow_params(config_path, params_dict, ref_config_path=None):
+    """
+    Update arbitrary parameters in simflow.config file
+
+    Parameters:
+    -----------
+    config_path : str or Path
+        Path to simflow.config file to update
+    params_dict : dict
+        Dictionary of parameter names and values to update
+    ref_config_path : str or Path, optional
+        Path to reference simflow.config to validate against
+        If provided, will error if parameter doesn't exist in reference
+
+    Raises:
+    -------
+    ValueError
+        If ref_config_path is provided and a parameter doesn't exist in reference
+    """
+    from src.core.simflow_config import SimflowConfig
+
+    # If reference provided, validate parameters exist
+    if ref_config_path:
+        ref_cfg = SimflowConfig(ref_config_path)
+        for param in params_dict.keys():
+            if param not in ref_cfg:
+                raise ValueError(
+                    f"Parameter '{param}' not found in reference simflow.config. "
+                    f"Cannot add new parameters during case creation."
+                )
+
+    # Read and update
+    lines = []
+    updated_params = set()
+
+    with open(config_path, 'r') as f:
+        for line in f:
+            stripped = line.strip()
+            updated_line = False
+
+            # Check if this line defines any of our parameters
+            for param, value in params_dict.items():
+                if stripped.startswith(param) and '=' in line and not stripped.startswith('#'):
+                    # Update this parameter
+                    lines.append(f"{param}\t= {value}\n")
+                    updated_params.add(param)
+                    updated_line = True
+                    break
+
+            if not updated_line:
+                lines.append(line)
+
+    # Write back
+    with open(config_path, 'w') as f:
+        f.writelines(lines)
+
+    # Check if all parameters were updated
+    not_found = set(params_dict.keys()) - updated_params
+    if not_found:
+        # This shouldn't happen if validation passed, but guard anyway
+        raise ValueError(f"Parameters not found in config file: {', '.join(not_found)}")
+
+
 def validate_reference_case(ref_case_path, problem_name, logger):
     """
     Validate that reference case has all mandatory files
@@ -365,12 +428,13 @@ def create_case_from_config(case_config, ref_case_path, logger, force=False, dry
     if not case_name:
         logger.error("Case name not specified in configuration")
         return False
-    
+
     problem_name = case_config.get('problem_name')
     np_value = case_config.get('processors', 36)
     freq_value = case_config.get('output_frequency', 50)
     geo_params = case_config.get('geo', {})
     def_params = case_config.get('def', {})
+    time_params = case_config.get('time', {})
     
     if dry_run:
         logger.info(f"\n{Colors.bold(Colors.cyan('[DRY RUN]'))} Preview for case: {case_name}")
@@ -379,6 +443,8 @@ def create_case_from_config(case_config, ref_case_path, logger, force=False, dry
     logger.info(f"  Problem: {problem_name if problem_name else 'from reference'}")
     logger.info(f"  Processors: {np_value}")
     logger.info(f"  Output Frequency: {freq_value}")
+    if time_params:
+        logger.info(f"  Time parameters: {time_params}")
     
     # Check simflow.config exists
     config_path = ref_case_path / 'simflow.config'
@@ -470,6 +536,18 @@ def create_case_from_config(case_config, ref_case_path, logger, force=False, dry
     if not dry_run:
         target_config = target_path / 'simflow.config'
         update_simflow_np_freq(target_config, np_value=np_value, freq_value=freq_value)
+
+    # Update time parameters in simflow.config
+    if time_params:
+        logger.info(f"{'Would update' if dry_run else 'Updating'} simflow.config time parameters: {time_params}")
+        if not dry_run:
+            target_config = target_path / 'simflow.config'
+            ref_config = ref_case_path / 'simflow.config'
+            try:
+                update_simflow_params(target_config, time_params, ref_config_path=ref_config)
+            except ValueError as e:
+                logger.error(str(e))
+                return False
 
     # Apply geometry parameter substitutions
     if dry_run:
@@ -600,9 +678,30 @@ def execute_new(args):
                 # Batch mode
                 cases = config['cases']
                 logger.info(f"Batch mode: Creating {len(cases)} cases")
-                
+
+                # Extract global defaults
+                global_problem = config.get('problem_name')
+                global_np = config.get('processors')
+                global_freq = config.get('output_frequency')
+                global_time = config.get('time', {})
+
                 success_count = 0
                 for case_config in cases:
+                    # Merge global defaults with case-specific config
+                    # Case-specific values take precedence
+                    if global_problem and 'problem_name' not in case_config:
+                        case_config['problem_name'] = global_problem
+                    if global_np is not None and 'processors' not in case_config:
+                        case_config['processors'] = global_np
+                    if global_freq is not None and 'output_frequency' not in case_config:
+                        case_config['output_frequency'] = global_freq
+
+                    # Merge time parameters (case-specific overrides global)
+                    if global_time:
+                        case_time = case_config.get('time', {})
+                        merged_time = {**global_time, **case_time}  # case_time overrides global_time
+                        case_config['time'] = merged_time
+
                     # Override with command-line flags if provided
                     if args.problem_name:
                         case_config['problem_name'] = args.problem_name
@@ -610,7 +709,7 @@ def execute_new(args):
                         case_config['processors'] = args.np
                     if args.freq != 50:  # Check if freq was explicitly set
                         case_config['output_frequency'] = args.freq
-                    
+
                     if create_case_from_config(case_config, ref_case_path, logger, args.force, args.dry_run):
                         success_count += 1
                     else:

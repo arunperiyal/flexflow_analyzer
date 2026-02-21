@@ -126,6 +126,9 @@ def print_new_examples():
         {Colors.CYAN}groove_width:{Colors.RESET} 0.12
       {Colors.CYAN}def:{Colors.RESET}
         {Colors.CYAN}Ur:{Colors.RESET} 5.8
+      {Colors.CYAN}time:{Colors.RESET}
+        {Colors.CYAN}maxsteps:{Colors.RESET} 16000
+        {Colors.CYAN}dt:{Colors.RESET} 0.05
 
 {Colors.BOLD}6. YAML Configuration - Batch Mode:{Colors.RESET}
     {Colors.GREEN}flexflow new --from-config batch_config.yaml --verbose{Colors.RESET}
@@ -146,8 +149,24 @@ def print_new_examples():
     {Colors.GREEN}flexflow new case3 --problem-name cylinder --np 36 --freq 25{Colors.RESET}
 
 {Colors.BOLD}9. Parametric Study with Batch YAML:{Colors.RESET}
-    {Colors.DIM}Create batch_config.yaml with multiple cases having different parameters{Colors.RESET}
+    {Colors.DIM}Create batch_config.yaml with global defaults and per-case overrides:{Colors.RESET}
+      {Colors.CYAN}problem_name:{Colors.RESET} riser
+      {Colors.CYAN}processors:{Colors.RESET} 120
+      {Colors.CYAN}output_frequency:{Colors.RESET} 50
+      {Colors.CYAN}time:{Colors.RESET}
+        {Colors.CYAN}maxsteps:{Colors.RESET} 16000
+        {Colors.CYAN}dt:{Colors.RESET} 0.05
+      {Colors.CYAN}cases:{Colors.RESET}
+        - {Colors.CYAN}name:{Colors.RESET} Case005
+          {Colors.CYAN}processors:{Colors.RESET} 60
+          {Colors.CYAN}def:{Colors.RESET}
+            {Colors.CYAN}Ur:{Colors.RESET} 4.0
+          {Colors.CYAN}time:{Colors.RESET}
+            {Colors.CYAN}maxsteps:{Colors.RESET} 20000
+        - {Colors.CYAN}name:{Colors.RESET} Case010
+          {Colors.CYAN}def:{Colors.RESET}
+            {Colors.CYAN}Ur:{Colors.RESET} 8.0
     {Colors.GREEN}flexflow new --from-config batch_config.yaml{Colors.RESET}
-    {Colors.DIM}Automatically generates all cases with their specific parameters{Colors.RESET}
+    {Colors.DIM}Case-specific values override global defaults. Case010 inherits all globals.{Colors.RESET}
 """
     print(examples_text)
