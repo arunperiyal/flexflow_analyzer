@@ -148,6 +148,59 @@ class DefConfig:
         return dict(self._variables)
 
     # ------------------------------------------------------------------
+    # Write support
+    # ------------------------------------------------------------------
+
+    def update_output_frequency(self, frequency: int) -> None:
+        """
+        Update outFreq values in outputSimulation and outputRestart blocks.
+
+        Parameters
+        ----------
+        frequency:
+            The new output frequency value to set.
+        """
+        if not self._path.exists():
+            raise FileNotFoundError(f".def file not found: {self._path}")
+
+        with open(self._path, 'r') as f:
+            lines = f.readlines()
+
+        new_lines = []
+        in_output_block = False
+        block_name = None
+
+        for line in lines:
+            stripped = line.strip()
+
+            # Detect outputSimulation or outputRestart block start
+            if re.match(r'outputSimulation\s*\{', stripped) or re.match(r'outputRestart\s*\{', stripped):
+                in_output_block = True
+                block_name = 'outputSimulation' if 'outputSimulation' in stripped else 'outputRestart'
+                new_lines.append(line)
+                continue
+
+            # Detect block end
+            if in_output_block and stripped == '}':
+                in_output_block = False
+                block_name = None
+                new_lines.append(line)
+                continue
+
+            # Inside output block, look for outFreq parameter
+            if in_output_block and re.match(r'outFreq\s*=', stripped):
+                # Update the outFreq value
+                indent = len(line) - len(line.lstrip())
+                new_lines.append(' ' * indent + f"outFreq               = {frequency}\n")
+                continue
+
+            new_lines.append(line)
+
+        # Write back
+        with open(self._path, 'w') as f:
+            f.writelines(new_lines)
+
+    # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
 
