@@ -27,6 +27,7 @@ export MPISIMFLOW="${SIMFLOW_HOME}/bin/mpiSimflow"
 export SIMPLT="${SIMFLOW_HOME}/bin/simPlt"
 export SIMPLT2BIN="${SIMFLOW_HOME}/bin/simPlt2Bin"
 export SIMGMSHCNVT="${SIMFLOW_HOME}/bin/simGmshCnvt"
+export SIMPBC="${SIMFLOW_HOME}/bin/simPBc"
 
 # -----------------------------------------------------------------------------
 # Third-party Tools

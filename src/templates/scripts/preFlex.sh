@@ -152,6 +152,17 @@ echo ""
 # Optional: Additional preprocessing steps
 # -----------------------------------------------------------------------------
 
+# Assign necessary periodic boundary conditions if necessary
+# if [ ! -x "$SIMPBC" ]; then
+#     echo "Error: simGmshCnvt not found or not executable: $SIMPBC"
+#     exit 1
+# fi
+
+# SRF1="side1"
+# SRF2="side"
+# $SIMPBC -pbc1 $PROBLEM.${SRF1}.nbc -pbc2 $PROBLEM.${SRF2}.nbc
+# SIMPBC_EXIT=$?
+
 # Uncomment if you need to run MATLAB scripts
 # echo "Step 4: Running MATLAB preprocessing..."
 # matlab -batch writeBeamLineCrd
