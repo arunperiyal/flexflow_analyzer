@@ -437,6 +437,44 @@ def list_reference_case_variables(ref_case_path, logger):
     return geo_placeholders, def_variables, problem_name
 
 
+def update_script_job_name(script_path, case_name):
+    """
+    Update SBATCH job-name directive in a SLURM script.
+
+    Replaces the job name in #SBATCH --job-name=... with the case name,
+    preserving the script type prefix (pre/main/post).
+
+    Parameters:
+    -----------
+    script_path : Path
+        Path to the script file
+    case_name : str
+        Name of the case to use in job name
+    """
+    if not script_path.exists():
+        return
+
+    with open(script_path, 'r') as f:
+        lines = f.readlines()
+
+    new_lines = []
+    for line in lines:
+        # Match #SBATCH --job-name=... pattern
+        match = re.match(r'^(#SBATCH\s+--job-name=)(pre|main|post)(\w+)(.*)$', line)
+        if match:
+            # Preserve the prefix, script type, and any suffix/comments
+            prefix = match.group(1)
+            script_type = match.group(2)
+            suffix = match.group(4)
+            # Update with new case name
+            new_lines.append(f"{prefix}{script_type}{case_name}{suffix}\n")
+        else:
+            new_lines.append(line)
+
+    with open(script_path, 'w') as f:
+        f.writelines(new_lines)
+
+
 def create_case_from_config(case_config, ref_case_path, logger, force=False, dry_run=False):
     """
     Create a single case from configuration dictionary
@@ -567,6 +605,15 @@ def create_case_from_config(case_config, ref_case_path, logger, force=False, dry
             logger.info(f"  {'Would copy' if dry_run else 'Copying'}: {script}")
             if not dry_run:
                 shutil.copy2(src, dest)
+
+    # Update SBATCH job names in SLURM scripts
+    if not dry_run:
+        for script in ('preFlex.sh', 'mainFlex.sh', 'postFlex.sh'):
+            script_path = target_path / script
+            if script_path.exists():
+                update_script_job_name(script_path, case_name)
+    else:
+        logger.info(f"Would update SBATCH job names in scripts to use case name: {case_name}")
 
     # Update simflow.config if problem name changed
     if problem_name != original_problem_name:
