@@ -10,8 +10,8 @@ def print_plot_help():
 Plot displacement or force data for a specific node.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    flexflow plot {Colors.YELLOW}<case_directory>{Colors.RESET} [options]
-    flexflow plot {Colors.YELLOW}--input-file{Colors.RESET} <yaml_file>
+    plot {Colors.YELLOW}<case_directory>{Colors.RESET} [options]
+    plot {Colors.YELLOW}--input-file{Colors.RESET} <yaml_file>
 
 {Colors.BOLD}REQUIRED OPTIONS:{Colors.RESET}
     {Colors.YELLOW}--node{Colors.RESET} N              Node number to plot
@@ -65,105 +65,105 @@ def print_plot_examples():
 {Colors.BOLD}{Colors.CYAN}Plot Command Examples{Colors.RESET}
 
 {Colors.BOLD}Basic Time Series:{Colors.RESET}
-    flexflow plot CS4SG1U1 --node 100 --data-type displacement
-    flexflow plot CS4SG1U1 --node 100 --data-type force --component y
+    plot CS4SG1U1 --node 100 --data-type displacement
+    plot CS4SG1U1 --node 100 --data-type force --component y
 
 {Colors.BOLD}With Time Range:{Colors.RESET}
-    flexflow plot CS4SG1U1 --node 100 --data-type displacement \\
+    plot CS4SG1U1 --node 100 --data-type displacement \\
         --start-time 10.0 --end-time 50.0
 
 {Colors.BOLD}Styled Plots:{Colors.RESET}
     # Red solid line with circles, width 2
-    flexflow plot CS4SG1U1 --node 100 --data-type displacement \\
+    plot CS4SG1U1 --node 100 --data-type displacement \\
         --plot-style "red,2,-,o" --title "Node 100|16"
-    
+
     # Blue dashed line, no markers
-    flexflow plot CS4SG1U1 --node 100 --data-type displacement \\
+    plot CS4SG1U1 --node 100 --data-type displacement \\
         --plot-style "blue,1.5,--,None"
-    
+
     # Green dash-dot line with squares
-    flexflow plot CS4SG1U1 --node 100 --data-type displacement \\
+    plot CS4SG1U1 --node 100 --data-type displacement \\
         --plot-style "green,2,-.,s"
-    
+
     # Custom hex color with stars
-    flexflow plot CS4SG1U1 --node 100 --data-type displacement \\
+    plot CS4SG1U1 --node 100 --data-type displacement \\
         --plot-style "#FF5733,1.5,-,*"
 
 {Colors.BOLD}Enhanced Labels with LaTeX:{Colors.RESET}
     # Simple labels with custom font size
-    flexflow plot CS4SG1U1 --node 100 --data-type displacement \\
+    plot CS4SG1U1 --node 100 --data-type displacement \\
         --title "Displacement Analysis|18" \\
         --xlabel "Time (s)|14" --ylabel "Displacement (m)|14"
-    
+
     # LaTeX rendering for mathematical expressions
-    flexflow plot CS4SG1U1 --node 100 --data-type displacement \\
+    plot CS4SG1U1 --node 100 --data-type displacement \\
         --title "Node Displacement $\\Delta x$|16|True" \\
         --xlabel 'Time $t$ (s)|14|True' \\
         --ylabel 'Displacement $\\delta$ (m)|14|True'
 
     # Mixed: LaTeX for ylabel, simple for others
-    flexflow plot CS4SG1U1 --node 100 --data-type displacement \\
+    plot CS4SG1U1 --node 100 --data-type displacement \\
         --title "Analysis Results|16" \\
         --ylabel 'Force $F_x$ (N)|14|True'
 
 {Colors.BOLD}Custom Fonts (Academic Style):{Colors.RESET}
     # Times-like serif font (professional publications)
-    flexflow plot CS4SG1U1 --node 100 --data-type displacement \\
+    plot CS4SG1U1 --node 100 --data-type displacement \\
         --component y --fontname serif \\
         --title "Case Study|16" --ylabel "Displacement (m)|14"
-    
+
     # DejaVu Serif (Times New Roman alternative)
-    flexflow plot CS4SG1U1 --node 100 --data-type displacement \\
+    plot CS4SG1U1 --node 100 --data-type displacement \\
         --component y --fontname "DejaVu Serif" \\
         --title "Analysis|16"
-    
+
     # Liberation Serif (metrically compatible with Times New Roman)
-    flexflow plot CS4SG1U1 --node 100 --data-type displacement \\
+    plot CS4SG1U1 --node 100 --data-type displacement \\
         --component y --fontname "Liberation Serif"
 
 {Colors.BOLD}FFT Analysis:{Colors.RESET}
-    flexflow plot CS4SG1U1 --node 100 --data-type displacement \\
+    plot CS4SG1U1 --node 100 --data-type displacement \\
         --plot-type fft --component y
 
 {Colors.BOLD}2D Trajectory:{Colors.RESET}
-    flexflow plot CS4SG1U1 --node 100 --data-type displacement \\
+    plot CS4SG1U1 --node 100 --data-type displacement \\
         --plot-type traj2d --component x y
 
 {Colors.BOLD}3D Trajectory:{Colors.RESET}
-    flexflow plot CS4SG1U1 --node 100 --data-type displacement \\
+    plot CS4SG1U1 --node 100 --data-type displacement \\
         --plot-type traj3d --component x y z
 
 {Colors.BOLD}Save to File (Multiple Formats):{Colors.RESET}
     # PNG (default, good for presentations)
-    flexflow plot CS4SG1U1 --node 100 --data-type displacement \\
+    plot CS4SG1U1 --node 100 --data-type displacement \\
         --output plot.png
 
     # PDF (vector format, best for publications)
-    flexflow plot CS4SG1U1 --node 100 --data-type displacement \\
+    plot CS4SG1U1 --node 100 --data-type displacement \\
         --output plot.pdf
 
     # SVG (scalable vector graphics)
-    flexflow plot CS4SG1U1 --node 100 --data-type displacement \\
+    plot CS4SG1U1 --node 100 --data-type displacement \\
         --output plot.svg
 
 {Colors.BOLD}Terminal Plot (HPC/SSH Usage):{Colors.RESET}
     # Display plot directly in terminal (requires plotext)
-    flexflow plot CS4SG1U1 --node 100 --data-type displacement \\
+    plot CS4SG1U1 --node 100 --data-type displacement \\
         --component y --gnu
 
     # Terminal plot + save to file
-    flexflow plot CS4SG1U1 --node 100 --data-type displacement \\
+    plot CS4SG1U1 --node 100 --data-type displacement \\
         --component y --gnu --output plot.pdf
 
 {Colors.BOLD}Remote/SSH Usage (No Display):{Colors.RESET}
     # Automatically headless when using --output
-    flexflow plot CS4SG1U1 --node 100 --data-type displacement \\
+    plot CS4SG1U1 --node 100 --data-type displacement \\
         --component y --output result.png
 
     # Or explicitly use --no-display
-    flexflow plot CS4SG1U1 --node 100 --data-type displacement \\
+    plot CS4SG1U1 --node 100 --data-type displacement \\
         --component y --no-display
 
 {Colors.BOLD}Using YAML Configuration:{Colors.RESET}
-    flexflow plot --input-file plot_config.yaml
+    plot --input-file plot_config.yaml
 """)
