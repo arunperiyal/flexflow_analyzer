@@ -175,9 +175,16 @@ fi
 # -----------------------------------------------------------------------------
 
 echo "Step 2: Running simPlt2Bin to convert to binary format..."
-echo "Command: $SIMPLT2BIN -n $SLURM_NTASKS -w $RUN_DIR -f $FREQ -p $PROBLEM -l $END_TIME"
 
-$SIMPLT2BIN -n $SLURM_NTASKS -w $RUN_DIR -f $FREQ -p $PROBLEM -l $END_TIME
+# Add -m only when processing from a non-zero start
+MIN_ARG=""
+if [ "${START_TIME}" -gt 0 ] 2>/dev/null; then
+    MIN_ARG="-m ${START_TIME}"
+fi
+
+echo "Command: $SIMPLT2BIN -n $SLURM_NTASKS -w $RUN_DIR -f $FREQ -p $PROBLEM ${MIN_ARG} -l $END_TIME"
+
+$SIMPLT2BIN -n $SLURM_NTASKS -w $RUN_DIR -f $FREQ -p $PROBLEM ${MIN_ARG} -l $END_TIME
 SIMPLT2BIN_EXIT=$?
 
 if [ $SIMPLT2BIN_EXIT -ne 0 ]; then
