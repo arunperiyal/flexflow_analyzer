@@ -156,6 +156,14 @@ def show_dry_run(script_path, case_dir, args, console):
     if gmsh_override:
         table.add_row("gmsh Override", f"[bold yellow]{gmsh_override}[/bold yellow] (via --export GMSH)")
 
+    account_override = getattr(args, 'account', None)
+    if account_override:
+        table.add_row("Account", f"[bold yellow]{account_override}[/bold yellow]")
+
+    qos_override = getattr(args, 'qos', None)
+    if qos_override:
+        table.add_row("QOS", f"[bold yellow]{qos_override}[/bold yellow]")
+
     # Parse SBATCH directives from script
     sbatch_info = parse_sbatch_directives(script_path)
     if sbatch_info:
@@ -170,6 +178,10 @@ def show_dry_run(script_path, case_dir, args, console):
     cmd_parts = ['sbatch']
     if gmsh_override:
         cmd_parts.append(f'--export=GMSH={gmsh_override}')
+    if account_override:
+        cmd_parts.append(f'--account={account_override}')
+    if qos_override:
+        cmd_parts.append(f'--qos={qos_override}')
     cmd_parts.append(script_path.name)
     console.print(f"[dim]  {' '.join(cmd_parts)}[/dim]")
     console.print()
@@ -253,6 +265,14 @@ def submit_preprocessing_job(script_path, case_dir, args, console):
     if gmsh_override:
         table.add_row("gmsh Override", f"[bold yellow]{gmsh_override}[/bold yellow] (via --export GMSH)")
 
+    account_override = getattr(args, 'account', None)
+    if account_override:
+        table.add_row("Account", f"[bold yellow]{account_override}[/bold yellow]")
+
+    qos_override = getattr(args, 'qos', None)
+    if qos_override:
+        table.add_row("QOS", f"[bold yellow]{qos_override}[/bold yellow]")
+
     console.print(table)
     console.print()
 
@@ -261,6 +281,10 @@ def submit_preprocessing_job(script_path, case_dir, args, console):
         cmd = ['sbatch']
         if gmsh_override:
             cmd.append(f'--export=GMSH={gmsh_override}')
+        if account_override:
+            cmd.append(f'--account={account_override}')
+        if qos_override:
+            cmd.append(f'--qos={qos_override}')
         cmd.append(script_path.name)
 
         # Submit job using sbatch

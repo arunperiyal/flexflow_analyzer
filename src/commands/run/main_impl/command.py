@@ -224,6 +224,16 @@ def show_dry_run(script_path, case_dir, args, console):
     if wall_time_dry:
         table.add_row("Wall Time", f"[bold yellow]{wall_time_dry}[/bold yellow] [dim](this submission only)[/dim]")
 
+    # Check for account override
+    account_override = getattr(args, 'account', None)
+    if account_override:
+        table.add_row("Account", f"[bold yellow]{account_override}[/bold yellow]")
+
+    # Check for QOS override
+    qos_override = getattr(args, 'qos', None)
+    if qos_override:
+        table.add_row("QOS", f"[bold yellow]{qos_override}[/bold yellow]")
+
     # Parse SBATCH directives from script
     sbatch_info = parse_sbatch_directives(script_path)
     if sbatch_info:
@@ -245,6 +255,10 @@ def show_dry_run(script_path, case_dir, args, console):
         cmd_parts.append(f"--partition={partition_override}")
     if wall_time_dry:
         cmd_parts.append(f"--time={wall_time_dry}")
+    if account_override:
+        cmd_parts.append(f"--account={account_override}")
+    if qos_override:
+        cmd_parts.append(f"--qos={qos_override}")
     cmd_parts.append(script_path.name)
 
     console.print(f"[dim]  {' '.join(cmd_parts)}[/dim]")
@@ -606,6 +620,14 @@ def submit_main_job(script_path, case_dir, args, console):
     if wall_time:
         table.add_row("Wall Time", f"[bold yellow]{wall_time}[/bold yellow] [dim](this submission only)[/dim]")
 
+    account = getattr(args, 'account', None)
+    if account:
+        table.add_row("Account", f"[bold yellow]{account}[/bold yellow]")
+
+    qos = getattr(args, 'qos', None)
+    if qos:
+        table.add_row("QOS", f"[bold yellow]{qos}[/bold yellow]")
+
     console.print(table)
     console.print()
 
@@ -636,6 +658,14 @@ def submit_main_job(script_path, case_dir, args, console):
         # Wall-time override — temporary, does not modify the script
         if wall_time:
             cmd.append(f'--time={wall_time}')
+
+        # Add account if specified
+        if account:
+            cmd.append(f'--account={account}')
+
+        # Add QOS if specified
+        if qos:
+            cmd.append(f'--qos={qos}')
 
         cmd.append(script_path.name)
 
@@ -713,6 +743,9 @@ This runs the primary FlexFlow simulation (mpiSimflow).
     {Colors.YELLOW}--reset{Colors.RESET}               Comment out restartFlag/restartTsId and start fresh
     {Colors.YELLOW}--dependency JOB_ID{Colors.RESET}   Wait for another job to complete first
     {Colors.YELLOW}--partition NAME{Colors.RESET}       Override partition at submit time (sbatch CLI, script unchanged)
+    {Colors.YELLOW}--account NAME{Colors.RESET}         Set SLURM account (passed to sbatch)
+    {Colors.YELLOW}--qos NAME{Colors.RESET}             Set SLURM QOS (passed to sbatch)
+    {Colors.YELLOW}--wall-time HH:MM:SS{Colors.RESET}  Override wall time for this submission only
     {Colors.YELLOW}--dry-run{Colors.RESET}             Show what would be submitted
     {Colors.YELLOW}--show{Colors.RESET}                Display the script content
     {Colors.YELLOW}-h, --help{Colors.RESET}            Show this help message
@@ -733,6 +766,9 @@ This runs the primary FlexFlow simulation (mpiSimflow).
 
     # Override partition at submit time (does not modify mainFlex.sh)
     run main Case001 --partition shared
+
+    # Set account and QOS
+    run main Case001 --account myaccount --qos high
 
     # Preview what will be submitted
     run main Case001 --dry-run

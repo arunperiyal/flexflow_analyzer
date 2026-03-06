@@ -189,6 +189,16 @@ def show_dry_run(script_path, case_dir, args, console):
     if hasattr(args, 'dependency') and args.dependency:
         table.add_row("Job Dependency", args.dependency)
 
+    # Check for account override
+    account_override = getattr(args, 'account', None)
+    if account_override:
+        table.add_row("Account", f"[bold yellow]{account_override}[/bold yellow]")
+
+    # Check for QOS override
+    qos_override = getattr(args, 'qos', None)
+    if qos_override:
+        table.add_row("QOS", f"[bold yellow]{qos_override}[/bold yellow]")
+
     # Parse SBATCH directives from script
     sbatch_info = parse_sbatch_directives(script_path)
     if sbatch_info:
@@ -203,6 +213,12 @@ def show_dry_run(script_path, case_dir, args, console):
     cmd_parts = ["sbatch"]
     if hasattr(args, 'dependency') and args.dependency:
         cmd_parts.append(f"--dependency=afterok:{args.dependency}")
+    account_override = getattr(args, 'account', None)
+    if account_override:
+        cmd_parts.append(f"--account={account_override}")
+    qos_override = getattr(args, 'qos', None)
+    if qos_override:
+        cmd_parts.append(f"--qos={qos_override}")
     export_parts = []
     if start_tsid is not None:
         export_parts.append(f'START_TIME={start_tsid}')
@@ -499,6 +515,14 @@ def submit_postprocessing_job(script_path, case_dir, args, console):
     if hasattr(args, 'dependency') and args.dependency:
         table.add_row("Dependency", f"Wait for job {args.dependency}")
 
+    account_override = getattr(args, 'account', None)
+    if account_override:
+        table.add_row("Account", f"[bold yellow]{account_override}[/bold yellow]")
+
+    qos_override = getattr(args, 'qos', None)
+    if qos_override:
+        table.add_row("QOS", f"[bold yellow]{qos_override}[/bold yellow]")
+
     # Parse SBATCH info
     sbatch_info = parse_sbatch_directives(script_path)
     if sbatch_info.get('Job Name'):
@@ -516,6 +540,14 @@ def submit_postprocessing_job(script_path, case_dir, args, console):
         # Add dependency if specified
         if hasattr(args, 'dependency') and args.dependency:
             cmd.append(f'--dependency=afterok:{args.dependency}')
+
+        # Add account if specified
+        if account_override:
+            cmd.append(f'--account={account_override}')
+
+        # Add QOS if specified
+        if qos_override:
+            cmd.append(f'--qos={qos_override}')
 
         # Pass overrides via --export so postFlex.sh picks them up
         export_parts = []
