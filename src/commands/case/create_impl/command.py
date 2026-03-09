@@ -441,8 +441,8 @@ def update_script_job_name(script_path, case_name):
     """
     Update SBATCH job-name directive in a SLURM script.
 
-    Replaces the job name in #SBATCH --job-name=... with the case name,
-    preserving the script type prefix (pre/main/post).
+    Replaces the job name in #SBATCH -J ... or #SBATCH --job-name=... with the case name,
+    preserving the script type prefix (pre/main/post/job/postBin/etc).
 
     Parameters:
     -----------
@@ -459,17 +459,28 @@ def update_script_job_name(script_path, case_name):
 
     new_lines = []
     for line in lines:
-        # Match #SBATCH --job-name=... pattern
-        match = re.match(r'^(#SBATCH\s+--job-name=)(pre|main|post)(\w+)(.*)$', line)
+        # Try matching #SBATCH -J format first (e.g., "#SBATCH -J preCS4SG1U1  # comment")
+        # Order matters: longer prefixes first (postBin before post)
+        match = re.match(r'^(#SBATCH\s+-J\s+)(postBin|post|main|pre|job|other)(\w+)(.*?)$', line)
         if match:
-            # Preserve the prefix, script type, and any suffix/comments
             prefix = match.group(1)
             script_type = match.group(2)
             suffix = match.group(4)
-            # Update with new case name
             new_lines.append(f"{prefix}{script_type}{case_name}{suffix}\n")
-        else:
-            new_lines.append(line)
+            continue
+        
+        # Try matching #SBATCH --job-name= format (e.g., "#SBATCH --job-name=preCS4SG1U1")
+        # Order matters: longer prefixes first (postBin before post)
+        match = re.match(r'^(#SBATCH\s+--job-name=)(postBin|post|main|pre|job|other)(\w+)(.*)$', line)
+        if match:
+            prefix = match.group(1)
+            script_type = match.group(2)
+            suffix = match.group(4)
+            new_lines.append(f"{prefix}{script_type}{case_name}{suffix}\n")
+            continue
+        
+        # Line doesn't match, keep as-is
+        new_lines.append(line)
 
     with open(script_path, 'w') as f:
         f.writelines(new_lines)
@@ -935,6 +946,15 @@ def execute_new(args):
                 logger.info(f"  {'Would copy' if args.dry_run else 'Copying'}: {script}")
                 if not args.dry_run:
                     shutil.copy2(src, dest)
+
+        # Update SBATCH job names in SLURM scripts
+        if not args.dry_run:
+            for script in ('preFlex.sh', 'mainFlex.sh', 'postFlex.sh'):
+                script_path = target_path / script
+                if script_path.exists():
+                    update_script_job_name(script_path, case_name)
+        else:
+            logger.info(f"Would update SBATCH job names in scripts to use case name: {case_name}")
 
         # Update simflow.config if problem name changed
         if args.problem_name:
