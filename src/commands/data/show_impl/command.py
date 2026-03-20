@@ -52,6 +52,81 @@ def execute_preview(args):
             sys.exit(1)
         
         reader = case.othd_reader
+        
+        # Check if pendulum mode is requested
+        if hasattr(args, 'pendulum') and args.pendulum:
+            # Display pendulum data
+            pend_data = reader.get_pendulum_data()
+            
+            if pend_data is None:
+                logger.error("No pendulum data found in OTHD files")
+                sys.exit(1)
+            
+            times = pend_data['times']
+            displacement = pend_data['displacement']
+            velocity = pend_data['velocity']
+            acceleration = pend_data['acceleration']
+            
+            # Determine time range
+            if args.start_time is not None or args.end_time is not None:
+                # Filter by time range
+                start_time = args.start_time if args.start_time is not None else times[0]
+                end_time = args.end_time if args.end_time is not None else times[-1]
+                
+                # Find indices within time range
+                mask = (times >= start_time) & (times <= end_time)
+                indices = np.where(mask)[0]
+                
+                if len(indices) == 0:
+                    logger.error(f"No data found in time range [{start_time}, {end_time}]")
+                    sys.exit(1)
+                
+                start_idx = indices[0]
+                end_idx = indices[-1]
+            else:
+                # Default: first 10 timesteps
+                start_idx = 0
+                end_idx = min(9, len(times) - 1)
+            
+            # Use Rich for better formatting
+            console = Console()
+            
+            # Create header info
+            console.print()
+            console.print("[bold cyan]FlexFlow Pendulum Data Preview[/bold cyan]")
+            console.print(f"[bold]Case:[/bold] {case.case_directory}")
+            console.print(f"[bold]Problem:[/bold] {case.problem_name}")
+            console.print(f"[bold]Time Range:[/bold] {times[start_idx]:.6f} to {times[end_idx]:.6f} s")
+            console.print(f"[bold]Steps Shown:[/bold] {end_idx - start_idx + 1}")
+            console.print()
+            
+            # Create pendulum data table
+            table = Table(title="Pendulum Data", box=box.SIMPLE, 
+                         show_header=True, header_style="bold yellow")
+            
+            table.add_column("Step", justify="right", style="cyan")
+            table.add_column("Time (s)", justify="right", style="white")
+            table.add_column("Displacement", justify="right", style="green")
+            table.add_column("Velocity", justify="right", style="magenta")
+            table.add_column("Acceleration", justify="right", style="yellow")
+            
+            # Add data rows
+            for step in range(start_idx, end_idx + 1):
+                table.add_row(
+                    str(step),
+                    f"{times[step]:.6f}",
+                    f"{displacement[step]:.6e}",
+                    f"{velocity[step]:.6e}",
+                    f"{acceleration[step]:.6e}"
+                )
+            
+            console.print(table)
+            console.print()
+            
+            logger.success("Pendulum data preview completed")
+            return
+        
+        # Original displacement data display
         node_id = args.node if args.node is not None else 0
         
         # Validate node ID

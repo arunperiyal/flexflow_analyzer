@@ -32,6 +32,7 @@ class OTHDReader:
             
         self.times = []
         self.displacements = {}
+        self.pendulum_data = {}  # Store pendulum displacement, velocity, acceleration
         self.num_nodes = 0
         self.tsIds = []
         self.tsId_filter = tsId_filter
@@ -52,6 +53,7 @@ class OTHDReader:
         i = 0
         current_time = None
         current_tsId = None
+        current_timestep_idx = None  # Track the current timestep index
         
         while i < len(lines):
             line = lines[i].strip()
@@ -63,6 +65,7 @@ class OTHDReader:
             
             if line.startswith('time '):
                 current_time = float(line.split()[1])
+                current_timestep_idx = None  # Reset for new time
                 i += 1
                 continue
             
@@ -83,6 +86,8 @@ class OTHDReader:
                             self.tsIds.append(current_tsId)
                             self.time_to_index[current_time] = timestep_idx
                         
+                        current_timestep_idx = timestep_idx  # Track for pendulum data
+                        
                         parts = line.split()
                         num_components = int(parts[1])
                         num_nodes = int(parts[2])
@@ -95,15 +100,27 @@ class OTHDReader:
                             disp_line = lines[i].strip().split()
                             dx, dy, dz = float(disp_line[0]), float(disp_line[1]), float(disp_line[2])
                             self.displacements[(timestep_idx, node_idx)] = [dx, dy, dz]
-                        
-                        current_time = None
                     else:
                         # Skip this aleDisp section
                         parts = line.split()
                         num_nodes = int(parts[2])
                         i += num_nodes + 1
-                        current_time = None
                         continue
+                
+                i += 1
+                continue
+            
+            # Read pendulum data fields
+            if line.startswith('pendDisp ') or line.startswith('pendVel ') or line.startswith('pendAccel '):
+                if current_timestep_idx is not None:
+                    field_type = line.split()[0]  # pendDisp, pendVel, or pendAccel
+                    i += 1
+                    value_line = lines[i].strip()
+                    value = float(value_line)
+                    
+                    if current_timestep_idx not in self.pendulum_data:
+                        self.pendulum_data[current_timestep_idx] = {}
+                    self.pendulum_data[current_timestep_idx][field_type] = value
                 
                 i += 1
                 continue
@@ -167,6 +184,43 @@ class OTHDReader:
             'dy': dy,
             'dz': dz,
             'magnitude': magnitude
+        }
+    
+    def get_pendulum_data(self):
+        """
+        Get pendulum time history data.
+        
+        Returns:
+        --------
+        dict : Dictionary containing:
+            - 'times': numpy array of timesteps
+            - 'displacement': numpy array of pendulum displacements
+            - 'velocity': numpy array of pendulum velocities
+            - 'acceleration': numpy array of pendulum accelerations
+        Returns None if no pendulum data is available.
+        """
+        if not self.pendulum_data:
+            return None
+        
+        times = np.array(self.times)
+        num_timesteps = len(times)
+        
+        displacement = np.zeros(num_timesteps)
+        velocity = np.zeros(num_timesteps)
+        acceleration = np.zeros(num_timesteps)
+        
+        for t_idx in range(num_timesteps):
+            if t_idx in self.pendulum_data:
+                pend_data = self.pendulum_data[t_idx]
+                displacement[t_idx] = pend_data.get('pendDisp', 0.0)
+                velocity[t_idx] = pend_data.get('pendVel', 0.0)
+                acceleration[t_idx] = pend_data.get('pendAccel', 0.0)
+        
+        return {
+            'times': times,
+            'displacement': displacement,
+            'velocity': velocity,
+            'acceleration': acceleration
         }
     
     def __repr__(self):
