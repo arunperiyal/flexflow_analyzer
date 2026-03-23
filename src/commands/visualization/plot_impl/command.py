@@ -420,6 +420,10 @@ def execute_plot(args):
             print(f"{Colors.red('Error:')} --node is required for displacement data", file=sys.stderr)
             sys.exit(1)
         
+        if args.data_type == 'pendulum' and args.component is None:
+            # Default to displacement for pendulum
+            args.component = 'displacement'
+        
         # Ensure MS fonts are loaded (if installed)
         ensure_ms_fonts_loaded()
         
@@ -453,6 +457,8 @@ def execute_plot(args):
         # Generate plot based on data type and plot type
         if args.data_type == 'displacement':
             fig, axes = generate_displacement_plot(case, args, plot_type, plot_style, logger, legend_style)
+        elif args.data_type == 'pendulum':
+            fig, axes = generate_pendulum_plot(case, args, plot_type, plot_style, logger, legend_style)
         elif args.data_type == 'force':
             fig, axes = generate_force_plot(case, args, plot_type, plot_style, logger)
         elif args.data_type == 'moment':
@@ -568,6 +574,111 @@ def generate_displacement_plot(case, args, plot_type, plot_style, logger, legend
         raise ValueError(f"Invalid plot type: {plot_type}")
     
     return fig, axes
+
+
+def generate_pendulum_plot(case, args, plot_type, plot_style, logger, legend_style=None):
+    """Generate pendulum plot"""
+    if not case.othd_reader:
+        raise ValueError("No OTHD data available")
+    
+    # Get pendulum data
+    pend_data = case.othd_reader.get_pendulum_data()
+    if pend_data is None:
+        raise ValueError("No pendulum data available in OTHD files")
+    
+    # Handle component as list or single value
+    component = args.component
+    if isinstance(component, list):
+        component_single = component[0] if component else 'displacement'
+    else:
+        component_single = component if component else 'displacement'
+    
+    # Map component names
+    component_map = {
+        'displacement': 'displacement',
+        'disp': 'displacement',
+        'd': 'displacement',
+        'velocity': 'velocity',
+        'vel': 'velocity',
+        'v': 'velocity',
+        'acceleration': 'acceleration',
+        'accel': 'acceleration',
+        'a': 'acceleration',
+        'all': 'all'
+    }
+    
+    comp_key = component_map.get(component_single.lower(), 'displacement')
+    
+    logger.info(f"Generating {plot_type} plot for pendulum, component: {comp_key}")
+    
+    # Filter by time range if specified
+    times = pend_data['times']
+    if args.start_time is not None or args.end_time is not None:
+        import numpy as np
+        start_t = args.start_time if args.start_time is not None else times[0]
+        end_t = args.end_time if args.end_time is not None else times[-1]
+        mask = (times >= start_t) & (times <= end_t)
+        times = times[mask]
+        displacement = pend_data['displacement'][mask]
+        velocity = pend_data['velocity'][mask]
+        acceleration = pend_data['acceleration'][mask]
+    else:
+        displacement = pend_data['displacement']
+        velocity = pend_data['velocity']
+        acceleration = pend_data['acceleration']
+    
+    # Create figure
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    if plot_type == 'time':
+        if comp_key == 'all':
+            # Plot all three on same graph
+            ax.plot(times, displacement, label='Displacement', **plot_style)
+            ax.plot(times, velocity, label='Velocity', **plot_style)
+            ax.plot(times, acceleration, label='Acceleration', **plot_style)
+            ax.set_ylabel('Pendulum Data')
+            ax.legend()
+        else:
+            # Plot single component
+            data = pend_data[comp_key]
+            if args.start_time is not None or args.end_time is not None:
+                data = data[mask]
+            ax.plot(times, data, **plot_style)
+            ax.set_ylabel(f'Pendulum {comp_key.capitalize()}')
+        
+        ax.set_xlabel('Time (s)')
+        ax.grid(True, alpha=0.3)
+        
+    elif plot_type == 'fft':
+        # FFT plot for pendulum data
+        import numpy as np
+        from scipy import signal
+        
+        data = pend_data[comp_key]
+        if args.start_time is not None or args.end_time is not None:
+            data = data[mask]
+        
+        # Calculate sampling frequency
+        dt = times[1] - times[0]
+        fs = 1.0 / dt
+        
+        # Compute FFT
+        fft_vals = np.fft.fft(data)
+        fft_freq = np.fft.fftfreq(len(data), dt)
+        
+        # Take only positive frequencies
+        pos_mask = fft_freq > 0
+        fft_freq = fft_freq[pos_mask]
+        fft_magnitude = np.abs(fft_vals[pos_mask])
+        
+        ax.plot(fft_freq, fft_magnitude, **plot_style)
+        ax.set_xlabel('Frequency (Hz)')
+        ax.set_ylabel(f'FFT Magnitude - Pendulum {comp_key.capitalize()}')
+        ax.grid(True, alpha=0.3)
+    else:
+        raise ValueError(f"Plot type '{plot_type}' not supported for pendulum data. Use 'time' or 'fft'.")
+    
+    return fig, ax
 
 
 def generate_force_plot(case, args, plot_type, plot_style, logger):

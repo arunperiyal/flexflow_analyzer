@@ -303,10 +303,10 @@ _flexflow_completions() {
             else
                 case "$prev" in
                     --data-type)
-                        COMPREPLY=( $(compgen -W "displacement force moment pressure" -- "$cur") )
+                        COMPREPLY=( $(compgen -W "displacement force pendulum" -- "$cur") )
                         ;;
                     --component|--traj-x|--traj-y|--traj-z)
-                        COMPREPLY=( $(compgen -W "x y z magnitude tx ty tz all" -- "$cur") )
+                        COMPREPLY=( $(compgen -W "x y z magnitude tx ty tz all displacement velocity acceleration" -- "$cur") )
                         ;;
                     --plot-type)
                         COMPREPLY=( $(compgen -W "time fft traj2d traj3d" -- "$cur") )
@@ -335,10 +335,10 @@ _flexflow_completions() {
             else
                 case "$prev" in
                     --data-type)
-                        COMPREPLY=( $(compgen -W "displacement force moment pressure" -- "$cur") )
+                        COMPREPLY=( $(compgen -W "displacement force pendulum" -- "$cur") )
                         ;;
                     --component)
-                        COMPREPLY=( $(compgen -W "x y z magnitude tx ty tz all" -- "$cur") )
+                        COMPREPLY=( $(compgen -W "x y z magnitude tx ty tz all displacement velocity acceleration" -- "$cur") )
                         ;;
                     --plot-type)
                         COMPREPLY=( $(compgen -W "time fft traj2d traj3d" -- "$cur") )
@@ -543,8 +543,8 @@ _flexflow() {
                     _arguments \\
                         '1:case:_flexflow_cases' \\
                         '--node[Node ID to plot]:node:' \\
-                        '--data-type[Data type]:type:(displacement force moment pressure)' \\
-                        '--component[Component to plot]:component:(x y z magnitude tx ty tz all)' \\
+                        '--data-type[Data type]:type:(displacement force pendulum)' \\
+                        '--component[Component to plot]:component:(x y z magnitude tx ty tz all displacement velocity acceleration)' \\
                         '--plot-type[Plot type]:type:(time fft traj2d traj3d)' \\
                         '--traj-x[X component for trajectory]:component:(x y z magnitude)' \\
                         '--traj-y[Y component for trajectory]:component:(x y z magnitude)' \\
@@ -572,8 +572,8 @@ _flexflow() {
                     _arguments \\
                         '*:case:_flexflow_cases' \\
                         '--node[Node ID to plot]:node:' \\
-                        '--data-type[Data type]:type:(displacement force moment pressure)' \\
-                        '--component[Component to plot]:component:(x y z magnitude tx ty tz all)' \\
+                        '--data-type[Data type]:type:(displacement force pendulum)' \\
+                        '--component[Component to plot]:component:(x y z magnitude tx ty tz all displacement velocity acceleration)' \\
                         '--plot-type[Plot type]:type:(time fft traj2d traj3d)' \\
                         '--start-time[Start time]:time:' \\
                         '--end-time[End time]:time:' \\
@@ -720,8 +720,8 @@ complete -c flexflow -n "__fish_seen_subcommand_from statistics" -l examples -d 
 
 # Plot command
 complete -c flexflow -n "__fish_seen_subcommand_from plot" -l node -d "Node ID to plot"
-complete -c flexflow -n "__fish_seen_subcommand_from plot" -l data-type -d "Data type" -xa "displacement force moment pressure"
-complete -c flexflow -n "__fish_seen_subcommand_from plot" -l component -d "Component" -xa "x y z magnitude tx ty tz all"
+complete -c flexflow -n "__fish_seen_subcommand_from plot" -l data-type -d "Data type" -xa "displacement force pendulum"
+complete -c flexflow -n "__fish_seen_subcommand_from plot" -l component -d "Component" -xa "x y z magnitude tx ty tz all displacement velocity acceleration"
 complete -c flexflow -n "__fish_seen_subcommand_from plot" -l plot-type -d "Plot type" -xa "time fft traj2d traj3d"
 complete -c flexflow -n "__fish_seen_subcommand_from plot" -l traj-x -d "X component" -xa "x y z magnitude"
 complete -c flexflow -n "__fish_seen_subcommand_from plot" -l traj-y -d "Y component" -xa "x y z magnitude"
@@ -747,8 +747,8 @@ complete -c flexflow -n "__fish_seen_subcommand_from plot" -l examples -d "Show 
 
 # Compare command
 complete -c flexflow -n "__fish_seen_subcommand_from compare" -l node -d "Node ID to plot"
-complete -c flexflow -n "__fish_seen_subcommand_from compare" -l data-type -d "Data type" -xa "displacement force moment pressure"
-complete -c flexflow -n "__fish_seen_subcommand_from compare" -l component -d "Component" -xa "x y z magnitude tx ty tz all"
+complete -c flexflow -n "__fish_seen_subcommand_from compare" -l data-type -d "Data type" -xa "displacement force pendulum"
+complete -c flexflow -n "__fish_seen_subcommand_from compare" -l component -d "Component" -xa "x y z magnitude tx ty tz all displacement velocity acceleration"
 complete -c flexflow -n "__fish_seen_subcommand_from compare" -l plot-type -d "Plot type" -xa "time fft traj2d traj3d"
 complete -c flexflow -n "__fish_seen_subcommand_from compare" -l start-time -d "Start time"
 complete -c flexflow -n "__fish_seen_subcommand_from compare" -l end-time -d "End time"

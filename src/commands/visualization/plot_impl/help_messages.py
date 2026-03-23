@@ -14,12 +14,14 @@ Plot displacement or force data for a specific node.
     plot {Colors.YELLOW}--input-file{Colors.RESET} <yaml_file>
 
 {Colors.BOLD}REQUIRED OPTIONS:{Colors.RESET}
-    {Colors.YELLOW}--node{Colors.RESET} N              Node number to plot
-    {Colors.YELLOW}--data-type{Colors.RESET} TYPE     Data type: displacement or force
+    {Colors.YELLOW}--node{Colors.RESET} N              Node number to plot (for displacement/force)
+    {Colors.YELLOW}--data-type{Colors.RESET} TYPE     Data type: displacement, force, or pendulum
 
 {Colors.BOLD}PLOT OPTIONS:{Colors.RESET}
     {Colors.YELLOW}--plot-type{Colors.RESET} TYPE     Plot type: time, fft, traj2d, traj3d (default: time)
-    {Colors.YELLOW}--component{Colors.RESET} X [Y Z]  Components to plot (x, y, z)
+    {Colors.YELLOW}--component{Colors.RESET} X [Y Z]  Components to plot
+                            {Colors.DIM}Displacement/Force:{Colors.RESET} x, y, z
+                            {Colors.DIM}Pendulum:{Colors.RESET} displacement, velocity, acceleration, all
     {Colors.YELLOW}--start-time{Colors.RESET} T       Start time for plot
     {Colors.YELLOW}--end-time{Colors.RESET} T         End time for plot
 
@@ -154,6 +156,23 @@ def print_plot_examples():
     # Terminal plot + save to file
     plot CS4SG1U1 --node 100 --data-type displacement \\
         --component y --gnu --output plot.pdf
+
+{Colors.BOLD}Pendulum Data Plots:{Colors.RESET}
+    # Time series of pendulum displacement
+    plot CS4SG1U1 --data-type pendulum --component displacement
+
+    # Pendulum velocity
+    plot CS4SG1U1 --data-type pendulum --component velocity
+
+    # Pendulum acceleration
+    plot CS4SG1U1 --data-type pendulum --component acceleration
+
+    # All pendulum components on one plot
+    plot CS4SG1U1 --data-type pendulum --component all
+
+    # FFT of pendulum displacement
+    plot CS4SG1U1 --data-type pendulum --component displacement \\
+        --plot-type fft
 
 {Colors.BOLD}Remote/SSH Usage (No Display):{Colors.RESET}
     # Automatically headless when using --output

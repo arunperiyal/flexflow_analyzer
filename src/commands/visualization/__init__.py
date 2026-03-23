@@ -24,7 +24,7 @@ class PlotCommand(BaseCommand):
         parser.add_argument('case', nargs='?', help='Case directory path')
         parser.add_argument('--input-file', type=str, help='YAML input file')
         parser.add_argument('--node', type=int, help='Node number to plot')
-        parser.add_argument('--data-type', type=str, choices=['displacement', 'force'],
+        parser.add_argument('--data-type', type=str, choices=['displacement', 'force', 'pendulum'],
                           help='Data type to plot')
 
         # Plot options
