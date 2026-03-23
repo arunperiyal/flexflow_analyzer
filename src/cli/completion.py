@@ -119,7 +119,7 @@ _flexflow_completions() {
                 # Have subcommand
                 case "$subcommand" in
                     show)
-                        local flags="--node --component --start-time --end-time --start-step --end-step -v --verbose -h --help --examples"
+                        local flags="--node --component --start-time --end-time --start-step --end-step --pendulum -v --verbose -h --help --examples"
                         if [[ "$cur" == -* ]]; then
                             COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
                         else
@@ -264,7 +264,7 @@ _flexflow_completions() {
             fi
             ;;
         preview)
-            local flags="--node --start-time --end-time -v --verbose -h --help --examples"
+            local flags="--node --start-time --end-time --pendulum -v --verbose -h --help --examples"
             if [[ "$cur" == -* ]]; then
                 COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
             else
@@ -526,6 +526,7 @@ _flexflow() {
                         '--node[Node ID to preview]:node:' \\
                         '--start-time[Start time for preview]:time:' \\
                         '--end-time[End time for preview]:time:' \\
+                        '--pendulum[Show pendulum data instead of displacement data]' \\
                         '(-v --verbose)'{-v,--verbose}'[Enable verbose output]' \\
                         '(-h --help)'{-h,--help}'[Show help]' \\
                         '--examples[Show usage examples]'
@@ -706,6 +707,7 @@ complete -c flexflow -n "__fish_seen_subcommand_from new" -l examples -d "Show e
 complete -c flexflow -n "__fish_seen_subcommand_from preview" -l node -d "Node ID to preview"
 complete -c flexflow -n "__fish_seen_subcommand_from preview" -l start-time -d "Start time"
 complete -c flexflow -n "__fish_seen_subcommand_from preview" -l end-time -d "End time"
+complete -c flexflow -n "__fish_seen_subcommand_from preview" -l pendulum -d "Show pendulum data"
 complete -c flexflow -n "__fish_seen_subcommand_from preview" -s v -l verbose -d "Enable verbose output"
 complete -c flexflow -n "__fish_seen_subcommand_from preview" -s h -l help -d "Show help"
 complete -c flexflow -n "__fish_seen_subcommand_from preview" -l examples -d "Show examples"

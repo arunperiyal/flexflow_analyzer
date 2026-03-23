@@ -16,6 +16,7 @@ Preview displacement data from OTHD files in tabular format.
     {Colors.YELLOW}--node <node_id>{Colors.RESET}       Node ID to preview (default: 0)
     {Colors.YELLOW}--start-time <time>{Colors.RESET}    Start time for preview
     {Colors.YELLOW}--end-time <time>{Colors.RESET}      End time for preview
+    {Colors.YELLOW}--pendulum{Colors.RESET}             Show pendulum data instead of displacement data
     {Colors.YELLOW}--verbose, -v{Colors.RESET}          Show detailed information
     {Colors.YELLOW}--examples{Colors.RESET}             Show usage examples
     {Colors.YELLOW}--help, -h{Colors.RESET}             Show this help message
@@ -34,11 +35,15 @@ Preview displacement data from OTHD files in tabular format.
     With node flag:
     - Displays data for the specified node
     
+    With --pendulum flag:
+    - Displays pendulum displacement, velocity, and acceleration
+    - Ignores --node flag (pendulum data is global)
+    
     The table includes:
     - Step number
     - Time value
-    - Displacement components (dx, dy, dz)
-    - Displacement magnitude
+    - Displacement components (dx, dy, dz) or pendulum data
+    - Displacement magnitude (displacement mode only)
 """)
 
 
@@ -60,4 +65,8 @@ def print_preview_examples():
 
 {Colors.BOLD}Preview with verbose output:{Colors.RESET}
     flexflow data show CS4SG1U1 --node 10 --verbose
+
+{Colors.BOLD}Preview pendulum data:{Colors.RESET}
+    flexflow data show CS4SG1U1 --pendulum
+    flexflow data show CS4SG1U1 --pendulum --start-time 50.0 --end-time 100.0
 """)
