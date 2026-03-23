@@ -20,6 +20,7 @@ flexflow → plot CS4SG1U1 --node 10
 ## Features
 
 - **Interactive Shell** - REPL mode with tab completion and command history
+- **Command Chaining** - Chain multiple commands with semicolon (e.g., `use case:C1; data show`)
 - **Data Analysis** - Inspect OTHD/OISD files and PLT files via PyTecplot
 - **Case Management** - Create, organize, and manage simulation cases
 - **SLURM Integration** - Submit and monitor simulation jobs

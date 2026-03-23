@@ -346,6 +346,12 @@ class FlexFlowCompleter(Completer):
 
     def get_completions(self, document, complete_event):
         text = document.text_before_cursor
+        
+        # Support semicolon-separated commands: complete from after last semicolon
+        last_semicolon = text.rfind(';')
+        if last_semicolon != -1:
+            text = text[last_semicolon + 1:].lstrip()
+        
         words = text.split()
         ends_with_space = text.endswith(' ')
 
@@ -737,7 +743,8 @@ class InteractiveShell:
                 "  • Type [cyan]help[/cyan] or [cyan]?[/cyan] for available commands\n"
                 "  • Use [cyan]ls[/cyan], [cyan]cd[/cyan], [cyan]find[/cyan] to browse\n"
                 "  • Use [cyan]Tab[/cyan] for autocompletion\n"
-                "  • Use [cyan]↑/↓[/cyan] for command history\n\n"
+                "  • Use [cyan]↑/↓[/cyan] for command history\n"
+                "  • Chain commands with [cyan];[/cyan] (e.g., [cyan]use case:C1; data show[/cyan])\n\n"
                 "[yellow]Set Context:[/yellow]\n"
                 "  [cyan]use case:Case015 node:24 t1:50.0 t2:100.0[/cyan]\n"
                 "  Set multiple contexts at once with [bold]context:value[/bold] syntax\n\n"
@@ -1187,6 +1194,12 @@ class InteractiveShell:
         self.console.print("[yellow]Context Syntax Example:[/yellow]")
         self.console.print("  [cyan]use case:Case015 node:24 t1:50.0 t2:100.0[/cyan]")
         self.console.print("  [dim]Set multiple contexts at once[/dim]")
+        self.console.print()
+        
+        # Command chaining example
+        self.console.print("[yellow]Command Chaining:[/yellow]")
+        self.console.print("  [cyan]use case:Case005; data show --pendulum; plot --data-type pendulum[/cyan]")
+        self.console.print("  [dim]Chain multiple commands with semicolon (;)[/dim]")
         self.console.print()
 
         # Shell commands
@@ -2547,6 +2560,57 @@ class InteractiveShell:
         except Exception as e:
             self.console.print(f"[red]Error showing tree: {e}[/red]")
 
+    def _split_by_semicolon(self, command_line: str) -> List[str]:
+        """
+        Split command line by semicolon, respecting quotes.
+        
+        Args:
+            command_line: Full command line string
+            
+        Returns:
+            List of individual commands
+            
+        Examples:
+            'cmd1; cmd2; cmd3' -> ['cmd1', 'cmd2', 'cmd3']
+            'plot --title "A; B"; cmd2' -> ['plot --title "A; B"', 'cmd2']
+            'cmd1;; cmd3' -> ['cmd1', '', 'cmd3']
+        """
+        commands = []
+        current = []
+        in_quotes = False
+        quote_char = None
+        escape_next = False
+        
+        for char in command_line:
+            if escape_next:
+                current.append(char)
+                escape_next = False
+                continue
+                
+            if char == '\\':
+                escape_next = True
+                current.append(char)
+                continue
+                
+            if char in ('"', "'"):
+                if not in_quotes:
+                    in_quotes = True
+                    quote_char = char
+                elif char == quote_char:
+                    in_quotes = False
+                    quote_char = None
+                current.append(char)
+            elif char == ';' and not in_quotes:
+                commands.append(''.join(current))
+                current = []
+            else:
+                current.append(char)
+        
+        if current:
+            commands.append(''.join(current))
+        
+        return commands
+
     def execute_command(self, command_line: str) -> None:
         """
         Execute a FlexFlow command.
@@ -2740,12 +2804,20 @@ class InteractiveShell:
                 # Expand alias before routing (so aliases to shell built-ins work)
                 user_input = self._expand_alias_str(user_input)
 
-                # Handle shell commands
-                if self.handle_shell_command(user_input):
-                    continue
+                # Split by semicolon to support command chaining
+                commands = self._split_by_semicolon(user_input)
+                
+                for cmd in commands:
+                    cmd = cmd.strip()
+                    if not cmd:
+                        continue
+                    
+                    # Handle shell commands
+                    if self.handle_shell_command(cmd):
+                        continue
 
-                # Execute FlexFlow command
-                self.execute_command(user_input)
+                    # Execute FlexFlow command
+                    self.execute_command(cmd)
 
             except KeyboardInterrupt:
                 # Ctrl+C pressed - don't exit, just show new prompt

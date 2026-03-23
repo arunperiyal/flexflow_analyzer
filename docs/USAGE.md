@@ -47,8 +47,29 @@ Tab completion works for commands, subcommands, and options:
 ```bash
 ff <TAB>                     # Shows all commands
 ff case <TAB>                # Shows: show, create, run
-ff plot --data-type <TAB>    # Shows: displacement, force, moment, pressure
+ff plot --data-type <TAB>    # Shows: displacement, force, pendulum
 ```
+
+### Command Chaining
+
+Chain multiple commands with semicolon (`;`) for efficient workflows:
+
+```bash
+# Set context and run commands
+use case:Case005; data show --pendulum
+
+# Multiple operations
+use case:Case005 node:24; data show; plot --data-type displacement --component y
+
+# Works with quotes
+plot --title "Analysis; Results"; data stats
+```
+
+**Features:**
+- Tab completion works after semicolons
+- Context persists across chained commands
+- Errors don't stop subsequent commands
+- Empty commands (;;) are skipped automatically
 
 ## Command Structure
 
@@ -406,6 +427,30 @@ case:
 ```
 
 ## Advanced Usage
+
+### Command Chaining in Interactive Mode
+
+Chain multiple commands for efficient workflows:
+
+```bash
+# Quick analysis workflow
+use case:Case005; data show; data stats
+
+# Set context and plot
+use case:Case005 node:24 t1:50.0 t2:100.0; plot --data-type displacement --component y
+
+# Pendulum analysis
+use case:Case005; data show --pendulum; plot --data-type pendulum --component velocity
+
+# Multiple operations
+cd ~/simulations; use case:Case005; data show; plot --data-type pendulum --output result.png
+```
+
+**Benefits:**
+- Faster than typing separate commands
+- Context persists across chain
+- Tab completion works after semicolons
+- Errors don't stop subsequent commands
 
 ### Batch Processing
 

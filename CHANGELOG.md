@@ -1,5 +1,25 @@
 # FlexFlow Changelog
 
+## Unreleased
+
+### ✨ New Features
+
+#### Command Chaining with Semicolons
+- **Semicolon separator** - Chain multiple commands on one line
+  - Example: `use case:Case005; data show --pendulum; plot --data-type pendulum`
+  - Supports quoted strings: `plot --title "A; B"; data show`
+  - Empty commands ignored (e.g., `cmd1;; cmd2`)
+- **Smart tab completion** - Tab works correctly after semicolons
+- **Context persistence** - Context set by `use` applies to all chained commands
+- **Error handling** - Errors in one command don't stop the chain
+
+#### Pendulum Data Support
+- **`--pendulum` flag** - Added to `data show` command to display pendulum data
+- **`pendulum` data type** - Added to `plot` command's `--data-type` option
+- **New components** - Pendulum: displacement, velocity, acceleration, all
+- **Pendulum plotting** - Time-series and FFT plots for pendulum data
+- **Full documentation** - Help messages and examples updated
+
 ## Version 2.0.0 - Interactive Shell Release (2026-02-06)
 
 ### 🎉 Major Features
