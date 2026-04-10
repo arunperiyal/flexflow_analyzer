@@ -1,14 +1,17 @@
-"""Execute run check command - Validate case directory."""
+"""Execute run check command - Validate case directory and check SLURM status."""
 
 import os
+import re
 from pathlib import Path
+from datetime import datetime
 from rich.console import Console
 from rich.table import Table
+from rich.panel import Panel
 from rich import box
 
 
 def execute_check(args):
-    """Execute run check command to validate case directory."""
+    """Execute run check command to validate case directory and check SLURM status."""
 
     # Handle help flag
     if hasattr(args, 'help') and args.help:
@@ -45,6 +48,10 @@ def execute_check(args):
 
     # Display summary
     display_summary(results, console)
+
+    # 5. Check last SLURM job status
+    console.print()
+    check_last_slurm_status(case_dir, verbose, console)
 
 
 def get_case_directory(args):
@@ -295,19 +302,20 @@ def show_check_help():
     from src.utils.colors import Colors
 
     print(f"""
-{Colors.BOLD}{Colors.CYAN}Run Check - Validate Case Directory{Colors.RESET}
+{Colors.BOLD}{Colors.CYAN}Run Check - Validate Case Directory and SLURM Status{Colors.RESET}
 
 Verify that the case directory has all required files and structure.
+Also checks the status of the last submitted SLURM job.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
     run check [case_directory] [options]
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
-    {Colors.YELLOW}-v, --verbose{Colors.RESET}  Show detailed validation results
+    {Colors.YELLOW}-v, --verbose{Colors.RESET}  Show detailed validation results and error messages
     {Colors.YELLOW}-h, --help{Colors.RESET}     Show this help message
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
-    # Check specific case
+    # Check specific case and last SLURM job
     run check Case001
 
     # Check with detailed output
@@ -343,8 +351,201 @@ Verify that the case directory has all required files and structure.
     • simPlt - PLT file generator
     • simPlt2Bin - Binary PLT converter
 
+    {Colors.GREEN}SLURM Job Status:{Colors.RESET}
+    • Finds the latest slurm-*.out file (by modification time)
+    • Checks for error keywords in the SLURM output
+    • Displays job ID, modification time, and status
+    • Shows up to 10 error messages if job failed
+
+{Colors.BOLD}SLURM JOB STATUS INDICATORS:{Colors.RESET}
+    • {Colors.GREEN}✓ SUCCESS{Colors.RESET} - No errors found in SLURM output
+    • {Colors.RED}✗ FAILURE{Colors.RESET} - Error keywords detected in output
+
 {Colors.BOLD}OUTPUT:{Colors.RESET}
     • {Colors.GREEN}✓{Colors.RESET} - Check passed
     • {Colors.YELLOW}⚠{Colors.RESET} - Warning (non-critical)
     • {Colors.RED}✗{Colors.RESET} - Error (must be fixed)
+
+{Colors.BOLD}ERROR DETECTION:{Colors.RESET}
+    The SLURM status check looks for common error keywords:
+    • Error, ERROR, error, FAILED, Failed, Traceback
+    • Segmentation fault, Out of memory, Cannot find
+    • Fatal, Exception, etc.
+
+    Use --verbose to see all detected errors.
 """)
+
+
+def find_latest_slurm_file(case_dir: Path):
+    """
+    Find the latest SLURM output file in case directory.
+    
+    Looks for files matching pattern: slurm-<jobid>.out
+    Returns the file with the most recent modification time.
+    
+    Parameters:
+    -----------
+    case_dir : Path
+        Case directory path
+        
+    Returns:
+    --------
+    Path or None
+        Path to the latest SLURM file, or None if not found
+    """
+    slurm_files = list(case_dir.glob('slurm-*.out'))
+    
+    if not slurm_files:
+        return None
+    
+    # Return file with most recent modification time
+    return max(slurm_files, key=lambda p: p.stat().st_mtime)
+
+
+def extract_job_id_from_filename(filename: str) -> str:
+    """Extract job ID from SLURM filename."""
+    match = re.match(r'slurm-(\d+)\.out', filename)
+    if match:
+        return match.group(1)
+    return "Unknown"
+
+
+def check_slurm_output_for_errors(slurm_file: Path) -> tuple:
+    """
+    Check SLURM output file for errors.
+    
+    Parameters:
+    -----------
+    slurm_file : Path
+        Path to SLURM output file
+        
+    Returns:
+    --------
+    tuple : (status, error_messages)
+        status : str - 'success' or 'failure'
+        error_messages : list - List of error messages found (empty if success)
+    """
+    error_keywords = [
+        'Error',
+        'ERROR',
+        'error',
+        'FAILED',
+        'Failed',
+        'failed',
+        'Traceback',
+        'traceback',
+        'Segmentation fault',
+        'segmentation fault',
+        'Out of memory',
+        'out of memory',
+        'Cannot find',
+        'cannot find',
+        'No such file',
+        'no such file',
+        'exception',
+        'Exception',
+        'EXCEPTION',
+        'fatal',
+        'Fatal',
+        'FATAL',
+    ]
+    
+    error_messages = []
+    
+    try:
+        with open(slurm_file, 'r', errors='ignore') as f:
+            content = f.read()
+            lines = content.split('\n')
+            
+            # Search for error keywords
+            for i, line in enumerate(lines):
+                for keyword in error_keywords:
+                    if keyword in line and line.strip():
+                        error_messages.append(line.strip())
+                        break
+    except Exception as e:
+        return 'failure', [f"Could not read SLURM file: {str(e)}"]
+    
+    # Determine status
+    if error_messages:
+        return 'failure', error_messages
+    else:
+        return 'success', []
+
+
+def check_last_slurm_status(case_dir: Path, verbose: bool, console: Console):
+    """
+    Check the last SLURM job status.
+    
+    Parameters:
+    -----------
+    case_dir : Path
+        Case directory path
+    verbose : bool
+        Enable verbose output
+    console : Console
+        Rich console instance
+    """
+    slurm_file = find_latest_slurm_file(case_dir)
+    
+    if not slurm_file:
+        console.print("[bold cyan]SLURM Status:[/bold cyan]")
+        console.print("[dim]  No SLURM output files found[/dim]")
+        console.print()
+        return
+    
+    # Extract job ID
+    job_id = extract_job_id_from_filename(slurm_file.name)
+    
+    # Get file modification time
+    mtime = slurm_file.stat().st_mtime
+    mod_time = datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M:%S')
+    
+    # Check for errors
+    status, error_messages = check_slurm_output_for_errors(slurm_file)
+    
+    console.print("[bold cyan]Last SLURM Job Status:[/bold cyan]")
+    console.print()
+    
+    # Create status table
+    table = Table(box=box.ROUNDED, show_header=False)
+    table.add_column("Field", style="cyan")
+    table.add_column("Value", style="white")
+    
+    table.add_row("SLURM File", slurm_file.name)
+    table.add_row("Job ID", job_id)
+    table.add_row("Modified", mod_time)
+    
+    if status == 'success':
+        table.add_row("Status", "[bold green]✓ SUCCESS[/bold green]")
+    else:
+        table.add_row("Status", "[bold red]✗ FAILURE[/bold red]")
+    
+    console.print(table)
+    console.print()
+    
+    # Show error details if any
+    if error_messages:
+        console.print("[bold yellow]Error Details:[/bold yellow]")
+        
+        # Limit to first 10 error messages
+        displayed_errors = error_messages[:10]
+        for i, error in enumerate(displayed_errors, 1):
+            # Truncate long error messages
+            if len(error) > 120:
+                error = error[:117] + "..."
+            console.print(f"  [red]{i}.[/red] {error}")
+        
+        if len(error_messages) > 10:
+            console.print(f"  [dim]... and {len(error_messages) - 10} more error(s)[/dim]")
+        
+        console.print()
+        
+        # Show hint
+        if verbose:
+            console.print("[dim]View full SLURM output with:[/dim]")
+            console.print(f"[dim]  cat {slurm_file}[/dim]")
+            console.print()
+    else:
+        console.print("[bold green]✓ No errors detected in SLURM output[/bold green]")
+        console.print()
