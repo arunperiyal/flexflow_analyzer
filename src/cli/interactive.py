@@ -364,6 +364,12 @@ class FlexFlowCompleter(Completer):
             for shell_cmd, desc in self._SHELL_COMMANDS:
                 if shell_cmd.startswith(word):
                     yield Completion(shell_cmd, start_position=-len(word), display_meta=desc)
+            # Add alias completions
+            if self.shell and hasattr(self.shell, '_aliases'):
+                for alias_name, alias_expansion in self.shell._aliases.items():
+                    if alias_name.startswith(word):
+                        yield Completion(alias_name, start_position=-len(word), 
+                                       display_meta=f'alias → {alias_expansion}')
             return
 
         cmd_name = words[0]
