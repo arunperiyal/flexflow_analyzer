@@ -328,6 +328,26 @@ class FlexFlowCompleter(Completer):
             if value.startswith(word):
                 yield Completion(value, start_position=-len(word), display_meta=desc)
 
+    def _expand_alias_for_completion(self, alias_name: str) -> Optional[str]:
+        """
+        Expand an alias to its actual command.
+        
+        Args:
+            alias_name: Name of the potential alias
+            
+        Returns:
+            The expanded command (first word only), or None if not an alias
+        """
+        if not self.shell or not hasattr(self.shell, '_aliases'):
+            return None
+        
+        if alias_name in self.shell._aliases:
+            expansion = self.shell._aliases[alias_name]
+            # Get the first word of the expansion
+            return expansion.split()[0] if expansion else None
+        
+        return None
+
     def _get_file_completions(self, word: str, directory: Path) -> List[tuple]:
         try:
             if not directory.exists():
@@ -373,6 +393,11 @@ class FlexFlowCompleter(Completer):
             return
 
         cmd_name = words[0]
+        
+        # Expand alias if cmd_name is an alias
+        expanded_cmd = self._expand_alias_for_completion(cmd_name)
+        if expanded_cmd:
+            cmd_name = expanded_cmd
 
         # ── use / unuse ──────────────────────────────────────────────────────
         if cmd_name == 'use':
