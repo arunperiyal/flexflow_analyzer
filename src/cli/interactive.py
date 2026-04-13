@@ -408,7 +408,7 @@ class FlexFlowCompleter(Completer):
             return
 
         # ── file-browsing commands ───────────────────────────────────────────
-        if cmd_name in ('cd', 'cat', 'ls', 'grep', 'head', 'tail'):
+        if cmd_name in ('cd', 'cat', 'ls', 'grep', 'head', 'tail', 'rm', 'cp', 'mv', 'du'):
             yield from self._complete_path(words, ends_with_space)
             return
 

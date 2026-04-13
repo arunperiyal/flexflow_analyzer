@@ -473,6 +473,68 @@ def check_slurm_output_for_errors(slurm_file: Path) -> tuple:
         return 'success', []
 
 
+def detect_job_stage(slurm_file: Path, case_dir: Path) -> str:
+    """
+    Detect which job stage (pre, main, post, sq, sb, sc) was submitted.
+    
+    Parameters:
+    -----------
+    slurm_file : Path
+        Path to SLURM output file
+    case_dir : Path
+        Case directory path
+        
+    Returns:
+    --------
+    str : Stage name ('pre', 'main', 'post', 'sq', 'sb', 'sc', or 'unknown')
+    """
+    # Read SLURM file and look for clues about which script was executed
+    try:
+        with open(slurm_file, 'r', errors='ignore') as f:
+            content = f.read().lower()
+            
+            # Look for script names in the SLURM output
+            # Most sbatch submissions include the script path in the output
+            if 'postflex.sh' in content or 'post.sh' in content or 'postsubmit' in content:
+                return 'post'
+            elif 'mainflex.sh' in content or 'main.sh' in content or 'submit.sh' in content:
+                return 'main'
+            elif 'preflex.sh' in content or 'pre.sh' in content or 'preprocessing' in content:
+                return 'pre'
+            elif 'SQ' in content or 'sb.py' in content:
+                return 'sq'
+            elif 'SB' in content or 'sb.py' in content:
+                return 'sb'
+            elif 'SC' in content or 'sc.py' in content:
+                return 'sc'
+    except Exception:
+        pass
+    
+    # Fallback: Check the most recent script modification time
+    stage_scripts = {
+        'pre': ['preFlex.sh', 'pre.sh', 'preprocessing.sh'],
+        'main': ['mainFlex.sh', 'submit.sh', 'main.sh'],
+        'post': ['postFlex.sh', 'PostSubmit.sh', 'post.sh'],
+    }
+    
+    slurm_mtime = slurm_file.stat().st_mtime
+    latest_stage = None
+    latest_mtime = 0
+    
+    for stage, scripts in stage_scripts.items():
+        for script_name in scripts:
+            script_path = case_dir / script_name
+            if script_path.exists():
+                mtime = script_path.stat().st_mtime
+                # Check if script was modified after slurm file was created
+                # or use it as a fallback if we can't determine from content
+                if mtime > latest_mtime and mtime <= slurm_mtime:
+                    latest_stage = stage
+                    latest_mtime = mtime
+    
+    return latest_stage if latest_stage else 'unknown'
+
+
 def check_last_slurm_status(case_dir: Path, verbose: bool, console: Console):
     """
     Check the last SLURM job status.
@@ -489,7 +551,7 @@ def check_last_slurm_status(case_dir: Path, verbose: bool, console: Console):
     slurm_file = find_latest_slurm_file(case_dir)
     
     if not slurm_file:
-        console.print("[bold cyan]SLURM Status:[/bold cyan]")
+        console.print("[bold cyan]Last SLURM Job Status:[/bold cyan]")
         console.print("[dim]  No SLURM output files found[/dim]")
         console.print()
         return
@@ -500,6 +562,9 @@ def check_last_slurm_status(case_dir: Path, verbose: bool, console: Console):
     # Get file modification time
     mtime = slurm_file.stat().st_mtime
     mod_time = datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M:%S')
+    
+    # Detect which stage was submitted
+    stage = detect_job_stage(slurm_file, case_dir)
     
     # Check for errors
     status, error_messages = check_slurm_output_for_errors(slurm_file)
@@ -514,6 +579,7 @@ def check_last_slurm_status(case_dir: Path, verbose: bool, console: Console):
     
     table.add_row("SLURM File", slurm_file.name)
     table.add_row("Job ID", job_id)
+    table.add_row("Stage", f"[bold yellow]{stage.upper()}[/bold yellow]" if stage != 'unknown' else "[dim]unknown[/dim]")
     table.add_row("Modified", mod_time)
     
     if status == 'success':
