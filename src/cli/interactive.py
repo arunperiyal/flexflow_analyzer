@@ -2812,6 +2812,67 @@ class InteractiveShell:
         segments = [PipeSegment(seg) for seg in segment_strings if seg]
         return segments
 
+    def _has_pipe(self, command_line: str) -> bool:
+        """
+        Check if a command line contains pipes (respecting quotes).
+        
+        Args:
+            command_line: Command line to check
+            
+        Returns:
+            True if command contains unquoted pipes
+        """
+        in_quotes = False
+        quote_char = None
+        escape_next = False
+        
+        for char in command_line:
+            if escape_next:
+                escape_next = False
+                continue
+                
+            if char == '\\':
+                escape_next = True
+                continue
+                
+            if char in ('"', "'"):
+                if not in_quotes:
+                    in_quotes = True
+                    quote_char = char
+                elif char == quote_char:
+                    in_quotes = False
+                    quote_char = None
+            elif char == '|' and not in_quotes:
+                return True
+        
+        return False
+
+    def _handle_piped_command(self, command_line: str) -> None:
+        """
+        Handle a command line that contains pipes.
+        
+        Args:
+            command_line: Command line with pipes
+        """
+        try:
+            # Parse into segments
+            segments = self._parse_pipe_segments(command_line)
+            
+            if not segments:
+                return
+            
+            # Execute pipe and capture output
+            output = self._execute_pipe(segments)
+            
+            # Display output to user
+            if output:
+                self.console.print(output, end='')
+            
+        except Exception as e:
+            self.console.print(f"[red]Error executing pipe: {e}[/red]")
+            import traceback
+            self.console.print(f"[dim]{traceback.format_exc()}[/dim]")
+
     def _execute_command_with_capture(self, command_line: str) -> str:
         """
         Execute a FlexFlow command and capture its output as plain text.
@@ -3191,6 +3252,12 @@ class InteractiveShell:
                 for cmd in commands:
                     cmd = cmd.strip()
                     if not cmd:
+                        continue
+                    
+                    # Check for pipes first (they take precedence over semicolon chaining)
+                    if self._has_pipe(cmd):
+                        # Handle piped command
+                        self._handle_piped_command(cmd)
                         continue
                     
                     # Handle shell commands
