@@ -1851,7 +1851,7 @@ class InteractiveShell:
         self.console.print("  use context:value [context:value ...]")
         self.console.print()
         self.console.print("[bold]CONTEXTS:[/bold]")
-        self.console.print("  case       Case directory path")
+        self.console.print("  case       Case directory path (supports glob patterns: *, ?, [...])")
         self.console.print("  problem    Problem name")
         self.console.print("  rundir     Run directory path")
         self.console.print("  dir        Output directory (relative to case)")
@@ -1870,6 +1870,19 @@ class InteractiveShell:
         self.console.print("  use case:Case015 node:24 t1:50.0 t2:100.0")
         self.console.print("  use node:0 t1:150.0 t2:200.0")
         self.console.print()
+        self.console.print("[bold]WILDCARD CASE PATTERNS:[/bold]")
+        self.console.print("  [dim]# Iterate over matching cases - use with command chain (semicolon)[/dim]")
+        self.console.print("  use case:Case*; case check --run           [dim]# Run check on all cases[/dim]")
+        self.console.print("  use case:Case00?; data show                [dim]# Show data for Case001-009[/dim]")
+        self.console.print("  use case:Case[1-3]*; case status           [dim]# Status for Case1xx, Case2xx, Case3xx[/dim]")
+        self.console.print("  use case:Case*; case create --dry-run      [dim]# Dry run for all cases[/dim]")
+        self.console.print()
+        self.console.print("[bold]WILDCARD PATTERNS:[/bold]")
+        self.console.print("  *       Match any characters (e.g., Case* matches Case001, Case002, ...)")
+        self.console.print("  ?       Match single character (e.g., Case00? matches Case001-009 only)")
+        self.console.print("  [...]   Match character range (e.g., Case00[1-3] matches Case001, Case002, Case003)")
+        self.console.print()
+
 
     def show_unuse_help(self) -> None:
         """Show help for unuse command."""
@@ -1896,15 +1909,66 @@ class InteractiveShell:
         self.console.print("  unuse                   [dim]# Clear everything[/dim]")
         self.console.print()
 
+    def _is_wildcard_pattern(self, value: str) -> bool:
+        """
+        Check if value is a glob pattern containing wildcard characters.
+        
+        Args:
+            value: String to check for wildcard characters
+            
+        Returns:
+            True if value contains glob pattern characters (*, ?, [)
+        """
+        return any(char in value for char in ['*', '?', '['])
+
+    def _find_matching_cases(self, pattern: str) -> List[Path]:
+        """
+        Find all directories matching the glob pattern.
+        
+        Args:
+            pattern: Glob pattern (e.g., "Case*", "Case00?", "Case[1-3]*")
+            
+        Returns:
+            List of absolute Path objects to matching directories, sorted
+        """
+        base_dir = Path(self._current_dir)
+        
+        try:
+            # Find matching directories
+            matching = list(base_dir.glob(pattern))
+            
+            # Filter to only directories
+            matching = [p for p in matching if p.is_dir()]
+            
+            # Sort for consistent ordering
+            matching.sort()
+            
+            return matching
+        except Exception as e:
+            self.console.print(f"[red]Error matching pattern '{pattern}':[/red] {e}")
+            return []
+
     def use_case(self, case_input: str) -> None:
         """
         Set current case context.
+        
+        Supports both single cases and wildcard patterns:
+        - "Case001" - single case
+        - "Case*" - all cases matching pattern
+        - "Case00?" - cases with single-digit suffix
 
         Args:
-            case_input: Case name or path
+            case_input: Case name, path, or glob pattern
         """
         try:
-            # Try to resolve the case path
+            # Check if this is a wildcard pattern
+            if self._is_wildcard_pattern(case_input):
+                # Handle wildcard - return without setting single case
+                self.console.print(f"[dim]Pattern '{case_input}' detected - use in command chain with semicolon[/dim]")
+                self.console.print(f"[dim]Example: use case:{case_input}; case check --run[/dim]")
+                return
+            
+            # Single case resolution (existing logic)
             case_path = Path(case_input)
 
             # If not absolute, try relative to current directory
@@ -3256,6 +3320,62 @@ class InteractiveShell:
 
         return args
 
+    def _process_case_wildcard_chain(self, case_pattern: str, remaining_commands: List[str]) -> None:
+        """
+        Process a wildcard case pattern by iterating over matching cases.
+        
+        For each matched case, execute the remaining commands with that case set.
+        
+        Args:
+            case_pattern: Glob pattern for cases (e.g., "Case*", "Case00?")
+            remaining_commands: List of commands to execute for each matched case
+        """
+        # Find matching cases
+        matched_cases = self._find_matching_cases(case_pattern)
+        
+        if not matched_cases:
+            self.console.print(f"[yellow]No cases matching pattern:[/yellow] {case_pattern}")
+            return
+        
+        # Store the original case context to restore later
+        original_case = self._current_case
+        original_case_name = self._current_case_name
+        
+        try:
+            # Iterate over each matched case
+            for case_idx, case_path in enumerate(matched_cases, 1):
+                # Set current case
+                self._current_case = str(case_path)
+                self._current_case_name = case_path.name
+                
+                # Print progress with separator
+                self.console.print(f"[cyan]{'─' * 50}[/cyan]")
+                self.console.print(f"[green]Case {case_idx}/{len(matched_cases)}:[/green] [cyan]{self._current_case_name}[/cyan]")
+                self.console.print(f"[dim]Path: {case_path}[/dim]")
+                
+                # Execute each remaining command for this case
+                for cmd in remaining_commands:
+                    cmd = cmd.strip()
+                    if not cmd:
+                        continue
+                    
+                    # Check for pipes first
+                    if self._has_pipe(cmd):
+                        self._handle_piped_command(cmd)
+                    # Handle shell commands
+                    elif self.handle_shell_command(cmd):
+                        pass
+                    # Execute FlexFlow command
+                    else:
+                        self.execute_command(cmd)
+        
+        finally:
+            # Restore original case context
+            self._current_case = original_case
+            self._current_case_name = original_case_name
+            self.console.print(f"[cyan]{'─' * 50}[/cyan]")
+            self.console.print(f"[green]✓ Processed {len(matched_cases)} cases[/green]")
+
     def run(self) -> int:
         """
         Run the interactive shell.
@@ -3283,6 +3403,28 @@ class InteractiveShell:
                 # Split by semicolon to support command chaining
                 commands = self._split_by_semicolon(user_input)
                 
+                # Check if first command is "use case:*" (wildcard pattern)
+                if commands and commands[0].strip().startswith('use case:'):
+                    first_cmd = commands[0].strip()
+                    # Parse "use case:PATTERN"
+                    if first_cmd.startswith('use case:'):
+                        case_part = first_cmd[9:].strip()  # Remove "use case:"
+                        
+                        # Check if any other contexts are in the first command (e.g., "use case:Case*; ...")
+                        # Extract just the case value (handle multiple context setting)
+                        # Split by space or end of string
+                        case_match = case_part.split()[0] if ' ' in case_part else case_part
+                        
+                        # Check if this is a wildcard pattern
+                        if self._is_wildcard_pattern(case_match):
+                            # This is a wildcard case - get remaining commands
+                            remaining_commands = commands[1:] if len(commands) > 1 else []
+                            
+                            # Process case wildcard chain
+                            self._process_case_wildcard_chain(case_match, remaining_commands)
+                            continue
+                
+                # Normal command processing (no wildcard case)
                 for cmd in commands:
                     cmd = cmd.strip()
                     if not cmd:
