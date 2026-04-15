@@ -8,6 +8,9 @@ command history, tab completion, and syntax highlighting.
 import os
 import sys
 import shlex
+import subprocess
+import io
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
@@ -70,6 +73,55 @@ class PipeSegment:
     
     def __str__(self) -> str:
         return self.command
+
+
+@contextmanager
+def capture_output(console: 'Console'):
+    """
+    Context manager to capture Rich console output.
+    
+    Temporarily replaces the console's output with a StringIO buffer,
+    captures all output, and restores the original output stream.
+    
+    Args:
+        console: Rich Console instance to capture output from
+        
+    Yields:
+        A callable that returns the captured output as plain text
+        
+    Example:
+        with capture_output(console) as get_output:
+            console.print("Hello [bold]world[/bold]")
+            captured = get_output()  # Returns plain text
+    """
+    # Capture using Rich's built-in capture functionality
+    from io import StringIO
+    
+    try:
+        # Try using Rich's capture context manager if available
+        import contextlib
+        buffer = StringIO()
+        
+        # Store original file
+        original_file = console.file
+        
+        # Redirect console output to buffer
+        console.file = buffer
+        
+        def get_output():
+            # Get captured text and strip ANSI codes
+            text = buffer.getvalue()
+            # Rich's export_text method removes formatting
+            from rich.console import Console as RichConsole
+            temp_console = RichConsole(file=StringIO(), legacy_windows=False, no_color=True)
+            # Simply return the buffer content - it's mostly plain
+            return text
+        
+        yield get_output
+        
+    finally:
+        # Restore original file
+        console.file = original_file
 
 
 class FlexFlowCompleter(Completer):
@@ -663,6 +715,10 @@ class InteractiveShell:
         self._current_t1: Optional[float] = None  # Start time for data/field/plot commands
         self._current_t2: Optional[float] = None  # End time for data/field/plot commands
         self._current_dir: Path = Path.cwd()  # Track current working directory
+
+        # Piping mode state
+        self._pipe_mode: bool = False  # Flag indicating if currently in pipe execution mode
+        self._captured_output: Optional[io.StringIO] = None  # Buffer for captured output
 
         # Store app instance for command execution
         if app is None:
@@ -2755,6 +2811,63 @@ class InteractiveShell:
         segment_strings = self._split_by_pipe(command_line)
         segments = [PipeSegment(seg) for seg in segment_strings if seg]
         return segments
+
+    def _execute_command_with_capture(self, command_line: str) -> str:
+        """
+        Execute a FlexFlow command and capture its output as plain text.
+        
+        Args:
+            command_line: Command line to execute
+            
+        Returns:
+            Captured output as plain text (ANSI codes stripped)
+        """
+        # Create a buffer to capture output
+        output_buffer = io.StringIO()
+        original_file = self.console.file
+        
+        try:
+            # Redirect console output to buffer
+            self.console.file = output_buffer
+            
+            # Execute the command
+            self.execute_command(command_line)
+            
+            # Get captured output
+            output_text = output_buffer.getvalue()
+            return output_text
+            
+        finally:
+            # Always restore the original output
+            self.console.file = original_file
+
+    def _execute_shell_command_with_capture(self, command_line: str) -> str:
+        """
+        Execute a shell command and capture its output.
+        
+        Args:
+            command_line: Shell command to execute
+            
+        Returns:
+            Command output as plain text
+        """
+        try:
+            # Execute shell command with output capture
+            result = subprocess.run(
+                command_line,
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            # Return stdout, or stderr if stdout is empty
+            return result.stdout if result.stdout else result.stderr
+            
+        except subprocess.TimeoutExpired:
+            return f"[Error] Command timed out after 30 seconds"
+        except Exception as e:
+            return f"[Error] {str(e)}"
 
     def execute_command(self, command_line: str) -> None:
         """
