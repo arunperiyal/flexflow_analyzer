@@ -2869,6 +2869,129 @@ class InteractiveShell:
         except Exception as e:
             return f"[Error] {str(e)}"
 
+    def _execute_pipe(self, segments: List[PipeSegment]) -> str:
+        """
+        Execute a piped command chain, flowing output from one segment to the next.
+        
+        Args:
+            segments: List of PipeSegment objects representing the pipe chain
+            
+        Returns:
+            Final output from the last segment in the pipe
+            
+        Examples:
+            segments = [PipeSegment("echo hello"), PipeSegment("grep hello")]
+            output = shell._execute_pipe(segments)  # Returns filtered output
+        """
+        if not segments:
+            return ""
+        
+        try:
+            # Start with first segment's output
+            current_output = None
+            
+            for i, segment in enumerate(segments):
+                is_last_segment = (i == len(segments) - 1)
+                next_segment = segments[i + 1] if not is_last_segment else None
+                
+                try:
+                    if segment.is_flexflow:
+                        # FlexFlow command
+                        current_output = self._execute_pipe_flexflow_segment(
+                            segment, current_output, next_segment, is_last_segment
+                        )
+                    else:
+                        # Shell command
+                        current_output = self._execute_pipe_shell_segment(
+                            segment, current_output, next_segment, is_last_segment
+                        )
+                    
+                except Exception as e:
+                    return f"[Error in segment {i+1} '{segment.command_name}']: {str(e)}"
+            
+            return current_output if current_output is not None else ""
+            
+        except Exception as e:
+            return f"[Error executing pipe]: {str(e)}"
+
+    def _execute_pipe_shell_segment(self, segment: PipeSegment, input_text: Optional[str], 
+                                     next_segment: Optional[PipeSegment], is_last: bool) -> str:
+        """
+        Execute a shell command segment in a pipe.
+        
+        Args:
+            segment: The shell command segment
+            input_text: Input from previous segment (or None for first)
+            next_segment: Next segment in pipe (or None for last)
+            is_last: True if this is the last segment
+            
+        Returns:
+            Output from this segment
+        """
+        try:
+            if input_text is not None:
+                # Pipe input from previous segment
+                result = subprocess.run(
+                    segment.command,
+                    input=input_text,
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+            else:
+                # First segment, no input
+                result = subprocess.run(
+                    segment.command,
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+            
+            # Check for errors
+            if result.returncode != 0 and result.stderr:
+                # Some commands return non-zero for valid outputs (like grep)
+                # So we return stderr only if we expect an error
+                if result.returncode > 1 or "not found" in result.stderr.lower():
+                    return f"[Error in '{segment.command_name}']: {result.stderr}"
+            
+            return result.stdout if result.stdout else result.stderr
+            
+        except subprocess.TimeoutExpired:
+            return f"[Error]: '{segment.command_name}' timed out after 30 seconds"
+        except Exception as e:
+            return f"[Error]: {str(e)}"
+
+    def _execute_pipe_flexflow_segment(self, segment: PipeSegment, input_text: Optional[str],
+                                        next_segment: Optional[PipeSegment], is_last: bool) -> str:
+        """
+        Execute a FlexFlow command segment in a pipe.
+        
+        Args:
+            segment: The FlexFlow command segment
+            input_text: Input from previous segment (ignored for FlexFlow)
+            next_segment: Next segment in pipe (or None for last)
+            is_last: True if this is the last segment
+            
+        Returns:
+            Output from this segment
+        """
+        try:
+            # Capture the FlexFlow command output
+            output = self._execute_command_with_capture(segment.command)
+            
+            # Remove ANSI color codes for clean piping
+            # Rich adds color codes like [bold], [red], etc.
+            import re
+            # Remove Rich markup tags like [bold], [/bold], [red], etc.
+            clean_output = re.sub(r'\[/?[^\]]*\]', '', output)
+            
+            return clean_output
+            
+        except Exception as e:
+            return f"[Error in FlexFlow '{segment.command_name}']: {str(e)}"
+
     def execute_command(self, command_line: str) -> None:
         """
         Execute a FlexFlow command.
