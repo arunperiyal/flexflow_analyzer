@@ -1,5 +1,30 @@
 # FlexFlow Case Configuration Template (Multiple Cases)
 # This template is for creating multiple cases with parameter variations
+#
+# OPTION 1: Without Global Defaults (repeat parameters for each case)
+# OPTION 2: With Global Defaults (define once, cases inherit and override)
+#
+# See examples/case_multi_with_globals.yaml for a complete example using global defaults.
+# Global defaults reduce YAML size by 40-50% for typical parametric studies!
+
+# ─────────────────────────────────────────────────────────────────────────────
+# OPTION 2: GLOBAL DEFAULTS APPROACH (recommended for batch studies)
+# ─────────────────────────────────────────────────────────────────────────────
+# Uncomment and customize the section below to use global defaults.
+# All cases will inherit these values unless they specify their own.
+# 
+# problem_name: riser
+# processors: 120
+# output_frequency: 100
+# time:
+#   maxsteps: 16000
+#   dt: 0.05
+
+# ─────────────────────────────────────────────────────────────────────────────
+# OPTION 1: WITHOUT GLOBAL DEFAULTS (traditional approach, full specification)
+# ─────────────────────────────────────────────────────────────────────────────
+# Each case specifies all parameters explicitly.
+# Use this approach when your cases have very different configurations.
 
 # Batch Case Generation
 # Define multiple cases with different parameters
@@ -47,17 +72,34 @@ cases:
       dt: 0.05
 
   # Add more cases as needed
-  # - name: case4_...
-  #   problem_name: riser
-  #   processors: 120
-  #   output_frequency: 100
+  # With global defaults, you only need to specify parameters that differ:
+  # - name: case4_Ur7_groove09
   #   geo:
-  #     parameter: value
+  #     groove_depth: 0.09
+  #     groove_width: 0.14
   #   def:
-  #     variable: value
-  #   time:
-  #     maxsteps: 16000
-  #     dt: 0.05
+  #     Ur: 7.0
+  #     Re: 1000
+
+# Alternative: With global defaults, the cases section above becomes much cleaner:
+# cases:
+#   - name: case1_Ur4_groove03
+#     geo:
+#       groove_depth: 0.03
+#       groove_width: 0.08
+#     def:
+#       Ur: 4.0
+#       Re: 1000
+#   
+#   - name: case2_Ur5_groove05
+#     geo:
+#       groove_depth: 0.05
+#       groove_width: 0.10
+#     def:
+#       Ur: 5.0
+#       Re: 1000
+# 
+# (All case-common fields like problem_name, processors, etc. defined once at top)
 
 # Optional: SLURM Configuration (applies to all cases)
 # Uncomment to override default SLURM settings for all cases
@@ -74,6 +116,13 @@ cases:
 # - Parameter names must match placeholders in .geo file (#parameter_name)
 # - Variable names must match definitions in .def file (define{variable=...})
 # - Use descriptive case names that reflect the parameter variations
+#
+# GLOBAL DEFAULTS:
+# - If you define problem_name, processors, output_frequency, or time at the root level
+#   (above the 'cases:' line), all cases will inherit these values
+# - Case-specific values override global defaults
+# - Command-line flags (--np, --freq) override all config values
+# - See examples/case_multi_with_globals.yaml for a complete working example
 
 # Example Usage:
 # 1. Edit this file to define your parameter sweep

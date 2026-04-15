@@ -226,6 +226,115 @@ cases:
       maxsteps: 16000
 ```
 
+## Global Defaults for Batch Cases
+
+For batch case generation, you can define common parameters once at the root level instead of repeating them in every case. This greatly reduces YAML file size and improves maintainability.
+
+### Global Defaults Syntax
+
+```yaml
+# These apply to all cases below
+problem_name: riser
+processors: 120
+output_frequency: 50
+time:
+  maxsteps: 16000
+  dt: 0.05
+
+cases:
+  - name: Case001
+    geo:
+      groove_depth: 0.03
+    def:
+      Ur: 4.0
+    # Inherits: problem_name, processors, output_frequency, time
+  
+  - name: Case002
+    processors: 60              # Override just this field
+    time:
+      maxsteps: 32000           # Override just maxsteps, inherits dt: 0.05
+    geo:
+      groove_depth: 0.05
+    def:
+      Ur: 5.0
+```
+
+### Merge Behavior
+
+When both global and case-specific values exist:
+
+1. **Simple fields** (problem_name, processors, output_frequency):
+   - Case-specific value completely overrides global value
+   - If case doesn't specify, global value is used
+
+2. **Dict fields** (time, geo, def):
+   - Individual parameters within the dict merge intelligently
+   - Case-specific parameters override global parameters
+   - Unspecified parameters inherit from global
+   - Example: If global has `dt: 0.05` and case specifies `maxsteps: 32000`, case gets both values
+
+### Benefits
+
+- **50% reduction** in YAML file size for typical parametric studies
+- **Easier maintenance** - change global value once, affects all cases
+- **Clearer intent** - common pattern appears once, differences stand out
+- **Less error-prone** - less repetition means less chance of typos
+
+### Example: Before and After
+
+**Without Global Defaults (60 lines):**
+```yaml
+cases:
+  - name: Case1
+    problem_name: riser
+    processors: 120
+    output_frequency: 50
+    time:
+      maxsteps: 16000
+      dt: 0.05
+    geo:
+      groove_depth: 0.03
+  
+  - name: Case2
+    problem_name: riser
+    processors: 120
+    output_frequency: 50
+    time:
+      maxsteps: 16000
+      dt: 0.05
+    geo:
+      groove_depth: 0.05
+```
+
+**With Global Defaults (25 lines):**
+```yaml
+problem_name: riser
+processors: 120
+output_frequency: 50
+time:
+  maxsteps: 16000
+  dt: 0.05
+
+cases:
+  - name: Case1
+    geo:
+      groove_depth: 0.03
+  
+  - name: Case2
+    geo:
+      groove_depth: 0.05
+```
+
+**Savings: 58% reduction!**
+
+### Real-World Example
+
+See `examples/case_multi_with_globals.yaml` for a complete working example showing:
+- Global defaults setup
+- Multiple cases with various overrides
+- Time parameter overriding
+- Detailed comments explaining each case
+
 ## Verification
 
 To verify your time parameters were applied:
