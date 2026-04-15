@@ -93,26 +93,26 @@ class TestLoadCasesFromFile:
 class TestUseCaseWithWildcard:
     """Test use_case method with wildcard patterns."""
     
-    def test_use_case_with_wildcard_sets_case_name_asterisk(self):
-        """Test that use_case with * sets case name to '*' for prompt display."""
+    def test_use_case_with_wildcard_requires_chaining(self):
+        """Test that use_case with * requires command chaining (not persistent)."""
         shell = InteractiveShell(Mock())
         
         shell.use_case("*")
         
-        # Should set case name to "*" for prompt display
-        assert shell._current_case_name == "*"
-        # Should not set actual case path
+        # Wildcard alone should NOT set any context
+        assert shell._current_case_name is None
         assert shell._current_case is None
     
-    def test_use_case_with_wildcard_shows_guidance(self):
-        """Test that use_case with * shows guidance message."""
+    def test_use_case_with_wildcard_shows_chaining_requirement(self):
+        """Test that use_case with * shows help for command chaining."""
         shell = InteractiveShell(Mock())
         
-        # This should show guidance but not set case
+        # This should show error message about requiring chaining
         shell.use_case("*")
         
-        # Should not set a single case for wildcard
+        # Should not set any case context
         assert shell._current_case is None
+        assert shell._current_case_name is None
     
     def test_use_case_with_single_case_still_works(self):
         """Test that single case usage still works (backward compatibility)."""
@@ -130,28 +130,8 @@ class TestUseCaseWithWildcard:
             assert "Case001" in shell._current_case
 
 
-class TestUnuseCaseWithWildcard:
-    """Test unuse_case method with wildcard mode."""
-    
-    def test_unuse_case_clears_wildcard_mode(self):
-        """Test that unuse_case clears wildcard mode."""
-        shell = InteractiveShell(Mock())
-        
-        # Set wildcard mode
-        shell.use_case("*")
-        assert shell._current_case_name == "*"
-        assert shell._current_case is None
-        
-        # Clear wildcard mode
-        shell.unuse_case()
-        
-        # Should be cleared
-        assert shell._current_case_name is None
-        assert shell._current_case is None
-
-
 class TestProcessCaseWildcardChain:
-    """Test processing commands with case wildcard."""
+    """Test processing commands with case wildcard (inline chaining only)."""
     
     def test_process_case_wildcard_chain_basic(self):
         """Test basic wildcard chain processing with .cases file."""
@@ -205,7 +185,7 @@ class TestProcessCaseWildcardChain:
             assert shell.execute_command.call_count == 0
     
     def test_process_case_wildcard_chain_restores_context(self):
-        """Test that after processing wildcard chain, we return to wildcard mode."""
+        """Test that after processing wildcard chain, case context is cleared (inline-only)."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
             
@@ -225,10 +205,6 @@ class TestProcessCaseWildcardChain:
             shell = InteractiveShell(Mock())
             shell._current_dir = tmpdir_path
             
-            # Set to wildcard mode first (as would happen with use case:*)
-            shell._current_case = None
-            shell._current_case_name = "*"
-            
             # Mock the handlers
             shell.handle_shell_command = Mock(return_value=False)
             shell.execute_command = Mock()
@@ -236,9 +212,9 @@ class TestProcessCaseWildcardChain:
             # Process wildcard chain
             shell._process_case_wildcard_chain(["echo test"])
             
-            # After processing, should remain in wildcard mode
+            # After processing, context should be cleared (inline-only, not persistent)
             assert shell._current_case is None
-            assert shell._current_case_name == "*"
+            assert shell._current_case_name is None
     
     def test_process_case_wildcard_chain_multiple_commands(self):
         """Test wildcard chain with multiple commands for each case."""

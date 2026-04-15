@@ -1958,25 +1958,24 @@ class InteractiveShell:
         """
         Set current case context.
         
-        Supports both single cases and wildcard patterns:
+        Supports:
         - "Case001" - single case
-        - "*" - all cases from .cases file
+        
+        Note: Wildcard "*" is only supported in command chains:
+              use case:*; command1; command2
 
         Args:
-            case_input: Case name, path, or wildcard pattern
+            case_input: Case name or path
         """
         try:
-            # Check if this is a wildcard pattern
+            # Wildcard requires command chaining - error if used alone
             if self._is_wildcard_pattern(case_input):
-                # Handle wildcard - set special marker in case name for prompt display
-                self._current_case_name = "*"
-                self._current_case = None  # No single case selected
-                self.console.print(f"[green]✓[/green] Wildcard mode: [cyan]*[/cyan]")
-                self.console.print(f"[dim]Use in command chain: use case:*; <commands>[/dim]")
-                self.console.print(f"[dim]Example: use case:*; case check --run[/dim]")
+                self.console.print("[yellow]Error:[/yellow] Wildcard '*' requires command chaining")
+                self.console.print("[dim]Usage: use case:*; command1; command2[/dim]")
+                self.console.print("[dim]Example: use case:*; case check --run[/dim]")
                 return
             
-            # Single case resolution (existing logic)
+            # Single case resolution
             case_path = Path(case_input)
 
             # If not absolute, try relative to current directory
@@ -3335,9 +3334,9 @@ class InteractiveShell:
         """
         Process all cases from .cases file by iterating over them.
         
-        When wildcard mode is active (_current_case_name == "*"), this method
-        executes all remaining commands for each case in the .cases file.
-        After all cases are processed, returns to wildcard mode.
+        For inline wildcard chaining (use case:*; command1; command2),
+        this method executes all commands for each case in the .cases file.
+        After all cases are processed, clears case context (back to None).
         
         Args:
             remaining_commands: List of commands to execute for each case
@@ -3380,11 +3379,10 @@ class InteractiveShell:
                         self.execute_command(cmd)
         
         finally:
-            # After processing all cases, return to wildcard mode (case_name = "*")
-            # This allows subsequent commands to also iterate over all cases
+            # After processing all cases, clear case context (back to None)
+            # Wildcard is inline-only, not persistent
             self._current_case = None
-            self._current_case_name = "*"
-            self.console.print(f"[cyan]{'─' * 50}[/cyan]")
+            self._current_case_name = None
             self.console.print(f"[cyan]{'─' * 50}[/cyan]")
             self.console.print(f"[green]✓ Processed {len(cases_data)} cases[/green]")
 
@@ -3416,7 +3414,8 @@ class InteractiveShell:
                 # Split by semicolon to support command chaining
                 commands = self._split_by_semicolon(user_input)
                 
-                # Check if first command is "use case:*" to set wildcard mode
+                # Check if first command is "use case:*" for inline wildcard processing
+                # Wildcard mode is ONLY for semicolon chaining, not persistent
                 if commands and commands[0].strip().startswith('use case:'):
                     first_cmd = commands[0].strip()
                     if first_cmd.startswith('use case:'):
@@ -3424,19 +3423,21 @@ class InteractiveShell:
                         case_match = case_part.split()[0] if ' ' in case_part else case_part
                         
                         if self._is_wildcard_pattern(case_match):
-                            # This is "use case:*" - handle it as a shell command (not FlexFlow)
-                            self.handle_shell_command(first_cmd)
-                            # Remaining commands (if any) will be processed in wildcard mode below
-                            commands = commands[1:] if len(commands) > 1 else []
+                            # Wildcard detected - only process if there are chained commands
+                            remaining_commands = commands[1:] if len(commands) > 1 else []
+                            
+                            if remaining_commands:
+                                # Inline wildcard with commands: use case:*; command1; command2
+                                self._process_case_wildcard_chain(remaining_commands)
+                                continue
+                            else:
+                                # Just "use case:*" without commands - show help
+                                self.console.print("[yellow]Wildcard mode requires command chaining[/yellow]")
+                                self.console.print("[dim]Usage: use case:*; command1; command2 ...[/dim]")
+                                self.console.print("[dim]Example: use case:*; case check --run[/dim]")
+                                continue
                 
-                # Now check if we're in wildcard mode (either just set or was already active)
-                if self._current_case_name == "*" and self._current_case is None:
-                    # In wildcard mode - process all commands for all cases from .cases file
-                    if commands:
-                        self._process_case_wildcard_chain(commands)
-                    continue
-                
-                # Normal command processing (no wildcard mode)
+                # Normal command processing (no wildcard in chain)
                 for cmd in commands:
                     cmd = cmd.strip()
                     if not cmd:
