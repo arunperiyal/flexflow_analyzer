@@ -205,7 +205,7 @@ class TestProcessCaseWildcardChain:
             assert shell.execute_command.call_count == 0
     
     def test_process_case_wildcard_chain_restores_context(self):
-        """Test that original case context is restored after loop."""
+        """Test that after processing wildcard chain, we return to wildcard mode."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
             
@@ -225,10 +225,9 @@ class TestProcessCaseWildcardChain:
             shell = InteractiveShell(Mock())
             shell._current_dir = tmpdir_path
             
-            # Set original case context
-            original_case = str(tmpdir_path / "OriginalCase")
-            shell._current_case = original_case
-            shell._current_case_name = "OriginalCase"
+            # Set to wildcard mode first (as would happen with use case:*)
+            shell._current_case = None
+            shell._current_case_name = "*"
             
             # Mock the handlers
             shell.handle_shell_command = Mock(return_value=False)
@@ -237,9 +236,9 @@ class TestProcessCaseWildcardChain:
             # Process wildcard chain
             shell._process_case_wildcard_chain(["echo test"])
             
-            # Should restore original case context
-            assert shell._current_case == original_case
-            assert shell._current_case_name == "OriginalCase"
+            # After processing, should remain in wildcard mode
+            assert shell._current_case is None
+            assert shell._current_case_name == "*"
     
     def test_process_case_wildcard_chain_multiple_commands(self):
         """Test wildcard chain with multiple commands for each case."""

@@ -3331,17 +3331,16 @@ class InteractiveShell:
 
         return args
 
-    def _process_case_wildcard_chain(self, remaining_commands: List[str], is_inline: bool = False) -> None:
+    def _process_case_wildcard_chain(self, remaining_commands: List[str]) -> None:
         """
         Process all cases from .cases file by iterating over them.
         
-        For each case, execute the remaining commands with that case set.
+        When wildcard mode is active (_current_case_name == "*"), this method
+        executes all remaining commands for each case in the .cases file.
+        After all cases are processed, returns to wildcard mode.
         
         Args:
             remaining_commands: List of commands to execute for each case
-            is_inline: If True, this is inline chaining (use case:*; commands),
-                      so don't leave wildcard mode active after completing.
-                      If False (persistent), leave wildcard mode active.
         """
         # Load cases from .cases file
         cases_data = self._load_cases_from_file()
@@ -3349,17 +3348,13 @@ class InteractiveShell:
         if not cases_data:
             return
         
-        # Store the original case context to restore later
-        original_case = self._current_case
-        original_case_name = self._current_case_name
-        
         try:
             # Iterate over each case from .cases file
             for case_idx, case_entry in enumerate(cases_data, 1):
                 case_path = Path(case_entry['path'])
                 case_name = case_entry['name']
                 
-                # Set current case
+                # Set current case context for this iteration
                 self._current_case = str(case_path)
                 self._current_case_name = case_name
                 
@@ -3385,9 +3380,11 @@ class InteractiveShell:
                         self.execute_command(cmd)
         
         finally:
-            # Restore original case context
-            self._current_case = original_case
-            self._current_case_name = original_case_name
+            # After processing all cases, return to wildcard mode (case_name = "*")
+            # This allows subsequent commands to also iterate over all cases
+            self._current_case = None
+            self._current_case_name = "*"
+            self.console.print(f"[cyan]{'─' * 50}[/cyan]")
             self.console.print(f"[cyan]{'─' * 50}[/cyan]")
             self.console.print(f"[green]✓ Processed {len(cases_data)} cases[/green]")
 
@@ -3419,32 +3416,29 @@ class InteractiveShell:
                 # Split by semicolon to support command chaining
                 commands = self._split_by_semicolon(user_input)
                 
-                # Check if we're currently in wildcard mode (use case:* was previously set)
-                if self._current_case_name == "*" and self._current_case is None:
-                    # We're in wildcard mode - process commands for all cases (persistent mode)
-                    self._process_case_wildcard_chain(commands, is_inline=False)
-                    continue
-                
-                # Check if first command is "use case:*" (load all cases from .cases file)
+                # Check if first command is "use case:*" to set wildcard mode
+                is_setting_wildcard = False
                 if commands and commands[0].strip().startswith('use case:'):
                     first_cmd = commands[0].strip()
-                    # Parse "use case:PATTERN"
                     if first_cmd.startswith('use case:'):
                         case_part = first_cmd[9:].strip()  # Remove "use case:"
-                        
-                        # Extract just the case value
                         case_match = case_part.split()[0] if ' ' in case_part else case_part
                         
-                        # Check if this is a wildcard pattern (specifically '*')
                         if self._is_wildcard_pattern(case_match):
-                            # This is a wildcard case - get remaining commands
-                            remaining_commands = commands[1:] if len(commands) > 1 else []
-                            
-                            # Process all cases from .cases file (inline mode - don't leave wildcard active)
-                            self._process_case_wildcard_chain(remaining_commands, is_inline=True)
-                            continue
+                            is_setting_wildcard = True
+                            # Execute just the use case:* command first
+                            self.execute_command(first_cmd)
+                            # Remaining commands (if any) will be processed in wildcard mode below
+                            commands = commands[1:] if len(commands) > 1 else []
                 
-                # Normal command processing (no wildcard case)
+                # Now check if we're in wildcard mode (either just set or was already active)
+                if self._current_case_name == "*" and self._current_case is None:
+                    # In wildcard mode - process all commands for all cases from .cases file
+                    if commands:
+                        self._process_case_wildcard_chain(commands)
+                    continue
+                
+                # Normal command processing (no wildcard mode)
                 for cmd in commands:
                     cmd = cmd.strip()
                     if not cmd:
