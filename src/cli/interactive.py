@@ -1960,18 +1960,20 @@ class InteractiveShell:
         
         Supports both single cases and wildcard patterns:
         - "Case001" - single case
-        - "Case*" - all cases matching pattern
-        - "Case00?" - cases with single-digit suffix
+        - "*" - all cases from .cases file
 
         Args:
-            case_input: Case name, path, or glob pattern
+            case_input: Case name, path, or wildcard pattern
         """
         try:
             # Check if this is a wildcard pattern
             if self._is_wildcard_pattern(case_input):
-                # Handle wildcard - return without setting single case
-                self.console.print(f"[dim]Pattern '{case_input}' detected - use in command chain with semicolon[/dim]")
-                self.console.print(f"[dim]Example: use case:{case_input}; case check --run[/dim]")
+                # Handle wildcard - set special marker in case name for prompt display
+                self._current_case_name = "*"
+                self._current_case = None  # No single case selected
+                self.console.print(f"[green]✓[/green] Wildcard mode: [cyan]*[/cyan]")
+                self.console.print(f"[dim]Use in command chain: use case:*; <commands>[/dim]")
+                self.console.print(f"[dim]Example: use case:*; case check --run[/dim]")
                 return
             
             # Single case resolution (existing logic)
@@ -2138,11 +2140,14 @@ class InteractiveShell:
 
     def unuse_case(self) -> None:
         """Clear case context."""
-        if self._current_case:
+        if self._current_case or self._current_case_name == "*":
             old_case = self._current_case_name
             self._current_case = None
             self._current_case_name = None
-            self.console.print(f"[green]✓[/green] Case context cleared: [dim]{old_case}[/dim]")
+            if old_case == "*":
+                self.console.print(f"[green]✓[/green] Wildcard mode cleared")
+            else:
+                self.console.print(f"[green]✓[/green] Case context cleared: [dim]{old_case}[/dim]")
         else:
             self.console.print("[dim]No case context is set[/dim]")
 
@@ -3409,6 +3414,12 @@ class InteractiveShell:
 
                 # Split by semicolon to support command chaining
                 commands = self._split_by_semicolon(user_input)
+                
+                # Check if we're currently in wildcard mode (use case:* was previously set)
+                if self._current_case_name == "*" and self._current_case is None:
+                    # We're in wildcard mode - process commands for all cases
+                    self._process_case_wildcard_chain(commands)
+                    continue
                 
                 # Check if first command is "use case:*" (load all cases from .cases file)
                 if commands and commands[0].strip().startswith('use case:'):

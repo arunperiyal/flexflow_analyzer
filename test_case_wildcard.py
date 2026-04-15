@@ -93,6 +93,17 @@ class TestLoadCasesFromFile:
 class TestUseCaseWithWildcard:
     """Test use_case method with wildcard patterns."""
     
+    def test_use_case_with_wildcard_sets_case_name_asterisk(self):
+        """Test that use_case with * sets case name to '*' for prompt display."""
+        shell = InteractiveShell(Mock())
+        
+        shell.use_case("*")
+        
+        # Should set case name to "*" for prompt display
+        assert shell._current_case_name == "*"
+        # Should not set actual case path
+        assert shell._current_case is None
+    
     def test_use_case_with_wildcard_shows_guidance(self):
         """Test that use_case with * shows guidance message."""
         shell = InteractiveShell(Mock())
@@ -117,6 +128,26 @@ class TestUseCaseWithWildcard:
             # Should set the current case
             assert shell._current_case is not None
             assert "Case001" in shell._current_case
+
+
+class TestUnuseCaseWithWildcard:
+    """Test unuse_case method with wildcard mode."""
+    
+    def test_unuse_case_clears_wildcard_mode(self):
+        """Test that unuse_case clears wildcard mode."""
+        shell = InteractiveShell(Mock())
+        
+        # Set wildcard mode
+        shell.use_case("*")
+        assert shell._current_case_name == "*"
+        assert shell._current_case is None
+        
+        # Clear wildcard mode
+        shell.unuse_case()
+        
+        # Should be cleared
+        assert shell._current_case_name is None
+        assert shell._current_case is None
 
 
 class TestProcessCaseWildcardChain:
