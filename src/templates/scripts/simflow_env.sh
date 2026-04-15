@@ -11,6 +11,15 @@
 #   source "$(dirname "$0")/simflow_env.sh"
 # =============================================================================
 
+# Use UCX (modern communication layer) instead of deprecated OpenIB to avoid
+# InfiniBand (mlx5) resource errors like "No space left on device".
+# - OMPI_MCA_pml=ucx      : Select UCX as the MPI communication layer
+# - OMPI_MCA_btl=^openib  : Disable old OpenIB transport
+# - UCX_TLS=rc,sm,self    : Use reliable InfiniBand (rc), shared memory (sm), and loopback (self)
+export OMPI_MCA_pml=ucx
+export OMPI_MCA_btl=^openib
+export UCX_TLS=rc,sm,self
+
 # -----------------------------------------------------------------------------
 # FlexFlow Installation
 # -----------------------------------------------------------------------------

@@ -27,6 +27,51 @@ from src.cli.registry import registry
 from src.utils.colors import Colors
 
 
+class PipeSegment:
+    """
+    Represents a single segment in a piped command chain.
+    
+    Each segment can be either a shell command or a FlexFlow command.
+    Attributes:
+        command: The command string (e.g., "grep status" or "case show Case001")
+        is_flexflow: Boolean indicating if this is a FlexFlow command
+        command_name: First word of the command (e.g., "grep" or "case")
+        args: Remaining arguments
+    """
+    
+    def __init__(self, command: str):
+        """
+        Initialize a pipe segment.
+        
+        Args:
+            command: The command string (already trimmed)
+        """
+        self.command = command
+        self.command_name = None
+        self.args = []
+        self.is_flexflow = False
+        
+        # Parse command and arguments
+        try:
+            parts = shlex.split(command)
+            if parts:
+                self.command_name = parts[0]
+                self.args = parts[1:] if len(parts) > 1 else []
+                
+                # Determine if this is a FlexFlow command
+                self.is_flexflow = registry.get(self.command_name) is not None
+        except ValueError:
+            # If shlex parsing fails, treat as shell command
+            self.command_name = command.split()[0] if command else None
+            self.is_flexflow = False
+    
+    def __repr__(self) -> str:
+        return f"PipeSegment(cmd='{self.command}', type={'flexflow' if self.is_flexflow else 'shell'})"
+    
+    def __str__(self) -> str:
+        return self.command
+
+
 class FlexFlowCompleter(Completer):
     """
     Custom completer for FlexFlow commands.
@@ -2641,6 +2686,75 @@ class InteractiveShell:
             commands.append(''.join(current))
         
         return commands
+
+    def _split_by_pipe(self, command_line: str) -> List[str]:
+        """
+        Split command line by pipe character, respecting quotes.
+        
+        Args:
+            command_line: Full command line string
+            
+        Returns:
+            List of pipe segments
+            
+        Examples:
+            'cmd1 | cmd2' -> ['cmd1', 'cmd2']
+            'case show "A|B" | grep x' -> ['case show "A|B"', 'grep x']
+            'cmd1|cmd2|cmd3' -> ['cmd1', 'cmd2', 'cmd3']
+        """
+        segments = []
+        current = []
+        in_quotes = False
+        quote_char = None
+        escape_next = False
+        
+        for char in command_line:
+            if escape_next:
+                current.append(char)
+                escape_next = False
+                continue
+                
+            if char == '\\':
+                escape_next = True
+                current.append(char)
+                continue
+                
+            if char in ('"', "'"):
+                if not in_quotes:
+                    in_quotes = True
+                    quote_char = char
+                elif char == quote_char:
+                    in_quotes = False
+                    quote_char = None
+                current.append(char)
+            elif char == '|' and not in_quotes:
+                segments.append(''.join(current).strip())
+                current = []
+            else:
+                current.append(char)
+        
+        if current:
+            segments.append(''.join(current).strip())
+        
+        return segments
+
+    def _parse_pipe_segments(self, command_line: str) -> List[PipeSegment]:
+        """
+        Parse a command line into PipeSegment objects.
+        
+        Args:
+            command_line: Full command line string (may contain pipes)
+            
+        Returns:
+            List of PipeSegment objects
+            
+        Examples:
+            'cmd1 | cmd2' -> [PipeSegment('cmd1'), PipeSegment('cmd2')]
+            'case show Case001 | grep status' -> [PipeSegment('case show Case001'), PipeSegment('grep status')]
+        """
+        segment_strings = self._split_by_pipe(command_line)
+        segments = [PipeSegment(seg) for seg in segment_strings if seg]
+        return segments
 
     def execute_command(self, command_line: str) -> None:
         """
