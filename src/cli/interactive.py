@@ -464,6 +464,15 @@ class FlexFlowCompleter(Completer):
     def get_completions(self, document, complete_event):
         text = document.text_before_cursor
         
+        # Support pipes: complete from after last pipe
+        # This needs to respect quotes, so use simple last-pipe logic first
+        last_pipe_pos = text.rfind('|')
+        if last_pipe_pos != -1:
+            # Check if pipe is inside quotes - simple check (look for matching quotes)
+            # For now, assume pipe is real if there's no quoted section containing it
+            text_after_pipe = text[last_pipe_pos + 1:].lstrip()
+            text = text_after_pipe
+        
         # Support semicolon-separated commands: complete from after last semicolon
         last_semicolon = text.rfind(';')
         if last_semicolon != -1:
@@ -876,10 +885,15 @@ class InteractiveShell:
                 "  • Use [cyan]ls[/cyan], [cyan]cd[/cyan], [cyan]find[/cyan] to browse\n"
                 "  • Use [cyan]Tab[/cyan] for autocompletion\n"
                 "  • Use [cyan]↑/↓[/cyan] for command history\n"
-                "  • Chain commands with [cyan];[/cyan] (e.g., [cyan]use case:C1; data show[/cyan])\n\n"
+                "  • Chain commands with [cyan];[/cyan] (e.g., [cyan]use case:C1; data show[/cyan])\n"
+                "  • Pipe commands with [cyan]|[/cyan] (e.g., [cyan]case show | grep status[/cyan])\n\n"
                 "[yellow]Set Context:[/yellow]\n"
                 "  [cyan]use case:Case015 node:24 t1:50.0 t2:100.0[/cyan]\n"
                 "  Set multiple contexts at once with [bold]context:value[/bold] syntax\n\n"
+                "[yellow]Piping Examples:[/yellow]\n"
+                "  [cyan]case show | head -10[/cyan] (first 10 lines)\n"
+                "  [cyan]data show | grep -i status[/cyan] (search for status)\n"
+                "  [cyan]find . | grep Case[/cyan] (find cases)\n\n"
                 "[dim]Type [cyan]exit[/cyan] or [cyan]quit[/cyan] to exit[/dim]",
                 border_style="cyan",
                 box=box.ROUNDED
@@ -1382,6 +1396,26 @@ class InteractiveShell:
             browse_table.add_row(cmd, desc)
 
         self.console.print(browse_table)
+        self.console.print()
+        
+        # Piping examples
+        pipe_table = Table(title="Piping Examples", box=box.ROUNDED, show_header=True)
+        pipe_table.add_column("Example", style="cyan", no_wrap=False)
+        pipe_table.add_column("Description", style="white")
+        
+        pipe_examples = [
+            ("case show | head -10", "Show first 10 lines"),
+            ("data show | grep -i status", "Search for specific text"),
+            ("find . | grep Case", "Find cases in directory"),
+            ("ls -lv | sort", "Sort directory listing"),
+            ("case show | wc -l", "Count output lines"),
+            ("cat file.txt | grep pattern | head -5", "Combine multiple pipes"),
+        ]
+        
+        for example, desc in pipe_examples:
+            pipe_table.add_row(example, desc)
+        
+        self.console.print(pipe_table)
         self.console.print()
 
     def show_history(self) -> None:
