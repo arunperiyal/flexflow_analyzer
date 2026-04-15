@@ -3331,7 +3331,7 @@ class InteractiveShell:
 
         return args
 
-    def _process_case_wildcard_chain(self, remaining_commands: List[str]) -> None:
+    def _process_case_wildcard_chain(self, remaining_commands: List[str], is_inline: bool = False) -> None:
         """
         Process all cases from .cases file by iterating over them.
         
@@ -3339,6 +3339,9 @@ class InteractiveShell:
         
         Args:
             remaining_commands: List of commands to execute for each case
+            is_inline: If True, this is inline chaining (use case:*; commands),
+                      so don't leave wildcard mode active after completing.
+                      If False (persistent), leave wildcard mode active.
         """
         # Load cases from .cases file
         cases_data = self._load_cases_from_file()
@@ -3388,6 +3391,7 @@ class InteractiveShell:
             self.console.print(f"[cyan]{'─' * 50}[/cyan]")
             self.console.print(f"[green]✓ Processed {len(cases_data)} cases[/green]")
 
+
     def run(self) -> int:
         """
         Run the interactive shell.
@@ -3417,8 +3421,8 @@ class InteractiveShell:
                 
                 # Check if we're currently in wildcard mode (use case:* was previously set)
                 if self._current_case_name == "*" and self._current_case is None:
-                    # We're in wildcard mode - process commands for all cases
-                    self._process_case_wildcard_chain(commands)
+                    # We're in wildcard mode - process commands for all cases (persistent mode)
+                    self._process_case_wildcard_chain(commands, is_inline=False)
                     continue
                 
                 # Check if first command is "use case:*" (load all cases from .cases file)
@@ -3436,8 +3440,8 @@ class InteractiveShell:
                             # This is a wildcard case - get remaining commands
                             remaining_commands = commands[1:] if len(commands) > 1 else []
                             
-                            # Process all cases from .cases file
-                            self._process_case_wildcard_chain(remaining_commands)
+                            # Process all cases from .cases file (inline mode - don't leave wildcard active)
+                            self._process_case_wildcard_chain(remaining_commands, is_inline=True)
                             continue
                 
                 # Normal command processing (no wildcard case)
