@@ -30,6 +30,12 @@ def:
   # Add more solver parameters as needed
   # parameter_name: value
 
+# Time Stepping Parameters (for .def file timeSteppingControl)
+# These will update maxTimeSteps and initialTimeIncrement in the .def file
+time:
+  maxsteps: 16000           # Total simulation time steps
+  dt: 0.05                  # Initial time increment
+
 # SLURM Configuration (optional overrides)
 # Uncomment to override default SLURM settings
 # slurm:

@@ -14,6 +14,9 @@ cases:
     def:
       Ur: 4.0
       Re: 1000
+    time:
+      maxsteps: 16000
+      dt: 0.05
 
   - name: case2_Ur5_groove05
     problem_name: riser
@@ -25,6 +28,9 @@ cases:
     def:
       Ur: 5.0
       Re: 1000
+    time:
+      maxsteps: 16000
+      dt: 0.05
 
   - name: case3_Ur6_groove07
     problem_name: riser
@@ -36,6 +42,9 @@ cases:
     def:
       Ur: 6.0
       Re: 1000
+    time:
+      maxsteps: 16000
+      dt: 0.05
 
   # Add more cases as needed
   # - name: case4_...
@@ -46,6 +55,9 @@ cases:
   #     parameter: value
   #   def:
   #     variable: value
+  #   time:
+  #     maxsteps: 16000
+  #     dt: 0.05
 
 # Optional: SLURM Configuration (applies to all cases)
 # Uncomment to override default SLURM settings for all cases

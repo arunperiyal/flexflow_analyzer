@@ -22,6 +22,12 @@ def:
   Ur: 5.4                 # Reduced velocity
   Re: 1000                # Reynolds number
 
+# Time Stepping Parameters (for .def file timeSteppingControl)
+# These will update maxTimeSteps and initialTimeIncrement in the .def file
+time:
+  maxsteps: 16000         # Total simulation time steps
+  dt: 0.05                # Initial time increment
+
 # SLURM Configuration (optional overrides)
 # slurm:
 #   partition: medium
@@ -46,6 +52,9 @@ def:
 #     def:
 #       Ur: 4.0
 #       Re: 1000
+#     time:
+#       maxsteps: 16000
+#       dt: 0.05
 # 
 #   - name: case2_groove05
 #     problem_name: riser
@@ -57,6 +66,9 @@ def:
 #     def:
 #       Ur: 5.0
 #       Re: 1000
+#     time:
+#       maxsteps: 20000
+#       dt: 0.05
 # 
 #   - name: case3_groove07
 #     problem_name: riser
@@ -68,6 +80,9 @@ def:
 #     def:
 #       Ur: 6.0
 #       Re: 1000
+#     time:
+#       maxsteps: 16000
+#       dt: 0.05
 
 # Parameter Sweep Example
 # --------------------------
