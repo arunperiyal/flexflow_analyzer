@@ -21,8 +21,9 @@ flexflow → plot CS4SG1U1 --node 10
 
 - **Interactive Shell** - REPL mode with tab completion and command history
 - **Command Chaining** - Chain multiple commands with semicolon (e.g., `use case:C1; data show`)
+- **Unix Piping** - Pipe commands with `|` operator (e.g., `case show | grep status | head -10`)
 - **Data Analysis** - Inspect OTHD/OISD files and PLT files via PyTecplot
-- **Case Management** - Create, organize, and manage simulation cases
+- **Case Management** - Create, organize, and manage simulation cases with time parameters
 - **SLURM Integration** - Submit and monitor simulation jobs
 - **Visualization** - Generate time-series plots and comparisons
 
@@ -37,6 +38,7 @@ flexflow → plot CS4SG1U1 --node 10
 - [Installation Guide](docs/INSTALL.md)
 - [Usage Guide](docs/USAGE.md)
 - [Command Reference](docs/REFERENCE.md)
+- [Case Creation with Time Parameters](CASE_CREATE_TIME_PARAMETERS.md)
 - [Changelog](CHANGELOG.md)
 
 ## Main Commands
