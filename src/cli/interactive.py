@@ -3417,7 +3417,6 @@ class InteractiveShell:
                 commands = self._split_by_semicolon(user_input)
                 
                 # Check if first command is "use case:*" to set wildcard mode
-                is_setting_wildcard = False
                 if commands and commands[0].strip().startswith('use case:'):
                     first_cmd = commands[0].strip()
                     if first_cmd.startswith('use case:'):
@@ -3425,9 +3424,8 @@ class InteractiveShell:
                         case_match = case_part.split()[0] if ' ' in case_part else case_part
                         
                         if self._is_wildcard_pattern(case_match):
-                            is_setting_wildcard = True
-                            # Execute just the use case:* command first
-                            self.execute_command(first_cmd)
+                            # This is "use case:*" - handle it as a shell command (not FlexFlow)
+                            self.handle_shell_command(first_cmd)
                             # Remaining commands (if any) will be processed in wildcard mode below
                             commands = commands[1:] if len(commands) > 1 else []
                 
