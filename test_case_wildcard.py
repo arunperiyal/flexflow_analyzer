@@ -1,10 +1,11 @@
 """
 Test suite for wildcard case support in the 'use' command.
 
-Tests the ability to iterate over multiple case directories using glob patterns.
+Tests the ability to iterate over all cases from .cases file using 'use case:*'.
 """
 
 import pytest
+import json
 import tempfile
 from pathlib import Path
 from unittest.mock import Mock
@@ -15,161 +16,89 @@ class TestWildcardPatternDetection:
     """Test wildcard pattern detection."""
     
     def test_is_wildcard_pattern_with_asterisk(self):
-        """Test detection of * wildcard."""
+        """Test detection of * as wildcard."""
         shell = InteractiveShell(Mock())
-        assert shell._is_wildcard_pattern("Case*") is True
         assert shell._is_wildcard_pattern("*") is True
     
-    def test_is_wildcard_pattern_with_question_mark(self):
-        """Test detection of ? wildcard."""
-        shell = InteractiveShell(Mock())
-        assert shell._is_wildcard_pattern("Case?") is True
-        assert shell._is_wildcard_pattern("Case00?") is True
-    
-    def test_is_wildcard_pattern_with_brackets(self):
-        """Test detection of [...] wildcard."""
-        shell = InteractiveShell(Mock())
-        assert shell._is_wildcard_pattern("Case[1-3]") is True
-        assert shell._is_wildcard_pattern("Case[0-9]*") is True
-    
-    def test_is_wildcard_pattern_without_wildcards(self):
+    def test_is_wildcard_pattern_without_asterisk(self):
         """Test non-wildcard strings."""
         shell = InteractiveShell(Mock())
         assert shell._is_wildcard_pattern("Case001") is False
-        assert shell._is_wildcard_pattern("Case_A") is False
-        assert shell._is_wildcard_pattern("Case") is False
+        assert shell._is_wildcard_pattern("Case*") is False
+        assert shell._is_wildcard_pattern("?") is False
+        assert shell._is_wildcard_pattern("[1-3]") is False
 
 
-class TestFindMatchingCases:
-    """Test finding cases matching glob patterns."""
+class TestLoadCasesFromFile:
+    """Test loading cases from .cases file."""
     
-    def test_find_matching_cases_with_asterisk(self):
-        """Test finding cases with * pattern."""
-        shell = InteractiveShell(Mock())
-        
+    def test_load_cases_from_file_success(self):
+        """Test loading cases from valid .cases file."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
+            
+            # Create a .cases file
+            cases_data = [
+                {'name': 'Case001', 'path': '/path/to/Case001'},
+                {'name': 'Case002', 'path': '/path/to/Case002'},
+                {'name': 'Case003', 'path': '/path/to/Case003'},
+            ]
+            cases_file = tmpdir_path / '.cases'
+            with open(cases_file, 'w') as f:
+                json.dump(cases_data, f)
+            
+            shell = InteractiveShell(Mock())
             shell._current_dir = tmpdir_path
             
-            # Create test case directories
-            (tmpdir_path / "Case001").mkdir()
-            (tmpdir_path / "Case002").mkdir()
-            (tmpdir_path / "Case003").mkdir()
-            (tmpdir_path / "other_dir").mkdir()
+            # Load cases
+            loaded = shell._load_cases_from_file()
             
-            # Test matching
-            matches = shell._find_matching_cases("Case*")
-            assert len(matches) == 3
-            assert matches[0].name == "Case001"
-            assert matches[1].name == "Case002"
-            assert matches[2].name == "Case003"
+            assert len(loaded) == 3
+            assert loaded[0]['name'] == 'Case001'
+            assert loaded[1]['name'] == 'Case002'
+            assert loaded[2]['name'] == 'Case003'
     
-    def test_find_matching_cases_with_question_mark(self):
-        """Test finding cases with ? pattern."""
-        shell = InteractiveShell(Mock())
-        
+    def test_load_cases_from_file_not_found(self):
+        """Test when .cases file doesn't exist."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
+            
+            shell = InteractiveShell(Mock())
             shell._current_dir = tmpdir_path
             
-            # Create test case directories
-            (tmpdir_path / "Case001").mkdir()
-            (tmpdir_path / "Case002").mkdir()
-            (tmpdir_path / "Case010").mkdir()
-            (tmpdir_path / "Case100").mkdir()
+            # Load cases when file doesn't exist
+            loaded = shell._load_cases_from_file()
             
-            # Test matching only Case00X (not Case010 or Case100)
-            matches = shell._find_matching_cases("Case00?")
-            assert len(matches) == 2
-            assert matches[0].name == "Case001"
-            assert matches[1].name == "Case002"
+            assert loaded == []
     
-    def test_find_matching_cases_with_brackets(self):
-        """Test finding cases with [...] pattern."""
-        shell = InteractiveShell(Mock())
-        
+    def test_load_cases_from_file_invalid_format(self):
+        """Test when .cases file has invalid format."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
+            
+            # Create a .cases file with invalid format (dict instead of list)
+            cases_file = tmpdir_path / '.cases'
+            with open(cases_file, 'w') as f:
+                json.dump({'case001': {'path': '/path'}}, f)
+            
+            shell = InteractiveShell(Mock())
             shell._current_dir = tmpdir_path
             
-            # Create test case directories
-            (tmpdir_path / "Case001").mkdir()
-            (tmpdir_path / "Case002").mkdir()
-            (tmpdir_path / "Case003").mkdir()
-            (tmpdir_path / "Case004").mkdir()
-            (tmpdir_path / "Case005").mkdir()
+            # Load cases - should return empty list for invalid format
+            loaded = shell._load_cases_from_file()
             
-            # Test matching only Case001, Case002, Case003
-            matches = shell._find_matching_cases("Case00[1-3]")
-            assert len(matches) == 3
-            assert matches[0].name == "Case001"
-            assert matches[1].name == "Case002"
-            assert matches[2].name == "Case003"
-    
-    def test_find_matching_cases_sorted_order(self):
-        """Test that matches are sorted in consistent order."""
-        shell = InteractiveShell(Mock())
-        
-        with tempfile.TemporaryDirectory() as tmpdir:
-            tmpdir_path = Path(tmpdir)
-            shell._current_dir = tmpdir_path
-            
-            # Create test case directories in non-alphabetical order
-            (tmpdir_path / "Case003").mkdir()
-            (tmpdir_path / "Case001").mkdir()
-            (tmpdir_path / "Case002").mkdir()
-            
-            # Test that results are sorted
-            matches = shell._find_matching_cases("Case*")
-            assert len(matches) == 3
-            assert matches[0].name == "Case001"
-            assert matches[1].name == "Case002"
-            assert matches[2].name == "Case003"
-    
-    def test_find_matching_cases_no_matches(self):
-        """Test when no cases match the pattern."""
-        shell = InteractiveShell(Mock())
-        
-        with tempfile.TemporaryDirectory() as tmpdir:
-            tmpdir_path = Path(tmpdir)
-            shell._current_dir = tmpdir_path
-            
-            # Create test case directories
-            (tmpdir_path / "Case001").mkdir()
-            (tmpdir_path / "Case002").mkdir()
-            
-            # Test non-matching pattern
-            matches = shell._find_matching_cases("NoCase*")
-            assert len(matches) == 0
-    
-    def test_find_matching_cases_excludes_files(self):
-        """Test that only directories are matched, not files."""
-        shell = InteractiveShell(Mock())
-        
-        with tempfile.TemporaryDirectory() as tmpdir:
-            tmpdir_path = Path(tmpdir)
-            shell._current_dir = tmpdir_path
-            
-            # Create test case directories and files
-            (tmpdir_path / "Case001").mkdir()
-            (tmpdir_path / "Case002").mkdir()
-            (tmpdir_path / "Case003.txt").touch()  # File, not directory
-            
-            # Test that only directories are matched
-            matches = shell._find_matching_cases("Case*")
-            assert len(matches) == 2
-            assert all(m.is_dir() for m in matches)
+            assert loaded == []
 
 
 class TestUseCaseWithWildcard:
     """Test use_case method with wildcard patterns."""
     
     def test_use_case_with_wildcard_shows_guidance(self):
-        """Test that use_case with wildcard shows guidance message."""
+        """Test that use_case with * shows guidance message."""
         shell = InteractiveShell(Mock())
         
         # This should show guidance but not set case
-        shell.use_case("Case*")
+        shell.use_case("*")
         
         # Should not set a single case for wildcard
         assert shell._current_case is None
@@ -180,8 +109,7 @@ class TestUseCaseWithWildcard:
             tmpdir_path = Path(tmpdir)
             (tmpdir_path / "Case001").mkdir()
             
-            console_mock = Mock()
-            shell = InteractiveShell(console_mock)
+            shell = InteractiveShell(Mock())
             shell._current_dir = tmpdir_path
             
             shell.use_case("Case001")
@@ -194,18 +122,56 @@ class TestUseCaseWithWildcard:
 class TestProcessCaseWildcardChain:
     """Test processing commands with case wildcard."""
     
-    def test_process_case_wildcard_chain_no_matches(self):
-        """Test wildcard chain with no matching cases."""
+    def test_process_case_wildcard_chain_basic(self):
+        """Test basic wildcard chain processing with .cases file."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            
+            # Create test case directories
+            (tmpdir_path / "Case001").mkdir()
+            (tmpdir_path / "Case002").mkdir()
+            
+            # Create .cases file
+            cases_data = [
+                {'name': 'Case001', 'path': str(tmpdir_path / 'Case001')},
+                {'name': 'Case002', 'path': str(tmpdir_path / 'Case002')},
+            ]
+            cases_file = tmpdir_path / '.cases'
+            with open(cases_file, 'w') as f:
+                json.dump(cases_data, f)
+            
+            shell = InteractiveShell(Mock())
+            shell._current_dir = tmpdir_path
+            
+            # Mock the handlers to track calls
+            shell.handle_shell_command = Mock(return_value=False)
+            shell.execute_command = Mock()
+            
+            # Process wildcard chain
+            shell._process_case_wildcard_chain(["echo test"])
+            
+            # Should have executed echo test for each case
+            assert shell.execute_command.call_count == 2
+            # Restore case should be None
+            assert shell._current_case is None
+    
+    def test_process_case_wildcard_chain_no_cases(self):
+        """Test wildcard chain when no .cases file exists."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
             
             shell = InteractiveShell(Mock())
             shell._current_dir = tmpdir_path
             
-            # Process wildcard chain with no matches
-            shell._process_case_wildcard_chain("NoCase*", ["echo test"])
+            # Mock the handlers
+            shell.handle_shell_command = Mock(return_value=False)
+            shell.execute_command = Mock()
             
-            # No exception should be raised, just handled gracefully
+            # Process wildcard chain with no .cases file
+            shell._process_case_wildcard_chain(["echo test"])
+            
+            # Should not execute any commands
+            assert shell.execute_command.call_count == 0
     
     def test_process_case_wildcard_chain_restores_context(self):
         """Test that original case context is restored after loop."""
@@ -216,8 +182,16 @@ class TestProcessCaseWildcardChain:
             (tmpdir_path / "Case001").mkdir()
             (tmpdir_path / "Case002").mkdir()
             
-            console_mock = Mock()
-            shell = InteractiveShell(console_mock)
+            # Create .cases file
+            cases_data = [
+                {'name': 'Case001', 'path': str(tmpdir_path / 'Case001')},
+                {'name': 'Case002', 'path': str(tmpdir_path / 'Case002')},
+            ]
+            cases_file = tmpdir_path / '.cases'
+            with open(cases_file, 'w') as f:
+                json.dump(cases_data, f)
+            
+            shell = InteractiveShell(Mock())
             shell._current_dir = tmpdir_path
             
             # Set original case context
@@ -225,16 +199,47 @@ class TestProcessCaseWildcardChain:
             shell._current_case = original_case
             shell._current_case_name = "OriginalCase"
             
-            # Mock the handler
+            # Mock the handlers
             shell.handle_shell_command = Mock(return_value=False)
             shell.execute_command = Mock()
             
             # Process wildcard chain
-            shell._process_case_wildcard_chain("Case*", ["echo test"])
+            shell._process_case_wildcard_chain(["echo test"])
             
             # Should restore original case context
             assert shell._current_case == original_case
             assert shell._current_case_name == "OriginalCase"
+    
+    def test_process_case_wildcard_chain_multiple_commands(self):
+        """Test wildcard chain with multiple commands for each case."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            
+            # Create test case directories
+            (tmpdir_path / "Case001").mkdir()
+            (tmpdir_path / "Case002").mkdir()
+            
+            # Create .cases file
+            cases_data = [
+                {'name': 'Case001', 'path': str(tmpdir_path / 'Case001')},
+                {'name': 'Case002', 'path': str(tmpdir_path / 'Case002')},
+            ]
+            cases_file = tmpdir_path / '.cases'
+            with open(cases_file, 'w') as f:
+                json.dump(cases_data, f)
+            
+            shell = InteractiveShell(Mock())
+            shell._current_dir = tmpdir_path
+            
+            # Mock the handlers
+            shell.handle_shell_command = Mock(return_value=False)
+            shell.execute_command = Mock()
+            
+            # Process wildcard chain with 3 commands
+            shell._process_case_wildcard_chain(["cmd1", "cmd2", "cmd3"])
+            
+            # Should execute 3 commands for each of 2 cases = 6 total
+            assert shell.execute_command.call_count == 6
 
 
 if __name__ == "__main__":

@@ -1851,7 +1851,7 @@ class InteractiveShell:
         self.console.print("  use context:value [context:value ...]")
         self.console.print()
         self.console.print("[bold]CONTEXTS:[/bold]")
-        self.console.print("  case       Case directory path (supports glob patterns: *, ?, [...])")
+        self.console.print("  case       Case directory path (or * to iterate all cases from .cases file)")
         self.console.print("  problem    Problem name")
         self.console.print("  rundir     Run directory path")
         self.console.print("  dir        Output directory (relative to case)")
@@ -1870,18 +1870,16 @@ class InteractiveShell:
         self.console.print("  use case:Case015 node:24 t1:50.0 t2:100.0")
         self.console.print("  use node:0 t1:150.0 t2:200.0")
         self.console.print()
-        self.console.print("[bold]WILDCARD CASE PATTERNS:[/bold]")
-        self.console.print("  [dim]# Iterate over matching cases - use with command chain (semicolon)[/dim]")
-        self.console.print("  use case:Case*; case check --run           [dim]# Run check on all cases[/dim]")
-        self.console.print("  use case:Case00?; data show                [dim]# Show data for Case001-009[/dim]")
-        self.console.print("  use case:Case[1-3]*; case status           [dim]# Status for Case1xx, Case2xx, Case3xx[/dim]")
-        self.console.print("  use case:Case*; case create --dry-run      [dim]# Dry run for all cases[/dim]")
+        self.console.print("[bold]ITERATE OVER ALL CASES (from .cases file):[/bold]")
+        self.console.print("  [dim]# Use case:* to iterate over all cases in .cases registry[/dim]")
+        self.console.print("  [dim]# Requires: case add (to create .cases file first)[/dim]")
         self.console.print()
-        self.console.print("[bold]WILDCARD PATTERNS:[/bold]")
-        self.console.print("  *       Match any characters (e.g., Case* matches Case001, Case002, ...)")
-        self.console.print("  ?       Match single character (e.g., Case00? matches Case001-009 only)")
-        self.console.print("  [...]   Match character range (e.g., Case00[1-3] matches Case001, Case002, Case003)")
+        self.console.print("  use case:*; case check --run           [dim]# Run check on all cases[/dim]")
+        self.console.print("  use case:*; data show                  [dim]# Show data for all cases[/dim]")
+        self.console.print("  use case:*; case status                [dim]# Status for all cases[/dim]")
+        self.console.print("  use case:*; case create --dry-run      [dim]# Dry run for all cases[/dim]")
         self.console.print()
+
 
 
     def show_unuse_help(self) -> None:
@@ -1911,41 +1909,49 @@ class InteractiveShell:
 
     def _is_wildcard_pattern(self, value: str) -> bool:
         """
-        Check if value is a glob pattern containing wildcard characters.
+        Check if value is the wildcard pattern '*' for all cases.
         
         Args:
-            value: String to check for wildcard characters
+            value: String to check
             
         Returns:
-            True if value contains glob pattern characters (*, ?, [)
+            True if value is '*' (indicating all cases from .cases file)
         """
-        return any(char in value for char in ['*', '?', '['])
+        return value == '*'
 
-    def _find_matching_cases(self, pattern: str) -> List[Path]:
+    def _load_cases_from_file(self) -> List[dict]:
         """
-        Find all directories matching the glob pattern.
+        Load cases from the .cases file in current directory.
         
-        Args:
-            pattern: Glob pattern (e.g., "Case*", "Case00?", "Case[1-3]*")
-            
+        The .cases file is a JSON file with format:
+        [
+          {'name': 'Case001', 'path': '/full/path/to/Case001'},
+          {'name': 'Case002', 'path': '/full/path/to/Case002'},
+          ...
+        ]
+        
         Returns:
-            List of absolute Path objects to matching directories, sorted
+            List of case dicts with 'name' and 'path' keys, or empty list if no .cases file
         """
-        base_dir = Path(self._current_dir)
+        cases_file = Path(self._current_dir) / '.cases'
+        
+        if not cases_file.exists():
+            self.console.print(f"[yellow]No .cases file found in:[/yellow] {self._current_dir}")
+            self.console.print("[dim]Hint: Use 'case add' to create a .cases registry[/dim]")
+            return []
         
         try:
-            # Find matching directories
-            matching = list(base_dir.glob(pattern))
+            import json
+            with open(cases_file) as f:
+                data = json.load(f)
             
-            # Filter to only directories
-            matching = [p for p in matching if p.is_dir()]
-            
-            # Sort for consistent ordering
-            matching.sort()
-            
-            return matching
+            if isinstance(data, list):
+                return data
+            else:
+                self.console.print(f"[red]Error:[/red] .cases file has invalid format")
+                return []
         except Exception as e:
-            self.console.print(f"[red]Error matching pattern '{pattern}':[/red] {e}")
+            self.console.print(f"[red]Error loading .cases file:[/red] {e}")
             return []
 
     def use_case(self, case_input: str) -> None:
@@ -3320,21 +3326,19 @@ class InteractiveShell:
 
         return args
 
-    def _process_case_wildcard_chain(self, case_pattern: str, remaining_commands: List[str]) -> None:
+    def _process_case_wildcard_chain(self, remaining_commands: List[str]) -> None:
         """
-        Process a wildcard case pattern by iterating over matching cases.
+        Process all cases from .cases file by iterating over them.
         
-        For each matched case, execute the remaining commands with that case set.
+        For each case, execute the remaining commands with that case set.
         
         Args:
-            case_pattern: Glob pattern for cases (e.g., "Case*", "Case00?")
-            remaining_commands: List of commands to execute for each matched case
+            remaining_commands: List of commands to execute for each case
         """
-        # Find matching cases
-        matched_cases = self._find_matching_cases(case_pattern)
+        # Load cases from .cases file
+        cases_data = self._load_cases_from_file()
         
-        if not matched_cases:
-            self.console.print(f"[yellow]No cases matching pattern:[/yellow] {case_pattern}")
+        if not cases_data:
             return
         
         # Store the original case context to restore later
@@ -3342,15 +3346,18 @@ class InteractiveShell:
         original_case_name = self._current_case_name
         
         try:
-            # Iterate over each matched case
-            for case_idx, case_path in enumerate(matched_cases, 1):
+            # Iterate over each case from .cases file
+            for case_idx, case_entry in enumerate(cases_data, 1):
+                case_path = Path(case_entry['path'])
+                case_name = case_entry['name']
+                
                 # Set current case
                 self._current_case = str(case_path)
-                self._current_case_name = case_path.name
+                self._current_case_name = case_name
                 
                 # Print progress with separator
                 self.console.print(f"[cyan]{'─' * 50}[/cyan]")
-                self.console.print(f"[green]Case {case_idx}/{len(matched_cases)}:[/green] [cyan]{self._current_case_name}[/cyan]")
+                self.console.print(f"[green]Case {case_idx}/{len(cases_data)}:[/green] [cyan]{self._current_case_name}[/cyan]")
                 self.console.print(f"[dim]Path: {case_path}[/dim]")
                 
                 # Execute each remaining command for this case
@@ -3374,7 +3381,7 @@ class InteractiveShell:
             self._current_case = original_case
             self._current_case_name = original_case_name
             self.console.print(f"[cyan]{'─' * 50}[/cyan]")
-            self.console.print(f"[green]✓ Processed {len(matched_cases)} cases[/green]")
+            self.console.print(f"[green]✓ Processed {len(cases_data)} cases[/green]")
 
     def run(self) -> int:
         """
@@ -3403,25 +3410,23 @@ class InteractiveShell:
                 # Split by semicolon to support command chaining
                 commands = self._split_by_semicolon(user_input)
                 
-                # Check if first command is "use case:*" (wildcard pattern)
+                # Check if first command is "use case:*" (load all cases from .cases file)
                 if commands and commands[0].strip().startswith('use case:'):
                     first_cmd = commands[0].strip()
                     # Parse "use case:PATTERN"
                     if first_cmd.startswith('use case:'):
                         case_part = first_cmd[9:].strip()  # Remove "use case:"
                         
-                        # Check if any other contexts are in the first command (e.g., "use case:Case*; ...")
-                        # Extract just the case value (handle multiple context setting)
-                        # Split by space or end of string
+                        # Extract just the case value
                         case_match = case_part.split()[0] if ' ' in case_part else case_part
                         
-                        # Check if this is a wildcard pattern
+                        # Check if this is a wildcard pattern (specifically '*')
                         if self._is_wildcard_pattern(case_match):
                             # This is a wildcard case - get remaining commands
                             remaining_commands = commands[1:] if len(commands) > 1 else []
                             
-                            # Process case wildcard chain
-                            self._process_case_wildcard_chain(case_match, remaining_commands)
+                            # Process all cases from .cases file
+                            self._process_case_wildcard_chain(remaining_commands)
                             continue
                 
                 # Normal command processing (no wildcard case)
