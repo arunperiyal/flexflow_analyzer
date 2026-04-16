@@ -17,6 +17,7 @@ from rich import box
 from ....utils.logger import Logger
 from ....utils.colors import Colors
 from ....core.simflow_config import SimflowConfig
+from ...case_iteration import is_wildcard_case, load_cases_from_directory
 
 
 # ---------------------------------------------------------------------------
@@ -26,9 +27,6 @@ from ....core.simflow_config import SimflowConfig
 def execute_case_check(args):
     """Execute the case check command."""
     from .help_messages import print_check_help
-    from ...case_iteration import is_wildcard_case, load_cases_from_directory
-    from pathlib import Path
-    from src.cli.interactive import InteractiveShell
 
     if hasattr(args, 'help') and args.help:
         print_check_help()

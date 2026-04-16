@@ -8,7 +8,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich import box
 
-from ..shared_helpers import apply_partition_header
+from ..shared_helpers import apply_partition_header, execute_on_all_cases, get_case_name_and_base_dir
 
 
 def _apply_partition_header(script_path: Path, partition: str, console) -> bool:
@@ -71,7 +71,6 @@ def execute_main(args):
 
     # If wildcard, execute on all cases
     if case_name == "*":
-        from .shared_helpers import execute_on_all_cases
         execute_on_all_cases(
             case_name, 
             base_dir,
@@ -141,8 +140,6 @@ def _execute_main_on_case(case_dir: Path, args):
 
 def _get_case_info(args):
     """Get case name and base directory."""
-    from .shared_helpers import get_case_name_and_base_dir
-    
     # Try from args first
     if hasattr(args, 'case') and args.case:
         return args.case, Path.cwd()
