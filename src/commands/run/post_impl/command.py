@@ -7,7 +7,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from rich import box
-from ..shared_helpers import apply_partition_header
+from ..shared_helpers import apply_partition_header, execute_on_all_cases, get_case_name_and_base_dir
 
 
 def execute_post(args):
@@ -18,11 +18,32 @@ def execute_post(args):
         show_post_help()
         return
 
-    # Get case directory
-    case_dir = get_case_directory(args)
-    if not case_dir:
+    # Get case info
+    case_name, base_dir = _get_case_info(args)
+    if case_name is None:
         return
 
+    # If wildcard, execute on all cases
+    if case_name == "*":
+        execute_on_all_cases(
+            case_name, 
+            base_dir,
+            lambda case_dir, display_name: _execute_post_on_case(case_dir, args),
+            "Post-processing"
+        )
+        return
+
+    # Single case execution
+    case_dir = Path(case_name)
+    if not case_dir.exists():
+        print(f"Error: Case directory not found: {case_dir}")
+        return
+    
+    _execute_post_on_case(case_dir.resolve(), args)
+
+
+def _execute_post_on_case(case_dir: Path, args):
+    """Execute post-processing on a single case."""
     console = Console()
 
     # Handle --cleanup-only flag
@@ -70,36 +91,12 @@ def execute_post(args):
     submit_postprocessing_job(script_path, case_dir, args, console)
 
 
-def get_case_directory(args):
-    """Get and validate case directory from args or context."""
-    from src.cli.interactive import InteractiveShell
-
-    case_dir = None
-
-    # Try to get from args
-    if hasattr(args, 'case') and args.case:
-        case_dir = Path(args.case)
-    # Try to get from context (if in interactive mode)
-    elif hasattr(InteractiveShell, '_instance') and InteractiveShell._instance:
-        shell = InteractiveShell._instance
-        if shell._current_case:
-            case_dir = Path(shell._current_case)
-
-    if not case_dir:
-        print("Error: Case directory not specified")
-        print("\nUsage: run post <case_directory>")
-        print("   or: use case:<directory>, then run post")
-        return None
-
-    if not case_dir.exists():
-        print(f"Error: Case directory not found: {case_dir}")
-        return None
-
-    if not case_dir.is_dir():
-        print(f"Error: Not a directory: {case_dir}")
-        return None
-
-    return case_dir.resolve()
+def _get_case_info(args):
+    """Get case name and base directory from args or context."""
+    case_name, base_dir = get_case_name_and_base_dir(args)
+    if case_name is None:
+        return None, None
+    return case_name, base_dir
 
 
 def find_postprocessing_script(case_dir):
