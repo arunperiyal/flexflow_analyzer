@@ -26,6 +26,9 @@ from ....core.simflow_config import SimflowConfig
 def execute_case_check(args):
     """Execute the case check command."""
     from .help_messages import print_check_help
+    from ...case_iteration import is_wildcard_case, load_cases_from_directory
+    from pathlib import Path
+    from src.cli.interactive import InteractiveShell
 
     if hasattr(args, 'help') and args.help:
         print_check_help()
@@ -48,12 +51,85 @@ def execute_case_check(args):
         print_check_help()
         return
 
-    # Resolve case directory
-    case_dir = _get_case_dir(args)
+    # Get case name from args or interactive context
+    case_name = _get_case_name(args)
+    if case_name is None:
+        return
+
+    # Check if wildcard - if so, iterate over all cases
+    if is_wildcard_case(case_name):
+        _execute_check_on_all_cases(args, do_run, do_archive, do_config, do_plt)
+        return
+
+    # Single case execution
+    case_dir = _resolve_case_dir(case_name)
     if case_dir is None:
         return
 
-    logger  = Logger(verbose=getattr(args, 'verbose', False))
+    _execute_check_on_case(case_dir, do_run, do_archive, do_config, do_plt)
+
+
+def _get_case_name(args) -> Optional[str]:
+    """Get case name from args or interactive context."""
+    from src.cli.interactive import InteractiveShell
+
+    if hasattr(args, 'case') and args.case:
+        return args.case
+    elif (hasattr(InteractiveShell, '_instance') and
+          InteractiveShell._instance and
+          InteractiveShell._instance._current_case):
+        return InteractiveShell._instance._current_case
+    else:
+        print("Error: No case directory specified.")
+        print("Usage:  case check <dir> --run")
+        print("   or:  use case <dir>  then  case check --run")
+        return None
+
+
+def _execute_check_on_all_cases(args, do_run, do_archive, do_config, do_plt):
+    """Execute check on all cases from .cases file."""
+    from src.cli.interactive import InteractiveShell
+    
+    # Get base directory
+    if (hasattr(InteractiveShell, '_instance') and InteractiveShell._instance):
+        base_dir = InteractiveShell._instance._current_dir
+    else:
+        base_dir = Path.cwd()
+    
+    # Load cases
+    cases = load_cases_from_directory(base_dir)
+    if not cases:
+        print(f"Error: No cases found in .cases file or file does not exist")
+        return
+
+    console = Console()
+    console.print(f"\n[cyan]{'─' * 60}[/cyan]")
+    console.print(f"[green]Processing {len(cases)} cases[/green]")
+    console.print(f"[cyan]{'─' * 60}[/cyan]\n")
+
+    for case_idx, case_entry in enumerate(cases, 1):
+        case_path = Path(case_entry['path'])
+        case_name = case_entry['name']
+
+        console.print(f"[cyan]{'─' * 60}[/cyan]")
+        console.print(f"[green]Case {case_idx}/{len(cases)}:[/green] [cyan]{case_name}[/cyan]")
+        console.print(f"[dim]Path: {case_path}[/dim]")
+        console.print(f"[cyan]{'─' * 60}[/cyan]\n")
+
+        if not case_path.exists():
+            console.print(f"[red]Error:[/red] Case directory not found: {case_path}\n")
+            continue
+
+        _execute_check_on_case(case_path, do_run, do_archive, do_config, do_plt)
+
+    console.print(f"[cyan]{'─' * 60}[/cyan]")
+    console.print(f"[green]✓ Processed {len(cases)} cases[/green]")
+    console.print(f"[cyan]{'─' * 60}[/cyan]\n")
+
+
+def _execute_check_on_case(case_dir: Path, do_run, do_archive, do_config, do_plt):
+    """Execute check on a single case."""
+    logger  = Logger(verbose=False)
     console = Console()
 
     console.print()
@@ -91,28 +167,15 @@ def execute_case_check(args):
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _get_case_dir(args) -> Optional[Path]:
-    """Resolve case directory from args or interactive context."""
-    from src.cli.interactive import InteractiveShell
-
-    if hasattr(args, 'case') and args.case:
-        p = Path(args.case)
-    elif (hasattr(InteractiveShell, '_instance') and
-          InteractiveShell._instance and
-          InteractiveShell._instance._current_case):
-        p = Path(InteractiveShell._instance._current_case)
-    else:
-        print("Error: No case directory specified.")
-        print("Usage:  case check <dir> --run")
-        print("   or:  use case <dir>  then  case check --run")
-        return None
+def _resolve_case_dir(case_name: str) -> Optional[Path]:
+    """Resolve a single case directory from case name."""
+    p = Path(case_name)
 
     if not p.exists() or not p.is_dir():
         print(f"Error: Case directory not found: {p}")
         return None
 
     return p.resolve()
-
 
 
 def _read_data_file_range(file_path: Path) -> Optional[Tuple[int, int]]:
