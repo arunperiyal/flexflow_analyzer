@@ -64,11 +64,33 @@ def execute_main(args):
         show_main_help()
         return
 
-    # Get case directory
-    case_dir = get_case_directory(args)
-    if not case_dir:
+    # Get case info
+    case_name, base_dir = _get_case_info(args)
+    if case_name is None:
         return
 
+    # If wildcard, execute on all cases
+    if case_name == "*":
+        from .shared_helpers import execute_on_all_cases
+        execute_on_all_cases(
+            case_name, 
+            base_dir,
+            lambda case_dir, display_name: _execute_main_on_case(case_dir, args),
+            "Main simulation"
+        )
+        return
+
+    # Single case execution
+    case_dir = Path(case_name)
+    if not case_dir.exists():
+        print(f"Error: Case directory not found: {case_dir}")
+        return
+    
+    _execute_main_on_case(case_dir.resolve(), args)
+
+
+def _execute_main_on_case(case_dir: Path, args):
+    """Execute main simulation on a single case."""
     console = Console()
 
     # Find main simulation script
@@ -115,6 +137,26 @@ def execute_main(args):
 
     # Submit the job
     submit_main_job(script_path, case_dir, args, console)
+
+
+def _get_case_info(args):
+    """Get case name and base directory."""
+    from .shared_helpers import get_case_name_and_base_dir
+    
+    # Try from args first
+    if hasattr(args, 'case') and args.case:
+        return args.case, Path.cwd()
+    
+    # Fall back to context
+    case_name, base_dir = get_case_name_and_base_dir()
+    
+    if not case_name:
+        print("Error: Case directory not specified")
+        print("\nUsage: run main <case_directory>")
+        print("   or: use case:<directory>, then run main")
+        return None, None
+    
+    return case_name, base_dir
 
 
 def get_case_directory(args):

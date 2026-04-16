@@ -27,8 +27,8 @@ def is_wildcard_case(case_name: Optional[str]) -> bool:
 
 def load_cases_from_directory(base_dir: Path):
     """Load cases from .cases file in base directory."""
-    from ...case_iteration import load_cases_from_directory as load_cases
-    return load_cases(base_dir)
+    from .. import case_iteration
+    return case_iteration.load_cases_from_directory(base_dir)
 
 
 def execute_on_all_cases(case_name: str, base_dir: Path, action: Callable, action_name: str):
