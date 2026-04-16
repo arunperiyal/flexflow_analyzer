@@ -1907,72 +1907,24 @@ class InteractiveShell:
         self.console.print("  unuse                   [dim]# Clear everything[/dim]")
         self.console.print()
 
-    def _is_wildcard_pattern(self, value: str) -> bool:
-        """
-        Check if value is the wildcard pattern '*' for all cases.
-        
-        Args:
-            value: String to check
-            
-        Returns:
-            True if value is '*' (indicating all cases from .cases file)
-        """
-        return value == '*'
-
-    def _load_cases_from_file(self) -> List[dict]:
-        """
-        Load cases from the .cases file in current directory.
-        
-        The .cases file is a JSON file with format:
-        [
-          {'name': 'Case001', 'path': '/full/path/to/Case001'},
-          {'name': 'Case002', 'path': '/full/path/to/Case002'},
-          ...
-        ]
-        
-        Returns:
-            List of case dicts with 'name' and 'path' keys, or empty list if no .cases file
-        """
-        cases_file = Path(self._current_dir) / '.cases'
-        
-        if not cases_file.exists():
-            self.console.print(f"[yellow]No .cases file found in:[/yellow] {self._current_dir}")
-            self.console.print("[dim]Hint: Use 'case add' to create a .cases registry[/dim]")
-            return []
-        
-        try:
-            import json
-            with open(cases_file) as f:
-                data = json.load(f)
-            
-            if isinstance(data, list):
-                return data
-            else:
-                self.console.print(f"[red]Error:[/red] .cases file has invalid format")
-                return []
-        except Exception as e:
-            self.console.print(f"[red]Error loading .cases file:[/red] {e}")
-            return []
-
     def use_case(self, case_input: str) -> None:
         """
         Set current case context.
         
         Supports:
         - "Case001" - single case
-        
-        Note: Wildcard "*" is only supported in command chains:
-              use case:*; command1; command2
+        - "*" - all cases (from .cases file); commands handle iteration internally
 
         Args:
-            case_input: Case name or path
+            case_input: Case name, path, or "*" for all cases
         """
         try:
-            # Wildcard requires command chaining - error if used alone
-            if self._is_wildcard_pattern(case_input):
-                self.console.print("[yellow]Error:[/yellow] Wildcard '*' requires command chaining")
-                self.console.print("[dim]Usage: use case:*; command1; command2[/dim]")
-                self.console.print("[dim]Example: use case:*; case check --run[/dim]")
+            # Support "*" for all cases - just set it as the case name
+            if case_input == "*":
+                self._current_case = "*"
+                self._current_case_name = "*"
+                self.console.print(f"[green]✓[/green] Case set to: [cyan]* (all cases)[/cyan]")
+                self.console.print("[dim]Commands will iterate over all cases from .cases file[/dim]")
                 return
             
             # Single case resolution
@@ -3330,62 +3282,6 @@ class InteractiveShell:
 
         return args
 
-    def _process_case_wildcard_chain(self, remaining_commands: List[str]) -> None:
-        """
-        Process all cases from .cases file by iterating over them.
-        
-        For inline wildcard chaining (use case:*; command1; command2),
-        this method executes all commands for each case in the .cases file.
-        After all cases are processed, clears case context (back to None).
-        
-        Args:
-            remaining_commands: List of commands to execute for each case
-        """
-        # Load cases from .cases file
-        cases_data = self._load_cases_from_file()
-        
-        if not cases_data:
-            return
-        
-        try:
-            # Iterate over each case from .cases file
-            for case_idx, case_entry in enumerate(cases_data, 1):
-                case_path = Path(case_entry['path'])
-                case_name = case_entry['name']
-                
-                # Set current case context for this iteration
-                self._current_case = str(case_path)
-                self._current_case_name = case_name
-                
-                # Print progress with separator
-                self.console.print(f"[cyan]{'─' * 50}[/cyan]")
-                self.console.print(f"[green]Case {case_idx}/{len(cases_data)}:[/green] [cyan]{self._current_case_name}[/cyan]")
-                self.console.print(f"[dim]Path: {case_path}[/dim]")
-                
-                # Execute each remaining command for this case
-                for cmd in remaining_commands:
-                    cmd = cmd.strip()
-                    if not cmd:
-                        continue
-                    
-                    # Check for pipes first
-                    if self._has_pipe(cmd):
-                        self._handle_piped_command(cmd)
-                    # Handle shell commands
-                    elif self.handle_shell_command(cmd):
-                        pass
-                    # Execute FlexFlow command
-                    else:
-                        self.execute_command(cmd)
-        
-        finally:
-            # After processing all cases, clear case context (back to None)
-            # Wildcard is inline-only, not persistent
-            self._current_case = None
-            self._current_case_name = None
-            self.console.print(f"[cyan]{'─' * 50}[/cyan]")
-            self.console.print(f"[green]✓ Processed {len(cases_data)} cases[/green]")
-
 
     def run(self) -> int:
         """
@@ -3414,30 +3310,7 @@ class InteractiveShell:
                 # Split by semicolon to support command chaining
                 commands = self._split_by_semicolon(user_input)
                 
-                # Check if first command is "use case:*" for inline wildcard processing
-                # Wildcard mode is ONLY for semicolon chaining, not persistent
-                if commands and commands[0].strip().startswith('use case:'):
-                    first_cmd = commands[0].strip()
-                    if first_cmd.startswith('use case:'):
-                        case_part = first_cmd[9:].strip()  # Remove "use case:"
-                        case_match = case_part.split()[0] if ' ' in case_part else case_part
-                        
-                        if self._is_wildcard_pattern(case_match):
-                            # Wildcard detected - only process if there are chained commands
-                            remaining_commands = commands[1:] if len(commands) > 1 else []
-                            
-                            if remaining_commands:
-                                # Inline wildcard with commands: use case:*; command1; command2
-                                self._process_case_wildcard_chain(remaining_commands)
-                                continue
-                            else:
-                                # Just "use case:*" without commands - show help
-                                self.console.print("[yellow]Wildcard mode requires command chaining[/yellow]")
-                                self.console.print("[dim]Usage: use case:*; command1; command2 ...[/dim]")
-                                self.console.print("[dim]Example: use case:*; case check --run[/dim]")
-                                continue
-                
-                # Normal command processing (no wildcard in chain)
+                # Normal command processing with support for command chaining
                 for cmd in commands:
                     cmd = cmd.strip()
                     if not cmd:
