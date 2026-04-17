@@ -52,6 +52,22 @@ export GMSH="gmsh"                   # Use 'which gmsh' to find the path
 # OpenMP Settings
 # -----------------------------------------------------------------------------
 
+# Assign necessary periodic boundary conditions if necessary
+# if [ ! -x "$SIMPBC" ]; then
+#     echo "Error: simGmshCnvt not found or not executable: $SIMPBC"
+#     exit 1
+# fi
+ 
+# SRF1="side1"
+# SRF2="side"
+# $SIMPBC -nbc1 $PROBLEM.${SRF1}.nbc -nbc2 $PROBLEM.${SRF2}.nbc
+# SIMPBC_EXIT=$?
+
+# if [ $SIMPBC_EXIT -ne 0 ]; then
+#     echo "Error: simGmshCnvt failed with exit code $SIMPBC_EXIT"
+#     exit $SIMPBC_EXIT
+# fi
+
 # Number of OpenMP threads per MPI process
 # Leave commented to use SLURM_CPUS_PER_TASK automatically
 # export OMP_NUM_THREADS=4
@@ -61,6 +77,7 @@ export GMSH="gmsh"                   # Use 'which gmsh' to find the path
 # -----------------------------------------------------------------------------
 
 # Uncomment and modify based on your cluster setup
+# module load matlab
 # module load compiler/openmpi/4.0.2
 # module load compiler/intel-mpi/mpi-2018.2.199
 # module load compiler/intel/2018.2.199

@@ -93,7 +93,7 @@ def _execute_post_on_case(case_dir: Path, args):
 
 def _get_case_info(args):
     """Get case name and base directory from args or context."""
-    case_name, base_dir = get_case_name_and_base_dir(args)
+    case_name, base_dir = get_case_name_and_base_dir()
     if case_name is None:
         return None, None
     return case_name, base_dir
