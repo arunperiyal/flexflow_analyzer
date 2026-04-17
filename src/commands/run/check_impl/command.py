@@ -77,10 +77,20 @@ def _execute_check_on_case(case_dir: Path, args):
 
 
 def _get_case_info(args):
-    """Get case name and base directory from args or context."""
+    """Get case name and base directory."""
+    # Try from args first
+    if hasattr(args, 'case') and args.case:
+        return args.case, Path.cwd()
+    
+    # Fall back to context
     case_name, base_dir = get_case_name_and_base_dir()
-    if case_name is None:
+    
+    if not case_name:
+        print("Error: Case directory not specified")
+        print("\nUsage: run check <case_directory>")
+        print("   or: use case:<directory>, then run check")
         return None, None
+    
     return case_name, base_dir
 
     if not case_dir.is_dir():
