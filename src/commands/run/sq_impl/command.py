@@ -84,8 +84,45 @@ def parse_queue_output(output: str) -> list:
             job['memory'] = _fmt_memory(job['memory'])
             job['submit'] = _fmt_submit_time(job['submit'])
             job['dependency'] = _fmt_dependency(job['dependency'])
+            job['workdir'] = None  # Will be fetched separately if needed
             jobs.append(job)
     return jobs
+
+
+def get_job_workdir(job_id: str) -> str:
+    """Get WorkDir for a job using scontrol. Returns None if unavailable."""
+    try:
+        result = subprocess.run(
+            ['scontrol', 'show', 'job', job_id],
+            capture_output=True, text=True, timeout=5
+        )
+        for line in result.stdout.splitlines():
+            if 'WorkDir=' in line:
+                parts = line.split('WorkDir=')
+                if len(parts) > 1:
+                    return parts[1].strip()
+        return None
+    except Exception:
+        return None
+
+
+def enrich_jobs_with_workdir(jobs: list) -> list:
+    """Fetch WorkDir for each job. Returns the same list with workdir populated."""
+    for job in jobs:
+        if job['workdir'] is None:
+            job['workdir'] = get_job_workdir(job['jobid'])
+    return jobs
+
+
+def group_jobs_by_workdir(jobs: list) -> dict:
+    """Group jobs by their WorkDir. Returns dict: {workdir -> [jobs]}."""
+    grouped = {}
+    for job in jobs:
+        workdir = job.get('workdir') or 'Unknown'
+        if workdir not in grouped:
+            grouped[workdir] = []
+        grouped[workdir].append(job)
+    return grouped
 
 
 def _fmt_memory(raw: str) -> str:
@@ -194,36 +231,80 @@ def create_queue_table(jobs: list) -> Table:
 def show_queue(args):
     console = Console()
     show_all = getattr(args, 'all', False)
+    group_by_dir = getattr(args, 'by_dir', False)
 
     output = get_queue_data(show_all)
     jobs = parse_queue_output(output)
 
-    console.print()
-    console.print(create_queue_table(jobs))
-    console.print()
+    if not jobs:
+        console.print()
+        console.print(create_queue_table(jobs))
+        console.print()
+        console.print('[dim]No jobs in queue[/dim]')
+        console.print()
+        return
+
+    if group_by_dir:
+        jobs = enrich_jobs_with_workdir(jobs)
+        grouped = group_jobs_by_workdir(jobs)
+        
+        console.print()
+        for workdir in sorted(grouped.keys()):
+            dir_jobs = grouped[workdir]
+            table = create_queue_table(dir_jobs)
+            table.title = f'SLURM Job Queue - {workdir}'
+            console.print(table)
+        console.print()
+    else:
+        console.print()
+        console.print(create_queue_table(jobs))
+        console.print()
 
     if jobs:
         running = sum(1 for j in jobs if j['state'] == 'RUNNING')
         pending = sum(1 for j in jobs if j['state'] == 'PENDING')
         console.print(f'[dim]Total: {len(jobs)} jobs  |  Running: {running}  |  Pending: {pending}[/dim]')
-    else:
-        console.print('[dim]No jobs in queue[/dim]')
     console.print()
 
 
 def watch_queue(args):
     console = Console()
     show_all = getattr(args, 'all', False)
+    group_by_dir = getattr(args, 'by_dir', False)
 
     console.print()
     console.print('[bold cyan]Watch Mode[/bold cyan] - Press Ctrl+C to exit')
     console.print()
 
     try:
+        def get_live_table():
+            jobs = parse_queue_output(get_queue_data(show_all))
+            if not jobs:
+                return create_queue_table(jobs)
+            
+            if group_by_dir:
+                jobs = enrich_jobs_with_workdir(jobs)
+                grouped = group_jobs_by_workdir(jobs)
+                # Return panels stacked vertically for watch mode
+                from rich.layout import Layout
+                layout = Layout()
+                for i, workdir in enumerate(sorted(grouped.keys())):
+                    if i > 0:
+                        layout.split_column(Layout(), Layout(name=f"dir_{i}"))
+                    dir_jobs = grouped[workdir]
+                    table = create_queue_table(dir_jobs)
+                    table.title = f'SLURM Job Queue - {workdir}'
+                    if i == 0:
+                        layout.update(table)
+                    else:
+                        layout[f"dir_{i}"].update(table)
+                return layout
+            else:
+                return create_queue_table(jobs)
+
         with Live(console=console, refresh_per_second=0.1) as live:
             while True:
-                jobs = parse_queue_output(get_queue_data(show_all))
-                live.update(create_queue_table(jobs))
+                live.update(get_live_table())
                 time.sleep(10)
     except KeyboardInterrupt:
         console.print()
@@ -363,13 +444,14 @@ def show_sq_help():
 {Colors.BOLD}{Colors.CYAN}run sq — SLURM Job Queue{Colors.RESET}
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    run sq [<job_id>] [--all] [--watch]
+    run sq [<job_id>] [--all] [--by-dir] [--watch]
 
 {Colors.BOLD}ARGUMENTS:{Colors.RESET}
     {Colors.YELLOW}<job_id>{Colors.RESET}    Show detailed info for a single job (scontrol + sstat)
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
     {Colors.YELLOW}--all{Colors.RESET}       Show all users' jobs (default: yours only)
+    {Colors.YELLOW}--by-dir{Colors.RESET}    Group jobs by their WorkDir (fetches directory info for each job)
     {Colors.YELLOW}--watch{Colors.RESET}     Refresh every 10 seconds (Ctrl+C to stop)
     {Colors.YELLOW}-h, --help{Colors.RESET}  Show this help message
 
@@ -385,6 +467,8 @@ def show_sq_help():
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
     run sq                  # Your jobs
     run sq --all            # All users
+    run sq --by-dir         # Group your jobs by work directory
     run sq --watch          # Auto-refresh
     run sq 1258586          # Detail for job 1258586
 """)
+

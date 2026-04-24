@@ -185,8 +185,25 @@ ff case run CS4SG1U1 --nodes 4 --ntasks 128
 
 **Monitoring:**
 - Press `Ctrl+C` to stop monitoring (jobs continue running)
-- Use `squeue` to check job status manually
+- Use `run sq` to check job status in the CLI
+- Use `squeue -u $USER` to check jobs manually
 - Logs are saved in case directory
+
+**Check Job Queue:**
+
+View your running jobs:
+```bash
+ff run sq                  # Show your jobs
+ff run sq --all            # Show all users' jobs
+ff run sq --by-dir         # Group jobs by their work directory
+ff run sq --watch          # Auto-refresh every 10 seconds
+ff run sq <job_id>         # Show detailed info for a job
+```
+
+The `--by-dir` flag is useful when running multiple simulations:
+- Groups jobs by their work directory
+- Helps identify which jobs are running in which case directories
+- Handy when you have jobs with the same name in different locations
 
 **Example workflow:**
 ```bash
@@ -201,7 +218,8 @@ vim config.yaml
 ff case run MY_SIMULATION
 
 # Check progress (if monitoring was stopped)
-squeue -u $USER
+ff run sq                  # View all jobs
+ff run sq --by-dir         # View jobs grouped by directory
 ```
 
 ## Data Inspection
