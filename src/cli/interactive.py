@@ -928,6 +928,8 @@ class InteractiveShell:
         if self._current_output_dir:
             output_dir_name = Path(self._current_output_dir).name
             contexts.append(f'<outputdir>d:{output_dir_name}</outputdir>')
+        if self._current_remote:
+            contexts.append(f'<remote>rem:{self._current_remote}</remote>')
         if self._current_node is not None:
             contexts.append(f'<node>n:{self._current_node}</node>')
         if self._current_t1 is not None:
@@ -3308,7 +3310,7 @@ class InteractiveShell:
 
         # Commands that take a case as their second or third argument
         case_commands = {
-            'case': {'show': 2, 'run': 2, 'organise': 2, 'check': 2, 'status': 2},  # case show <case>
+            'case': {'show': 2, 'run': 2, 'organise': 2, 'check': 2, 'status': 2, 'download': 2},  # case show <case>
             'data': {'show': 2, 'stats': 2},  # data show <case>
             'field': {'info': 2, 'extract': 2},  # field info <case>
             'run': {'check': 2, 'pre': 2, 'main': 2, 'post': 2},  # run check <case>
