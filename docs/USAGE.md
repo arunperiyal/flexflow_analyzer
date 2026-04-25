@@ -222,6 +222,74 @@ ff run sq                  # View all jobs
 ff run sq --by-dir         # View jobs grouped by directory
 ```
 
+### Remote Machine Management
+
+Manage remote machines for file transfer operations:
+
+```bash
+# Add a new remote machine
+ff remote add myserver --user john --ip 192.168.1.100 --password secret123
+
+# List all configured remotes
+ff remote list
+
+# Update remote settings
+ff remote modify myserver --port 2222 --password newpass
+
+# Set base path for case downloads
+ff remote set-path myserver /home/john/simulations
+
+# Remove a remote
+ff remote delete myserver
+```
+
+**Remote Configuration:**
+- Credentials are stored in `~/.flexflow/remotes.json` (read/write permissions only by owner)
+- Supports custom SSH ports (default: 22)
+- Base path can be overridden per download operation
+
+### Download Cases from Remote
+
+Transfer case directories from remote servers to your local machine:
+
+```bash
+# Basic download (downloads othd_files, oisd_files, binary by default)
+ff case download ./mycase --to myserver
+
+# Download specific directories only
+ff case download ./mycase --to myserver --dir othd_files,oisd_files
+
+# Override the remote path for this download
+ff case download ./mycase --to myserver --remote-path /scratch/simulations
+
+# Specify relative path
+ff case download mycase --to myserver
+```
+
+**Download behavior:**
+- Creates local case directory if it doesn't exist
+- Downloads only specified directories (default: othd_files, oisd_files, binary)
+- Shows transfer progress with file counts
+- Preserves remote directory structure locally
+- Supports tilde expansion (`~/cases/mycase`)
+
+**Example workflow:**
+```bash
+# Configure remote once
+ff remote add hpc-cluster --user jane --ip 192.168.10.50 --password xyz
+ff remote set-path hpc-cluster /home/jane/projects
+
+# Later: Download completed simulation
+ff case download mySimulation --to hpc-cluster
+
+# Download specific output files only
+ff case download mySimulation --to hpc-cluster --dir othd_files
+
+# Download to different location
+cd /local/storage
+ff case download ../mySimulation --to hpc-cluster --remote-path /alternate/path
+```
+
 ## Data Inspection
 
 ### Check Data Files
