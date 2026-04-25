@@ -108,6 +108,7 @@ class FlexFlowApp:
         from src.commands.template import TemplateCommand
         from src.commands.utils import DocsCommand
         from src.commands.run import RunCommand
+        from src.commands.remote import RemoteCommand
 
         # Register all commands
         command_classes = [
@@ -122,6 +123,8 @@ class FlexFlowApp:
             # Visualization commands
             PlotCommand,
             CompareCommand,
+            # Configuration commands
+            RemoteCommand,
             # Utility commands
             TemplateCommand,
             DocsCommand,
