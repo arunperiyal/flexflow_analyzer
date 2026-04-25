@@ -28,6 +28,7 @@ from rich import box
 
 from src.cli.registry import registry
 from src.utils.colors import Colors
+from src.utils.remote_config import RemoteConfig
 
 
 class PipeSegment:
@@ -137,11 +138,12 @@ class FlexFlowCompleter(Completer):
     # ---------------------------------------------------------------------------
 
     _SUBCOMMANDS: Dict[str, List[str]] = {
-        'case':     ['show', 'create', 'run', 'organise', 'check', 'status', 'add', 'report'],
+        'case':     ['show', 'create', 'run', 'organise', 'check', 'status', 'add', 'report', 'download'],
         'data':     ['show', 'stats'],
         'field':    ['info', 'extract'],
         'run':      ['check', 'pre', 'main', 'post', 'sq', 'sb', 'sc'],
         'template': ['plot', 'case', 'script'],
+        'remote':   ['add', 'modify', 'delete', 'list', 'set-path'],
         'check':    [],
         'plot':     [],
         'compare':  [],
@@ -210,6 +212,34 @@ class FlexFlowCompleter(Completer):
             '--dir':  'Directory containing .cases file (default: current directory)',
         },
         ('case', 'status'):  {**_COMMON_FLAGS},
+        ('case', 'download'): {
+            **_COMMON_FLAGS,
+            '--dir':          'Directories to download (comma-separated, default: othd_files,oisd_files,binary)',
+            '--to':           'Remote machine name (required)',
+            '--remote-path':  'Override remote base path (default: use remote config)',
+        },
+
+        # ── remote ──────────────────────────────────────────────────────────
+        ('remote', None):      {**_COMMON_FLAGS},
+        ('remote', 'add'):    {
+            **_COMMON_FLAGS,
+            '--user':     'SSH username (required)',
+            '--ip':       'Remote IP address (required)',
+            '--password': 'SSH password (required)',
+            '--port':     'SSH port (default: 22)',
+        },
+        ('remote', 'modify'): {
+            **_COMMON_FLAGS,
+            '--user':     'Update SSH username',
+            '--ip':       'Update remote IP address',
+            '--password': 'Update SSH password',
+            '--port':     'Update SSH port',
+        },
+        ('remote', 'delete'): {**_COMMON_FLAGS},
+        ('remote', 'list'):   {**_COMMON_FLAGS},
+        ('remote', 'set-path'): {
+            **_COMMON_FLAGS,
+        },
 
         # ── data ────────────────────────────────────────────────────────────
         ('data', None):      {**_COMMON_FLAGS},
@@ -286,10 +316,11 @@ class FlexFlowCompleter(Completer):
             '--dependency':   'Job dependency (job ID)',
         },
         ('run', 'sq'):       {
-            '--all':   'Show all users jobs',
-            '--watch': 'Live queue monitoring (refresh every 10s)',
-            '--help':  'Show help message',
-            '-h':      'Show help message',
+            '--all':    'Show all users jobs',
+            '--watch':  'Live queue monitoring (refresh every 10s)',
+            '--by-dir': 'Group jobs by parent directory',
+            '--help':   'Show help message',
+            '-h':       'Show help message',
         },
         ('run', 'sb'):       {
             '--help':  'Show help message',
@@ -560,6 +591,36 @@ class FlexFlowCompleter(Completer):
             if not current_word.startswith('-') and positional_key in self._POSITIONAL_CHOICES:
                 yield from self._yield_choices(self._POSITIONAL_CHOICES[positional_key], current_word)
                 return
+
+            # Check if we're completing an argument for a specific flag
+            # Get the previous word if one exists
+            if len(words) >= 2:
+                prev_word = words[-2]
+                
+                # Handle --to flag for case download (complete remote names)
+                if prev_word == '--to' and cmd_name == 'case' and len(words) >= 2:
+                    try:
+                        remote_config = RemoteConfig()
+                        remotes = remote_config.get_all_remotes()
+                        for remote in remotes:
+                            remote_name = remote.get('name', '')
+                            if remote_name.startswith(current_word):
+                                yield Completion(remote_name, start_position=-len(current_word), 
+                                              display_meta=f"Remote: {remote.get('user')}@{remote.get('ip')}")
+                    except Exception:
+                        pass
+                    return
+                
+                # Handle --remote-path flag for case download (complete file paths)
+                if prev_word == '--remote-path' and cmd_name == 'case':
+                    # This would complete local paths, similar to case paths
+                    yield from self._complete_path(words, ends_with_space)
+                    return
+                
+                # Handle --ref-case flag for case create (complete case directories)
+                if prev_word == '--ref-case' and cmd_name == 'case':
+                    yield from self._complete_path(words, ends_with_space)
+                    return
 
             # Otherwise complete flags
             if current_word.startswith('-') or ends_with_space:
