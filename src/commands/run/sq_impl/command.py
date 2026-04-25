@@ -115,13 +115,20 @@ def enrich_jobs_with_workdir(jobs: list) -> list:
 
 
 def group_jobs_by_workdir(jobs: list) -> dict:
-    """Group jobs by their WorkDir. Returns dict: {workdir -> [jobs]}."""
+    """Group jobs by parent directory of WorkDir. Returns dict: {parent_dir -> [jobs]}."""
+    import os
     grouped = {}
     for job in jobs:
-        workdir = job.get('workdir') or 'Unknown'
-        if workdir not in grouped:
-            grouped[workdir] = []
-        grouped[workdir].append(job)
+        workdir = job.get('workdir')
+        if workdir:
+            # Use parent directory for grouping (removes case name level)
+            parent_dir = os.path.dirname(workdir)
+        else:
+            parent_dir = 'Unknown'
+        
+        if parent_dir not in grouped:
+            grouped[parent_dir] = []
+        grouped[parent_dir].append(job)
     return grouped
 
 
@@ -451,7 +458,7 @@ def show_sq_help():
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
     {Colors.YELLOW}--all{Colors.RESET}       Show all users' jobs (default: yours only)
-    {Colors.YELLOW}--by-dir{Colors.RESET}    Group jobs by their WorkDir (fetches directory info for each job)
+    {Colors.YELLOW}--by-dir{Colors.RESET}    Group jobs by parent directory (removes case name from path)
     {Colors.YELLOW}--watch{Colors.RESET}     Refresh every 10 seconds (Ctrl+C to stop)
     {Colors.YELLOW}-h, --help{Colors.RESET}  Show this help message
 

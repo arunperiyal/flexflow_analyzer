@@ -195,15 +195,15 @@ View your running jobs:
 ```bash
 ff run sq                  # Show your jobs
 ff run sq --all            # Show all users' jobs
-ff run sq --by-dir         # Group jobs by their work directory
+ff run sq --by-dir         # Group jobs by parent directory (case name level)
 ff run sq --watch          # Auto-refresh every 10 seconds
 ff run sq <job_id>         # Show detailed info for a job
 ```
 
 The `--by-dir` flag is useful when running multiple simulations:
-- Groups jobs by their work directory
-- Helps identify which jobs are running in which case directories
-- Handy when you have jobs with the same name in different locations
+- Groups jobs by parent directory (removes case name from the path)
+- Helps identify which domain/geometry configurations share jobs
+- Handy when you have jobs with the same name in different cases under the same parent directory
 
 **Example workflow:**
 ```bash
