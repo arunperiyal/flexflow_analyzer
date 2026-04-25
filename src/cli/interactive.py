@@ -644,7 +644,7 @@ class FlexFlowCompleter(Completer):
         # Contexts whose value is a filesystem path (directories)
         _PATH_CONTEXTS = {'case', 'rundir', 'dir'}
         # All supported context keys
-        _ALL_CONTEXTS = ['case', 'problem', 'rundir', 'dir', 'node', 't1', 't2']
+        _ALL_CONTEXTS = ['case', 'problem', 'rundir', 'dir', 'node', 't1', 't2', 'remote']
         _CONTEXT_DESCS = {
             'case':    'Set current case directory',
             'problem': 'Override problem name',
@@ -653,6 +653,7 @@ class FlexFlowCompleter(Completer):
             'node':    'Set node ID for data/field commands',
             't1':      'Set start time',
             't2':      'Set end time',
+            'remote':  'Set remote machine for downloads',
         }
 
         if self.shell is None:
@@ -685,6 +686,18 @@ class FlexFlowCompleter(Completer):
                         start_position=-len(current_word),
                         display_meta='dir' if is_dir else 'file',
                     )
+            elif ctx == 'remote':
+                # Complete remote machine names
+                from src.utils.remote_config import RemoteConfig
+                remote_config = RemoteConfig()
+                for remote_name in remote_config.list_remotes():
+                    if remote_name.startswith(partial_val):
+                        display = f'{ctx}:{remote_name}'
+                        yield Completion(
+                            display,
+                            start_position=-len(current_word),
+                            display_meta='remote',
+                        )
             # For non-path contexts (node, t1, t2, problem) nothing to complete
         else:
             # User is typing the context key prefix (or nothing yet)
@@ -713,6 +726,7 @@ class FlexFlowCompleter(Completer):
                 ('node',    'Clear node context'),
                 ('t1',      'Clear start time'),
                 ('t2',      'Clear end time'),
+                ('remote',  'Clear remote context'),
                 ('all',     'Clear all contexts'),
             ]
             for val, desc in subcommands:
@@ -784,6 +798,7 @@ class InteractiveShell:
         self._current_node: Optional[int] = None  # Node ID for data/field commands
         self._current_t1: Optional[float] = None  # Start time for data/field/plot commands
         self._current_t2: Optional[float] = None  # End time for data/field/plot commands
+        self._current_remote: Optional[str] = None  # Remote machine for downloads
         self._current_dir: Path = Path.cwd()  # Track current working directory
 
         # Piping mode state
@@ -1040,9 +1055,11 @@ class InteractiveShell:
                     self.use_t1(value)
                 elif context == 't2':
                     self.use_t2(value)
+                elif context == 'remote':
+                    self.use_remote(value)
                 else:
                     self.console.print(f"[yellow]Unknown context:[/yellow] {context}")
-                    self.console.print("[dim]Valid contexts: case, problem, rundir, dir, node, t1, t2[/dim]")
+                    self.console.print("[dim]Valid contexts: case, problem, rundir, dir, node, t1, t2, remote[/dim]")
             return True
 
         # Clear context with subcommands
@@ -1072,11 +1089,13 @@ class InteractiveShell:
                     self.unuse_t1()
                 elif subcommand == 't2':
                     self.unuse_t2()
+                elif subcommand == 'remote':
+                    self.unuse_remote()
                 elif subcommand == 'all':
                     self.unuse_all()
                 else:
                     self.console.print(f"[yellow]Unknown subcommand:[/yellow] {subcommand}")
-                    self.console.print("[dim]Use: unuse [case|problem|rundir|dir|node|t1|t2|all][/dim]")
+                    self.console.print("[dim]Use: unuse [case|problem|rundir|dir|node|t1|t2|remote|all][/dim]")
             return True
 
         # Show current directory and all contexts
@@ -1096,8 +1115,10 @@ class InteractiveShell:
                 self.console.print(f"Start time (t1): [cyan]{self._current_t1}[/cyan]")
             if self._current_t2 is not None:
                 self.console.print(f"End time (t2): [cyan]{self._current_t2}[/cyan]")
+            if self._current_remote:
+                self.console.print(f"Remote context: [cyan]{self._current_remote}[/cyan]")
             if not any([self._current_case, self._current_problem, self._current_rundir, self._current_output_dir,
-                       self._current_node is not None, self._current_t1 is not None, self._current_t2 is not None]):
+                       self._current_node is not None, self._current_t1 is not None, self._current_t2 is not None, self._current_remote]):
                 self.console.print("[dim]No context set[/dim]")
             return True
 
@@ -1919,12 +1940,14 @@ class InteractiveShell:
         self.console.print("  node       Node ID for data/field commands")
         self.console.print("  t1         Start time for data/field/plot commands")
         self.console.print("  t2         End time for data/field/plot commands")
+        self.console.print("  remote     Remote machine for downloads (default for 'case download')")
         self.console.print()
         self.console.print("[bold]EXAMPLES:[/bold]")
         self.console.print("  [dim]# Single context[/dim]")
         self.console.print("  use case:Case015")
         self.console.print("  use node:24")
         self.console.print("  use t1:50.0")
+        self.console.print("  use remote:myserver")
         self.console.print()
         self.console.print("  [dim]# Multiple contexts[/dim]")
         self.console.print("  use case:Case015 problem:rigid node:0")
@@ -1956,6 +1979,7 @@ class InteractiveShell:
         self.console.print("  unuse node              Clear node context")
         self.console.print("  unuse t1                Clear start time context")
         self.console.print("  unuse t2                Clear end time context")
+        self.console.print("  unuse remote            Clear remote context")
         self.console.print("  unuse all               Clear all contexts")
         self.console.print("  unuse                   Clear all contexts (same as 'unuse all')")
         self.console.print("  unuse --help            Show this help message")
@@ -2021,6 +2045,26 @@ class InteractiveShell:
         self._current_problem = problem_name
         self.console.print(f"[green]✓[/green] Problem set to: [cyan]{problem_name}[/cyan]")
 
+
+    def use_remote(self, remote_name: str) -> None:
+        """
+        Set current remote machine context for downloads.
+
+        Args:
+            remote_name: Remote machine name as configured via 'ff remote add'
+        """
+        # Validate that the remote exists
+        from src.utils.remote_config import RemoteConfig
+        remote_config = RemoteConfig()
+        
+        if not remote_config.remote_exists(remote_name):
+            self.console.print(f"[red]Error:[/red] Remote '{remote_name}' not found.")
+            self.console.print("[dim]Use 'ff remote list' to see available remotes[/dim]")
+            return
+        
+        self._current_remote = remote_name
+        self.console.print(f"[green]✓[/green] Remote set to: [cyan]{remote_name}[/cyan]")
+        self.console.print("[dim]Commands like 'case download' will use this remote by default[/dim]")
     def use_dir(self, dir_input: str) -> None:
         """
         Set current output directory context (from simflow.config dir field).
@@ -2172,6 +2216,15 @@ class InteractiveShell:
         else:
             self.console.print("[dim]No problem context is set[/dim]")
 
+
+    def unuse_remote(self) -> None:
+        """Clear remote context."""
+        if self._current_remote:
+            old_remote = self._current_remote
+            self._current_remote = None
+            self.console.print(f"[green]✓[/green] Remote context cleared: [dim]{old_remote}[/dim]")
+        else:
+            self.console.print("[dim]No remote context is set[/dim]")
     def unuse_dir(self) -> None:
         """Clear output directory context."""
         if self._current_output_dir:
@@ -2242,6 +2295,9 @@ class InteractiveShell:
         if self._current_t2 is not None:
             cleared.append(f"t2: {self._current_t2}")
             self._current_t2 = None
+        if self._current_remote:
+            cleared.append(f"remote: {self._current_remote}")
+            self._current_remote = None
 
         if cleared:
             self.console.print(f"[green]✓[/green] All contexts cleared:")
@@ -3194,6 +3250,7 @@ class InteractiveShell:
             # Inject current contexts if set and command needs them
             args = self._inject_case_context(args)
             args = self._inject_data_context(args)
+            args = self._inject_remote_context(args)
 
             # Check if it's a registered command
             cmd_name = args[0]
@@ -3340,6 +3397,30 @@ class InteractiveShell:
         # Show what was injected
         if context_added:
             self.console.print(f"[dim]Using: {', '.join(context_added)}[/dim]")
+
+        return args
+
+
+    def _inject_remote_context(self, args: List[str]) -> List[str]:
+        """
+        Inject current remote context into case download command if appropriate.
+
+        Args:
+            args: Command arguments
+
+        Returns:
+            Modified arguments with --to flag injected if needed
+        """
+        if not self._current_remote or len(args) < 2:
+            return args
+
+        # Check if this is a case download command
+        if args[0] == 'case' and len(args) >= 2 and args[1] == 'download':
+            # Check if --to flag is already present
+            if '--to' not in args:
+                # Add --to flag with the current remote
+                args.extend(['--to', self._current_remote])
+                self.console.print(f"[dim]Using remote: {self._current_remote}[/dim]")
 
         return args
 

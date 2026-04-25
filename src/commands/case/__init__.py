@@ -164,8 +164,8 @@ class CaseCommand(BaseCommand):
         download_parser.add_argument('case', nargs='?', help='Local case directory path')
         download_parser.add_argument('--dir', type=str, metavar='DIRS',
                                     help='Directories to download (comma-separated, default: othd_files,oisd_files,binary)')
-        download_parser.add_argument('--to', type=str, required=True, metavar='REMOTE',
-                                    help='Remote machine name')
+        download_parser.add_argument('--to', type=str, required=False, metavar='REMOTE',
+                                    help='Remote machine name (or use context with "use remote:name")')
         download_parser.add_argument('--remote-path', type=str, metavar='PATH',
                                     help='Override remote base path (default: use remote config)')
         download_parser.add_argument('-h', '--help', action='store_true',
