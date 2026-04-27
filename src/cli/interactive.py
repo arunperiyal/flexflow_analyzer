@@ -138,7 +138,7 @@ class FlexFlowCompleter(Completer):
     # ---------------------------------------------------------------------------
 
     _SUBCOMMANDS: Dict[str, List[str]] = {
-        'case':     ['show', 'create', 'run', 'organise', 'check', 'status', 'add', 'report', 'download'],
+        'case':     ['show', 'create', 'run', 'organise', 'check', 'status', 'add', 'report', 'upload'],
         'data':     ['show', 'stats'],
         'field':    ['info', 'extract'],
         'run':      ['check', 'pre', 'main', 'post', 'sq', 'sb', 'sc'],
@@ -212,11 +212,12 @@ class FlexFlowCompleter(Completer):
             '--dir':  'Directory containing .cases file (default: current directory)',
         },
         ('case', 'status'):  {**_COMMON_FLAGS},
-        ('case', 'download'): {
+        ('case', 'upload'): {
             **_COMMON_FLAGS,
-            '--dir':          'Directories to download (comma-separated, default: othd_files,oisd_files,binary)',
-            '--to':           'Remote machine name (required)',
+            '--dir':          'Directories to upload (comma-separated, default: othd_files,oisd_files,binary)',
+            '--to':           'Remote machine name (or use context: use remote:<name>)',
             '--remote-path':  'Override remote base path (default: use remote config)',
+            '--force':        'Create missing remote directories before upload',
         },
 
         # ── remote ──────────────────────────────────────────────────────────
@@ -414,7 +415,7 @@ class FlexFlowCompleter(Completer):
         ('tree',    'Show directory tree'),
         ('rm',      'Remove files or directories'),
         ('cp',      'Copy files or directories'),
-        ('use',     'Set context (case/problem/rundir)'),
+        ('use',     'Set context (case/problem/rundir/remote)'),
         ('unuse',   'Clear context'),
         ('quota',   'Show disk quota for /home and /scratch'),
         ('du',      'Show disk usage of files and directories'),
@@ -597,7 +598,7 @@ class FlexFlowCompleter(Completer):
             if len(words) >= 2:
                 prev_word = words[-2]
                 
-                # Handle --to flag for case download (complete remote names)
+                # Handle --to flag for case upload (complete remote names)
                 if prev_word == '--to' and cmd_name == 'case' and len(words) >= 2:
                     try:
                         remote_config = RemoteConfig()
@@ -611,7 +612,7 @@ class FlexFlowCompleter(Completer):
                         pass
                     return
                 
-                # Handle --remote-path flag for case download (complete file paths)
+                # Handle --remote-path flag for case upload (complete file paths)
                 if prev_word == '--remote-path' and cmd_name == 'case':
                     # This would complete local paths, similar to case paths
                     yield from self._complete_path(words, ends_with_space)
@@ -653,7 +654,7 @@ class FlexFlowCompleter(Completer):
             'node':    'Set node ID for data/field commands',
             't1':      'Set start time',
             't2':      'Set end time',
-            'remote':  'Set remote machine for downloads',
+            'remote':  'Set remote machine for uploads',
         }
 
         if self.shell is None:
@@ -798,7 +799,7 @@ class InteractiveShell:
         self._current_node: Optional[int] = None  # Node ID for data/field commands
         self._current_t1: Optional[float] = None  # Start time for data/field/plot commands
         self._current_t2: Optional[float] = None  # End time for data/field/plot commands
-        self._current_remote: Optional[str] = None  # Remote machine for downloads
+        self._current_remote: Optional[str] = None  # Remote machine for uploads
         self._current_dir: Path = Path.cwd()  # Track current working directory
 
         # Piping mode state
@@ -884,6 +885,7 @@ class InteractiveShell:
             'problem': '#ffaa00',       # Yellow/orange for problem
             'rundir': '#ff00ff',        # Magenta for rundir
             'outputdir': '#00ff00',     # Green for output dir
+            'remote': '#ffaaee',        # Light magenta for remote
             'sep': '#444444',           # Separator
         })
 
@@ -1942,7 +1944,7 @@ class InteractiveShell:
         self.console.print("  node       Node ID for data/field commands")
         self.console.print("  t1         Start time for data/field/plot commands")
         self.console.print("  t2         End time for data/field/plot commands")
-        self.console.print("  remote     Remote machine for downloads (default for 'case download')")
+        self.console.print("  remote     Remote machine for uploads (default for 'case upload')")
         self.console.print()
         self.console.print("[bold]EXAMPLES:[/bold]")
         self.console.print("  [dim]# Single context[/dim]")
@@ -2050,7 +2052,7 @@ class InteractiveShell:
 
     def use_remote(self, remote_name: str) -> None:
         """
-        Set current remote machine context for downloads.
+        Set current remote machine context for uploads.
 
         Args:
             remote_name: Remote machine name as configured via 'ff remote add'
@@ -2066,7 +2068,7 @@ class InteractiveShell:
         
         self._current_remote = remote_name
         self.console.print(f"[green]✓[/green] Remote set to: [cyan]{remote_name}[/cyan]")
-        self.console.print("[dim]Commands like 'case download' will use this remote by default[/dim]")
+        self.console.print("[dim]Commands like 'case upload' will use this remote by default[/dim]")
     def use_dir(self, dir_input: str) -> None:
         """
         Set current output directory context (from simflow.config dir field).
@@ -3310,7 +3312,7 @@ class InteractiveShell:
 
         # Commands that take a case as their second or third argument
         case_commands = {
-            'case': {'show': 2, 'run': 2, 'organise': 2, 'check': 2, 'status': 2, 'download': 2},  # case show <case>
+            'case': {'show': 2, 'run': 2, 'organise': 2, 'check': 2, 'status': 2, 'upload': 2},  # case show <case>
             'data': {'show': 2, 'stats': 2},  # data show <case>
             'field': {'info': 2, 'extract': 2},  # field info <case>
             'run': {'check': 2, 'pre': 2, 'main': 2, 'post': 2},  # run check <case>
@@ -3405,7 +3407,7 @@ class InteractiveShell:
 
     def _inject_remote_context(self, args: List[str]) -> List[str]:
         """
-        Inject current remote context into case download command if appropriate.
+        Inject current remote context into case upload command if appropriate.
 
         Args:
             args: Command arguments
@@ -3416,8 +3418,8 @@ class InteractiveShell:
         if not self._current_remote or len(args) < 2:
             return args
 
-        # Check if this is a case download command
-        if args[0] == 'case' and len(args) >= 2 and args[1] == 'download':
+        # Check if this is a case upload command
+        if args[0] == 'case' and len(args) >= 2 and args[1] == 'upload':
             # Check if --to flag is already present
             if '--to' not in args:
                 # Add --to flag with the current remote

@@ -7,7 +7,7 @@ class RemoteCommand(BaseCommand):
     """Manage remote machines for file transfers"""
 
     name = "remote"
-    description = "Manage remote machines for downloads"
+    description = "Manage remote machines for uploads"
     category = "Configuration"
 
     def setup_parser(self, subparsers):
@@ -108,4 +108,3 @@ class RemoteCommand(BaseCommand):
 
 # Export command class
 remote_command = RemoteCommand
-

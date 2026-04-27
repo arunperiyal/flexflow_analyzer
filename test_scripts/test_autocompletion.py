@@ -38,16 +38,17 @@ class TestAutocompletion:
         assert 'list' in completer._SUBCOMMANDS['remote']
         assert 'set-path' in completer._SUBCOMMANDS['remote']
 
-    def test_case_download_exists(self, completer):
-        """Test that case download is available."""
-        assert 'download' in completer._SUBCOMMANDS['case']
+    def test_case_upload_exists(self, completer):
+        """Test that case upload is available."""
+        assert 'upload' in completer._SUBCOMMANDS['case']
 
-    def test_case_download_flags_defined(self, completer):
-        """Test flags for case download are defined."""
-        flags = completer._flags_for('case', 'download')
+    def test_case_upload_flags_defined(self, completer):
+        """Test flags for case upload are defined."""
+        flags = completer._flags_for('case', 'upload')
         assert '--to' in flags
         assert '--dir' in flags
         assert '--remote-path' in flags
+        assert '--force' in flags
         assert '--help' in flags
 
     def test_remote_add_flags_defined(self, completer):
@@ -85,9 +86,9 @@ class TestAutocompletion:
 
     def test_subcommands_in_completer(self, completer):
         """Test that subcommands dict is properly updated."""
-        # Verify that both 'remote' and 'download' are in the subcommands dict
+        # Verify that both 'remote' and 'upload' are in the subcommands dict
         assert 'remote' in completer._SUBCOMMANDS
-        assert 'download' in completer._SUBCOMMANDS['case']
+        assert 'upload' in completer._SUBCOMMANDS['case']
         assert 'add' in completer._SUBCOMMANDS['remote']
         assert 'list' in completer._SUBCOMMANDS['remote']
 
@@ -104,13 +105,14 @@ class TestAutocompletion:
         list_flags = completer._flags_for('remote', 'list')
         assert '--help' in list_flags
 
-    def test_flags_for_case_download(self, completer):
-        """Test that flags are defined for case download."""
-        download_flags = completer._flags_for('case', 'download')
-        assert '--to' in download_flags
-        assert '--dir' in download_flags
-        assert '--remote-path' in download_flags
-        assert download_flags['--to'] == 'Remote machine name (required)'
+    def test_flags_for_case_upload(self, completer):
+        """Test that flags are defined for case upload."""
+        upload_flags = completer._flags_for('case', 'upload')
+        assert '--to' in upload_flags
+        assert '--dir' in upload_flags
+        assert '--remote-path' in upload_flags
+        assert '--force' in upload_flags
+        assert 'remote:<name>' in upload_flags['--to']
 
     def test_flag_descriptions(self, completer):
         """Test that flag descriptions are meaningful."""
@@ -120,12 +122,11 @@ class TestAutocompletion:
         assert len(add_flags['--ip']) > 0
         assert 'required' in add_flags['--ip'].lower()
         
-        # Case download flags
-        download_flags = completer._flags_for('case', 'download')
-        assert len(download_flags['--to']) > 0
-        assert 'required' in download_flags['--to'].lower()
+        # Case upload flags
+        upload_flags = completer._flags_for('case', 'upload')
+        assert len(upload_flags['--to']) > 0
+        assert 'remote' in upload_flags['--to'].lower()
 
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-

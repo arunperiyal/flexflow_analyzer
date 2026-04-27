@@ -236,7 +236,7 @@ ff remote list
 # Update remote settings
 ff remote modify myserver --port 2222 --password newpass
 
-# Set base path for case downloads
+# Set base path for case uploads
 ff remote set-path myserver /home/john/simulations
 
 # Remove a remote
@@ -246,31 +246,35 @@ ff remote delete myserver
 **Remote Configuration:**
 - Credentials are stored in `~/.flexflow/remotes.json` (read/write permissions only by owner)
 - Supports custom SSH ports (default: 22)
-- Base path can be overridden per download operation
+- Base path can be overridden per upload operation
 
-### Download Cases from Remote
+### Upload Cases to Remote
 
-Transfer case directories from remote servers to your local machine:
+Transfer case directories from your local machine to remote servers:
 
 ```bash
-# Basic download (downloads othd_files, oisd_files, binary by default)
-ff case download ./mycase --to myserver
+# Basic upload (uploads othd_files, oisd_files, binary by default)
+ff case upload ./mycase --to myserver
 
-# Download specific directories only
-ff case download ./mycase --to myserver --dir othd_files,oisd_files
+# Upload specific directories only
+ff case upload ./mycase --to myserver --dir othd_files,oisd_files
 
-# Override the remote path for this download
-ff case download ./mycase --to myserver --remote-path /scratch/simulations
+# Override the remote path for this upload
+ff case upload ./mycase --to myserver --remote-path /scratch/simulations
+
+# Create missing remote directories before upload
+ff case upload ./mycase --to myserver --dir othd_files --force
 
 # Specify relative path
-ff case download mycase --to myserver
+ff case upload mycase --to myserver
 ```
 
-**Download behavior:**
-- Creates local case directory if it doesn't exist
-- Downloads only specified directories (default: othd_files, oisd_files, binary)
+**Upload behavior:**
+- Uses local case directory as source
+- Uploads only specified directories (default: othd_files, oisd_files, binary)
+- `--force` creates missing remote directories before uploading
 - Shows transfer progress with file counts
-- Preserves remote directory structure locally
+- Preserves local directory structure on remote
 - Supports tilde expansion (`~/cases/mycase`)
 
 **Example workflow:**
@@ -279,15 +283,15 @@ ff case download mycase --to myserver
 ff remote add hpc-cluster --user jane --ip 192.168.10.50 --password xyz
 ff remote set-path hpc-cluster /home/jane/projects
 
-# Later: Download completed simulation
-ff case download mySimulation --to hpc-cluster
+# Later: Upload completed simulation
+ff case upload mySimulation --to hpc-cluster
 
-# Download specific output files only
-ff case download mySimulation --to hpc-cluster --dir othd_files
+# Upload specific output files only
+ff case upload mySimulation --to hpc-cluster --dir othd_files
 
-# Download to different location
+# Upload to different remote base location
 cd /local/storage
-ff case download ../mySimulation --to hpc-cluster --remote-path /alternate/path
+ff case upload ../mySimulation --to hpc-cluster --remote-path /alternate/path
 ```
 
 ## Data Inspection

@@ -1,4 +1,4 @@
-"""Tests for case download command."""
+"""Tests for case upload command."""
 
 import os
 import pytest
@@ -9,7 +9,7 @@ from src.utils.remote_config import RemoteConfig
 
 
 class TestCaseDownloadCommand:
-    """Test suite for case download command."""
+    """Test suite for case upload command."""
 
     @pytest.fixture
     def download_cmd(self):
@@ -126,14 +126,15 @@ class TestCaseDownloadCommand:
         )
         assert result == '/home/user/cases/myCase'
 
-    def test_download_directory_success(self, download_cmd):
-        """Test successful directory download."""
+    def test_upload_directory_success(self, download_cmd):
+        """Test successful directory upload."""
         mock_ssh = Mock()
         mock_ssh.remote_path_exists.return_value = True
         mock_ssh.remote_is_dir.return_value = True
-        mock_ssh.download_directory.return_value = 5
+        mock_ssh.upload_directory.return_value = 5
 
         with tempfile.TemporaryDirectory() as tmpdir:
+            os.makedirs(os.path.join(tmpdir, 'othd_files'), exist_ok=True)
             result = download_cmd.download_directory(
                 mock_ssh,
                 '/remote/case',
@@ -144,10 +145,24 @@ class TestCaseDownloadCommand:
             mock_ssh.remote_path_exists.assert_called_once_with('/remote/case/othd_files')
             mock_ssh.remote_is_dir.assert_called_once_with('/remote/case/othd_files')
 
-    def test_download_directory_not_exists(self, download_cmd, capsys):
-        """Test download when remote directory doesn't exist."""
+    def test_upload_directory_remote_not_exists(self, download_cmd, capsys):
+        """Test upload when remote directory doesn't exist and force is false."""
         mock_ssh = Mock()
         mock_ssh.remote_path_exists.return_value = False
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            os.makedirs(os.path.join(tmpdir, 'othd_files'), exist_ok=True)
+            result = download_cmd.download_directory(
+                mock_ssh,
+                '/remote/case',
+                tmpdir,
+                'othd_files'
+            )
+            assert result is False
+
+    def test_upload_directory_local_not_exists(self, download_cmd, capsys):
+        """Test upload when local directory doesn't exist."""
+        mock_ssh = Mock()
 
         with tempfile.TemporaryDirectory() as tmpdir:
             result = download_cmd.download_directory(
@@ -158,13 +173,14 @@ class TestCaseDownloadCommand:
             )
             assert result is False
 
-    def test_download_directory_not_a_dir(self, download_cmd, capsys):
-        """Test download when remote path is not a directory."""
+    def test_upload_directory_remote_not_a_dir(self, download_cmd, capsys):
+        """Test upload when remote path is not a directory."""
         mock_ssh = Mock()
         mock_ssh.remote_path_exists.return_value = True
         mock_ssh.remote_is_dir.return_value = False
 
         with tempfile.TemporaryDirectory() as tmpdir:
+            os.makedirs(os.path.join(tmpdir, 'othd_files'), exist_ok=True)
             result = download_cmd.download_directory(
                 mock_ssh,
                 '/remote/case',
@@ -173,14 +189,15 @@ class TestCaseDownloadCommand:
             )
             assert result is False
 
-    def test_download_directory_transfer_error(self, download_cmd, capsys):
-        """Test download with transfer error."""
+    def test_upload_directory_transfer_error(self, download_cmd, capsys):
+        """Test upload with transfer error."""
         mock_ssh = Mock()
         mock_ssh.remote_path_exists.return_value = True
         mock_ssh.remote_is_dir.return_value = True
-        mock_ssh.download_directory.side_effect = IOError("Transfer failed")
+        mock_ssh.upload_directory.side_effect = IOError("Transfer failed")
 
         with tempfile.TemporaryDirectory() as tmpdir:
+            os.makedirs(os.path.join(tmpdir, 'othd_files'), exist_ok=True)
             result = download_cmd.download_directory(
                 mock_ssh,
                 '/remote/case',
@@ -188,31 +205,57 @@ class TestCaseDownloadCommand:
                 'othd_files'
             )
             assert result is False
+
+    def test_upload_directory_remote_not_exists_with_force(self, download_cmd):
+        """Test upload when remote directory doesn't exist but force is true."""
+        mock_ssh = Mock()
+        mock_ssh.remote_path_exists.return_value = False
+        mock_ssh.make_remote_dir.return_value = True
+        mock_ssh.remote_is_dir.return_value = True
+        mock_ssh.upload_directory.return_value = 1
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            os.makedirs(os.path.join(tmpdir, 'othd_files'), exist_ok=True)
+            result = download_cmd.download_directory(
+                mock_ssh,
+                '/remote/case',
+                tmpdir,
+                'othd_files',
+                force=True
+            )
+            assert result is True
+            mock_ssh.make_remote_dir.assert_called_once_with('/remote/case/othd_files')
 
     def test_execute_download_no_case(self, download_cmd, capsys):
         """Test execute with no case argument."""
         args = Mock()
         args.case = None
         args.to = 'remote'
+        args.force = False
 
         result = download_cmd.execute_download(args)
         assert result == 1
 
     def test_execute_download_invalid_remote(self, download_cmd):
         """Test execute with invalid remote."""
-        args = Mock()
-        args.case = './mycase'
-        args.to = 'nonexistent'
-        args.dir = None
-        args.remote_path = None
+        with tempfile.TemporaryDirectory() as tmpdir:
+            case_path = os.path.join(tmpdir, 'mycase')
+            os.makedirs(case_path, exist_ok=True)
 
-        with patch.object(
-            download_cmd.remote_config,
-            'remote_exists',
-            return_value=False
-        ):
-            result = download_cmd.execute_download(args)
-            assert result == 1
+            args = Mock()
+            args.case = case_path
+            args.to = 'nonexistent'
+            args.dir = None
+            args.remote_path = None
+            args.force = False
+
+            with patch.object(
+                download_cmd.remote_config,
+                'remote_exists',
+                return_value=False
+            ):
+                result = download_cmd.execute_download(args)
+                assert result == 1
 
     @patch('src.commands.case.download_impl.command.SSHClientWrapper')
     def test_execute_download_success(self, mock_ssh_class, download_cmd):
@@ -220,17 +263,19 @@ class TestCaseDownloadCommand:
         mock_ssh = Mock()
         mock_ssh.remote_path_exists.return_value = True
         mock_ssh.remote_is_dir.return_value = True
-        mock_ssh.download_directory.return_value = 5
+        mock_ssh.upload_directory.return_value = 5
         mock_ssh_class.return_value = mock_ssh
 
         args = Mock()
         args.case = './mycase'
         args.to = 'test-remote'
-        args.dir = None
+        args.dir = 'othd_files'
         args.remote_path = None
+        args.force = False
 
         with tempfile.TemporaryDirectory() as tmpdir:
             args.case = os.path.join(tmpdir, 'mycase')
+            os.makedirs(os.path.join(args.case, 'othd_files'), exist_ok=True)
 
             with patch.object(
                 download_cmd.remote_config,
@@ -249,7 +294,7 @@ class TestCaseDownloadCommand:
                     }
                 ):
                     result = download_cmd.execute_download(args)
-                    assert result == 0 or result == 1  # May succeed depending on mocking
+                    assert result == 0
 
     @patch('src.commands.case.download_impl.command.SSHClientWrapper')
     def test_execute_download_connection_error(self, mock_ssh_class, download_cmd):
@@ -263,9 +308,11 @@ class TestCaseDownloadCommand:
         args.to = 'test-remote'
         args.dir = None
         args.remote_path = None
+        args.force = False
 
         with tempfile.TemporaryDirectory() as tmpdir:
             args.case = os.path.join(tmpdir, 'mycase')
+            os.makedirs(args.case, exist_ok=True)
 
             with patch.object(
                 download_cmd.remote_config,

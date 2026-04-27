@@ -285,7 +285,7 @@ def show_remote_help():
     {Colors.YELLOW}--ip <ip>{Colors.RESET}           IP address or hostname
     {Colors.YELLOW}--password <pass>{Colors.RESET}   SSH password (stored in plain text)
     {Colors.YELLOW}--port <port>{Colors.RESET}       SSH port (default: 22)
-    {Colors.YELLOW}--path <path>{Colors.RESET}       Base directory on remote for case downloads
+    {Colors.YELLOW}--path <path>{Colors.RESET}       Base directory on remote for case uploads
     {Colors.YELLOW}-h, --help{Colors.RESET}         Show this help message
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}

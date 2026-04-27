@@ -315,6 +315,57 @@ class SSHClientWrapper:
         _recursive_upload(local_dir, remote_dir)
         return files_uploaded
 
+    def make_remote_dir(self, remote_path: str) -> bool:
+        """
+        Create remote directory recursively if it doesn't exist.
+
+        Args:
+            remote_path: Remote directory path
+
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self.sftp_client:
+            return False
+
+        normalized_path = remote_path.strip()
+        if not normalized_path:
+            return False
+
+        try:
+            # Check if path already exists
+            self.sftp_client.stat(normalized_path)
+            return True
+        except FileNotFoundError:
+            # Path doesn't exist, need to create it
+            pass
+        except Exception:
+            return False
+
+        # Create directories recursively
+        path_parts = [part for part in normalized_path.split('/') if part]
+        if not path_parts:
+            return False
+
+        current_path = ""
+        is_absolute = normalized_path.startswith("/")
+
+        for part in path_parts:
+            if is_absolute:
+                current_path = f"{current_path}/{part}"
+            else:
+                current_path = f"{current_path}/{part}" if current_path else part
+
+            try:
+                self.sftp_client.stat(current_path)
+            except FileNotFoundError:
+                try:
+                    self.sftp_client.mkdir(current_path)
+                except Exception:
+                    return False
+
+        return True
+
     def _ensure_remote_dir_exists(self, remote_path: str) -> None:
         """Create remote directory if it doesn't exist."""
         if not self.sftp_client:
