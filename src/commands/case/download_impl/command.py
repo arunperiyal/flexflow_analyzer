@@ -1,11 +1,11 @@
 """Case upload command implementation."""
 
 import os
-import sys
 from pathlib import Path
 from typing import Optional, List
 from src.utils.ssh_client import SSHClientWrapper
 from src.utils.remote_config import RemoteConfig
+from ...case_iteration import is_wildcard_case, load_cases_from_directory
 from rich.console import Console
 from rich.progress import Progress
 from rich.table import Table
@@ -34,6 +34,14 @@ class CaseUploadCommand:
             return None
 
         return self.remote_config.get_remote(remote_name)
+
+    def _get_cases_base_dir(self) -> Path:
+        """Return directory used to resolve .cases for wildcard mode."""
+        from src.cli.interactive import InteractiveShell
+
+        if hasattr(InteractiveShell, "_instance") and InteractiveShell._instance:
+            return InteractiveShell._instance._current_dir
+        return Path.cwd()
 
     def validate_case_path(self, case_path: str) -> Optional[str]:
         """
@@ -234,13 +242,6 @@ class CaseUploadCommand:
         if not case_path:
             return 1
 
-        if not os.path.exists(case_path):
-            self.console.print(f"[red]Error:[/red] Local case path not found: {case_path}")
-            return 1
-        if not os.path.isdir(case_path):
-            self.console.print(f"[red]Error:[/red] Local case path is not a directory: {case_path}")
-            return 1
-
         if not args.to:
             self.console.print(
                 "[red]Error:[/red] Remote machine not provided. Use --to or 'use remote:<name>' in interactive shell."
@@ -259,6 +260,102 @@ class CaseUploadCommand:
 
         # Get remote base path
         remote_base = self.get_remote_base_path(remote, args.remote_path)
+
+        # Wildcard mode: iterate all cases from .cases
+        if is_wildcard_case(case_path):
+            base_dir = self._get_cases_base_dir()
+            cases = load_cases_from_directory(base_dir)
+            if not cases:
+                self.console.print(
+                    f"[red]Error:[/red] No cases found in .cases at {base_dir}"
+                )
+                return 1
+
+            self.console.print()
+            self.console.print(
+                f"[bold cyan]Case Upload Summary[/bold cyan] [dim](wildcard mode: {len(cases)} cases)[/dim]"
+            )
+            self.console.print()
+
+            table = Table(box=box.SIMPLE, show_header=True, header_style="bold yellow")
+            table.add_column("Parameter", style="cyan")
+            table.add_column("Value", style="white")
+            table.add_row("Case Selection", "* (all cases from .cases)")
+            table.add_row("Cases Base Dir", str(base_dir))
+            table.add_row("Remote Machine", args.to)
+            table.add_row("Remote Host", f"{remote['user']}@{remote['ip']}:{remote['port']}")
+            table.add_row("Remote Base Path", remote_base)
+            table.add_row("Directories", ", ".join(directories))
+            table.add_row("Force Create Missing Dir", "Yes" if force_enabled else "No")
+            self.console.print(table)
+            self.console.print()
+
+            try:
+                ssh = SSHClientWrapper(
+                    host=remote["ip"],
+                    username=remote["user"],
+                    password=remote["password"],
+                    port=remote.get("port", 22)
+                )
+
+                self.console.print("[cyan]Connecting to remote server...[/cyan]")
+                ssh.connect()
+                self.console.print("[green]✓[/green] Connected successfully")
+                self.console.print()
+
+                success_count = 0
+                total_targets = len(cases) * len(directories)
+
+                for idx, case_entry in enumerate(cases, 1):
+                    entry_path = case_entry.get("path")
+                    entry_name = case_entry.get("name", f"case-{idx}")
+
+                    self.console.print(
+                        f"[bold]Case {idx}/{len(cases)}:[/bold] [cyan]{entry_name}[/cyan]"
+                    )
+
+                    if not entry_path:
+                        self.console.print("[yellow]Warning:[/yellow] Missing case path in .cases entry")
+                        self.console.print()
+                        continue
+
+                    if not os.path.exists(entry_path) or not os.path.isdir(entry_path):
+                        self.console.print(
+                            f"[yellow]Warning:[/yellow] Local case directory not found: {entry_path}"
+                        )
+                        self.console.print()
+                        continue
+
+                    remote_case_path = self.construct_remote_case_path(remote_base, entry_path)
+                    self.console.print(f"[dim]Remote case path: {remote_case_path}[/dim]")
+
+                    for directory in directories:
+                        if self.upload_directory(
+                            ssh,
+                            remote_case_path,
+                            entry_path,
+                            directory,
+                            force=force_enabled
+                        ):
+                            success_count += 1
+                    self.console.print()
+
+                ssh.disconnect()
+                self.console.print(
+                    f"[green]✓[/green] Upload complete: {success_count}/{total_targets} directories"
+                )
+                return 0 if success_count > 0 else 1
+
+            except Exception as e:
+                self.console.print(f"[red]Error:[/red] {e}")
+                return 1
+
+        if not os.path.exists(case_path):
+            self.console.print(f"[red]Error:[/red] Local case path not found: {case_path}")
+            return 1
+        if not os.path.isdir(case_path):
+            self.console.print(f"[red]Error:[/red] Local case path is not a directory: {case_path}")
+            return 1
 
         # Construct remote case path
         remote_case_path = self.construct_remote_case_path(remote_base, case_path)

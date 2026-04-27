@@ -1965,6 +1965,7 @@ class InteractiveShell:
         self.console.print("  use case:*; case check --run           [dim]# Run check on all cases[/dim]")
         self.console.print("  use case:*; data show                  [dim]# Show data for all cases[/dim]")
         self.console.print("  use case:*; case status                [dim]# Status for all cases[/dim]")
+        self.console.print("  use case:*; case upload --to cloud     [dim]# Upload matching dirs for all cases[/dim]")
         self.console.print("  use case:*; case create --dry-run      [dim]# Dry run for all cases[/dim]")
         self.console.print()
 

@@ -257,6 +257,82 @@ class TestCaseDownloadCommand:
                 result = download_cmd.execute_download(args)
                 assert result == 1
 
+    def test_execute_download_wildcard_no_cases(self, download_cmd):
+        """Test wildcard upload when .cases is empty."""
+        args = Mock()
+        args.case = '*'
+        args.to = 'test-remote'
+        args.dir = 'othd_files'
+        args.remote_path = None
+        args.force = False
+
+        with patch.object(
+            download_cmd.remote_config,
+            'remote_exists',
+            return_value=True
+        ):
+            with patch.object(
+                download_cmd.remote_config,
+                'get_remote',
+                return_value={
+                    'user': 'testuser',
+                    'ip': '192.168.1.100',
+                    'port': 22,
+                    'password': 'testpass',
+                    'path': '/home/testuser'
+                }
+            ):
+                with patch('src.commands.case.download_impl.command.load_cases_from_directory', return_value=[]):
+                    result = download_cmd.execute_download(args)
+                    assert result == 1
+
+    @patch('src.commands.case.download_impl.command.SSHClientWrapper')
+    def test_execute_download_wildcard_success(self, mock_ssh_class, download_cmd):
+        """Test wildcard upload iterates over all cases."""
+        mock_ssh = Mock()
+        mock_ssh.remote_path_exists.return_value = True
+        mock_ssh.remote_is_dir.return_value = True
+        mock_ssh.upload_directory.return_value = 3
+        mock_ssh_class.return_value = mock_ssh
+
+        args = Mock()
+        args.case = '*'
+        args.to = 'test-remote'
+        args.dir = 'othd_files'
+        args.remote_path = None
+        args.force = False
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            case1 = os.path.join(tmpdir, 'Case001')
+            case2 = os.path.join(tmpdir, 'Case002')
+            os.makedirs(os.path.join(case1, 'othd_files'), exist_ok=True)
+            os.makedirs(os.path.join(case2, 'othd_files'), exist_ok=True)
+            cases = [
+                {'name': 'Case001', 'path': case1},
+                {'name': 'Case002', 'path': case2},
+            ]
+
+            with patch.object(
+                download_cmd.remote_config,
+                'remote_exists',
+                return_value=True
+            ):
+                with patch.object(
+                    download_cmd.remote_config,
+                    'get_remote',
+                    return_value={
+                        'user': 'testuser',
+                        'ip': '192.168.1.100',
+                        'port': 22,
+                        'password': 'testpass',
+                        'path': '/home/testuser'
+                    }
+                ):
+                    with patch('src.commands.case.download_impl.command.load_cases_from_directory', return_value=cases):
+                        result = download_cmd.execute_download(args)
+                        assert result == 0
+                        assert mock_ssh.upload_directory.call_count == 2
+
     @patch('src.commands.case.download_impl.command.SSHClientWrapper')
     def test_execute_download_success(self, mock_ssh_class, download_cmd):
         """Test successful download execution."""
