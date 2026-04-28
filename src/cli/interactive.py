@@ -10,6 +10,7 @@ import sys
 import shlex
 import subprocess
 import io
+from datetime import datetime
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional, List, Dict, Any
@@ -298,6 +299,8 @@ class FlexFlowCompleter(Completer):
             '--show':       'Display script contents',
             '--restart':    'Restart from specific timestep',
             '--reset':      'Comment out restartFlag/restartTsId and start fresh',
+            '--np':         'Set #SBATCH -n/--ntasks in script before submission',
+            '-n':           'Set #SBATCH -n/--ntasks in script before submission',
             '--dependency': 'Job dependency (job ID)',
             '--partition':  'Apply partition header to script',
             '--wall-time':  'Override wall time for this submission only (HH:MM:SS)',
@@ -401,7 +404,7 @@ class FlexFlowCompleter(Completer):
         ('help',    'Show help message'),
         ('?',       'Show help message'),
         ('clear',   'Clear screen'),
-        ('history', 'Show command history'),
+        ('history', 'Show command history (use --unique for deduped view)'),
         ('pwd',     'Show current directory and contexts'),
         ('ls',      'List files'),
         ('alias',   'Define or list command aliases'),
@@ -423,6 +426,13 @@ class FlexFlowCompleter(Completer):
         ('vim',     'Edit a file in vim'),
         ('nano',    'Edit a file in nano'),
     ]
+
+    _HISTORY_FLAGS: Dict[str, str] = {
+        '--unique': 'Show only most recent unique commands',
+        '-u': 'Show only most recent unique commands',
+        '--help': 'Show history command help',
+        '-h': 'Show history command help',
+    }
 
     # ---------------------------------------------------------------------------
 
@@ -543,6 +553,14 @@ class FlexFlowCompleter(Completer):
             return
         if cmd_name == 'unuse':
             yield from self._complete_unuse_command(words, ends_with_space)
+            return
+
+        # ── history ─────────────────────────────────────────────────────────────
+        if cmd_name == 'history':
+            current_word = '' if ends_with_space else words[-1]
+            for flag, desc in self._HISTORY_FLAGS.items():
+                if flag.startswith(current_word):
+                    yield Completion(flag, start_position=-len(current_word), display_meta=desc)
             return
 
         # ── file-browsing commands ───────────────────────────────────────────
@@ -787,6 +805,7 @@ class InteractiveShell:
         self.console = Console()
         self.running = True
         self.history_file = self._get_history_file()
+        self._compact_history_file(log_summary=False)
         self._aliases: dict = self._load_aliases()
         self.session = self._create_session()
 
@@ -1020,7 +1039,16 @@ class InteractiveShell:
 
         # Show history
         if cmd == 'history':
-            self.show_history()
+            flags = parts[1:]
+            if not flags:
+                self.show_history()
+            elif len(flags) == 1 and flags[0] in ['--unique', '-u']:
+                self.show_history(unique=True)
+            elif len(flags) == 1 and flags[0] in ['--help', '-h', 'help']:
+                self.show_history_help()
+            else:
+                self.console.print("[yellow]Usage:[/yellow] history [--unique]")
+                self.console.print("[dim]Use 'history --help' for details[/dim]")
             return True
 
         # Set context with subcommands
@@ -1443,7 +1471,7 @@ class InteractiveShell:
             ("help, ?", "Show this help message"),
             ("exit, quit", "Exit FlexFlow"),
             ("clear", "Clear the screen"),
-            ("history", "Show command history"),
+            ("history [--unique]", "Show command history (deduped with --unique)"),
             ("pwd", "Show current directory and contexts"),
             ("quota", "Show disk quota for /home and /scratch"),
         ]
@@ -1504,25 +1532,120 @@ class InteractiveShell:
         self.console.print(pipe_table)
         self.console.print()
 
-    def show_history(self) -> None:
-        """Show command history."""
+    def _read_history_entries(self) -> List[str]:
+        """Read history entries in newest-first order."""
         if not self.history_file.exists():
-            self.console.print("[dim]No command history yet.[/dim]")
-            return
+            return []
+        return list(FileHistory(str(self.history_file)).load_history_strings())
 
+    @staticmethod
+    def _dedupe_history_entries(entries: List[str]) -> List[str]:
+        """
+        Deduplicate newest-first entries while keeping the most recent instance.
+
+        Args:
+            entries: History entries in newest-first order
+
+        Returns:
+            Deduplicated entries in newest-first order
+        """
+        seen = set()
+        unique_entries = []
+        for entry in entries:
+            if entry in seen:
+                continue
+            seen.add(entry)
+            unique_entries.append(entry)
+        return unique_entries
+
+    def _write_history_entries(self, entries_newest_first: List[str]) -> None:
+        """
+        Write history entries in prompt_toolkit file format.
+
+        Args:
+            entries_newest_first: History entries in newest-first order
+        """
+        self.history_file.parent.mkdir(exist_ok=True)
+        with open(self.history_file, 'w', encoding='utf-8') as f:
+            # FileHistory expects oldest first on disk.
+            for entry in reversed(entries_newest_first):
+                f.write(f"\n# {datetime.now().isoformat(sep=' ', timespec='seconds')}\n")
+                for line in entry.split('\n'):
+                    f.write(f"+{line}\n")
+
+    def _compact_history_file(self, log_summary: bool = False) -> int:
+        """
+        Compact history by removing duplicate commands.
+
+        Args:
+            log_summary: Whether to print a summary message
+
+        Returns:
+            Number of duplicate entries removed
+        """
         try:
-            with open(self.history_file, 'r') as f:
-                lines = f.readlines()
+            entries = self._read_history_entries()
+            if not entries:
+                return 0
+
+            unique_entries = self._dedupe_history_entries(entries)
+            removed = len(entries) - len(unique_entries)
+            if removed > 0:
+                self._write_history_entries(unique_entries)
+                if log_summary:
+                    self.console.print(f"[dim]History compacted: removed {removed} duplicate entries[/dim]")
+            return removed
+        except Exception as e:
+            if log_summary:
+                self.console.print(f"[yellow]Warning: could not compact history: {e}[/yellow]")
+            return 0
+
+    def show_history_help(self) -> None:
+        """Show help for history command."""
+        self.console.print()
+        self.console.print("[bold cyan]History Command[/bold cyan]")
+        self.console.print()
+        self.console.print("[bold]USAGE:[/bold]")
+        self.console.print("  history")
+        self.console.print("  history --unique")
+        self.console.print()
+        self.console.print("[bold]OPTIONS:[/bold]")
+        self.console.print("  --unique, -u   Show only the latest unique commands")
+        self.console.print("  --help, -h     Show this help message")
+        self.console.print()
+
+    def show_history(self, unique: bool = False) -> None:
+        """
+        Show command history.
+
+        Args:
+            unique: Show only the most recent instance of each command
+        """
+        try:
+            entries = self._read_history_entries()
+            if not entries:
+                self.console.print("[dim]No command history yet.[/dim]")
+                return
+
+            display_entries = self._dedupe_history_entries(entries) if unique else entries
+            title = "Command History (Unique)" if unique else "Command History"
 
             self.console.print()
-            self.console.print("[bold]Command History:[/bold]")
-            for i, line in enumerate(lines[-20:], 1):  # Show last 20
-                self.console.print(f"  [dim]{i:2d}[/dim]  {line.strip()}")
+            self.console.print(f"[bold]{title}:[/bold]")
+            for i, entry in enumerate(display_entries[:20], 1):
+                compact_entry = entry.replace('\n', ' ; ')
+                self.console.print(f"  [dim]{i:2d}[/dim]  {compact_entry}")
             self.console.print()
 
-            if len(lines) > 20:
-                self.console.print(f"[dim]... showing last 20 of {len(lines)} commands[/dim]")
+            if len(display_entries) > 20:
+                self.console.print(f"[dim]... showing most recent 20 of {len(display_entries)} commands[/dim]")
                 self.console.print()
+
+            if unique:
+                removed = len(entries) - len(display_entries)
+                if removed > 0:
+                    self.console.print(f"[dim]{removed} duplicate entries hidden (use 'history' to view all)[/dim]")
+                    self.console.print()
 
         except Exception as e:
             self.console.print(f"[red]Error reading history: {e}[/red]")
@@ -3491,5 +3614,6 @@ class InteractiveShell:
                 import traceback
                 traceback.print_exc()
 
+        self._compact_history_file(log_summary=False)
         self.print_goodbye()
         return 0

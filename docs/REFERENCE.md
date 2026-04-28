@@ -15,7 +15,7 @@ ff                    # Start interactive shell
 | `help` or `?` | Show all commands | `help` |
 | `exit` or `quit` | Exit FlexFlow | `exit` |
 | `clear` | Clear screen | `clear` |
-| `history` | Show command history | `history` |
+| `history [--unique]` | Show command history (dedupe view with `--unique`) | `history --unique` |
 | `pwd` | Show current directory & case | `pwd` |
 
 ## Browsing Commands

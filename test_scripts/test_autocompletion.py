@@ -4,6 +4,7 @@ import pytest
 from src.cli.interactive import FlexFlowCompleter
 from src.cli.registry import registry
 from unittest.mock import Mock, patch
+from prompt_toolkit.document import Document
 
 
 class TestAutocompletion:
@@ -84,6 +85,12 @@ class TestAutocompletion:
         assert '--all' in flags
         assert '--watch' in flags
 
+    def test_run_main_np_flags_defined(self, completer):
+        """Test -n/--np flags in run main are defined."""
+        flags = completer._flags_for('run', 'main')
+        assert '--np' in flags
+        assert '-n' in flags
+
     def test_subcommands_in_completer(self, completer):
         """Test that subcommands dict is properly updated."""
         # Verify that both 'remote' and 'upload' are in the subcommands dict
@@ -126,6 +133,17 @@ class TestAutocompletion:
         upload_flags = completer._flags_for('case', 'upload')
         assert len(upload_flags['--to']) > 0
         assert 'remote' in upload_flags['--to'].lower()
+
+    def test_history_flag_completion(self, completer):
+        """Test history command flag completions."""
+        completions = list(completer.get_completions(Document("history --u"), None))
+        texts = {c.text for c in completions}
+        assert '--unique' in texts
+
+        completions = list(completer.get_completions(Document("history "), None))
+        texts = {c.text for c in completions}
+        assert '--unique' in texts
+        assert '--help' in texts
 
 
 if __name__ == "__main__":

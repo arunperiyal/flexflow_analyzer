@@ -258,6 +258,10 @@ def show_dry_run(script_path, case_dir, args, console):
         else:
             table.add_row("Partition Override", f"[bold yellow]{partition_override}[/bold yellow] (via sbatch CLI)")
 
+    np_dry = getattr(args, 'np', None)
+    if np_dry is not None:
+        table.add_row("Task Override", f"[bold yellow]{np_dry}[/bold yellow] [dim](will update #SBATCH -n in script before submit)[/dim]")
+
     # Check for wall-time override
     wall_time_dry = getattr(args, 'wall_time', None)
     if wall_time_dry:
@@ -377,7 +381,52 @@ def _parse_script_sbatch(script_path) -> dict:
     return result
 
 
-def check_task_consistency(script_path, case_dir, console) -> bool:
+def _set_script_ntasks(script_path: Path, ntasks: int, console) -> bool:
+    """
+    Update #SBATCH -n/--ntasks in the script.
+
+    If no ntasks directive exists, add one after the SBATCH header block.
+    """
+    import re
+
+    try:
+        lines = script_path.read_text().splitlines(keepends=True)
+    except Exception as e:
+        console.print(f"[red]Error reading {script_path.name}: {e}[/red]")
+        return False
+
+    ntasks_pattern = re.compile(r'(^\s*#SBATCH\s+(?:-n|--ntasks)(?:=|\s+))\d+')
+    updated = False
+
+    for i, line in enumerate(lines):
+        if ntasks_pattern.search(line):
+            lines[i] = ntasks_pattern.sub(rf'\g<1>{ntasks}', line, count=1)
+            updated = True
+
+    if not updated:
+        insert_idx = None
+        for i, line in enumerate(lines):
+            if line.strip().startswith('#SBATCH'):
+                insert_idx = i + 1
+        new_line = f"#SBATCH --ntasks={ntasks}\n"
+        if insert_idx is not None:
+            lines.insert(insert_idx, new_line)
+        elif lines and lines[0].startswith('#!'):
+            lines.insert(1, new_line)
+        else:
+            lines.insert(0, new_line)
+
+    try:
+        script_path.write_text(''.join(lines))
+        console.print(f"[dim]Updated {script_path.name}: --ntasks={ntasks}[/dim]")
+        console.print()
+        return True
+    except Exception as e:
+        console.print(f"[red]Error updating {script_path.name}: {e}[/red]")
+        return False
+
+
+def check_task_consistency(script_path, case_dir, console, enforce_np_match: bool = False) -> bool:
     """
     Compare np/nsg in simflow.config with #SBATCH directives in the job script.
 
@@ -403,9 +452,16 @@ def check_task_consistency(script_path, case_dir, console) -> bool:
     if cfg_np is None and cfg_nsg is None:
         return True
 
-    # Check for mismatches (covers both wrong value and missing key)
-    np_mismatch  = cfg_np  is not None and script_n is not None and cfg_np  != script_n
-    nsg_mismatch = expected_nsg is not None and cfg_nsg != expected_nsg
+    if script_n is None:
+        console.print("[red]Error:[/red] Could not determine #SBATCH -n/--ntasks from script.")
+        console.print("[dim]Set task count in mainFlex.sh (or use run main -n N) and retry.[/dim]")
+        console.print()
+        return not enforce_np_match
+
+    # Check for mismatches
+    np_mismatch  = cfg_np != script_n
+    # nsg is informational unless explicitly set
+    nsg_mismatch = cfg_nsg is not None and expected_nsg is not None and cfg_nsg != expected_nsg
 
     # ----------------------------------------------------------------
     # Always show consistency table
@@ -446,7 +502,18 @@ def check_task_consistency(script_path, case_dir, console) -> bool:
     if nsg_mismatch:
         fix['nsg'] = expected_nsg
 
-    if fix:
+    if enforce_np_match:
+        fix_parts = ', '.join(f'{k} = {v}' for k, v in fix.items())
+        console.print(f'[bold]Auto-fix:[/bold] set {fix_parts} in simflow.config')
+        console.print()
+        console.print('  1. Fix simflow.config and submit')
+        console.print('  2. Abort')
+        console.print()
+        console.print('Choice [1/2]: ', end='')
+        valid = {'1', 'f', '2', 'a'}
+        fix_choices = {'1', 'f'}
+        sub_choices = set()
+    elif fix:
         fix_parts = ', '.join(f'{k} = {v}' for k, v in fix.items())
         console.print(f'[bold]Auto-fix:[/bold] set {fix_parts} in simflow.config')
         console.print()
@@ -624,7 +691,29 @@ def submit_main_job(script_path, case_dir, args, console):
     console.print("[bold cyan]Submitting Main Simulation Job[/bold cyan]")
     console.print()
 
-    # Display job info
+    partition_override = getattr(args, 'partition', None)
+    wall_time = getattr(args, 'wall_time', None)
+    np_override = getattr(args, 'np', None)
+    account = getattr(args, 'account', None)
+    qos = getattr(args, 'qos', None)
+
+    # Apply partition header if a template exists for the requested partition
+    header_applied = False
+    if partition_override:
+        header_applied = apply_partition_header(script_path, partition_override, 'main', console)
+        if header_applied:
+            console.print(f"[dim]Applied {partition_override}.header to {script_path.name}[/dim]")
+            console.print()
+
+    # Apply task-count override directly to script before consistency check
+    if np_override is not None:
+        if np_override <= 0:
+            console.print("[red]Error:[/red] -n/--np must be a positive integer.")
+            return
+        if not _set_script_ntasks(script_path, np_override, console):
+            return
+
+    # Display job info after any script modifications
     table = Table(box=box.SIMPLE, show_header=False)
     table.add_column("Field", style="cyan")
     table.add_column("Value")
@@ -640,47 +729,34 @@ def submit_main_job(script_path, case_dir, args, console):
     if hasattr(args, 'dependency') and args.dependency:
         table.add_row("Dependency", f"Wait for job {args.dependency}")
 
-    # Parse SBATCH info
     sbatch_info = parse_sbatch_directives(script_path)
     if sbatch_info.get('Job Name'):
         table.add_row("Job Name", sbatch_info['Job Name'])
 
-    partition_override = getattr(args, 'partition', None)
     if partition_override:
         script_partition = sbatch_info.get('Partition', '—')
-        table.add_row("Partition", f"[bold yellow]{partition_override}[/bold yellow] [dim](script: {script_partition})[/dim]")
+        table.add_row("Partition", f"[bold yellow]{script_partition}[/bold yellow]")
     elif sbatch_info.get('Partition'):
         table.add_row("Partition", sbatch_info['Partition'])
 
     if sbatch_info.get('Tasks'):
         table.add_row("Tasks", sbatch_info['Tasks'])
 
-    wall_time = getattr(args, 'wall_time', None)
     if wall_time:
         table.add_row("Wall Time", f"[bold yellow]{wall_time}[/bold yellow] [dim](this submission only)[/dim]")
 
-    account = getattr(args, 'account', None)
     if account:
         table.add_row("Account", f"[bold yellow]{account}[/bold yellow]")
 
-    qos = getattr(args, 'qos', None)
     if qos:
         table.add_row("QOS", f"[bold yellow]{qos}[/bold yellow]")
 
     console.print(table)
     console.print()
 
-    # Check np/nsg consistency; abort if user declines
-    if not check_task_consistency(script_path, case_dir, console):
+    # Enforce np consistency before submission
+    if not check_task_consistency(script_path, case_dir, console, enforce_np_match=True):
         return
-
-    # Apply partition header if a template exists for the requested partition
-    header_applied = False
-    if partition_override:
-        header_applied = apply_partition_header(script_path, partition_override, 'main', console)
-        if header_applied:
-            console.print(f"[dim]Applied {partition_override}.header to {script_path.name}[/dim]")
-            console.print()
 
     try:
         # Build sbatch command
@@ -780,8 +856,9 @@ This runs the primary FlexFlow simulation (mpiSimflow).
 {Colors.BOLD}OPTIONS:{Colors.RESET}
     {Colors.YELLOW}--restart TSID{Colors.RESET}        Restart from specific timestep ID
     {Colors.YELLOW}--reset{Colors.RESET}               Comment out restartFlag/restartTsId and start fresh
+    {Colors.YELLOW}-n, --np N{Colors.RESET}            Set #SBATCH -n/--ntasks in main script before submit
     {Colors.YELLOW}--dependency JOB_ID{Colors.RESET}   Wait for another job to complete first
-    {Colors.YELLOW}--partition NAME{Colors.RESET}       Override partition at submit time (sbatch CLI, script unchanged)
+    {Colors.YELLOW}--partition NAME{Colors.RESET}      Apply partition header to script before submission
     {Colors.YELLOW}--account NAME{Colors.RESET}         Set SLURM account (passed to sbatch)
     {Colors.YELLOW}--qos NAME{Colors.RESET}             Set SLURM QOS (passed to sbatch)
     {Colors.YELLOW}--wall-time HH:MM:SS{Colors.RESET}  Override wall time for this submission only
@@ -803,8 +880,11 @@ This runs the primary FlexFlow simulation (mpiSimflow).
     # Chain after preprocessing
     run main Case001 --dependency 12345
 
-    # Override partition at submit time (does not modify mainFlex.sh)
+    # Apply partition header before submit
     run main Case001 --partition shared
+
+    # Set task count before submit
+    run main Case001 -n 120
 
     # Set account and QOS
     run main Case001 --account myaccount --qos high
