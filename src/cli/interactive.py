@@ -709,7 +709,7 @@ class FlexFlowCompleter(Completer):
                 # Complete remote machine names
                 from src.utils.remote_config import RemoteConfig
                 remote_config = RemoteConfig()
-                for remote_name in remote_config.list_remotes():
+                for remote_name in (r['name'] for r in remote_config.get_all_remotes()):
                     if remote_name.startswith(partial_val):
                         display = f'{ctx}:{remote_name}'
                         yield Completion(
