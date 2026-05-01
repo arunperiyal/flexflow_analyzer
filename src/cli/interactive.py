@@ -1326,7 +1326,18 @@ class InteractiveShell:
 
         # Disk usage
         if cmd == 'du':
-            self._show_du(parts[1:])
+            if '--help' in parts or '-h' in parts:
+                self.console.print("[bold]Usage:[/bold] du [path]")
+                self.console.print("[dim]Options:[/dim]")
+                self.console.print("  -h, --help    Show this help message")
+                self.console.print("[dim]Arguments:[/dim]")
+                self.console.print("  path          Directory to summarise (default: current directory)")
+                self.console.print("[dim]Examples:[/dim]")
+                self.console.print("  du")
+                self.console.print("  du CS4SG1U1/")
+                self.console.print("  du /scratch/ritwikna/short_flex")
+            else:
+                self._show_du(parts[1:])
             return True
 
         # Terminal editors — hand control of the terminal directly to the editor
