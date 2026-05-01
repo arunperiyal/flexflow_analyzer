@@ -9,6 +9,17 @@ from rich.table import Table
 from rich import box
 
 
+def _get_context_rundir() -> 'str | None':
+    """Return the rundir set via 'use rundir' in the interactive shell, or None."""
+    try:
+        from src.cli.interactive import InteractiveShell
+        if hasattr(InteractiveShell, '_instance') and InteractiveShell._instance:
+            return InteractiveShell._instance._current_rundir
+    except Exception:
+        pass
+    return None
+
+
 def execute_report(args):
     """Print a compact status table for all cases in .cases."""
     console = Console()
@@ -16,6 +27,9 @@ def execute_report(args):
     if hasattr(args, 'help') and args.help:
         _show_help(console)
         return
+
+    show_run  = bool(getattr(args, 'run',  False))
+    show_size = bool(getattr(args, 'size', False))
 
     # Locate .cases file
     search_dir = Path(getattr(args, 'dir', None) or '.').resolve()
@@ -30,6 +44,9 @@ def execute_report(args):
         console.print()
         return
 
+    # Resolve context rundir once (used as fallback when simflow.config has no dir)
+    context_rundir = _get_context_rundir() if show_run else None
+
     console.print()
 
     tbl = Table(
@@ -38,20 +55,28 @@ def execute_report(args):
         show_header=True,
         header_style='bold',
     )
-    tbl.add_column('Case',               style='cyan',  no_wrap=True)
-    tbl.add_column('Last (archive)',     justify='right')
-    tbl.add_column('Last (binary PLT)',  justify='right')
-    tbl.add_column('Disk Usage',         justify='right', style='green')
+    tbl.add_column('Case',              style='cyan', no_wrap=True)
+    tbl.add_column('Last (archive)',    justify='right')
+    tbl.add_column('Last (binary PLT)', justify='right')
+    if show_run:
+        tbl.add_column('Last (rundir)', justify='right')
+    if show_size:
+        tbl.add_column('Disk Usage',    justify='right', style='green')
 
     for entry in entries:
         case_path = Path(entry['path'])
         name      = entry['name']
 
         if not case_path.is_dir():
-            tbl.add_row(name, '[red]missing[/red]', '[dim]—[/dim]', '[dim]—[/dim]')
+            row = [name, '[red]missing[/red]', '[dim]—[/dim]']
+            if show_run:
+                row.append('[dim]—[/dim]')
+            if show_size:
+                row.append('[dim]—[/dim]')
+            tbl.add_row(*row)
             continue
 
-        # --- simflow.config (need problem name) ---
+        # --- simflow.config (need problem name + dir key) ---
         cfg     = _parse_config(case_path / 'simflow.config')
         problem = cfg.get('problem', '').strip().strip('"').strip("'") or None
 
@@ -59,14 +84,27 @@ def execute_report(args):
         archive_last = _last_othd_timestep(case_path)
         archive_str  = str(archive_last) if archive_last is not None else '[dim]—[/dim]'
 
-        # --- Column 2: last PLT from binary/ (by modification time) ---
+        # --- Column 2: last PLT from binary/ ---
         binary_last = _last_binary_plt_timestep(case_path, problem)
         binary_str  = str(binary_last) if binary_last is not None else '[dim]—[/dim]'
 
-        # --- Column 3: total disk usage ---
-        disk_str = _fmt_size(_dir_size(case_path))
+        row = [name, archive_str, binary_str]
 
-        tbl.add_row(name, archive_str, binary_str, disk_str)
+        # --- Column 3 (optional): last timestep from rundir ---
+        if show_run:
+            rundir = _resolve_rundir(case_path, cfg, context_rundir)
+            if rundir:
+                run_last = _last_othd_timestep_in_dir(rundir)
+                run_str  = str(run_last) if run_last is not None else '[dim]—[/dim]'
+            else:
+                run_str = '[dim]no rundir[/dim]'
+            row.append(run_str)
+
+        # --- Column 4 (optional): disk usage ---
+        if show_size:
+            row.append(_fmt_size(_dir_size(case_path)))
+
+        tbl.add_row(*row)
 
     console.print(tbl)
     console.print()
@@ -76,13 +114,28 @@ def execute_report(args):
 # Data helpers
 # ---------------------------------------------------------------------------
 
-def _last_othd_timestep(case_path: Path):
-    """Return the highest end-timestep across all .othd files in othd_files/."""
-    othd_dir = case_path / 'othd_files'
-    if not othd_dir.is_dir():
-        return None
+def _resolve_rundir(case_path: Path, cfg: dict, context_rundir: 'str | None') -> 'Path | None':
+    """
+    Determine the run directory for a case.
 
-    files = sorted(othd_dir.glob('*.othd'))
+    Priority: context rundir (absolute) > simflow.config 'dir' key (resolved
+    relative to case_path) > None.
+    """
+    if context_rundir:
+        p = Path(context_rundir)
+        return p if p.is_dir() else None
+
+    dir_val = cfg.get('dir', '').strip().strip('"').strip("'")
+    if dir_val:
+        p = Path(dir_val) if Path(dir_val).is_absolute() else case_path / dir_val
+        return p if p.is_dir() else None
+
+    return None
+
+
+def _last_othd_timestep_in_dir(directory: Path):
+    """Return the highest timestep across all .othd files directly in directory."""
+    files = sorted(directory.glob('*.othd'))
     if not files:
         return None
 
@@ -99,6 +152,14 @@ def _last_othd_timestep(case_path: Path):
             continue
 
     return max_ts
+
+
+def _last_othd_timestep(case_path: Path):
+    """Return the highest end-timestep across all .othd files in othd_files/."""
+    othd_dir = case_path / 'othd_files'
+    if not othd_dir.is_dir():
+        return None
+    return _last_othd_timestep_in_dir(othd_dir)
 
 
 def _last_binary_plt_timestep(case_path: Path, problem: str):
@@ -205,17 +266,20 @@ def _show_help(console):
     console.print("[bold cyan]case report[/bold cyan] — Compact status table for all registered cases")
     console.print()
     console.print("[bold]USAGE:[/bold]")
-    console.print("    case report [--dir PATH]")
+    console.print("    case report [--dir PATH] [--run] [--size]")
     console.print()
     console.print("[bold]OPTIONS:[/bold]")
     console.print("    --dir PATH    Directory containing .cases file (default: current directory)")
+    console.print("    --run         Add column with last timestep from each case's run directory")
+    console.print("    --size        Add column with total disk usage of each case")
     console.print("    -h, --help    Show this help message")
     console.print()
     console.print("[bold]COLUMNS:[/bold]")
     console.print("    Case              Case directory name")
     console.print("    Last (archive)    Highest timestep across all .othd files in othd_files/")
     console.print("    Last (binary PLT) Timestep of the most recently modified PLT in binary/")
-    console.print("    Disk Usage        Total size of the case directory")
+    console.print("    Last (rundir)     Highest timestep from .othd files in run directory (--run)")
+    console.print("    Disk Usage        Total size of the case directory (--size)")
     console.print()
     console.print("[bold]EXAMPLES:[/bold]")
     console.print("    case report")

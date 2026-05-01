@@ -155,6 +155,10 @@ class CaseCommand(BaseCommand):
                                                    help='Print a compact status table for all registered cases')
         report_parser.add_argument('--dir', type=str, metavar='PATH',
                                   help='Directory containing .cases file (default: current directory)')
+        report_parser.add_argument('--run', action='store_true',
+                                  help='Add column with last timestep from run directory')
+        report_parser.add_argument('--size', action='store_true',
+                                  help='Add column with total disk usage of each case')
         report_parser.add_argument('-h', '--help', action='store_true',
                                   help='Show help for report command')
 
