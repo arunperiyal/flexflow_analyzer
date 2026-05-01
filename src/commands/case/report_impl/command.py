@@ -1,5 +1,6 @@
 """case report — compact table of all cases listed in .cases."""
 
+import os
 import re
 from pathlib import Path
 
@@ -37,16 +38,17 @@ def execute_report(args):
         show_header=True,
         header_style='bold',
     )
-    tbl.add_column('Case',              style='cyan',   no_wrap=True)
-    tbl.add_column('Last (archive)',    justify='right')
-    tbl.add_column('Last (binary PLT)', justify='right')
+    tbl.add_column('Case',               style='cyan',  no_wrap=True)
+    tbl.add_column('Last (archive)',     justify='right')
+    tbl.add_column('Last (binary PLT)',  justify='right')
+    tbl.add_column('Disk Usage',         justify='right', style='green')
 
     for entry in entries:
         case_path = Path(entry['path'])
         name      = entry['name']
 
         if not case_path.is_dir():
-            tbl.add_row(name, '[red]missing[/red]', '—')
+            tbl.add_row(name, '[red]missing[/red]', '[dim]—[/dim]', '[dim]—[/dim]')
             continue
 
         # --- simflow.config (need problem name) ---
@@ -61,7 +63,10 @@ def execute_report(args):
         binary_last = _last_binary_plt_timestep(case_path, problem)
         binary_str  = str(binary_last) if binary_last is not None else '[dim]—[/dim]'
 
-        tbl.add_row(name, archive_str, binary_str)
+        # --- Column 3: total disk usage ---
+        disk_str = _fmt_size(_dir_size(case_path))
+
+        tbl.add_row(name, archive_str, binary_str, disk_str)
 
     console.print(tbl)
     console.print()
@@ -139,6 +144,34 @@ def _extract_plt_step(filename: str, problem: str) -> 'int | None':
 
 
 # ---------------------------------------------------------------------------
+# Disk usage helpers
+# ---------------------------------------------------------------------------
+
+def _dir_size(path: Path) -> int:
+    """Return total byte size of all files under path."""
+    total = 0
+    try:
+        for dirpath, _, filenames in os.walk(path):
+            for f in filenames:
+                try:
+                    total += os.path.getsize(os.path.join(dirpath, f))
+                except OSError:
+                    pass
+    except OSError:
+        pass
+    return total
+
+
+def _fmt_size(n: int) -> str:
+    """Human-readable byte size (e.g. 1.4 GB)."""
+    for unit in ('B', 'KB', 'MB', 'GB', 'TB'):
+        if n < 1024:
+            return f"{n} {unit}" if unit == 'B' else f"{n:.1f} {unit}"
+        n /= 1024
+    return f"{n:.1f} PB"
+
+
+# ---------------------------------------------------------------------------
 # Config parser
 # ---------------------------------------------------------------------------
 
@@ -182,6 +215,7 @@ def _show_help(console):
     console.print("    Case              Case directory name")
     console.print("    Last (archive)    Highest timestep across all .othd files in othd_files/")
     console.print("    Last (binary PLT) Timestep of the most recently modified PLT in binary/")
+    console.print("    Disk Usage        Total size of the case directory")
     console.print()
     console.print("[bold]EXAMPLES:[/bold]")
     console.print("    case report")
