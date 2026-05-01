@@ -2640,10 +2640,27 @@ class InteractiveShell:
             self.console.print("[yellow]Error: no paths specified[/yellow]")
             return
 
+        import glob as glob_module
+
+        expanded_paths: List[str] = []
+        for raw in raw_paths:
+            if any(c in raw for c in ('*', '?', '[')):
+                base = self._current_dir / raw
+                matches = sorted(glob_module.glob(str(base)))
+                if matches:
+                    expanded_paths.extend(matches)
+                else:
+                    self.console.print(f"[yellow]No matches: {raw}[/yellow]")
+            else:
+                expanded_paths.append(raw)
+
+        if not expanded_paths:
+            return
+
         removed: List[str] = []
         errors:  List[str] = []
 
-        for raw in raw_paths:
+        for raw in expanded_paths:
             target = Path(raw)
             if not target.is_absolute():
                 target = self._current_dir / target
