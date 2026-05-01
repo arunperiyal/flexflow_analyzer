@@ -6,10 +6,49 @@ from typing import Optional, List
 from src.utils.ssh_client import SSHClientWrapper
 from src.utils.remote_config import RemoteConfig
 from ...case_iteration import is_wildcard_case, load_cases_from_directory
+from src.utils.colors import Colors
 from rich.console import Console
-from rich.progress import Progress
+from rich.progress import Progress, BarColumn, TextColumn, DownloadColumn, TransferSpeedColumn, TimeRemainingColumn
 from rich.table import Table
 from rich import box
+
+
+def show_upload_help() -> None:
+    """Print help for case upload command."""
+    print(f"""
+{Colors.BOLD}{Colors.CYAN}FlexFlow Case Upload Command{Colors.RESET}
+
+Upload case directories from local machine to a remote server.
+
+{Colors.BOLD}USAGE:{Colors.RESET}
+    flexflow case upload [{Colors.YELLOW}case{Colors.RESET}] --to {Colors.YELLOW}REMOTE{Colors.RESET} [options]
+
+{Colors.BOLD}ARGUMENTS:{Colors.RESET}
+    {Colors.YELLOW}case{Colors.RESET}                   Local case directory path (use * for all cases in .cases)
+
+{Colors.BOLD}OPTIONS:{Colors.RESET}
+    {Colors.YELLOW}--to REMOTE{Colors.RESET}            Remote machine name (required)
+    {Colors.YELLOW}--dir DIRS{Colors.RESET}             Comma-separated directories to upload
+                           (default: othd_files,oisd_files,binary)
+    {Colors.YELLOW}--remote-path PATH{Colors.RESET}     Override remote base path (default: remote config path)
+    {Colors.YELLOW}--force{Colors.RESET}                Create remote directories if they do not exist
+    {Colors.YELLOW}--examples{Colors.RESET}             Show usage examples
+    {Colors.YELLOW}-h, --help{Colors.RESET}             Show this help message
+
+{Colors.BOLD}DESCRIPTION:{Colors.RESET}
+    Uploads one or more case directories to a configured remote server via
+    SFTP. The remote server must be registered with 'remote add'.
+
+    Use 'use remote:<name>' in the interactive shell to set a default remote
+    so --to can be omitted.
+
+    Wildcard mode ('case upload *') uploads all cases listed in the .cases
+    file in the current directory.
+
+{Colors.BOLD}CONTEXT:{Colors.RESET}
+    Set remote context:    use remote:myserver
+    Then run:              case upload CS4SG1U1
+""")
 
 
 class CaseUploadCommand:
@@ -186,20 +225,39 @@ class CaseUploadCommand:
         self.console.print(f"[cyan]Uploading:[/cyan] {directory_name}")
 
         try:
-            with Progress() as progress:
+            total_bytes = sum(
+                os.path.getsize(os.path.join(root, f))
+                for root, _, files in os.walk(local_dir)
+                for f in files
+            )
+
+            with Progress(
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                DownloadColumn(),
+                TransferSpeedColumn(),
+                TimeRemainingColumn(),
+            ) as progress:
                 task = progress.add_task(
                     f"Transferring {directory_name}...",
-                    total=None
+                    total=total_bytes or None,
                 )
 
-                def update_progress(transferred, total):
-                    progress.update(task, completed=transferred, total=total)
+                state = {"done": 0, "last": 0}
+
+                def update_progress(transferred, _file_total):
+                    if transferred < state["last"]:
+                        state["done"] += state["last"]
+                    state["last"] = transferred
+                    progress.update(task, completed=state["done"] + transferred)
 
                 files_count = ssh.upload_directory(
                     local_dir,
                     remote_dir,
-                    callback=update_progress
+                    callback=update_progress,
                 )
+
+                progress.update(task, completed=total_bytes)
 
             self.console.print(
                 f"[green]✓[/green] Uploaded {files_count} files to {remote_dir}"
@@ -237,6 +295,14 @@ class CaseUploadCommand:
         Returns:
             Exit code (0 for success, 1 for failure)
         """
+        if hasattr(args, "help") and args.help:
+            show_upload_help()
+            return 0
+
+        if hasattr(args, "examples") and args.examples:
+            show_upload_help()
+            return 0
+
         # Validate case path
         case_path = self.validate_case_path(args.case)
         if not case_path:
