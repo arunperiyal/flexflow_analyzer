@@ -196,6 +196,7 @@ View your running jobs:
 ff run sq                  # Show your jobs
 ff run sq --all            # Show all users' jobs
 ff run sq --by-dir         # Group jobs by parent directory (case name level)
+ff run sq --sort submitted # Sort jobs by submit time
 ff run sq --watch          # Auto-refresh every 10 seconds
 ff run sq <job_id>         # Show detailed info for a job
 ```

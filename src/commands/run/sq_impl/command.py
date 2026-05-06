@@ -4,6 +4,7 @@ import os
 import re
 import subprocess
 import time
+from datetime import datetime
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
@@ -57,6 +58,23 @@ _SQUEUE_FMT = '%i|%j|%T|%M|%D|%P|%C|%m|%V|%R|%E'
 _SQUEUE_COLS = ['jobid', 'name', 'state', 'time', 'nodes',
                 'partition', 'cpus', 'memory', 'submit', 'reason', 'dependency']
 
+_SORT_FIELD_ALIASES = {
+    'id': 'jobid',
+    'job-id': 'jobid',
+    'jobid': 'jobid',
+    'name': 'name',
+    'state': 'state',
+    'time': 'time',
+    'nodes': 'nodes',
+    'partition': 'partition',
+    'cpus': 'cpus',
+    'memory': 'memory',
+    'submit': 'submit',
+    'submitted': 'submit',
+    'reason': 'reason',
+    'dependency': 'dependency',
+}
+
 
 def get_queue_data(show_all=False):
     """Run squeue and return raw stdout."""
@@ -81,12 +99,133 @@ def parse_queue_output(output: str) -> list:
         parts = line.split('|', len(_SQUEUE_COLS) - 1)
         if len(parts) == len(_SQUEUE_COLS):
             job = {k: v.strip() for k, v in zip(_SQUEUE_COLS, parts)}
+            job['memory_raw'] = job['memory']
+            job['submit_raw'] = job['submit']
             job['memory'] = _fmt_memory(job['memory'])
             job['submit'] = _fmt_submit_time(job['submit'])
             job['dependency'] = _fmt_dependency(job['dependency'])
             job['workdir'] = None  # Will be fetched separately if needed
             jobs.append(job)
     return jobs
+
+
+def _normalize_sort_field(sort_value: str) -> str:
+    """Normalize --sort value to canonical job key."""
+    if not sort_value:
+        return None
+    return _SORT_FIELD_ALIASES.get(sort_value.strip().lower())
+
+
+def _sort_key_int(value: str):
+    """Sort helper for integer-like values."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return float('inf')
+
+
+def _parse_memory_to_mb(raw: str) -> float:
+    """Convert SLURM memory strings to MB for sorting."""
+    if not raw:
+        return float('inf')
+    text = str(raw).strip()
+    if not text:
+        return float('inf')
+
+    if text[-1].isalpha():
+        unit = text[-1].upper()
+        try:
+            value = float(text[:-1])
+        except ValueError:
+            return float('inf')
+        factors = {
+            'K': 1.0 / 1024.0,
+            'M': 1.0,
+            'G': 1024.0,
+            'T': 1024.0 * 1024.0,
+            'P': 1024.0 * 1024.0 * 1024.0,
+        }
+        return value * factors.get(unit, float('inf'))
+
+    try:
+        # squeue %m returns MB when no unit suffix is present.
+        return float(text)
+    except ValueError:
+        return float('inf')
+
+
+def _parse_elapsed_seconds(raw: str) -> int:
+    """Parse SLURM elapsed time ([days-]HH:MM:SS or MM:SS) into seconds."""
+    if not raw:
+        return float('inf')
+    text = str(raw).strip()
+    if not text:
+        return float('inf')
+
+    days = 0
+    if '-' in text:
+        day_text, _, time_text = text.partition('-')
+        try:
+            days = int(day_text)
+        except ValueError:
+            return float('inf')
+    else:
+        time_text = text
+
+    parts = time_text.split(':')
+    try:
+        if len(parts) == 3:
+            hh, mm, ss = (int(p) for p in parts)
+        elif len(parts) == 2:
+            hh = 0
+            mm, ss = (int(p) for p in parts)
+        elif len(parts) == 1:
+            hh = 0
+            mm = 0
+            ss = int(parts[0])
+        else:
+            return float('inf')
+    except ValueError:
+        return float('inf')
+
+    return days * 86400 + hh * 3600 + mm * 60 + ss
+
+
+def _parse_submit_timestamp(raw: str):
+    """Parse SLURM submit timestamp for sorting."""
+    if not raw:
+        return datetime.max
+    text = str(raw).strip()
+    if not text:
+        return datetime.max
+    try:
+        return datetime.strptime(text[:19], '%Y-%m-%dT%H:%M:%S')
+    except ValueError:
+        return datetime.max
+
+
+def _job_sort_key(job: dict, sort_field: str):
+    """Build sorting key for a queue row."""
+    if sort_field in ('jobid', 'nodes', 'cpus'):
+        return _sort_key_int(job.get(sort_field))
+    if sort_field == 'memory':
+        return _parse_memory_to_mb(job.get('memory_raw') or job.get('memory'))
+    if sort_field == 'time':
+        return _parse_elapsed_seconds(job.get('time'))
+    if sort_field == 'submit':
+        return _parse_submit_timestamp(job.get('submit_raw') or job.get('submit'))
+    if sort_field == 'dependency':
+        dep = (job.get('dependency') or '').strip()
+        return _sort_key_int(dep) if dep.isdigit() else dep.lower()
+    return str(job.get(sort_field) or '').lower()
+
+
+def sort_jobs(jobs: list, sort_value: str) -> list:
+    """Return jobs sorted by requested column."""
+    sort_field = _normalize_sort_field(sort_value)
+    if not sort_field:
+        return jobs
+    return sorted(jobs, key=lambda job: _job_sort_key(job, sort_field))
 
 
 def get_job_workdir(job_id: str) -> str:
@@ -166,9 +305,8 @@ def _fmt_submit_time(raw: str) -> str:
     m = re.match(r'(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})', raw)
     if not m:
         return raw
-    import datetime
     year, mon, day, hh, mm = (int(x) for x in m.groups())
-    today = datetime.date.today()
+    today = datetime.today().date()
     if (year, mon, day) == (today.year, today.month, today.day):
         return f'{hh:02d}:{mm:02d}'
     return f'{mon:02d}-{day:02d} {hh:02d}:{mm:02d}'
@@ -239,9 +377,11 @@ def show_queue(args):
     console = Console()
     show_all = getattr(args, 'all', False)
     group_by_dir = getattr(args, 'by_dir', False)
+    sort_by = getattr(args, 'sort', None)
 
     output = get_queue_data(show_all)
     jobs = parse_queue_output(output)
+    jobs = sort_jobs(jobs, sort_by)
 
     if not jobs:
         console.print()
@@ -278,6 +418,7 @@ def watch_queue(args):
     console = Console()
     show_all = getattr(args, 'all', False)
     group_by_dir = getattr(args, 'by_dir', False)
+    sort_by = getattr(args, 'sort', None)
 
     console.print()
     console.print('[bold cyan]Watch Mode[/bold cyan] - Press Ctrl+C to exit')
@@ -286,6 +427,7 @@ def watch_queue(args):
     try:
         def get_live_table():
             jobs = parse_queue_output(get_queue_data(show_all))
+            jobs = sort_jobs(jobs, sort_by)
             if not jobs:
                 return create_queue_table(jobs)
             
@@ -447,11 +589,12 @@ def _fmt_kb(raw: str) -> str:
 
 def show_sq_help():
     from src.utils.colors import Colors
+    sort_columns = ', '.join(sorted(_SORT_FIELD_ALIASES.keys()))
     print(f"""
 {Colors.BOLD}{Colors.CYAN}run sq — SLURM Job Queue{Colors.RESET}
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    run sq [<job_id>] [--all] [--by-dir] [--watch]
+    run sq [<job_id>] [--all] [--by-dir] [--watch] [--sort <column>]
 
 {Colors.BOLD}ARGUMENTS:{Colors.RESET}
     {Colors.YELLOW}<job_id>{Colors.RESET}    Show detailed info for a single job (scontrol + sstat)
@@ -460,6 +603,7 @@ def show_sq_help():
     {Colors.YELLOW}--all{Colors.RESET}       Show all users' jobs (default: yours only)
     {Colors.YELLOW}--by-dir{Colors.RESET}    Group jobs by parent directory (removes case name from path)
     {Colors.YELLOW}--watch{Colors.RESET}     Refresh every 10 seconds (Ctrl+C to stop)
+    {Colors.YELLOW}--sort{Colors.RESET}      Sort by queue column ({sort_columns})
     {Colors.YELLOW}-h, --help{Colors.RESET}  Show this help message
 
 {Colors.BOLD}COLUMNS (queue view):{Colors.RESET}
@@ -475,7 +619,7 @@ def show_sq_help():
     run sq                  # Your jobs
     run sq --all            # All users
     run sq --by-dir         # Group your jobs by work directory
+    run sq --sort submit    # Sort by submit timestamp
     run sq --watch          # Auto-refresh
     run sq 1258586          # Detail for job 1258586
 """)
-

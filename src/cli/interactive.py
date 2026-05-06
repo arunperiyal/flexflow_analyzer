@@ -323,6 +323,7 @@ class FlexFlowCompleter(Completer):
             '--all':    'Show all users jobs',
             '--watch':  'Live queue monitoring (refresh every 10s)',
             '--by-dir': 'Group jobs by parent directory',
+            '--sort':   'Sort by column (jobid,name,state,time,nodes,partition,cpus,memory,submitted,reason,dependency)',
             '--help':   'Show help message',
             '-h':       'Show help message',
         },

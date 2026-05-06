@@ -47,6 +47,9 @@ Submit and manage SLURM jobs for FlexFlow simulations.
     # Watch job queue
     run sq --watch
 
+    # Sort queue by a column
+    run sq --sort submitted
+
     # Show detail for a specific job
     run sq 1258586
 

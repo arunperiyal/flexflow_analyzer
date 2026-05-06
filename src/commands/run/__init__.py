@@ -106,6 +106,14 @@ class RunCommand(BaseCommand):
         sq_parser.add_argument('--all', action='store_true', help='Show all users jobs')
         sq_parser.add_argument('--by-dir', action='store_true', help='Group jobs by their work directory')
         sq_parser.add_argument('--watch', action='store_true', help='Watch mode (refresh every 10s)')
+        sq_parser.add_argument(
+            '--sort',
+            type=str,
+            metavar='COLUMN',
+            choices=['id', 'job-id', 'jobid', 'name', 'state', 'time', 'nodes', 'partition',
+                     'cpus', 'memory', 'submit', 'submitted', 'reason', 'dependency'],
+            help='Sort queue by column'
+        )
         sq_parser.add_argument('-h', '--help', action='store_true', help='Show help')
 
         # run sb subcommand (sbatch wrapper)
