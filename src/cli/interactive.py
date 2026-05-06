@@ -1882,8 +1882,8 @@ class InteractiveShell:
                         name = f"[bold cyan]{name}/[/bold cyan]"
                     elif self._is_case_directory(item):
                         name = f"[bold green]{name}/[/bold green]"
-                    elif item.suffix in ['.othd', '.oisd', '.plt']:
-                        name = f"[magenta]{name}[/magenta]"
+                    else:
+                        name = self._format_ls_file_name(item)
 
                     table.add_row(item_type, size_str, mtime_str, name)
 
@@ -1899,10 +1899,8 @@ class InteractiveShell:
                             items_formatted.append(f"[bold green]{item.name}/[/bold green]")
                         else:
                             items_formatted.append(f"[cyan]{item.name}/[/cyan]")
-                    elif item.suffix in ['.othd', '.oisd', '.plt']:
-                        items_formatted.append(f"[magenta]{item.name}[/magenta]")
                     else:
-                        items_formatted.append(item.name)
+                        items_formatted.append(self._format_ls_file_name(item))
 
                 self.console.print(Columns(items_formatted, equal=True, expand=False))
 
@@ -1957,6 +1955,20 @@ class InteractiveShell:
             size /= 1024.0
         return f"{size:.1f}PB"
 
+    @staticmethod
+    def _is_shell_or_slurm_file(path: Path) -> bool:
+        """Return True for shell scripts and slurm-* files."""
+        return path.suffix == '.sh' or path.name.startswith('slurm-')
+
+    def _format_ls_file_name(self, path: Path) -> str:
+        """Apply ls color rules for known file types."""
+        name = path.name
+        if path.suffix in ['.othd', '.oisd', '.plt']:
+            return f"[magenta]{name}[/magenta]"
+        if self._is_shell_or_slurm_file(path):
+            return f"[yellow]{name}[/yellow]"
+        return name
+
     def _show_file_info(self, file_path: Path) -> None:
         """
         Show information about a single file.
@@ -2010,19 +2022,14 @@ class InteractiveShell:
                 size_str = self._format_size(stat.st_size)
                 mtime = datetime.datetime.fromtimestamp(stat.st_mtime)
                 mtime_str = mtime.strftime("%Y-%m-%d %H:%M")
-                name = f.name
-                if f.suffix in ['.othd', '.oisd', '.plt']:
-                    name = f"[magenta]{name}[/magenta]"
+                name = self._format_ls_file_name(f)
                 table.add_row(size_str, mtime_str, name)
 
             self.console.print(table)
         else:
             items_formatted = []
             for f in files:
-                if f.suffix in ['.othd', '.oisd', '.plt']:
-                    items_formatted.append(f"[magenta]{f.name}[/magenta]")
-                else:
-                    items_formatted.append(f.name)
+                items_formatted.append(self._format_ls_file_name(f))
             self.console.print(Columns(items_formatted, equal=True, expand=False))
 
     def find_cases(self, pattern: str) -> None:
