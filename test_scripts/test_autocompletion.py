@@ -85,6 +85,9 @@ class TestAutocompletion:
         assert '--all' in flags
         assert '--watch' in flags
         assert '--sort' in flags
+        assert '--out' in flags
+        assert '--lines' in flags
+        assert '-n' in flags
 
     def test_run_main_np_flags_defined(self, completer):
         """Test -n/--np flags in run main are defined."""

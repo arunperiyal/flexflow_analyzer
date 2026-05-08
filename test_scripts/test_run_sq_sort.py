@@ -1,5 +1,7 @@
 """Tests for run sq --sort behavior."""
 
+from pathlib import Path
+
 from rich.console import Group
 
 from src.commands.run.sq_impl import command as sq_cmd
@@ -96,3 +98,20 @@ def test_grouped_watch_renderable_uses_group():
     renderable = sq_cmd.create_grouped_queue_renderable(jobs)
     assert isinstance(renderable, Group)
     assert len(renderable.renderables) == 2
+
+
+def test_resolve_stdout_path_joins_relative_with_workdir():
+    resolved = sq_cmd._resolve_stdout_path("slurm-123.out", "/scratch/demo/run")
+    assert resolved == Path("/scratch/demo/run/slurm-123.out")
+
+
+def test_resolve_stdout_path_keeps_absolute():
+    resolved = sq_cmd._resolve_stdout_path("/scratch/demo/slurm-123.out", "/scratch/demo/run")
+    assert resolved == Path("/scratch/demo/slurm-123.out")
+
+
+def test_tail_file_lines_reads_last_n(tmp_path):
+    out_file = tmp_path / "slurm.out"
+    out_file.write_text("line1\nline2\nline3\nline4\n", encoding="utf-8")
+    tail_lines = sq_cmd._tail_file_lines(out_file, 2)
+    assert tail_lines == ["line3\n", "line4\n"]

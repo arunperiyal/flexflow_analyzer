@@ -53,6 +53,9 @@ Submit and manage SLURM jobs for FlexFlow simulations.
     # Show detail for a specific job
     run sq 1258586
 
+    # Show job stdout tail
+    run sq 1258586 --out -n 50
+
     # Submit a script directly
     run sb postFlex.sh
 

@@ -199,6 +199,7 @@ ff run sq --by-dir         # Group jobs by parent directory (case name level)
 ff run sq --sort submitted # Sort jobs by submit time
 ff run sq --watch          # Auto-refresh every 10 seconds
 ff run sq <job_id>         # Show detailed info for a job
+ff run sq <job_id> --out -n 50  # Show last 50 lines from job StdOut
 ```
 
 The `--by-dir` flag is useful when running multiple simulations:

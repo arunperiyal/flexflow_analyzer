@@ -4,7 +4,9 @@ import os
 import re
 import subprocess
 import time
+from collections import deque
 from datetime import datetime
+from pathlib import Path
 from rich.console import Console, Group
 from rich.table import Table
 from rich.panel import Panel
@@ -27,7 +29,16 @@ def execute_sq(args):
     # Job detail mode: run sq <job_id>
     job_id = getattr(args, 'job_id', None)
     if job_id:
-        show_job_detail(job_id)
+        show_out = getattr(args, 'out', False)
+        out_lines = getattr(args, 'n', 20)
+        if out_lines <= 0:
+            print("Error: -n/--lines must be a positive integer")
+            return
+        show_job_detail(job_id, show_out=show_out, out_lines=out_lines)
+        return
+
+    if getattr(args, 'out', False):
+        print("Error: --out requires <job_id> (usage: run sq <job_id> --out)")
         return
 
     if hasattr(args, 'watch') and args.watch:
@@ -283,6 +294,28 @@ def create_grouped_queue_renderable(jobs: list):
     return Group(*tables)
 
 
+def _resolve_stdout_path(raw_stdout: str, raw_workdir: str):
+    """Resolve StdOut path, using WorkDir as base for relative paths."""
+    if not raw_stdout or raw_stdout in ('—', '(null)', 'N/A', 'None'):
+        return None
+
+    stdout_path = Path(os.path.expandvars(os.path.expanduser(raw_stdout.strip())))
+    if stdout_path.is_absolute():
+        return stdout_path
+
+    if raw_workdir and raw_workdir not in ('—', '(null)', 'N/A', 'None'):
+        workdir_path = Path(os.path.expandvars(os.path.expanduser(raw_workdir.strip())))
+        return workdir_path / stdout_path
+
+    return stdout_path
+
+
+def _tail_file_lines(path: Path, line_count: int) -> list:
+    """Read the last line_count lines from a text file."""
+    with path.open('r', encoding='utf-8', errors='replace') as file_obj:
+        return list(deque(file_obj, maxlen=line_count))
+
+
 def _fmt_memory(raw: str) -> str:
     """Convert squeue memory value (MB integer or suffix string) to readable form."""
     if not raw or raw in ('N/A', '0', '(null)'):
@@ -463,7 +496,7 @@ def watch_queue(args):
 # Job detail view  (run sq <job_id>)
 # ---------------------------------------------------------------------------
 
-def show_job_detail(job_id: str):
+def show_job_detail(job_id: str, show_out: bool = False, out_lines: int = 20):
     """Show detailed info for a single job using scontrol + sstat."""
     console = Console()
     console.print()
@@ -552,6 +585,36 @@ def show_job_detail(job_id: str):
         except Exception as e:
             console.print(f'  [dim]sstat unavailable: {e}[/dim]')
 
+    if show_out:
+        stdout_path = _resolve_stdout_path(ctrl.get('StdOut', ''), ctrl.get('WorkDir', ''))
+        console.print()
+        console.print(f'[bold]StdOut tail[/bold] [dim](last {out_lines} lines)[/dim]')
+
+        if stdout_path is None:
+            console.print('  [dim]StdOut path is not available for this job[/dim]')
+        elif not stdout_path.exists():
+            console.print(f'  [yellow]StdOut file not found:[/yellow] {stdout_path}')
+        elif not stdout_path.is_file():
+            console.print(f'  [yellow]StdOut path is not a file:[/yellow] {stdout_path}')
+        else:
+            try:
+                tail_lines = _tail_file_lines(stdout_path, out_lines)
+            except OSError as e:
+                console.print(f'  [red]Error reading StdOut file:[/red] {e}')
+            else:
+                if not tail_lines:
+                    console.print('  [dim]StdOut file is empty[/dim]')
+                else:
+                    tail_text = ''.join(tail_lines).rstrip('\n')
+                    if not tail_text:
+                        tail_text = '[dim](blank output)[/dim]'
+                    console.print(Panel(
+                        tail_text,
+                        title=f'[bold cyan]{stdout_path}[/bold cyan]',
+                        border_style='cyan',
+                        box=box.ROUNDED,
+                    ))
+
     console.print()
 
 
@@ -592,7 +655,7 @@ def show_sq_help():
 {Colors.BOLD}{Colors.CYAN}run sq — SLURM Job Queue{Colors.RESET}
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    run sq [<job_id>] [--all] [--by-dir] [--watch] [--sort <column>]
+    run sq [<job_id>] [--all] [--by-dir] [--watch] [--sort <column>] [--out] [-n <lines>]
 
 {Colors.BOLD}ARGUMENTS:{Colors.RESET}
     {Colors.YELLOW}<job_id>{Colors.RESET}    Show detailed info for a single job (scontrol + sstat)
@@ -602,6 +665,8 @@ def show_sq_help():
     {Colors.YELLOW}--by-dir{Colors.RESET}    Group jobs by parent directory (removes case name from path)
     {Colors.YELLOW}--watch{Colors.RESET}     Refresh every 10 seconds (Ctrl+C to stop)
     {Colors.YELLOW}--sort{Colors.RESET}      Sort by queue column ({sort_columns})
+    {Colors.YELLOW}--out{Colors.RESET}       With <job_id>, show tail of StdOut file
+    {Colors.YELLOW}-n, --lines{Colors.RESET} Number of StdOut lines with --out (default: 20)
     {Colors.YELLOW}-h, --help{Colors.RESET}  Show this help message
 
 {Colors.BOLD}COLUMNS (queue view):{Colors.RESET}
@@ -620,4 +685,6 @@ def show_sq_help():
     run sq --sort submit    # Sort by submit timestamp
     run sq --watch          # Auto-refresh
     run sq 1258586          # Detail for job 1258586
+    run sq 1258586 --out    # Show last 20 StdOut lines
+    run sq 1258586 --out -n 50
 """)

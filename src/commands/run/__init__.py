@@ -114,6 +114,10 @@ class RunCommand(BaseCommand):
                      'cpus', 'memory', 'submit', 'submitted', 'reason', 'dependency'],
             help='Sort queue by column'
         )
+        sq_parser.add_argument('--out', action='store_true',
+                               help='With job_id, print tail of StdOut file')
+        sq_parser.add_argument('-n', '--lines', dest='n', type=int, default=20, metavar='N',
+                               help='Number of StdOut lines to print with --out (default: 20)')
         sq_parser.add_argument('-h', '--help', action='store_true', help='Show help')
 
         # run sb subcommand (sbatch wrapper)
