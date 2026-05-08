@@ -146,6 +146,39 @@ class TestAutocompletion:
         assert '--unique' in texts
         assert '--help' in texts
 
+    def test_vi_path_completion(self, completer, tmp_path):
+        """Test vi command path completions."""
+        (tmp_path / "notes.txt").write_text("hello")
+        completer.shell = Mock()
+        completer.shell._current_dir = tmp_path
+        completer.shell._aliases = {}
+
+        completions = list(completer.get_completions(Document("vi no"), None))
+        texts = {c.text for c in completions}
+        assert 'notes.txt' in texts
+
+    def test_case_create_ref_case_path_completion_after_space(self, completer, tmp_path):
+        """Test case create --ref-case path completion when argument is empty."""
+        (tmp_path / "refCase").mkdir()
+        completer.shell = Mock()
+        completer.shell._current_dir = tmp_path
+        completer.shell._aliases = {}
+
+        completions = list(completer.get_completions(Document("case create --ref-case "), None))
+        texts = {c.text for c in completions}
+        assert 'refCase/' in texts
+
+    def test_case_create_from_config_path_completion_after_space(self, completer, tmp_path):
+        """Test case create --from-config path completion when argument is empty."""
+        (tmp_path / "case_config.yaml").write_text("case_name: demo")
+        completer.shell = Mock()
+        completer.shell._current_dir = tmp_path
+        completer.shell._aliases = {}
+
+        completions = list(completer.get_completions(Document("case create --from-config "), None))
+        texts = {c.text for c in completions}
+        assert 'case_config.yaml' in texts
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

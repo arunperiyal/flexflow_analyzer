@@ -1,5 +1,7 @@
 """Tests for run sq --sort behavior."""
 
+from rich.console import Group
+
 from src.commands.run.sq_impl import command as sq_cmd
 
 
@@ -57,3 +59,40 @@ def test_sort_jobs_by_time_parses_slurm_elapsed():
 
     sorted_jobs = sq_cmd.sort_jobs(jobs, "time")
     assert [job["jobid"] for job in sorted_jobs] == ["B", "C", "A"]
+
+
+def test_grouped_watch_renderable_uses_group():
+    jobs = [
+        {
+            "jobid": "1",
+            "name": "mainCase001",
+            "state": "PENDING",
+            "time": "0:00",
+            "nodes": "3",
+            "partition": "medium",
+            "cpus": "120",
+            "memory": "4300M",
+            "submit": "05-06 14:48",
+            "reason": "(Priority)",
+            "dependency": "—",
+            "workdir": "/scratch/project/a/Case001",
+        },
+        {
+            "jobid": "2",
+            "name": "mainCase002",
+            "state": "PENDING",
+            "time": "0:00",
+            "nodes": "3",
+            "partition": "medium",
+            "cpus": "120",
+            "memory": "4300M",
+            "submit": "05-06 16:32",
+            "reason": "(Priority)",
+            "dependency": "—",
+            "workdir": "/scratch/project/b/Case002",
+        },
+    ]
+
+    renderable = sq_cmd.create_grouped_queue_renderable(jobs)
+    assert isinstance(renderable, Group)
+    assert len(renderable.renderables) == 2

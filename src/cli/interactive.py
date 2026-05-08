@@ -565,7 +565,7 @@ class FlexFlowCompleter(Completer):
             return
 
         # ── file-browsing commands ───────────────────────────────────────────
-        if cmd_name in ('cd', 'cat', 'ls', 'grep', 'head', 'tail', 'rm', 'cp', 'mv', 'du'):
+        if cmd_name in ('cd', 'cat', 'ls', 'grep', 'head', 'tail', 'rm', 'cp', 'mv', 'du', 'vi', 'vim', 'nano'):
             yield from self._complete_path(words, ends_with_space)
             return
 
@@ -615,7 +615,7 @@ class FlexFlowCompleter(Completer):
             # Check if we're completing an argument for a specific flag
             # Get the previous word if one exists
             if len(words) >= 2:
-                prev_word = words[-2]
+                prev_word = words[-1] if ends_with_space else words[-2]
                 
                 # Handle --to flag for case upload (complete remote names)
                 if prev_word == '--to' and cmd_name == 'case' and len(words) >= 2:
@@ -639,6 +639,11 @@ class FlexFlowCompleter(Completer):
                 
                 # Handle --ref-case flag for case create (complete case directories)
                 if prev_word == '--ref-case' and cmd_name == 'case':
+                    yield from self._complete_path(words, ends_with_space)
+                    return
+
+                # Handle --from-config for case create (complete local config file paths)
+                if prev_word == '--from-config' and cmd_name == 'case':
                     yield from self._complete_path(words, ends_with_space)
                     return
 

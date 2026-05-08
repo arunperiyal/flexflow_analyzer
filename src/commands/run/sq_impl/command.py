@@ -5,7 +5,7 @@ import re
 import subprocess
 import time
 from datetime import datetime
-from rich.console import Console
+from rich.console import Console, Group
 from rich.table import Table
 from rich.panel import Panel
 from rich import box
@@ -271,6 +271,18 @@ def group_jobs_by_workdir(jobs: list) -> dict:
     return grouped
 
 
+def create_grouped_queue_renderable(jobs: list):
+    """Build a stacked renderable with one queue table per workdir."""
+    grouped = group_jobs_by_workdir(jobs)
+    tables = []
+    for workdir in sorted(grouped.keys()):
+        dir_jobs = grouped[workdir]
+        table = create_queue_table(dir_jobs)
+        table.title = f'SLURM Job Queue - {workdir}'
+        tables.append(table)
+    return Group(*tables)
+
+
 def _fmt_memory(raw: str) -> str:
     """Convert squeue memory value (MB integer or suffix string) to readable form."""
     if not raw or raw in ('N/A', '0', '(null)'):
@@ -433,21 +445,7 @@ def watch_queue(args):
             
             if group_by_dir:
                 jobs = enrich_jobs_with_workdir(jobs)
-                grouped = group_jobs_by_workdir(jobs)
-                # Return panels stacked vertically for watch mode
-                from rich.layout import Layout
-                layout = Layout()
-                for i, workdir in enumerate(sorted(grouped.keys())):
-                    if i > 0:
-                        layout.split_column(Layout(), Layout(name=f"dir_{i}"))
-                    dir_jobs = grouped[workdir]
-                    table = create_queue_table(dir_jobs)
-                    table.title = f'SLURM Job Queue - {workdir}'
-                    if i == 0:
-                        layout.update(table)
-                    else:
-                        layout[f"dir_{i}"].update(table)
-                return layout
+                return create_grouped_queue_renderable(jobs)
             else:
                 return create_queue_table(jobs)
 
