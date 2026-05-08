@@ -149,6 +149,16 @@ class TestAutocompletion:
         assert '--unique' in texts
         assert '--help' in texts
 
+    def test_grep_after_context_flag_completion(self, completer):
+        """Test grep --after-context and -A flag completion."""
+        completions = list(completer.get_completions(Document("grep --a"), None))
+        texts = {c.text for c in completions}
+        assert '--after-context' in texts
+
+        completions = list(completer.get_completions(Document("grep -A"), None))
+        texts = {c.text for c in completions}
+        assert '-A' in texts
+
     def test_vi_path_completion(self, completer, tmp_path):
         """Test vi command path completions."""
         (tmp_path / "notes.txt").write_text("hello")

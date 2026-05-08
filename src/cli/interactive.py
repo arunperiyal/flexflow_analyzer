@@ -438,6 +438,19 @@ class FlexFlowCompleter(Completer):
         '-h': 'Show history command help',
     }
 
+    _GREP_FLAGS: Dict[str, str] = {
+        '-i': 'Case-insensitive search',
+        '--ignore-case': 'Case-insensitive search',
+        '-n': 'Show line numbers',
+        '--line-number': 'Show line numbers',
+        '-r': 'Search recursively in directories',
+        '--recursive': 'Search recursively in directories',
+        '-l': 'Show only filenames with matches',
+        '--files-only': 'Show only filenames with matches',
+        '-A': 'Show N lines after each match',
+        '--after-context': 'Show N lines after each match',
+    }
+
     # ---------------------------------------------------------------------------
 
     def __init__(self, shell=None):
@@ -567,8 +580,18 @@ class FlexFlowCompleter(Completer):
                     yield Completion(flag, start_position=-len(current_word), display_meta=desc)
             return
 
+        if cmd_name == 'grep':
+            current_word = '' if ends_with_space else words[-1]
+            if current_word.startswith('-'):
+                for flag, desc in self._GREP_FLAGS.items():
+                    if flag.startswith(current_word):
+                        yield Completion(flag, start_position=-len(current_word), display_meta=desc)
+                return
+            yield from self._complete_path(words, ends_with_space)
+            return
+
         # ── file-browsing commands ───────────────────────────────────────────
-        if cmd_name in ('cd', 'cat', 'ls', 'grep', 'head', 'tail', 'rm', 'cp', 'mv', 'du', 'vi', 'vim', 'nano'):
+        if cmd_name in ('cd', 'cat', 'ls', 'head', 'tail', 'rm', 'cp', 'mv', 'du', 'vi', 'vim', 'nano'):
             yield from self._complete_path(words, ends_with_space)
             return
 
@@ -1254,10 +1277,12 @@ class InteractiveShell:
                 self.console.print("  -n, --line-number    Show line numbers")
                 self.console.print("  -r, --recursive      Search recursively in directories")
                 self.console.print("  -l, --files-only     Show only filenames with matches")
+                self.console.print("  -A, --after-context  Show N lines after each match")
                 self.console.print("[dim]Examples:[/dim]")
                 self.console.print("  grep 'error' log.txt")
                 self.console.print("  grep -i 'warning' *.log")
                 self.console.print("  grep -rn 'TODO' src/")
+                self.console.print("  grep -A 2 'error' app.log")
             elif len(parts) > 1:
                 self.grep_files(parts[1:])
             else:
@@ -2836,11 +2861,34 @@ class InteractiveShell:
         show_line_numbers = True  # Default to showing line numbers
         recursive = False
         files_only = False
+        after_context = 0
 
         i = 0
         while i < len(args):
             arg = args[i]
-            if arg.startswith('-') and not arg.startswith('--') and len(arg) > 2:
+            if arg.startswith('-A') and not arg.startswith('--') and len(arg) > 2:
+                try:
+                    after_context = int(arg[2:])
+                except ValueError:
+                    self.console.print(f"[red]Error: Invalid -A value: {arg[2:]}[/red]")
+                    return
+                if after_context < 0:
+                    self.console.print("[red]Error: -A/--after-context must be >= 0[/red]")
+                    return
+            elif arg in ['-A', '--after-context']:
+                if i + 1 >= len(args):
+                    self.console.print("[red]Error: -A/--after-context requires a number[/red]")
+                    return
+                try:
+                    after_context = int(args[i + 1])
+                except ValueError:
+                    self.console.print(f"[red]Error: Invalid after-context number: {args[i + 1]}[/red]")
+                    return
+                if after_context < 0:
+                    self.console.print("[red]Error: -A/--after-context must be >= 0[/red]")
+                    return
+                i += 1
+            elif arg.startswith('-') and not arg.startswith('--') and len(arg) > 2:
                 # Handle combined short flags like -irn
                 for char in arg[1:]:
                     if char == 'i':
@@ -2950,13 +2998,28 @@ class InteractiveShell:
 
                 matches = []
                 with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
-                    for line_num, line in enumerate(f, 1):
-                        if regex.search(line):
-                            matches.append((line_num, line.rstrip()))
+                    lines = [line.rstrip('\n') for line in f]
+
+                matched_lines = set()
+                context_lines = set()
+                for line_num, line in enumerate(lines, 1):
+                    if regex.search(line):
+                        matched_lines.add(line_num)
+                        if after_context > 0:
+                            for ctx_line in range(line_num + 1, min(line_num + after_context, len(lines)) + 1):
+                                if ctx_line not in matched_lines:
+                                    context_lines.add(ctx_line)
+
+                if matched_lines:
+                    selected_lines = sorted(matched_lines | context_lines)
+                    for line_num in selected_lines:
+                        line = lines[line_num - 1]
+                        is_match = line_num in matched_lines
+                        matches.append((line_num, line, is_match))
 
                 if matches:
                     files_with_matches += 1
-                    total_matches += len(matches)
+                    total_matches += len(matched_lines)
 
                     if files_only:
                         # Just show filename
@@ -2968,14 +3031,24 @@ class InteractiveShell:
                             self.console.print(f"[bold cyan]{file_path}[/bold cyan]")
 
                         # Show matching lines
-                        for line_num, line in matches:
-                            if show_line_numbers:
-                                # Highlight the pattern in the line
+                        prev_line_num = None
+                        for line_num, line, is_match in matches:
+                            if prev_line_num is not None and line_num > prev_line_num + 1 and after_context > 0:
+                                self.console.print("[dim]--[/dim]")
+
+                            if is_match:
                                 highlighted = regex.sub(lambda m: f"[yellow]{m.group()}[/yellow]", line)
-                                self.console.print(f"[green]{line_num}[/green]:{highlighted}")
+                                if show_line_numbers:
+                                    self.console.print(f"[green]{line_num}[/green]:{highlighted}")
+                                else:
+                                    self.console.print(highlighted)
                             else:
-                                highlighted = regex.sub(lambda m: f"[yellow]{m.group()}[/yellow]", line)
-                                self.console.print(highlighted)
+                                if show_line_numbers:
+                                    self.console.print(f"[dim]{line_num}[/dim]-{line}")
+                                else:
+                                    self.console.print(f"[dim]{line}[/dim]")
+
+                            prev_line_num = line_num
 
             except UnicodeDecodeError:
                 # Skip binary files
