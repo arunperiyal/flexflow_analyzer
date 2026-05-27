@@ -18,6 +18,10 @@ from rich.panel import Panel
 from rich import box
 
 
+def _fmt_tsid(tsid: int) -> str:
+    return f"{tsid:,}"
+
+
 class FileInfo:
     """Information about a data file."""
 
@@ -239,6 +243,9 @@ class CaseOrganizer:
             self.logger.info("Analyzing OISD files...")
             oisd_files = self._analyze_data_files('oisd')
             self._find_redundant_files(oisd_files, 'OISD')
+
+            # Warn if OTHD and OISD coverage diverges after deduplication
+            self._check_cross_type_consistency(othd_files, oisd_files)
             self.console.print()
 
         # --- CLEAN OUTPUT ---
@@ -397,6 +404,17 @@ class CaseOrganizer:
                     other.is_redundant = True
                     other.redundant_reason = f"subset of {file.path.name}"
 
+        # Report tsId gaps in the surviving (non-redundant) files
+        survivors = sorted([f for f in files if not f.is_redundant], key=lambda f: f.start_step)
+        for i in range(len(survivors) - 1):
+            gap_start = survivors[i].end_step + 1
+            gap_end   = survivors[i + 1].start_step - 1
+            if gap_start <= gap_end:
+                self.console.print(
+                    f"  [yellow]⚠[/yellow]  {file_type} gap: "
+                    f"tsId {_fmt_tsid(gap_start)} – {_fmt_tsid(gap_end)} not covered"
+                )
+
         # Collect redundant files
         for file in files:
             if file.is_redundant:
@@ -412,6 +430,25 @@ class CaseOrganizer:
 
                 if self.args.verbose:
                     self.logger.info(f"  Redundant: {file.path.name} ({file.redundant_reason})")
+
+    def _check_cross_type_consistency(self, othd_files: List[FileInfo], oisd_files: List[FileInfo]):
+        """Warn if OTHD and OISD coverage diverges after deduplication."""
+        def coverage(files):
+            survivors = [f for f in files if not f.is_redundant]
+            if not survivors:
+                return None
+            return (min(f.start_step for f in survivors), max(f.end_step for f in survivors))
+
+        othd_cov = coverage(othd_files)
+        oisd_cov = coverage(oisd_files)
+
+        if othd_cov and oisd_cov and othd_cov != oisd_cov:
+            self.console.print(
+                f"  [yellow]⚠[/yellow]  OTHD coverage "
+                f"{_fmt_tsid(othd_cov[0])}–{_fmt_tsid(othd_cov[1])} "
+                f"differs from OISD "
+                f"{_fmt_tsid(oisd_cov[0])}–{_fmt_tsid(oisd_cov[1])}"
+            )
 
     def _analyze_clean_plt(self):
         """
@@ -657,7 +694,9 @@ class CaseOrganizer:
         """Rename files after cleanup."""
         self.logger.info("Renaming files...")
 
-        # Filter out redundant files and sort by time step
+        problem = self.case.problem_name
+
+        # OTHD and OISD: sort by tsId start step
         for file_type, files in [('OTHD', othd_files), ('OISD', oisd_files)]:
             if not files:
                 continue
@@ -665,8 +704,6 @@ class CaseOrganizer:
             kept_files = [f for f in files if not f.is_redundant]
             kept_files.sort(key=lambda f: f.start_step)
 
-            # Generate new names
-            problem = self.case.problem_name
             ext = 'othd' if file_type == 'OTHD' else 'oisd'
 
             for i, file_info in enumerate(kept_files, 1):
@@ -679,6 +716,18 @@ class CaseOrganizer:
 
                     if self.args.verbose:
                         self.logger.info(f"  Rename: {old_path.name} → {new_name}")
+
+        # RCV: no reader available, sort by mtime (oldest first = earliest in run)
+        rcv_dir = self.case_dir / 'rcv_files'
+        if rcv_dir.exists():
+            rcv_files = sorted(rcv_dir.glob('*.rcv'), key=lambda f: f.stat().st_mtime)
+            for i, rcv_path in enumerate(rcv_files, 1):
+                new_name = f'{problem}{i}.rcv'
+                new_path = rcv_dir / new_name
+                if rcv_path.name != new_name:
+                    self.files_to_rename.append((rcv_path, new_path))
+                    if self.args.verbose:
+                        self.logger.info(f"  Rename: {rcv_path.name} → {new_name}")
 
     def _show_summary(self):
         """Show summary before deletion."""
@@ -808,19 +857,30 @@ class CaseOrganizer:
             except Exception as e:
                 self.logger.error(f"Failed to delete {file_path}: {e}")
 
-        # Rename files
+        # Rename files — two-phase to avoid collisions when numbering shifts
+        # Phase 1: rename every file to a temp name
+        temp_map: List[Tuple[Path, Path]] = []
         for old_path, new_path in self.files_to_rename:
             try:
-                if log_handle:
-                    log_handle.write(f"Renamed: {old_path} → {new_path.name}\n")
+                tmp_path = old_path.with_name(old_path.name + '.__tmp__')
+                old_path.rename(tmp_path)
+                temp_map.append((tmp_path, new_path))
+            except Exception as e:
+                self.logger.error(f"Failed to stage rename {old_path}: {e}")
 
-                old_path.rename(new_path)
+        # Phase 2: rename each temp file to its final name
+        for tmp_path, new_path in temp_map:
+            try:
+                if log_handle:
+                    log_handle.write(f"Renamed: {new_path.with_name(tmp_path.name)} → {new_path.name}\n")
+
+                tmp_path.rename(new_path)
 
                 if self.args.verbose:
-                    self.logger.info(f"  Renamed: {old_path.name} → {new_path.name}")
+                    self.logger.info(f"  Renamed: → {new_path.name}")
 
             except Exception as e:
-                self.logger.error(f"Failed to rename {old_path}: {e}")
+                self.logger.error(f"Failed to finalise rename {tmp_path} → {new_path}: {e}")
 
         if log_handle:
             log_handle.close()
