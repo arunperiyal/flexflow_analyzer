@@ -102,6 +102,40 @@ fi
 echo ""
 
 # -----------------------------------------------------------------------------
+# Auto-restart configuration (managed by 'run main --dependency')
+# Set to 1 by flexflow-manager when chaining dependent jobs; resets on fresh submit
+# -----------------------------------------------------------------------------
+APPLY_RESTART=0
+
+if [ "$APPLY_RESTART" -eq 1 ]; then
+    echo "Step 1b: Configuring auto-restart..."
+
+    LATEST_OTHD=$(ls -t othd_files/*.othd 2>/dev/null | head -1)
+    if [ -z "$LATEST_OTHD" ]; then
+        echo "Error: APPLY_RESTART=1 but no .othd files found in othd_files/"
+        exit 1
+    fi
+
+    LAST_TSID=$(grep "^tsId " "$LATEST_OTHD" | tail -1 | awk '{print $2}')
+    if [ -z "$LAST_TSID" ]; then
+        echo "Error: Could not read tsId from $LATEST_OTHD"
+        exit 1
+    fi
+
+    echo "  Last tsId: $LAST_TSID (from $(basename "$LATEST_OTHD"))"
+
+    grep -q "restartTsId" "$CONFIG_FILE" \
+        && sed -i "s/^#*[[:space:]]*restartTsId[[:space:]]*=.*/restartTsId = $LAST_TSID/" "$CONFIG_FILE" \
+        || echo "restartTsId = $LAST_TSID" >> "$CONFIG_FILE"
+    grep -q "restartFlag" "$CONFIG_FILE" \
+        && sed -i "s/^#*[[:space:]]*restartFlag[[:space:]]*=.*/restartFlag = 1/" "$CONFIG_FILE" \
+        || echo "restartFlag = 1" >> "$CONFIG_FILE"
+
+    echo "  ✓ simflow.config updated: restartTsId = $LAST_TSID, restartFlag = 1"
+    echo ""
+fi
+
+# -----------------------------------------------------------------------------
 # Validate executables
 # -----------------------------------------------------------------------------
 

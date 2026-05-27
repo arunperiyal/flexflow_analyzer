@@ -637,6 +637,94 @@ def handle_reset(case_dir, console):
     return True
 
 
+_APPLY_RESTART_BLOCK = """\
+# -----------------------------------------------------------------------------
+# Auto-restart configuration (managed by 'run main --dependency')
+# Set to 1 by flexflow-manager when chaining dependent jobs; resets on fresh submit
+# -----------------------------------------------------------------------------
+APPLY_RESTART=0
+
+if [ "$APPLY_RESTART" -eq 1 ]; then
+    echo "Step 1b: Configuring auto-restart..."
+
+    LATEST_OTHD=$(ls -t othd_files/*.othd 2>/dev/null | head -1)
+    if [ -z "$LATEST_OTHD" ]; then
+        echo "Error: APPLY_RESTART=1 but no .othd files found in othd_files/"
+        exit 1
+    fi
+
+    LAST_TSID=$(grep "^tsId " "$LATEST_OTHD" | tail -1 | awk '{print $2}')
+    if [ -z "$LAST_TSID" ]; then
+        echo "Error: Could not read tsId from $LATEST_OTHD"
+        exit 1
+    fi
+
+    echo "  Last tsId: $LAST_TSID (from $(basename "$LATEST_OTHD"))"
+
+    grep -q "restartTsId" "$CONFIG_FILE" \\
+        && sed -i "s/^#*[[:space:]]*restartTsId[[:space:]]*=.*/restartTsId = $LAST_TSID/" "$CONFIG_FILE" \\
+        || echo "restartTsId = $LAST_TSID" >> "$CONFIG_FILE"
+    grep -q "restartFlag" "$CONFIG_FILE" \\
+        && sed -i "s/^#*[[:space:]]*restartFlag[[:space:]]*=.*/restartFlag = 1/" "$CONFIG_FILE" \\
+        || echo "restartFlag = 1" >> "$CONFIG_FILE"
+
+    echo "  ✓ simflow.config updated: restartTsId = $LAST_TSID, restartFlag = 1"
+    echo ""
+fi
+"""
+
+
+def _set_apply_restart(script_path: Path, enable: bool, console) -> bool:
+    """
+    Set APPLY_RESTART=0/1 in mainFlex.sh.
+
+    If the flag variable is already present, flips it in place.
+    If the block is absent (older script), injects it before the
+    'Validate executables' section (or before $MPISIMFLOW as fallback).
+    """
+    import re
+
+    try:
+        text = script_path.read_text()
+    except Exception as e:
+        console.print(f"[red]Error reading {script_path.name}: {e}[/red]")
+        return False
+
+    target = '1' if enable else '0'
+
+    if re.search(r'^APPLY_RESTART=[01]', text, re.MULTILINE):
+        new_text = re.sub(r'^APPLY_RESTART=[01]', f'APPLY_RESTART={target}',
+                          text, flags=re.MULTILINE)
+    else:
+        # Block missing — inject before the validate/run section
+        marker = re.search(
+            r'^# -{5,}\n# Validate executables',
+            text, re.MULTILINE
+        )
+        if not marker:
+            marker = re.search(r'^\$MPISIMFLOW\b', text, re.MULTILINE)
+
+        block = _APPLY_RESTART_BLOCK.replace('APPLY_RESTART=0',
+                                              f'APPLY_RESTART={target}', 1)
+        if marker:
+            pos = marker.start()
+            new_text = text[:pos] + block + '\n' + text[pos:]
+        else:
+            new_text = text + '\n' + block
+
+        console.print(f"[dim]Injected APPLY_RESTART block into {script_path.name}[/dim]")
+
+    try:
+        script_path.write_text(new_text)
+    except Exception as e:
+        console.print(f"[red]Error writing {script_path.name}: {e}[/red]")
+        return False
+
+    action = "enabled" if enable else "reset"
+    console.print(f"[dim]{script_path.name}: APPLY_RESTART {action}[/dim]")
+    return True
+
+
 def handle_restart(case_dir, restart_tsid, console):
     """
     Update simflow.config with restartTsId and restartFlag = 1.
@@ -679,13 +767,31 @@ def submit_main_job(script_path, case_dir, args, console):
         console.print()
         return
 
-    # Handle restart if specified
-    if hasattr(args, 'restart') and args.restart:
+    has_dependency = bool(getattr(args, 'dependency', None))
+    has_restart    = bool(getattr(args, 'restart',    None))
+
+    if has_restart:
+        # Explicit tsId: update config immediately (existing behaviour).
+        # If a dependency is also given the job is still chained, but the
+        # config is already correct so APPLY_RESTART is not needed.
         console.print()
         console.print(f"[bold cyan]Preparing restart from TSID {args.restart}[/bold cyan]")
         console.print()
         if not handle_restart(case_dir, args.restart, console):
             return
+        _set_apply_restart(script_path, False, console)
+
+    elif has_dependency:
+        # No explicit tsId: defer config update to job start via APPLY_RESTART=1.
+        console.print()
+        console.print("[bold cyan]Auto-restart enabled: tsId will be detected at job start[/bold cyan]")
+        console.print()
+        if not _set_apply_restart(script_path, True, console):
+            return
+
+    else:
+        # Fresh submit: ensure any leftover APPLY_RESTART=1 is cleared.
+        _set_apply_restart(script_path, False, console)
 
     console.print()
     console.print("[bold cyan]Submitting Main Simulation Job[/bold cyan]")
@@ -721,8 +827,10 @@ def submit_main_job(script_path, case_dir, args, console):
     table.add_row("Case", case_dir.name)
     table.add_row("Script", script_path.name)
 
-    if hasattr(args, 'restart') and args.restart:
+    if has_restart:
         table.add_row("Mode", f"Restart from TSID {args.restart}")
+    elif has_dependency:
+        table.add_row("Mode", "Auto-restart (tsId detected at job start)")
     else:
         table.add_row("Mode", "New simulation")
 
