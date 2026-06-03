@@ -69,6 +69,16 @@ class FlexFlowParser(argparse.ArgumentParser):
                     )
                     FieldCommand().show_help()
                     sys.exit(2)
+                elif 'def_subcommand' in message or (len(sys.argv) > 1 and sys.argv[1] == 'def'):
+                    # This is a def subcommand error
+                    from src.commands.def_cmd import DefCommand
+                    print(
+                        f"\n{Colors.RED}✗ Error: Unknown subcommand '{invalid_choice}' for 'def'"
+                        f"{Colors.RESET}\n",
+                        file=sys.stderr
+                    )
+                    DefCommand().show_help()
+                    sys.exit(2)
                 else:
                     # This is a main command error
                     print(
@@ -103,6 +113,7 @@ class FlexFlowApp:
         from src.commands.case import CaseCommand
         from src.commands.data import DataCommand
         from src.commands.field import FieldCommand
+        from src.commands.def_cmd import DefCommand
         from src.commands.check import CheckCommand
         from src.commands.visualization import PlotCommand, CompareCommand
         from src.commands.template import TemplateCommand
@@ -116,6 +127,7 @@ class FlexFlowApp:
             CaseCommand,
             DataCommand,
             FieldCommand,
+            DefCommand,
             # Execution commands
             RunCommand,
             # File inspection

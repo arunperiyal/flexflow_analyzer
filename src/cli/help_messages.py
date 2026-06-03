@@ -144,7 +144,10 @@ def print_main_help():
     {Colors.CYAN}field{Colors.RESET}       Work with Tecplot PLT files
                  {Colors.DIM}info{Colors.RESET}     - Show PLT file information
                  {Colors.DIM}extract{Colors.RESET}  - Extract data to CSV
-    
+
+    {Colors.CYAN}def{Colors.RESET}         Inspect and edit .def file parameters
+                 {Colors.DIM}var{Colors.RESET}      - Show or edit define{{}} variables
+
     {Colors.CYAN}template{Colors.RESET}    Generate YAML configuration templates
                  {Colors.DIM}plot{Colors.RESET}     - Plot configuration templates
                  {Colors.DIM}case{Colors.RESET}     - Case creation templates

@@ -142,6 +142,7 @@ class FlexFlowCompleter(Completer):
         'case':     ['show', 'create', 'run', 'organise', 'check', 'status', 'add', 'report', 'upload'],
         'data':     ['show', 'stats'],
         'field':    ['info', 'extract'],
+        'def':      ['var'],
         'run':      ['check', 'pre', 'main', 'post', 'sq', 'sb', 'sc'],
         'template': ['plot', 'case', 'script'],
         'remote':   ['add', 'modify', 'delete', 'list', 'set-path'],
@@ -281,6 +282,15 @@ class FlexFlowCompleter(Completer):
             '--ymax': 'Y maximum bound',
             '--zmin': 'Z minimum bound',
             '--zmax': 'Z maximum bound',
+        },
+
+        # ── def ─────────────────────────────────────────────────────────────
+        ('def', None):       {'--help': 'Show help message', '-h': 'Show help message'},
+        ('def', 'var'):      {
+            '--case':  'Case directory path (default: current directory)',
+            '-c':      'Case directory path (default: current directory)',
+            '--help':  'Show help message',
+            '-h':      'Show help message',
         },
 
         # ── run ─────────────────────────────────────────────────────────────

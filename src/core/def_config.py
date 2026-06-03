@@ -151,6 +151,68 @@ class DefConfig:
     # Write support
     # ------------------------------------------------------------------
 
+    def set_variable(self, name: str, value: Union[str, float, int]) -> bool:
+        """
+        Update the value of a define{} block variable in the .def file.
+
+        Rewrites the ``value = ...`` line of the ``define{}`` block whose
+        ``variable = NAME`` matches ``name``, preserving the original
+        indentation and ``value`` keyword alignment.
+
+        Parameters
+        ----------
+        name:
+            The variable name to update (case-sensitive, as in the file).
+        value:
+            The new value to write.
+
+        Returns
+        -------
+        bool
+            True if the variable was found and updated, False otherwise.
+        """
+        if not self._path.exists():
+            raise FileNotFoundError(f".def file not found: {self._path}")
+
+        lines = self._path.read_text().splitlines(keepends=True)
+
+        in_block = False
+        is_target = False
+        found = False
+
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+
+            if stripped.startswith('define{'):
+                in_block = True
+                is_target = False
+                continue
+
+            if in_block and stripped == '}':
+                in_block = False
+                is_target = False
+                continue
+
+            if in_block:
+                if stripped.startswith('variable') and '=' in stripped:
+                    var = stripped.split('=', 1)[1].strip()
+                    is_target = (var == name)
+                elif stripped.startswith('value') and '=' in stripped and is_target:
+                    # Preserve everything up to and including the '=' so the
+                    # original indentation and keyword alignment are kept.
+                    key_part = line.split('=', 1)[0]
+                    newline = '\n' if line.endswith('\n') else ''
+                    lines[i] = f"{key_part}= {value}{newline}"
+                    found = True
+                    is_target = False
+
+        if not found:
+            return False
+
+        self._path.write_text(''.join(lines))
+        self._variables[name] = str(value)
+        return True
+
     def update_output_frequency(self, frequency: int) -> None:
         """
         Update outFreq values in outputSimulation and outputRestart blocks.

@@ -29,7 +29,7 @@ _flexflow_completions() {
     done
 
     # Top-level commands and flags
-    local commands="info new preview statistics plot compare template tecplot docs case data field config"
+    local commands="info new preview statistics plot compare template tecplot docs case data field def config"
     local global_flags="--install --uninstall --update --completion --examples --version --help -h"
 
     # If no command yet, complete commands and global flags
@@ -196,6 +196,30 @@ _flexflow_completions() {
                         fi
                         ;;
                 esac
+            fi
+            ;;
+        def)
+            # Parse for subcommand (var)
+            local subcommand=""
+            for (( i=2; i < cword; i++ )); do
+                if [[ "${words[i]}" == "var" ]]; then
+                    subcommand="${words[i]}"
+                    break
+                fi
+            done
+
+            if [[ -z "$subcommand" ]]; then
+                # No subcommand yet
+                local flags="-h --help"
+                COMPREPLY=( $(compgen -W "var $flags" -- "$cur") )
+            else
+                # def var [name] [value]
+                local flags="-c --case -h --help"
+                if [[ "$cur" == -* ]]; then
+                    COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
+                elif [[ "$prev" == "--case" ]] || [[ "$prev" == "-c" ]]; then
+                    _flexflow_complete_cases
+                fi
             fi
             ;;
         config)
