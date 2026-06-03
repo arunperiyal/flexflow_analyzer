@@ -34,6 +34,7 @@ class RunCommand(BaseCommand):
             help='Validate case directory structure'
         )
         check_parser.add_argument('case', nargs='?', help='Case directory')
+        check_parser.add_argument('--headers', action='store_true', help='Show SBATCH header info (partition, tasks, walltime) for job scripts')
         check_parser.add_argument('-v', '--verbose', action='store_true', help='Verbose output')
         check_parser.add_argument('-h', '--help', action='store_true', help='Show help')
 

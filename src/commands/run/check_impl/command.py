@@ -48,6 +48,11 @@ def _execute_check_on_case(case_dir: Path, args):
     console = Console()
     verbose = hasattr(args, 'verbose') and args.verbose
 
+    # Focused mode: only show job-script SBATCH header info
+    if getattr(args, 'headers', False):
+        check_job_headers(case_dir, console)
+        return
+
     # Validate case directory
     console.print()
     console.print(f"[bold cyan]Validating case directory:[/bold cyan] {case_dir.name}")
@@ -210,6 +215,103 @@ def check_job_scripts(case_dir, verbose, console):
     return results
 
 
+def parse_sbatch_header(script_path: Path) -> dict:
+    """
+    Parse SBATCH header directives from a job script.
+
+    Returns a dict with keys: job_name, partition, qos, ntasks, nodes,
+    cpus_per_task, ntasks_per_node, time (values are str or None).
+    """
+    # short/long flag -> result key
+    flags = {
+        'J': 'job_name',          'job-name': 'job_name',
+        'p': 'partition',         'partition': 'partition',
+        'q': 'qos',               'qos': 'qos',
+        'n': 'ntasks',            'ntasks': 'ntasks',
+        'N': 'nodes',             'nodes': 'nodes',
+        'cpus-per-task': 'cpus_per_task',
+        'ntasks-per-node': 'ntasks_per_node',
+        't': 'time',              'time': 'time',
+    }
+    result = {key: None for key in (
+        'job_name', 'partition', 'qos', 'ntasks',
+        'nodes', 'cpus_per_task', 'ntasks_per_node', 'time')}
+
+    try:
+        with open(script_path) as f:
+            for line in f:
+                stripped = line.strip()
+                if not stripped.startswith('#SBATCH'):
+                    continue
+                body = stripped[len('#SBATCH'):].strip()
+                # Accept "-J name", "--job-name name", "--job-name=name"
+                m = re.match(r'(--?[A-Za-z-]+)(?:[=\s]+(\S+))?', body)
+                if not m:
+                    continue
+                flag = m.group(1).lstrip('-')
+                value = m.group(2)
+                key = flags.get(flag)
+                if key and value is not None:
+                    result[key] = value.split('#')[0].strip()
+    except Exception:
+        pass
+
+    return result
+
+
+def check_job_headers(case_dir: Path, console: Console):
+    """Show SBATCH header info (partition, tasks, walltime, ...) for job scripts."""
+    script_checks = [
+        ('pre',  ['preFlex.sh', 'pre.sh', 'preprocessing.sh']),
+        ('main', ['mainFlex.sh', 'submit.sh', 'main.sh']),
+        ('post', ['postFlex.sh', 'PostSubmit.sh', 'post.sh']),
+    ]
+
+    console.print()
+    console.print(f"[bold cyan]Job script headers:[/bold cyan] {case_dir.name}")
+    console.print()
+
+    table = Table(box=box.SIMPLE, show_header=True, header_style="bold yellow")
+    table.add_column("Stage", style="cyan")
+    table.add_column("Script", style="white")
+    table.add_column("Job Name")
+    table.add_column("Partition")
+    table.add_column("QOS")
+    table.add_column("Tasks", justify="right")
+    table.add_column("Nodes", justify="right")
+    table.add_column("Wall time")
+
+    def _v(x):
+        return x if x else '[dim]—[/dim]'
+
+    found_any = False
+    for stage, names in script_checks:
+        script_path = next((case_dir / n for n in names if (case_dir / n).exists()), None)
+        if script_path is None:
+            table.add_row(stage, '[dim]not found[/dim]', '—', '—', '—', '—', '—', '—')
+            continue
+
+        found_any = True
+        h = parse_sbatch_header(script_path)
+        table.add_row(
+            stage,
+            script_path.name,
+            _v(h['job_name']),
+            _v(h['partition']),
+            _v(h['qos']),
+            _v(h['ntasks']),
+            _v(h['nodes']),
+            _v(h['time']),
+        )
+
+    console.print(table)
+    console.print()
+
+    if not found_any:
+        console.print("[yellow]No job scripts found in this case directory[/yellow]")
+        console.print()
+
+
 def check_executable_paths(case_dir, verbose, console):
     """Check if executable paths in scripts are valid."""
     executables_to_check = ['gmsh', 'simGmshCnvt', 'mpiSimflow', 'simPlt', 'simPlt2Bin']
@@ -325,12 +427,17 @@ Also checks the status of the last submitted SLURM job.
     run check [case_directory] [options]
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
+    {Colors.YELLOW}--headers{Colors.RESET}      Show SBATCH header info (job name, partition, QOS, tasks,
+                   nodes, CPUs/task, wall time) for pre/main/post scripts
     {Colors.YELLOW}-v, --verbose{Colors.RESET}  Show detailed validation results and error messages
     {Colors.YELLOW}-h, --help{Colors.RESET}     Show this help message
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
     # Check specific case and last SLURM job
     run check Case001
+
+    # Show SBATCH headers for the job scripts
+    run check Case001 --headers
 
     # Check with detailed output
     run check Case001 --verbose

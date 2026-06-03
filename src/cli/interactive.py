@@ -296,7 +296,10 @@ class FlexFlowCompleter(Completer):
 
         # ── run ─────────────────────────────────────────────────────────────
         ('run', None):       {**_COMMON_FLAGS},
-        ('run', 'check'):    {**_COMMON_FLAGS},
+        ('run', 'check'):    {
+            **_COMMON_FLAGS,
+            '--headers': 'Show SBATCH header info (partition, tasks, walltime) for job scripts',
+        },
         ('run', 'pre'):      {
             **_COMMON_FLAGS,
             '--gmsh':      'Override gmsh executable path (sbatch --export, script unchanged)',
