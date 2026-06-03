@@ -8,7 +8,13 @@ from rich.panel import Panel
 from rich.table import Table
 from rich import box
 
-from ..shared_helpers import apply_partition_header, execute_on_all_cases, get_case_name_and_base_dir
+from ..shared_helpers import (
+    apply_partition_header,
+    execute_on_all_cases,
+    get_case_name_and_base_dir,
+    check_jobname_consistency,
+    show_jobname_info,
+)
 
 
 def _apply_partition_header(script_path: Path, partition: str, console) -> bool:
@@ -308,30 +314,10 @@ def show_dry_run(script_path, case_dir, args, console):
     console.print()
 
     # Show job-name check (informational only in dry-run)
-    _show_jobname_info(script_path, case_dir, console)
+    show_jobname_info(script_path, case_dir, 'main', console)
 
     # Show consistency check (informational only in dry-run)
     _show_task_consistency_info(script_path, case_dir, console)
-
-
-def _show_jobname_info(script_path, case_dir, console):
-    """Print an expected vs current job-name comparison (no prompt). Used by dry-run."""
-    expected = f'main{case_dir.name}'
-    job_name = _parse_script_jobname(script_path)
-
-    tbl = Table(box=box.SIMPLE, show_header=True, header_style='bold')
-    tbl.add_column('Parameter',   style='cyan')
-    tbl.add_column('Expected',    justify='right', style='yellow')
-    tbl.add_column('Job name',    justify='right', style='blue')
-    tbl.add_column('Match?',      justify='center')
-
-    job_name_str = job_name if job_name is not None else '[dim](not set)[/dim]'
-    match_icon = '[green]✓[/green]' if job_name == expected else '[red]✗[/red]'
-    tbl.add_row('job name', expected, job_name_str, match_icon)
-
-    console.print('[bold]Job name check:[/bold]')
-    console.print(tbl)
-    console.print()
 
 
 def _show_task_consistency_info(script_path, case_dir, console):
@@ -402,136 +388,6 @@ def _parse_script_sbatch(script_path) -> dict:
     except Exception:
         pass
     return result
-
-
-def _parse_script_jobname(script_path):
-    """Parse #SBATCH -J / --job-name from a job script (returns str or None)."""
-    import re
-    try:
-        with open(script_path) as f:
-            for line in f:
-                line = line.strip()
-                if not line.startswith('#SBATCH'):
-                    continue
-                body = line[7:].strip()
-                m = re.match(r'(?:-J|--job-name)[=\s]+(\S+)', body)
-                if m:
-                    # Strip any inline comment fragment that got attached
-                    return m.group(1).split('#')[0]
-    except Exception:
-        pass
-    return None
-
-
-def _set_script_jobname(script_path: Path, job_name: str, console) -> bool:
-    """
-    Update #SBATCH -J/--job-name in the script.
-
-    If no job-name directive exists, add one after the SBATCH header block.
-    """
-    import re
-
-    try:
-        lines = script_path.read_text().splitlines(keepends=True)
-    except Exception as e:
-        console.print(f"[red]Error reading {script_path.name}: {e}[/red]")
-        return False
-
-    jobname_pattern = re.compile(r'(^\s*#SBATCH\s+(?:-J|--job-name)(?:=|\s+))\S+')
-    updated = False
-
-    for i, line in enumerate(lines):
-        if jobname_pattern.search(line):
-            lines[i] = jobname_pattern.sub(lambda m: m.group(1) + job_name, line, count=1)
-            updated = True
-
-    if not updated:
-        insert_idx = None
-        for i, line in enumerate(lines):
-            if line.strip().startswith('#SBATCH'):
-                insert_idx = i + 1
-        new_line = f"#SBATCH --job-name={job_name}\n"
-        if insert_idx is not None:
-            lines.insert(insert_idx, new_line)
-        elif lines and lines[0].startswith('#!'):
-            lines.insert(1, new_line)
-        else:
-            lines.insert(0, new_line)
-
-    try:
-        script_path.write_text(''.join(lines))
-        console.print(f"[dim]Updated {script_path.name}: --job-name={job_name}[/dim]")
-        console.print()
-        return True
-    except Exception as e:
-        console.print(f"[red]Error updating {script_path.name}: {e}[/red]")
-        return False
-
-
-def check_jobname_consistency(script_path, case_dir, console) -> bool:
-    """
-    Compare the SBATCH job name in the script with the expected name.
-
-    The FlexFlow convention (see templates/scripts/*.sh) is
-    ``<script_type><case_name>`` — for the main script the job name is
-    ``main<case_name>``. On mismatch (or a missing job name) offers to set
-    the job to the expected name, submit anyway, or abort.
-
-    Returns True to proceed with submission, False to abort.
-    """
-    case_name = case_dir.name
-    expected = f'main{case_name}'
-    job_name = _parse_script_jobname(script_path)
-
-    # Matches — nothing to do.
-    if job_name is not None and job_name == expected:
-        return True
-
-    console.print()
-    if job_name is None:
-        console.print(
-            f"[bold yellow]⚠  No #SBATCH job name found in {script_path.name}[/bold yellow]"
-        )
-        console.print(f"[dim]Expected job name: {expected}[/dim]")
-        console.print()
-        console.print(f"  1. Set job name to '{expected}' and submit")
-        console.print("  2. Submit anyway (no job name)")
-        console.print("  3. Abort")
-    else:
-        console.print("[bold yellow]⚠  Job name does not match the expected name[/bold yellow]")
-        tbl = Table(box=box.SIMPLE, show_header=False)
-        tbl.add_column("Field", style="cyan")
-        tbl.add_column("Value")
-        tbl.add_row("Expected job name", expected)
-        tbl.add_row("Current job name",  job_name)
-        console.print(tbl)
-        console.print()
-        console.print(f"  1. Rename job to '{expected}' and submit")
-        console.print("  2. Submit anyway (keep current job name)")
-        console.print("  3. Abort")
-
-    console.print()
-    console.print('Choice [1/2/3]: ', end='')
-
-    try:
-        answer = input().strip().lower()
-    except (EOFError, KeyboardInterrupt):
-        console.print()
-        console.print('[yellow]Aborted[/yellow]')
-        return False
-
-    if answer in {'1', 'r', 'f'}:
-        if _set_script_jobname(script_path, expected, console):
-            return True
-        console.print("[yellow]Aborting — fix the script manually and re-run[/yellow]")
-        return False
-
-    if answer in {'2', 's'}:
-        return True
-
-    console.print('[yellow]Aborted[/yellow]')
-    console.print()
-    return False
 
 
 def _set_script_ntasks(script_path: Path, ntasks: int, console) -> bool:
@@ -972,8 +828,8 @@ def submit_main_job(script_path, case_dir, args, console):
         if not _set_script_ntasks(script_path, np_override, console):
             return
 
-    # Ensure the SBATCH job name matches the case name before submitting
-    if not check_jobname_consistency(script_path, case_dir, console):
+    # Ensure the SBATCH job name matches the expected name before submitting
+    if not check_jobname_consistency(script_path, case_dir, 'main', console):
         return
 
     # Display job info after any script modifications

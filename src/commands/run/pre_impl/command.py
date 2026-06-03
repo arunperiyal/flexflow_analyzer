@@ -7,7 +7,13 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from rich import box
-from ..shared_helpers import apply_partition_header, execute_on_all_cases, get_case_name_and_base_dir
+from ..shared_helpers import (
+    apply_partition_header,
+    execute_on_all_cases,
+    get_case_name_and_base_dir,
+    check_jobname_consistency,
+    show_jobname_info,
+)
 
 
 def execute_pre(args):
@@ -194,6 +200,9 @@ def show_dry_run(script_path, case_dir, args, console):
     console.print(f"[dim]  {' '.join(cmd_parts)}[/dim]")
     console.print()
 
+    # Show job-name check (informational only in dry-run)
+    show_jobname_info(script_path, case_dir, 'pre', console)
+
 
 def parse_sbatch_directives(script_path):
     """Parse SBATCH directives from script."""
@@ -249,6 +258,10 @@ def submit_preprocessing_job(script_path, case_dir, args, console):
         if not apply_partition_header(script_path, partition_override, 'pre', console):
             console.print(f"[yellow]Warning: Partition header '{partition_override}.header' not found — proceeding with existing script[/yellow]")
             console.print()
+
+    # Ensure the SBATCH job name matches the expected name before submitting
+    if not check_jobname_consistency(script_path, case_dir, 'pre', console):
+        return
 
     console.print()
     console.print("[bold cyan]Submitting Preprocessing Job[/bold cyan]")
