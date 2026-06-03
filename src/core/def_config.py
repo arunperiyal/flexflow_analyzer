@@ -47,6 +47,7 @@ class DefConfig:
         self._path = Path(def_path)
         self._tsc: dict = {}        # timeSteppingControl values
         self._variables: dict = {}  # define{} block variables
+        self._file_refs: list = []  # filenames referenced via File( "..." )
         if self._path.exists():
             self._parse()
 
@@ -62,6 +63,7 @@ class DefConfig:
 
         self._parse_time_stepping_control(content)
         self._parse_define_blocks(content)
+        self._parse_file_references(content)
 
     def _parse_time_stepping_control(self, content: str) -> None:
         match = re.search(r'timeSteppingControl\s*\{([^}]*)\}', content, re.DOTALL)
@@ -110,6 +112,27 @@ class DefConfig:
                     self._variables[current_var] = val
                     current_var = None
 
+    def _parse_file_references(self, content: str) -> None:
+        """
+        Collect filenames referenced via ``File( "name" )``.
+
+        Whitespace inside the parentheses varies between cases, and the same
+        file may be referenced many times; duplicates are removed while the
+        order of first appearance is preserved. Lines commented out with
+        ``#`` or ``//`` are ignored.
+        """
+        pattern = re.compile(r'File\s*\(\s*"([^"]+)"\s*\)')
+        seen = set()
+        for line in content.splitlines():
+            stripped = line.strip()
+            if stripped.startswith('#') or stripped.startswith('//'):
+                continue
+            for match in pattern.finditer(line):
+                name = match.group(1).strip()
+                if name and name not in seen:
+                    seen.add(name)
+                    self._file_refs.append(name)
+
     # ------------------------------------------------------------------
     # Convenience properties
     # ------------------------------------------------------------------
@@ -146,6 +169,11 @@ class DefConfig:
     def variables(self) -> dict:
         """Dict of name → value from all define{} blocks."""
         return dict(self._variables)
+
+    @property
+    def file_references(self) -> list:
+        """Unique filenames referenced via File( "..." ), in first-seen order."""
+        return list(self._file_refs)
 
     # ------------------------------------------------------------------
     # Write support

@@ -51,8 +51,14 @@ Must specify at least one action flag.
           • Lists each missing tsId explicitly
           • Reports extra files not in the expected set
 
+    {Colors.CYAN}--def{Colors.RESET}
+        Check that every file referenced via File( "..." ) in the .def file
+        exists in the case directory:
+          • Lists each referenced file as present (✓) or missing (✗)
+          • Reports how many referenced files are present / missing
+
     {Colors.CYAN}--all{Colors.RESET}
-        Run all checks in order: --config, --run, --archive, --plt.
+        Run all checks in order: --config, --def, --run, --archive, --plt.
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
     -v, --verbose     Show detailed output
@@ -74,6 +80,9 @@ Must specify at least one action flag.
 
     # Check PLT files against expected set
     case check CS4SG1U1 --plt
+
+    # Check .def File() references exist
+    case check CS4SG1U1 --def
 
     # Run everything
     case check CS4SG1U1 --all

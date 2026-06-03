@@ -36,16 +36,17 @@ def execute_case_check(args):
         print_check_help()
         return
 
-    do_run     = getattr(args, 'run',     False)
-    do_archive = getattr(args, 'archive', False)
-    do_config  = getattr(args, 'config',  False)
-    do_plt     = getattr(args, 'plt',     False)
-    do_all     = getattr(args, 'all',     False)
+    do_run     = getattr(args, 'run',       False)
+    do_archive = getattr(args, 'archive',   False)
+    do_config  = getattr(args, 'config',    False)
+    do_plt     = getattr(args, 'plt',       False)
+    do_def     = getattr(args, 'check_def', False)
+    do_all     = getattr(args, 'all',       False)
 
     if do_all:
-        do_run = do_archive = do_config = do_plt = True
+        do_run = do_archive = do_config = do_plt = do_def = True
 
-    if not (do_run or do_archive or do_config or do_plt):
+    if not (do_run or do_archive or do_config or do_plt or do_def):
         print_check_help()
         return
 
@@ -56,7 +57,7 @@ def execute_case_check(args):
 
     # Check if wildcard - if so, iterate over all cases
     if is_wildcard_case(case_name):
-        _execute_check_on_all_cases(args, do_run, do_archive, do_config, do_plt)
+        _execute_check_on_all_cases(args, do_run, do_archive, do_config, do_plt, do_def)
         return
 
     # Single case execution
@@ -64,7 +65,7 @@ def execute_case_check(args):
     if case_dir is None:
         return
 
-    _execute_check_on_case(case_dir, do_run, do_archive, do_config, do_plt)
+    _execute_check_on_case(case_dir, do_run, do_archive, do_config, do_plt, do_def)
 
 
 def _get_case_name(args) -> Optional[str]:
@@ -84,7 +85,7 @@ def _get_case_name(args) -> Optional[str]:
         return None
 
 
-def _execute_check_on_all_cases(args, do_run, do_archive, do_config, do_plt):
+def _execute_check_on_all_cases(args, do_run, do_archive, do_config, do_plt, do_def):
     """Execute check on all cases from .cases file."""
     from src.cli.interactive import InteractiveShell
     
@@ -118,14 +119,14 @@ def _execute_check_on_all_cases(args, do_run, do_archive, do_config, do_plt):
             console.print(f"[red]Error:[/red] Case directory not found: {case_path}\n")
             continue
 
-        _execute_check_on_case(case_path, do_run, do_archive, do_config, do_plt)
+        _execute_check_on_case(case_path, do_run, do_archive, do_config, do_plt, do_def)
 
     console.print(f"[cyan]{'─' * 60}[/cyan]")
     console.print(f"[green]✓ Processed {len(cases)} cases[/green]")
     console.print(f"[cyan]{'─' * 60}[/cyan]\n")
 
 
-def _execute_check_on_case(case_dir: Path, do_run, do_archive, do_config, do_plt):
+def _execute_check_on_case(case_dir: Path, do_run, do_archive, do_config, do_plt, do_def):
     """Execute check on a single case."""
     logger  = Logger(verbose=False)
     console = Console()
@@ -146,6 +147,10 @@ def _execute_check_on_case(case_dir: Path, do_run, do_archive, do_config, do_plt
 
     if do_config:
         ok = _check_config(cfg, case_dir, console)
+        any_error = any_error or not ok
+
+    if do_def:
+        ok = _check_def(cfg, case_dir, console)
         any_error = any_error or not ok
 
     if do_run:
@@ -435,6 +440,70 @@ def _check_archive(cfg: dict, case_dir: Path, console: Console):
     if not found_any:
         console.print("  [dim]No archived files found (othd_files/ and oisd_files/ are empty or missing)[/dim]")
         console.print()
+
+
+# ---------------------------------------------------------------------------
+# --def check
+# ---------------------------------------------------------------------------
+
+def _check_def(cfg, case_dir: Path, console: Console) -> bool:
+    """Verify every File( "..." ) referenced in the .def file exists.
+
+    Returns True if all referenced files are present (or there are none).
+    """
+    console.print("[bold]Def file check[/bold]")
+
+    from ....core.def_config import DefConfig
+    def_cfg = DefConfig.find(case_dir, cfg.problem)
+
+    if not def_cfg.exists:
+        console.print("  [red]✗[/red]  No .def file found in case directory")
+        console.print()
+        return False
+
+    refs = def_cfg.file_references
+    if not refs:
+        console.print(f"  [dim]—[/dim]  No File( \"...\" ) references in {def_cfg.path.name}")
+        console.print()
+        return True
+
+    base_dir = def_cfg.path.parent
+
+    tbl = Table(
+        title=f"File() references — {def_cfg.path.name}",
+        box=box.SIMPLE,
+        show_header=True,
+        header_style="bold yellow",
+    )
+    tbl.add_column("", width=2)
+    tbl.add_column("File", style="cyan")
+    tbl.add_column("Status", style="white")
+
+    missing = []
+    for name in refs:
+        ref_path = Path(name)
+        full = ref_path if ref_path.is_absolute() else (base_dir / ref_path)
+        if full.exists():
+            tbl.add_row("[green]✓[/green]", name, "[green]present[/green]")
+        else:
+            tbl.add_row("[red]✗[/red]", name, "[red]missing[/red]")
+            missing.append(name)
+
+    console.print(tbl)
+
+    n_total = len(refs)
+    n_present = n_total - len(missing)
+    if missing:
+        console.print(
+            f"  [red]✗[/red]  {n_present}/{n_total} referenced files present  "
+            f"([red]{len(missing)} missing[/red])"
+        )
+    else:
+        console.print(
+            f"  [green]✓[/green]  all {n_total} referenced files present"
+        )
+    console.print()
+    return not missing
 
 
 # ---------------------------------------------------------------------------

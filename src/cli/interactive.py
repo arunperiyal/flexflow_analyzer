@@ -203,7 +203,8 @@ class FlexFlowCompleter(Completer):
             '--archive': 'Check all archived files in othd_files/oisd_files',
             '--config':  'Validate simflow.config consistency',
             '--plt':     'Check PLT files against expected set (outFreq/maxTimeSteps)',
-            '--all':     'Run all checks (--run + --archive + --config + --plt)',
+            '--def':     'Check that all File() references in the .def file exist',
+            '--all':     'Run all checks (--run + --archive + --config + --plt + --def)',
         },
         ('case', 'add'):    {
             **_COMMON_FLAGS,
