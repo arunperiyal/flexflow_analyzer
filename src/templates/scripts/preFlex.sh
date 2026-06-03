@@ -61,6 +61,9 @@ fi
 # Mesh output file
 MSH_FILE="${PROBLEM}.msh"
 
+# CONVERT_ONLY: skip gmsh meshing and run only simGmshCnvt (env var, default: 0)
+CONVERT_ONLY=${CONVERT_ONLY:-0}
+
 # -----------------------------------------------------------------------------
 # Display job configuration
 # -----------------------------------------------------------------------------
@@ -73,6 +76,9 @@ echo "Geo File:     $GEO_FILE"
 echo "Mesh File:    $MSH_FILE"
 echo "Processes:    $SLURM_NTASKS"
 echo "CPUs/Task:    $SLURM_CPUS_PER_TASK"
+if [ "$CONVERT_ONLY" = "1" ]; then
+    echo "Mode:         convert-only (simGmshCnvt only, skipping gmsh)"
+fi
 echo "=========================================="
 echo ""
 
@@ -80,7 +86,7 @@ echo ""
 # Validate executables
 # -----------------------------------------------------------------------------
 
-if ! command -v $GMSH &> /dev/null; then
+if [ "$CONVERT_ONLY" != "1" ] && ! command -v $GMSH &> /dev/null; then
     echo "Error: gmsh not found: $GMSH"
     exit 1
 fi
@@ -97,24 +103,34 @@ export OMP_NUM_THREADS=${OMP_NUM_THREADS:-$SLURM_CPUS_PER_TASK}
 # Step 1: Generate mesh with Gmsh
 # -----------------------------------------------------------------------------
 
-echo "Step 1: Running gmsh to generate mesh..."
-echo "Command: $GMSH -3 $GEO_FILE -o $MSH_FILE"
+if [ "$CONVERT_ONLY" = "1" ]; then
+    echo "Step 1: Skipping gmsh (convert-only mode)"
+    if [ ! -f "$MSH_FILE" ]; then
+        echo "Error: convert-only requested but mesh file not found: $MSH_FILE"
+        exit 1
+    fi
+    echo "✓ Using existing mesh: $MSH_FILE"
+    echo ""
+else
+    echo "Step 1: Running gmsh to generate mesh..."
+    echo "Command: $GMSH -3 $GEO_FILE -o $MSH_FILE"
 
-$GMSH -3 $GEO_FILE -o $MSH_FILE
-GMSH_EXIT=$?
+    $GMSH -3 $GEO_FILE -o $MSH_FILE
+    GMSH_EXIT=$?
 
-if [ $GMSH_EXIT -ne 0 ]; then
-    echo "Error: gmsh failed with exit code $GMSH_EXIT"
-    exit $GMSH_EXIT
+    if [ $GMSH_EXIT -ne 0 ]; then
+        echo "Error: gmsh failed with exit code $GMSH_EXIT"
+        exit $GMSH_EXIT
+    fi
+
+    if [ ! -f "$MSH_FILE" ]; then
+        echo "Error: Mesh file was not created: $MSH_FILE"
+        exit 1
+    fi
+
+    echo "✓ Mesh generation completed successfully"
+    echo ""
 fi
-
-if [ ! -f "$MSH_FILE" ]; then
-    echo "Error: Mesh file was not created: $MSH_FILE"
-    exit 1
-fi
-
-echo "✓ Mesh generation completed successfully"
-echo ""
 
 # -----------------------------------------------------------------------------
 # Step 2: Convert mesh to FlexFlow format

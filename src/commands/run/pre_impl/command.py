@@ -156,6 +156,10 @@ def show_dry_run(script_path, case_dir, args, console):
     table.add_row("Script", script_path.name)
     table.add_row("Working Directory", str(case_dir))
 
+    convert_only = getattr(args, 'convert', False)
+    if convert_only:
+        table.add_row("Mode", "convert-only (simGmshCnvt only, skipping gmsh)")
+
     # Check if partition header will be applied
     partition_override = getattr(args, 'partition', None)
     if partition_override:
@@ -190,15 +194,30 @@ def show_dry_run(script_path, case_dir, args, console):
     console.print(f"[dim]  cd {case_dir}[/dim]")
 
     cmd_parts = ['sbatch']
-    if gmsh_override:
-        cmd_parts.append(f'--export=GMSH={gmsh_override}')
     if account_override:
         cmd_parts.append(f'--account={account_override}')
     if qos_override:
         cmd_parts.append(f'--qos={qos_override}')
+    export_parts = []
+    if gmsh_override:
+        export_parts.append(f'GMSH={gmsh_override}')
+    if convert_only:
+        export_parts.append('CONVERT_ONLY=1')
+    if export_parts:
+        cmd_parts.append(f'--export=ALL,{",".join(export_parts)}')
     cmd_parts.append(script_path.name)
     console.print(f"[dim]  {' '.join(cmd_parts)}[/dim]")
     console.print()
+
+    if convert_only and not _script_supports_convert(script_path):
+        console.print(
+            f"[yellow]Warning: {script_path.name} does not support --convert "
+            f"(no CONVERT_ONLY guard) — gmsh meshing would still run.[/yellow]"
+        )
+        console.print(
+            "[dim]Regenerate it with 'template script pre' to enable convert-only mode.[/dim]"
+        )
+        console.print()
 
     # Show job-name check (informational only in dry-run)
     show_jobname_info(script_path, case_dir, 'pre', console)
@@ -259,6 +278,19 @@ def submit_preprocessing_job(script_path, case_dir, args, console):
             console.print(f"[yellow]Warning: Partition header '{partition_override}.header' not found — proceeding with existing script[/yellow]")
             console.print()
 
+    # Warn if --convert is requested but the script predates the CONVERT_ONLY
+    # guard — it would run full meshing anyway, defeating the purpose.
+    if getattr(args, 'convert', False) and not _script_supports_convert(script_path):
+        console.print(
+            f"[yellow]Warning: {script_path.name} does not support --convert "
+            f"(no CONVERT_ONLY guard).[/yellow]"
+        )
+        console.print(
+            "[dim]Regenerate it with 'template script pre' to enable convert-only mode. "
+            "Submitting will still run gmsh meshing.[/dim]"
+        )
+        console.print()
+
     # Ensure the SBATCH job name matches the expected name before submitting
     if not check_jobname_consistency(script_path, case_dir, 'pre', console):
         return
@@ -268,6 +300,7 @@ def submit_preprocessing_job(script_path, case_dir, args, console):
     console.print()
 
     gmsh_override = getattr(args, 'gmsh', None)
+    convert_only = getattr(args, 'convert', False)
 
     # Display job info
     table = Table(box=box.SIMPLE, show_header=False)
@@ -276,6 +309,8 @@ def submit_preprocessing_job(script_path, case_dir, args, console):
 
     table.add_row("Case", case_dir.name)
     table.add_row("Script", script_path.name)
+    if convert_only:
+        table.add_row("Mode", "convert-only (simGmshCnvt only, skipping gmsh)")
 
     # Parse SBATCH info
     sbatch_info = parse_sbatch_directives(script_path)
@@ -300,12 +335,21 @@ def submit_preprocessing_job(script_path, case_dir, args, console):
     try:
         # Build sbatch command
         cmd = ['sbatch']
-        if gmsh_override:
-            cmd.append(f'--export=GMSH={gmsh_override}')
         if account_override:
             cmd.append(f'--account={account_override}')
         if qos_override:
             cmd.append(f'--qos={qos_override}')
+
+        # Combine all env overrides into a single --export (only the last
+        # --export is honored by sbatch, so they must not be split).
+        export_parts = []
+        if gmsh_override:
+            export_parts.append(f'GMSH={gmsh_override}')
+        if convert_only:
+            export_parts.append('CONVERT_ONLY=1')
+        if export_parts:
+            cmd.append(f'--export=ALL,{",".join(export_parts)}')
+
         cmd.append(script_path.name)
 
         # Submit job using sbatch
@@ -351,6 +395,14 @@ def submit_preprocessing_job(script_path, case_dir, args, console):
         console.print()
 
 
+def _script_supports_convert(script_path):
+    """True if the script honors CONVERT_ONLY (i.e. has the convert-only guard)."""
+    try:
+        return 'CONVERT_ONLY' in script_path.read_text()
+    except Exception:
+        return False
+
+
 def check_slurm_available():
     """Check if SLURM commands are available."""
     try:
@@ -375,6 +427,7 @@ This typically runs mesh generation (gmsh) and mesh conversion (simGmshCnvt).
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
     {Colors.YELLOW}--gmsh PATH{Colors.RESET}      Override gmsh executable (sbatch --export=GMSH=PATH, script unchanged)
+    {Colors.YELLOW}--convert{Colors.RESET}        Skip gmsh meshing; run only simGmshCnvt (mesh must already exist)
     {Colors.YELLOW}--partition NAME{Colors.RESET} Apply partition header to script
     {Colors.YELLOW}--dry-run{Colors.RESET}        Show what would be submitted without actually submitting
     {Colors.YELLOW}--show{Colors.RESET}           Display the script content
@@ -390,6 +443,9 @@ This typically runs mesh generation (gmsh) and mesh conversion (simGmshCnvt).
 
     # Override gmsh path at submit time (does not modify preFlex.sh)
     run pre Case001 --gmsh /usr/local/bin/gmsh
+
+    # Skip meshing and only run the mesh conversion (mesh already exists)
+    run pre Case001 --convert
 
     # Apply partition header before submission
     run pre Case001 --partition shared

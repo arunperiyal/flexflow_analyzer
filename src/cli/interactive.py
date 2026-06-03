@@ -300,6 +300,7 @@ class FlexFlowCompleter(Completer):
         ('run', 'pre'):      {
             **_COMMON_FLAGS,
             '--gmsh':      'Override gmsh executable path (sbatch --export, script unchanged)',
+            '--convert':   'Skip gmsh meshing; run only simGmshCnvt (mesh must exist)',
             '--partition': 'Apply partition header to script',
             '--dry-run':   'Preview without submitting',
             '--show':      'Display script contents',

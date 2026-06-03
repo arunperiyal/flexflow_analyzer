@@ -45,6 +45,7 @@ class RunCommand(BaseCommand):
         )
         pre_parser.add_argument('case', nargs='?', help='Case directory')
         pre_parser.add_argument('--gmsh', type=str, metavar='PATH', help='Override gmsh executable path (passed to sbatch, does not modify script)')
+        pre_parser.add_argument('--convert', action='store_true', help='Skip gmsh meshing; run only simGmshCnvt (mesh must already exist)')
         pre_parser.add_argument('--partition', type=str, metavar='NAME', help='Apply partition header to script')
         pre_parser.add_argument('--account', type=str, metavar='NAME', help='Set SLURM account (passed to sbatch)')
         pre_parser.add_argument('--qos', type=str, metavar='NAME', help='Set SLURM QOS (passed to sbatch)')
