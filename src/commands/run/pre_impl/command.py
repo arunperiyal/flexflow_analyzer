@@ -212,10 +212,10 @@ def show_dry_run(script_path, case_dir, args, console):
     if convert_only and not _script_supports_convert(script_path):
         console.print(
             f"[yellow]Warning: {script_path.name} does not support --convert "
-            f"(no CONVERT_ONLY guard) — gmsh meshing would still run.[/yellow]"
+            f"(no CONVERT_ONLY guard).[/yellow]"
         )
         console.print(
-            "[dim]Regenerate it with 'template script pre' to enable convert-only mode.[/dim]"
+            "[dim]Submitting (without --dry-run) will offer to retrofit the script.[/dim]"
         )
         console.print()
 
@@ -278,18 +278,35 @@ def submit_preprocessing_job(script_path, case_dir, args, console):
             console.print(f"[yellow]Warning: Partition header '{partition_override}.header' not found — proceeding with existing script[/yellow]")
             console.print()
 
-    # Warn if --convert is requested but the script predates the CONVERT_ONLY
-    # guard — it would run full meshing anyway, defeating the purpose.
+    # If --convert is requested but the script predates the CONVERT_ONLY guard,
+    # offer to retrofit it in place (otherwise gmsh meshing would still run).
     if getattr(args, 'convert', False) and not _script_supports_convert(script_path):
         console.print(
-            f"[yellow]Warning: {script_path.name} does not support --convert "
+            f"[yellow]⚠  {script_path.name} does not support --convert "
             f"(no CONVERT_ONLY guard).[/yellow]"
         )
-        console.print(
-            "[dim]Regenerate it with 'template script pre' to enable convert-only mode. "
-            "Submitting will still run gmsh meshing.[/dim]"
-        )
         console.print()
+        console.print("  1. Retrofit the script and submit (convert-only)")
+        console.print("  2. Submit anyway (gmsh meshing will run)")
+        console.print("  3. Abort")
+        console.print()
+        console.print('Choice [1/2/3]: ', end='')
+        try:
+            answer = input().strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            console.print()
+            console.print('[yellow]Aborted[/yellow]')
+            return
+        if answer in {'1', 'r'}:
+            if not _retrofit_convert_guard(script_path, console):
+                console.print('[yellow]Aborting — retrofit failed[/yellow]')
+                return
+        elif answer in {'2', 's'}:
+            console.print('[dim]Submitting without convert support — gmsh will run.[/dim]')
+            console.print()
+        else:
+            console.print('[yellow]Aborted[/yellow]')
+            return
 
     # Ensure the SBATCH job name matches the expected name before submitting
     if not check_jobname_consistency(script_path, case_dir, 'pre', console):
@@ -403,6 +420,72 @@ def _script_supports_convert(script_path):
         return False
 
 
+def _retrofit_convert_guard(script_path, console) -> bool:
+    """
+    Add CONVERT_ONLY support to an existing pre script, in place.
+
+    Defines ``CONVERT_ONLY`` after the SBATCH header and wraps the gmsh
+    invocation so it is skipped in convert-only mode. The script's own
+    "mesh file" checks (if present) then guard against a missing mesh.
+
+    Returns True on success.
+    """
+    import re
+
+    try:
+        lines = script_path.read_text().splitlines(keepends=True)
+    except Exception as e:
+        console.print(f"[red]Error reading {script_path.name}: {e}[/red]")
+        return False
+
+    if any('CONVERT_ONLY' in ln for ln in lines):
+        return True  # already supported
+
+    # Locate the gmsh execution line — e.g. `$GMSH -3 ...` (not the
+    # `command -v $GMSH` validation, whose line starts with `if`).
+    gmsh_re = re.compile(r'^\s*"?\$\{?GMSH\}?"?\s')
+    gmsh_idx = next((i for i, ln in enumerate(lines) if gmsh_re.match(ln)), None)
+
+    if gmsh_idx is None:
+        console.print(
+            f"[red]Could not find a gmsh command line in {script_path.name} to guard.[/red]"
+        )
+        return False
+
+    # Wrap the gmsh command in a CONVERT_ONLY guard, preserving indentation.
+    line = lines[gmsh_idx]
+    indent = line[:len(line) - len(line.lstrip())]
+    gmsh_cmd = line.strip()
+    lines[gmsh_idx] = (
+        f'{indent}if [ "$CONVERT_ONLY" = "1" ]; then\n'
+        f'{indent}    echo "Skipping gmsh meshing (convert-only mode)"\n'
+        f'{indent}else\n'
+        f'{indent}    {gmsh_cmd}\n'
+        f'{indent}fi\n'
+    )
+
+    # Insert the CONVERT_ONLY definition after the SBATCH header (or shebang).
+    insert_idx = 0
+    for i, ln in enumerate(lines):
+        if ln.strip().startswith('#SBATCH'):
+            insert_idx = i + 1
+    if insert_idx == 0 and lines and lines[0].startswith('#!'):
+        insert_idx = 1
+    lines.insert(insert_idx,
+                 '\n# CONVERT_ONLY: skip gmsh meshing and run only simGmshCnvt '
+                 "(added by 'run pre --convert')\n"
+                 'CONVERT_ONLY=${CONVERT_ONLY:-0}\n')
+
+    try:
+        script_path.write_text(''.join(lines))
+        console.print(f"[green]✓ Retrofitted {script_path.name} with CONVERT_ONLY support[/green]")
+        console.print()
+        return True
+    except Exception as e:
+        console.print(f"[red]Error writing {script_path.name}: {e}[/red]")
+        return False
+
+
 def check_slurm_available():
     """Check if SLURM commands are available."""
     try:
@@ -427,7 +510,8 @@ This typically runs mesh generation (gmsh) and mesh conversion (simGmshCnvt).
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
     {Colors.YELLOW}--gmsh PATH{Colors.RESET}      Override gmsh executable (sbatch --export=GMSH=PATH, script unchanged)
-    {Colors.YELLOW}--convert{Colors.RESET}        Skip gmsh meshing; run only simGmshCnvt (mesh must already exist)
+    {Colors.YELLOW}--convert{Colors.RESET}        Skip gmsh meshing; run only simGmshCnvt (mesh must already exist).
+                     Offers to retrofit older scripts that lack CONVERT_ONLY support.
     {Colors.YELLOW}--partition NAME{Colors.RESET} Apply partition header to script
     {Colors.YELLOW}--dry-run{Colors.RESET}        Show what would be submitted without actually submitting
     {Colors.YELLOW}--show{Colors.RESET}           Display the script content
