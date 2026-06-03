@@ -315,19 +315,19 @@ def show_dry_run(script_path, case_dir, args, console):
 
 
 def _show_jobname_info(script_path, case_dir, console):
-    """Print a job-name vs case-name comparison (no prompt). Used by dry-run."""
-    case_name = case_dir.name
+    """Print an expected vs current job-name comparison (no prompt). Used by dry-run."""
+    expected = f'main{case_dir.name}'
     job_name = _parse_script_jobname(script_path)
 
     tbl = Table(box=box.SIMPLE, show_header=True, header_style='bold')
     tbl.add_column('Parameter',   style='cyan')
-    tbl.add_column('Case name',   justify='right', style='yellow')
+    tbl.add_column('Expected',    justify='right', style='yellow')
     tbl.add_column('Job name',    justify='right', style='blue')
     tbl.add_column('Match?',      justify='center')
 
     job_name_str = job_name if job_name is not None else '[dim](not set)[/dim]'
-    match_icon = '[green]✓[/green]' if job_name == case_name else '[red]✗[/red]'
-    tbl.add_row('job name', case_name, job_name_str, match_icon)
+    match_icon = '[green]✓[/green]' if job_name == expected else '[red]✗[/red]'
+    tbl.add_row('job name', expected, job_name_str, match_icon)
 
     console.print('[bold]Job name check:[/bold]')
     console.print(tbl)
@@ -470,18 +470,21 @@ def _set_script_jobname(script_path: Path, job_name: str, console) -> bool:
 
 def check_jobname_consistency(script_path, case_dir, console) -> bool:
     """
-    Compare the SBATCH job name in the script with the case directory name.
+    Compare the SBATCH job name in the script with the expected name.
 
-    On mismatch (or a missing job name) offers to rename the job to the case
-    name, submit anyway, or abort.
+    The FlexFlow convention (see templates/scripts/*.sh) is
+    ``<script_type><case_name>`` — for the main script the job name is
+    ``main<case_name>``. On mismatch (or a missing job name) offers to set
+    the job to the expected name, submit anyway, or abort.
 
     Returns True to proceed with submission, False to abort.
     """
     case_name = case_dir.name
+    expected = f'main{case_name}'
     job_name = _parse_script_jobname(script_path)
 
     # Matches — nothing to do.
-    if job_name is not None and job_name == case_name:
+    if job_name is not None and job_name == expected:
         return True
 
     console.print()
@@ -489,21 +492,21 @@ def check_jobname_consistency(script_path, case_dir, console) -> bool:
         console.print(
             f"[bold yellow]⚠  No #SBATCH job name found in {script_path.name}[/bold yellow]"
         )
-        console.print(f"[dim]Case name: {case_name}[/dim]")
+        console.print(f"[dim]Expected job name: {expected}[/dim]")
         console.print()
-        console.print(f"  1. Set job name to '{case_name}' and submit")
+        console.print(f"  1. Set job name to '{expected}' and submit")
         console.print("  2. Submit anyway (no job name)")
         console.print("  3. Abort")
     else:
-        console.print("[bold yellow]⚠  Job name does not match case name[/bold yellow]")
+        console.print("[bold yellow]⚠  Job name does not match the expected name[/bold yellow]")
         tbl = Table(box=box.SIMPLE, show_header=False)
         tbl.add_column("Field", style="cyan")
         tbl.add_column("Value")
-        tbl.add_row("Case name", case_name)
-        tbl.add_row("Job name",  job_name)
+        tbl.add_row("Expected job name", expected)
+        tbl.add_row("Current job name",  job_name)
         console.print(tbl)
         console.print()
-        console.print(f"  1. Rename job to '{case_name}' and submit")
+        console.print(f"  1. Rename job to '{expected}' and submit")
         console.print("  2. Submit anyway (keep current job name)")
         console.print("  3. Abort")
 
@@ -518,7 +521,7 @@ def check_jobname_consistency(script_path, case_dir, console) -> bool:
         return False
 
     if answer in {'1', 'r', 'f'}:
-        if _set_script_jobname(script_path, case_name, console):
+        if _set_script_jobname(script_path, expected, console):
             return True
         console.print("[yellow]Aborting — fix the script manually and re-run[/yellow]")
         return False
