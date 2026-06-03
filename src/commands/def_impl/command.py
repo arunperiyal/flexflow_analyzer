@@ -15,6 +15,32 @@ from ...core.def_config import DefConfig
 from ...core.simflow_config import SimflowConfig
 
 
+def _resolve_case_path(args):
+    """
+    Determine the case directory for the def command.
+
+    Resolution order, matching the rest of the CLI:
+      1. --case/-c argument
+      2. the active interactive case context (`use case <dir>`)
+      3. the current working directory
+    """
+    case_arg = getattr(args, 'case', None)
+    if case_arg:
+        return case_arg
+
+    try:
+        from src.cli.interactive import InteractiveShell
+        if (hasattr(InteractiveShell, '_instance') and
+                InteractiveShell._instance and
+                InteractiveShell._instance._current_case and
+                InteractiveShell._instance._current_case != '*'):
+            return InteractiveShell._instance._current_case
+    except Exception:
+        pass
+
+    return os.getcwd()
+
+
 def _resolve_def_config(case_path: Path, console: Console):
     """
     Locate and load the .def file for a case directory.
@@ -50,7 +76,7 @@ def execute_var(args):
     """
     console = Console()
 
-    case_path = Path(getattr(args, 'case', None) or os.getcwd()).resolve()
+    case_path = Path(_resolve_case_path(args)).resolve()
     if not case_path.exists():
         console.print(f"[red]Error:[/red] Case directory not found: {case_path}")
         return 1
