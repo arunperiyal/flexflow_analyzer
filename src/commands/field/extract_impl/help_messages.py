@@ -20,7 +20,13 @@ Extract nodal data from binary PLT files to CSV (Tecplot-free; pure numpy).
     {Colors.YELLOW}--variables VAR1,VAR2{Colors.RESET}  Comma-separated list of variables to extract
                              (e.g., Y, X,Y,Z, U,V,W)
     {Colors.YELLOW}--zone ZONE{Colors.RESET}            Zone name to extract from (e.g., FIELD, BODY)
-    {Colors.YELLOW}--timestep STEP{Colors.RESET}        Timestep number to extract (e.g., 1000, 2000)
+
+{Colors.BOLD}TIMESTEP SELECTION (one of):{Colors.RESET}
+    {Colors.YELLOW}--timestep STEP{Colors.RESET}        A single timestep (e.g., 1000)
+    {Colors.YELLOW}--t1 STEP{Colors.RESET}              A single step (alone), or the start of a range
+    {Colors.YELLOW}--t2 STEP{Colors.RESET}              End of a range; --t1..--t2 extracts every PLT in
+                             that range into ONE file with a 'timestep' column/array
+    {Colors.DIM}Setting the t1/t2 context (use t1:.. t2:..) supplies these automatically.{Colors.RESET}
 
 {Colors.BOLD}OPTIONAL:{Colors.RESET}
     {Colors.YELLOW}--output-file FILE{Colors.RESET}     Output path; format from the extension:

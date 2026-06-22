@@ -41,3 +41,16 @@ def zone_index(plt, zone_name):
         if z["name"].lower() == zone_name.lower():
             return i
     return None
+
+
+def list_steps(binary_dir, problem=None):
+    """Return the sorted list of timestep numbers of the PLT files present."""
+    binary_dir = Path(binary_dir)
+    steps = []
+    for f in binary_dir.glob("*.plt"):
+        if problem and not f.name.startswith(problem + "."):
+            continue
+        s = _step(f)
+        if s >= 0:
+            steps.append(s)
+    return sorted(set(steps))

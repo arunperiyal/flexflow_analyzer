@@ -3830,6 +3830,19 @@ class InteractiveShell:
                 args.append('--variables')
                 args.append(self._current_var)
                 context_added.append(f"var: {self._current_var}")
+            # t1/t2 select the timestep(s): extract takes --t1/--t2 (single or
+            # range); convert/iso take a single --timestep from t1.
+            if subcmd == 'extract':
+                if self._current_t1 is not None and '--t1' not in args:
+                    args.append('--t1'); args.append(str(self._current_t1))
+                    context_added.append(f"t1: {self._current_t1}")
+                if self._current_t2 is not None and '--t2' not in args:
+                    args.append('--t2'); args.append(str(self._current_t2))
+                    context_added.append(f"t2: {self._current_t2}")
+            elif subcmd in ('convert', 'iso'):
+                if self._current_t1 is not None and '--timestep' not in args:
+                    args.append('--timestep'); args.append(str(int(self._current_t1)))
+                    context_added.append(f"timestep: {int(self._current_t1)}")
 
         # node/t1/t2 are injected ONLY where the target command+subcommand
         # actually defines those flags (otherwise argparse would reject them).

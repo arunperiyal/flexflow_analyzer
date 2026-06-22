@@ -61,9 +61,13 @@ class FieldCommand(BaseCommand):
         extract_parser.add_argument('--zone', type=str,
                                    help='Zone name to extract from')
         extract_parser.add_argument('--timestep', type=int,
-                                   help='Timestep to extract')
+                                   help='Single timestep to extract')
+        extract_parser.add_argument('--t1', type=float,
+                                   help='Start step (alone: that step; with --t2: range start)')
+        extract_parser.add_argument('--t2', type=float,
+                                   help='End step of a range (consolidated into one output)')
         extract_parser.add_argument('--output-file', type=str,
-                                   help='Output CSV file path')
+                                   help='Output path; .csv or point-cloud .vtu/.vtk/.vtp')
         extract_parser.add_argument('--xmin', type=float,
                                    help='Minimum X coordinate')
         extract_parser.add_argument('--xmax', type=float,
