@@ -29,7 +29,7 @@ _flexflow_completions() {
     done
 
     # Top-level commands and flags
-    local commands="info new preview statistics plot compare template tecplot docs case data field def config"
+    local commands="info new preview statistics plot compare template docs case data field def config"
     local global_flags="--install --uninstall --update --completion --examples --version --help -h"
 
     # If no command yet, complete commands and global flags
@@ -156,21 +156,22 @@ _flexflow_completions() {
             fi
             ;;
         field)
-            # Parse for subcommand (info or extract)
+            # Parse for subcommand
             local subcommand=""
             for (( i=2; i < cword; i++ )); do
-                if [[ "${words[i]}" == "info" ]] || [[ "${words[i]}" == "extract" ]]; then
-                    subcommand="${words[i]}"
-                    break
-                fi
+                case "${words[i]}" in
+                    info|extract|convert|iso|check)
+                        subcommand="${words[i]}"
+                        break
+                        ;;
+                esac
             done
-            
+
             if [[ -z "$subcommand" ]]; then
                 # No subcommand yet
                 local flags="-v --verbose -h --help --examples"
-                COMPREPLY=( $(compgen -W "info extract $flags" -- "$cur") )
+                COMPREPLY=( $(compgen -W "info extract convert iso check $flags" -- "$cur") )
             else
-                # Delegate to tecplot completion (same functionality)
                 case "$subcommand" in
                     info)
                         local flags="--basic --variables --zones --checks --stats --detailed --sample-file -v --verbose -h --help --examples"
@@ -186,13 +187,39 @@ _flexflow_completions() {
                             COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
                         else
                             case "$prev" in
-                                --output-file)
-                                    _filedir
-                                    ;;
-                                *)
-                                    _flexflow_complete_cases
-                                    ;;
+                                --output-file) _filedir ;;
+                                *) _flexflow_complete_cases ;;
                             esac
+                        fi
+                        ;;
+                    convert)
+                        local flags="--timestep --zone --nen --output --audit-only --xmin --xmax --ymin --ymax --zmin --zmax -v --verbose -h --help"
+                        if [[ "$cur" == -* ]]; then
+                            COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
+                        else
+                            case "$prev" in
+                                --output) _filedir ;;
+                                *) _flexflow_complete_cases ;;
+                            esac
+                        fi
+                        ;;
+                    iso)
+                        local flags="--vtu --config --write-template --timestep --zone --nen --contour --iso --color --out -v --verbose -h --help"
+                        if [[ "$cur" == -* ]]; then
+                            COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
+                        else
+                            case "$prev" in
+                                --vtu|--config|--write-template) _filedir ;;
+                                *) _flexflow_complete_cases ;;
+                            esac
+                        fi
+                        ;;
+                    check)
+                        local flags="-v --verbose -h --help"
+                        if [[ "$cur" == -* ]]; then
+                            COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
+                        else
+                            _filedir
                         fi
                         ;;
                 esac

@@ -5,31 +5,44 @@
 import os
 import sys
 
+from PyInstaller.utils.hooks import collect_all
+
 block_cipher = None
 
 # Get absolute paths
 project_root = os.path.dirname(os.path.abspath(SPEC))
 
+# pyvista/vtk (field iso) and meshio (field convert) ship data + many submodules;
+# let PyInstaller collect them. vtk is large -- the frozen build will grow.
+_extra_datas, _extra_binaries, _extra_hidden = [], [], []
+for _pkg in ('pyvista', 'vtkmodules', 'meshio'):
+    try:
+        _d, _b, _h = collect_all(_pkg)
+        _extra_datas += _d
+        _extra_binaries += _b
+        _extra_hidden += _h
+    except Exception:
+        pass  # not installed in this build env -- field iso/convert will be unavailable
+
 a = Analysis(
     ['main.py'],
     pathex=[project_root],
-    binaries=[],
+    binaries=_extra_binaries,
     datas=[
         ('src', 'src'),
         ('README.md', '.'),
-    ],
+    ] + _extra_datas,
     hiddenimports=[
         'numpy',
         'matplotlib',
         'matplotlib.backends.backend_agg',
-        'tecplot',
-        'tecplot.data',
-        'tecplot.tecutil',
         'pandas',
         'yaml',
         'rich',
         'tqdm',
         'markdown',
+        'meshio',
+        'pyvista',
         'src',
         'src.cli',
         'src.cli.registry',
@@ -40,17 +53,16 @@ a = Analysis(
         'src.core',
         'src.core.case',
         'src.core.readers',
-        'src.core.parsers',
         'src.commands',
         'src.commands.base',
-        'src.commands.plot',
-        'src.commands.compare',
-        'src.commands.case_group',
-        'src.commands.tecplot_cmd',
+        'src.commands.field',
         'src.installer',
-        'src.tecplot_handler',
-        'src.tecplot_pytec',
-    ],
+        'src.plt',
+        'src.plt.fxplt',
+        'src.plt.convert',
+        'src.plt.camera',
+        'src.plt.render',
+    ] + _extra_hidden,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

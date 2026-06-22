@@ -2,6 +2,39 @@
 
 ## Unreleased
 
+### ♻️ Field command: Tecplot-free backend
+
+- **Removed the Tecplot/pytecplot dependency** from `field`. PLT files are now
+  read by a pure-numpy parser (`src/plt/fxplt.py`) — no Tecplot 360 license,
+  and it works on Python 3.13+. Deleted `src/tecplot/`, the old
+  `TecplotConverter`, and the duplicate `src/commands/field.py`.
+- **`field info`** rewritten on the new backend; adds an **element-type / `nen`
+  audit** that flags an 8-node brick mesh mis-written as 4-node tetrahedra
+  (`simflow.config nen=4` → advises `nen=8`) and checks file-size consistency.
+- **`field extract`** rewritten Tecplot-free: nodal variables with x/y/z
+  subdomain filtering, to **CSV or a point-cloud `.vtu`/`.vtk`/`.vtp`** (format
+  chosen by the output-file extension).
+- **`field convert`** *(new)* — PLT volume zone → VTK `.vtu` (meshio), with
+  `--nen` override, `--audit-only`, and an `--xmin…--zmax` **box crop** that
+  exports a sub-region mesh (cells preserved).
+- **`field check`** *(new)* — validate a produced VTK file (`.vtu`/`.vtk`/`.vtp`):
+  reports points, cells, bounds, and per-array ranges; flags empty files or
+  NaN/Inf and exits non-zero on problems.
+- **`field iso`** *(new)* — isosurface PNGs via **pyvista** (config-driven YAML:
+  background, resolution, domain crop, threshold, camera orientation, and
+  reusable camera frames from ParaView `.pvsm`/`.py` Save State or a saved
+  `.yml`). Auto-converts a case's PLT to a cached `.vtu`.
+- **`use var:` / `use zone:` context** — set a default variable list / zone once
+  and they're auto-injected into `field extract` (`--variables`, `--zone`) and
+  `--zone` into `field convert`/`iso`. Shown in `pwd`, cleared via
+  `unuse var`/`unuse zone`/`unuse all`, with tab completion.
+- **Fixed context injection scope**: `node`/`t1`/`t2` are now injected only where
+  the target actually defines those flags — `data show` (node/t1/t2),
+  `data stats` (node only), `plot` (node/t1/t2). They are no longer pushed into
+  `field` commands (which don't accept them), and `t1`/`t2` are no longer pushed
+  into `data stats`.
+- **Dependencies**: removed `pytecplot`; added `meshio`, `pyvista`.
+
 ### ✨ New Features
 
 #### Command Chaining with Semicolons

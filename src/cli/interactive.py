@@ -141,7 +141,7 @@ class FlexFlowCompleter(Completer):
     _SUBCOMMANDS: Dict[str, List[str]] = {
         'case':     ['show', 'create', 'run', 'organise', 'check', 'status', 'add', 'report', 'upload'],
         'data':     ['show', 'stats'],
-        'field':    ['info', 'extract'],
+        'field':    ['info', 'extract', 'convert', 'iso', 'check'],
         'def':      ['var'],
         'run':      ['check', 'pre', 'main', 'post', 'sq', 'sb', 'sc'],
         'template': ['plot', 'case', 'script'],
@@ -284,6 +284,31 @@ class FlexFlowCompleter(Completer):
             '--zmin': 'Z minimum bound',
             '--zmax': 'Z maximum bound',
         },
+        ('field', 'convert'): {
+            **_COMMON_FLAGS,
+            '--timestep':   'Timestep to convert (default: latest)',
+            '--zone':       'Zone to export',
+            '--nen':        'Force nodes-per-element (e.g. 8 for bricks)',
+            '--output':     'Output .vtu path',
+            '--audit-only': 'Report element type / size only',
+            '--xmin': 'X minimum bound', '--xmax': 'X maximum bound',
+            '--ymin': 'Y minimum bound', '--ymax': 'Y maximum bound',
+            '--zmin': 'Z minimum bound', '--zmax': 'Z maximum bound',
+        },
+        ('field', 'iso'): {
+            **_COMMON_FLAGS,
+            '--vtu':            'Render an existing .vtu',
+            '--config':         'YAML config file',
+            '--write-template': 'Write a config template and exit',
+            '--timestep':       'Timestep to convert+render',
+            '--zone':           'Zone to render',
+            '--nen':            'Force nodes-per-element',
+            '--contour':        'Scalar to contour (default QCriterion)',
+            '--iso':            'Isosurface value(s)',
+            '--color':          'Scalar to colour by',
+            '--out':            'Output prefix for .vtp + PNGs',
+        },
+        ('field', 'check'): {**_COMMON_FLAGS},
 
         # ── def ─────────────────────────────────────────────────────────────
         ('def', None):       {'--help': 'Show help message', '-h': 'Show help message'},
@@ -653,6 +678,11 @@ class FlexFlowCompleter(Completer):
                 yield from self._yield_choices(self._POSITIONAL_CHOICES[positional_key], current_word)
                 return
 
+            # File-path completion for `field check <file.vtu/.vtk/.vtp>`
+            if (cmd_name, subcmd_name) == ('field', 'check') and not current_word.startswith('-'):
+                yield from self._complete_path(words, ends_with_space)
+                return
+
             # Check if we're completing an argument for a specific flag
             # Get the previous word if one exists
             if len(words) >= 2:
@@ -710,7 +740,7 @@ class FlexFlowCompleter(Completer):
         # Contexts whose value is a filesystem path (directories)
         _PATH_CONTEXTS = {'case', 'rundir', 'dir'}
         # All supported context keys
-        _ALL_CONTEXTS = ['case', 'problem', 'rundir', 'dir', 'node', 't1', 't2', 'remote']
+        _ALL_CONTEXTS = ['case', 'problem', 'rundir', 'dir', 'node', 't1', 't2', 'remote', 'var', 'zone']
         _CONTEXT_DESCS = {
             'case':    'Set current case directory',
             'problem': 'Override problem name',
@@ -720,6 +750,8 @@ class FlexFlowCompleter(Completer):
             't1':      'Set start time',
             't2':      'Set end time',
             'remote':  'Set remote machine for uploads',
+            'var':     'Default variable(s) for field extract',
+            'zone':    'Default zone for field extract/convert/iso',
         }
 
         if self.shell is None:
@@ -793,6 +825,8 @@ class FlexFlowCompleter(Completer):
                 ('t1',      'Clear start time'),
                 ('t2',      'Clear end time'),
                 ('remote',  'Clear remote context'),
+                ('var',     'Clear variable context'),
+                ('zone',    'Clear zone context'),
                 ('all',     'Clear all contexts'),
             ]
             for val, desc in subcommands:
@@ -866,6 +900,8 @@ class InteractiveShell:
         self._current_t1: Optional[float] = None  # Start time for data/field/plot commands
         self._current_t2: Optional[float] = None  # End time for data/field/plot commands
         self._current_remote: Optional[str] = None  # Remote machine for uploads
+        self._current_var: Optional[str] = None  # Default variable(s) for field extract
+        self._current_zone: Optional[str] = None  # Default zone for field extract/convert/iso
         self._current_dir: Path = Path.cwd()  # Track current working directory
 
         # Piping mode state
@@ -952,6 +988,8 @@ class InteractiveShell:
             'rundir': '#ff00ff',        # Magenta for rundir
             'outputdir': '#00ff00',     # Green for output dir
             'remote': '#ffaaee',        # Light magenta for remote
+            'var': '#00ddaa',           # Teal for variable
+            'zone': '#dd88ff',          # Light purple for zone
             'sep': '#444444',           # Separator
         })
 
@@ -1004,6 +1042,10 @@ class InteractiveShell:
             contexts.append(f'<t1>t1:{self._current_t1}</t1>')
         if self._current_t2 is not None:
             contexts.append(f'<t2>t2:{self._current_t2}</t2>')
+        if self._current_var is not None:
+            contexts.append(f'<var>var:{self._current_var}</var>')
+        if self._current_zone is not None:
+            contexts.append(f'<zone>zone:{self._current_zone}</zone>')
 
         # Multi-line prompt format
         if contexts:
@@ -1136,9 +1178,13 @@ class InteractiveShell:
                     self.use_t2(value)
                 elif context == 'remote':
                     self.use_remote(value)
+                elif context == 'var':
+                    self.use_var(value)
+                elif context == 'zone':
+                    self.use_zone(value)
                 else:
                     self.console.print(f"[yellow]Unknown context:[/yellow] {context}")
-                    self.console.print("[dim]Valid contexts: case, problem, rundir, dir, node, t1, t2, remote[/dim]")
+                    self.console.print("[dim]Valid contexts: case, problem, rundir, dir, node, t1, t2, remote, var, zone[/dim]")
             return True
 
         # Clear context with subcommands
@@ -1170,11 +1216,15 @@ class InteractiveShell:
                     self.unuse_t2()
                 elif subcommand == 'remote':
                     self.unuse_remote()
+                elif subcommand == 'var':
+                    self.unuse_var()
+                elif subcommand == 'zone':
+                    self.unuse_zone()
                 elif subcommand == 'all':
                     self.unuse_all()
                 else:
                     self.console.print(f"[yellow]Unknown subcommand:[/yellow] {subcommand}")
-                    self.console.print("[dim]Use: unuse [case|problem|rundir|dir|node|t1|t2|remote|all][/dim]")
+                    self.console.print("[dim]Use: unuse [case|problem|rundir|dir|node|t1|t2|remote|var|zone|all][/dim]")
             return True
 
         # Show current directory and all contexts
@@ -1196,8 +1246,13 @@ class InteractiveShell:
                 self.console.print(f"End time (t2): [cyan]{self._current_t2}[/cyan]")
             if self._current_remote:
                 self.console.print(f"Remote context: [cyan]{self._current_remote}[/cyan]")
+            if self._current_var is not None:
+                self.console.print(f"Variable context: [cyan]{self._current_var}[/cyan]")
+            if self._current_zone is not None:
+                self.console.print(f"Zone context: [cyan]{self._current_zone}[/cyan]")
             if not any([self._current_case, self._current_problem, self._current_rundir, self._current_output_dir,
-                       self._current_node is not None, self._current_t1 is not None, self._current_t2 is not None, self._current_remote]):
+                       self._current_node is not None, self._current_t1 is not None, self._current_t2 is not None,
+                       self._current_remote, self._current_var is not None, self._current_zone is not None]):
                 self.console.print("[dim]No context set[/dim]")
             return True
 
@@ -2389,6 +2444,26 @@ class InteractiveShell:
             self.console.print(f"[red]Error:[/red] Invalid time value: {time_input}")
             self.console.print("[dim]Time must be a number[/dim]")
 
+    def use_var(self, var_input: str) -> None:
+        """
+        Set default variable(s) context, injected as --variables for field extract.
+
+        Args:
+            var_input: Variable name or comma-separated list (e.g. U or U,V,Pressure)
+        """
+        self._current_var = var_input
+        self.console.print(f"[green]✓[/green] Variable(s) set to: [cyan]{var_input}[/cyan]")
+
+    def use_zone(self, zone_input: str) -> None:
+        """
+        Set default zone context, injected as --zone for field extract/convert/iso.
+
+        Args:
+            zone_input: Zone name (e.g. FIELD, cyl)
+        """
+        self._current_zone = zone_input
+        self.console.print(f"[green]✓[/green] Zone set to: [cyan]{zone_input}[/cyan]")
+
     def unuse_case(self) -> None:
         """Clear case context."""
         if self._current_case or self._current_case_name == "*":
@@ -2465,6 +2540,24 @@ class InteractiveShell:
         else:
             self.console.print("[dim]No end time (t2) context is set[/dim]")
 
+    def unuse_var(self) -> None:
+        """Clear variable context."""
+        if self._current_var is not None:
+            old = self._current_var
+            self._current_var = None
+            self.console.print(f"[green]✓[/green] Variable context cleared: [dim]{old}[/dim]")
+        else:
+            self.console.print("[dim]No variable context is set[/dim]")
+
+    def unuse_zone(self) -> None:
+        """Clear zone context."""
+        if self._current_zone is not None:
+            old = self._current_zone
+            self._current_zone = None
+            self.console.print(f"[green]✓[/green] Zone context cleared: [dim]{old}[/dim]")
+        else:
+            self.console.print("[dim]No zone context is set[/dim]")
+
     def unuse_all(self) -> None:
         """Clear all contexts."""
         cleared = []
@@ -2493,6 +2586,12 @@ class InteractiveShell:
         if self._current_remote:
             cleared.append(f"remote: {self._current_remote}")
             self._current_remote = None
+        if self._current_var is not None:
+            cleared.append(f"var: {self._current_var}")
+            self._current_var = None
+        if self._current_zone is not None:
+            cleared.append(f"zone: {self._current_zone}")
+            self._current_zone = None
 
         if cleared:
             self.console.print(f"[green]✓[/green] All contexts cleared:")
@@ -3614,42 +3713,48 @@ class InteractiveShell:
             return args
 
         cmd = args[0]
-
-        # Commands that use node, t1, t2 contexts
-        data_commands = {
-            'data': {'show', 'stats'},
-            'field': {'info', 'extract'},
-            'plot': True,  # plot uses these directly
-        }
-
-        # Check if this command uses data contexts
-        if cmd not in data_commands:
-            return args
-
         context_added = []
 
-        # For commands with subcommands
-        if cmd in ['data', 'field']:
-            if len(args) < 2:
-                return args
+        # field var/zone -> value flags (--variables / --zone).
+        # zone applies to extract/convert/iso; var to extract only.
+        # (field info's --variables/--zones are display toggles, so skip it.)
+        if cmd == 'field' and len(args) >= 2:
             subcmd = args[1]
-            if subcmd not in data_commands[cmd]:
-                return args
+            if (self._current_zone is not None and '--zone' not in args
+                    and subcmd in ('extract', 'convert', 'iso')):
+                args.append('--zone')
+                args.append(self._current_zone)
+                context_added.append(f"zone: {self._current_zone}")
+            if (self._current_var is not None and '--variables' not in args
+                    and subcmd == 'extract'):
+                args.append('--variables')
+                args.append(self._current_var)
+                context_added.append(f"var: {self._current_var}")
+
+        # node/t1/t2 are injected ONLY where the target command+subcommand
+        # actually defines those flags (otherwise argparse would reject them).
+        # data show: node/start/end ; data stats: node only ; plot: node/start/end.
+        time_subcmd = args[1] if (cmd == 'data' and len(args) >= 2) else None
+        allowed = {
+            ('data', 'show'):  {'node', 't1', 't2'},
+            ('data', 'stats'): {'node'},
+            ('plot', None):    {'node', 't1', 't2'},
+        }.get((cmd, time_subcmd), set())
 
         # Inject --node if set and not already present
-        if self._current_node is not None and '--node' not in args:
+        if 'node' in allowed and self._current_node is not None and '--node' not in args:
             args.append('--node')
             args.append(str(self._current_node))
             context_added.append(f"node: {self._current_node}")
 
         # Inject --start-time if t1 is set and not already present
-        if self._current_t1 is not None and '--start-time' not in args:
+        if 't1' in allowed and self._current_t1 is not None and '--start-time' not in args:
             args.append('--start-time')
             args.append(str(self._current_t1))
             context_added.append(f"t1: {self._current_t1}")
 
         # Inject --end-time if t2 is set and not already present
-        if self._current_t2 is not None and '--end-time' not in args:
+        if 't2' in allowed and self._current_t2 is not None and '--end-time' not in args:
             args.append('--end-time')
             args.append(str(self._current_t2))
             context_added.append(f"t2: {self._current_t2}")

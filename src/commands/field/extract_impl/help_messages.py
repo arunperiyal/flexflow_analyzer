@@ -8,7 +8,7 @@ def print_extract_help():
     print(f"""
 {Colors.BOLD}{Colors.CYAN}FlexFlow Field Extract Command{Colors.RESET}
 
-Extract data from Tecplot PLT binary files to CSV format using pytecplot.
+Extract nodal data from binary PLT files to CSV (Tecplot-free; pure numpy).
 
 {Colors.BOLD}USAGE:{Colors.RESET}
     flexflow field extract <case_dir> [options]
@@ -23,8 +23,9 @@ Extract data from Tecplot PLT binary files to CSV format using pytecplot.
     {Colors.YELLOW}--timestep STEP{Colors.RESET}        Timestep number to extract (e.g., 1000, 2000)
 
 {Colors.BOLD}OPTIONAL:{Colors.RESET}
-    {Colors.YELLOW}--output-file FILE{Colors.RESET}     Output CSV file path
-                             (default: case/extracted_STEP.csv)
+    {Colors.YELLOW}--output-file FILE{Colors.RESET}     Output path; format from the extension:
+                             .csv (table), or .vtu/.vtk/.vtp (point cloud for
+                             ParaView). Default: case/extracted_STEP.csv
     {Colors.YELLOW}--verbose, -v{Colors.RESET}          Show detailed extraction progress
     {Colors.YELLOW}--help, -h{Colors.RESET}             Show this help message
 
@@ -82,12 +83,11 @@ Extract data from Tecplot PLT binary files to CSV format using pytecplot.
 
 {Colors.BOLD}NOTES:{Colors.RESET}
 
-  - Requires pytecplot library to be installed
-  - Falls back to macro-based extraction if pytecplot is not available
-  - Subdomain filtering requires pytecplot (not available in macro mode)
-  - Output CSV includes metadata comments at the beginning
-  - If no points fall within subdomain, an error is reported
-  - Coordinate variables are automatically loaded for filtering but only
-    included in output if explicitly requested in --variables
+  - No Tecplot license or pytecplot needed; reads the .plt binary directly
+  - Works on Python 3.13+
+  - Extracts nodal (point) data; subdomain filtering is by node coordinates
+  - Output CSV header is the comma-separated variable names
+  - Coordinate variables (X,Y,Z) are available but only written if requested
+    in --variables
 
 """)
