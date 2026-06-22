@@ -66,8 +66,10 @@ class FieldCommand(BaseCommand):
                                    help='Start step (alone: that step; with --t2: range start)')
         extract_parser.add_argument('--t2', type=float,
                                    help='End step of a range (consolidated into one output)')
-        extract_parser.add_argument('--output-file', type=str,
-                                   help='Output path; .csv or point-cloud .vtu/.vtk/.vtp')
+        extract_parser.add_argument('--freq', type=int,
+                                   help='With --t1/--t2: keep only steps that are multiples of FREQ')
+        extract_parser.add_argument('--output', '--output-file', dest='output_file', type=str,
+                                   help='REQUIRED output path; .csv or point-cloud .vtu/.vtk/.vtp')
         extract_parser.add_argument('--xmin', type=float,
                                    help='Minimum X coordinate')
         extract_parser.add_argument('--xmax', type=float,

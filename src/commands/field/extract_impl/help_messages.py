@@ -26,12 +26,14 @@ Extract nodal data from binary PLT files to CSV (Tecplot-free; pure numpy).
     {Colors.YELLOW}--t1 STEP{Colors.RESET}              A single step (alone), or the start of a range
     {Colors.YELLOW}--t2 STEP{Colors.RESET}              End of a range; --t1..--t2 extracts every PLT in
                              that range into ONE file with a 'timestep' column/array
-    {Colors.DIM}Setting the t1/t2 context (use t1:.. t2:..) supplies these automatically.{Colors.RESET}
+    {Colors.YELLOW}--freq N{Colors.RESET}               With --t1/--t2: keep only steps that are multiples of N
+    {Colors.DIM}Setting the t1/t2/freq context (use t1:.. t2:.. freq:..) supplies these automatically.{Colors.RESET}
+
+    {Colors.YELLOW}--output FILE{Colors.RESET}          (required) Output path; format from the extension:
+                             .csv (table), or .vtu/.vtk/.vtp (point cloud for
+                             ParaView). Alias: --output-file
 
 {Colors.BOLD}OPTIONAL:{Colors.RESET}
-    {Colors.YELLOW}--output-file FILE{Colors.RESET}     Output path; format from the extension:
-                             .csv (table), or .vtu/.vtk/.vtp (point cloud for
-                             ParaView). Default: case/extracted_STEP.csv
     {Colors.YELLOW}--verbose, -v{Colors.RESET}          Show detailed extraction progress
     {Colors.YELLOW}--help, -h{Colors.RESET}             Show this help message
 
@@ -49,43 +51,29 @@ Extract nodal data from binary PLT files to CSV (Tecplot-free; pure numpy).
     Note: Coordinate variables (X,Y,Z) are only included in output if
           explicitly specified in --variables flag.
 
-{Colors.BOLD}EXAMPLES:{Colors.RESET}
+{Colors.BOLD}EXAMPLES:{Colors.RESET}  ({Colors.DIM}--output is required{Colors.RESET})
 
-  {Colors.BOLD}Extract single variable:{Colors.RESET}
-    flexflow field extract CS4SG1U1 --timestep 1000 --variables Y --zone FIELD
+  {Colors.BOLD}Single variable to CSV:{Colors.RESET}
+    flexflow field extract CS4SG1U1 --timestep 1000 --variables Y --zone FIELD --output y.csv
 
-  {Colors.BOLD}Extract multiple variables:{Colors.RESET}
-    flexflow field extract CS4SG1U1 --timestep 1000 --variables X,Y,Z,U,V,W --zone FIELD
+  {Colors.BOLD}Multiple variables to a point cloud (.vtu):{Colors.RESET}
+    flexflow field extract CS4SG1U1 --timestep 1000 --variables U,V,W --zone FIELD --output snap.vtu
 
-  {Colors.BOLD}Extract with custom output file:{Colors.RESET}
-    flexflow field extract CS4SG1U1 --timestep 1000 --variables Y --zone FIELD --output-file results.csv
+  {Colors.BOLD}Timestep range, consolidated into one file:{Colors.RESET}
+    flexflow field extract CS4SG1U1 --t1 1000 --t2 5000 --variables U,V --zone FIELD --output range.csv
 
-  {Colors.BOLD}Extract 2D subdomain (X and Y range):{Colors.RESET}
-    flexflow field extract CS4SG1U1 --timestep 1000 --variables U,V \\
-      --zone FIELD --xmin -1.0 --xmax 1.0 --ymin -2.0 --ymax 2.0
-
-  {Colors.BOLD}Extract 3D subdomain:{Colors.RESET}
-    flexflow field extract CS4SG1U1 --timestep 1000 --variables X,Y,Z,U,V,W \\
-      --zone FIELD --xmin -1.0 --xmax 1.0 --ymin -2.0 --ymax 2.0 --zmin -3.0 --zmax 3.0
-
-  {Colors.BOLD}Extract subdomain with single axis constraint:{Colors.RESET}
-    flexflow field extract CS4SG1U1 --timestep 1000 --variables Y,U \\
-      --zone FIELD --xmin 0.0 --xmax 0.5
-
-  {Colors.BOLD}Extract with verbose output:{Colors.RESET}
-    flexflow field extract CS4SG1U1 --timestep 1000 --variables Y --zone FIELD -v
+  {Colors.BOLD}3D subdomain box:{Colors.RESET}
+    flexflow field extract CS4SG1U1 --timestep 1000 --variables U,V --zone FIELD --output box.csv \\
+      --xmin -1.0 --xmax 1.0 --ymin -2.0 --ymax 2.0 --zmin -3.0 --zmax 3.0
 
 {Colors.BOLD}WORKFLOW:{Colors.RESET}
 
-  1. First, use info command to discover available variables and zones:
+  1. Discover variables and zones:
      {Colors.YELLOW}flexflow field info CS4SG1U1 --variables --zones{Colors.RESET}
 
-  2. Then extract the desired data:
-     {Colors.YELLOW}flexflow field extract CS4SG1U1 --timestep 1000 --variables Y --zone FIELD{Colors.RESET}
-
-  3. For subdomain extraction, specify coordinate bounds:
-     {Colors.YELLOW}flexflow field extract CS4SG1U1 --timestep 1000 --variables U,V \\
-       --zone FIELD --xmin -1 --xmax 1 --ymin -1 --ymax 1{Colors.RESET}
+  2. Optionally set context once, then extract without repeating flags:
+     {Colors.YELLOW}use zone:FIELD var:U,V t1:1000 t2:5000{Colors.RESET}
+     {Colors.YELLOW}flexflow field extract CS4SG1U1 --output range.csv{Colors.RESET}
 
 {Colors.BOLD}NOTES:{Colors.RESET}
 

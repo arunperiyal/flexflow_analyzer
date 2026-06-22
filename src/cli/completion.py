@@ -182,12 +182,12 @@ _flexflow_completions() {
                         fi
                         ;;
                     extract)
-                        local flags="--variables --zone --timestep --output-file --xmin --xmax --ymin --ymax --zmin --zmax -v --verbose -h --help --examples"
+                        local flags="--variables --zone --timestep --t1 --t2 --freq --output --output-file --xmin --xmax --ymin --ymax --zmin --zmax -v --verbose -h --help --examples"
                         if [[ "$cur" == -* ]]; then
                             COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
                         else
                             case "$prev" in
-                                --output-file) _filedir ;;
+                                --output|--output-file) _filedir ;;
                                 *) _flexflow_complete_cases ;;
                             esac
                         fi

@@ -275,8 +275,11 @@ class FlexFlowCompleter(Completer):
             **_COMMON_FLAGS,
             '--variables':   'Variables to extract',
             '--zone':        'Zone name filter',
-            '--timestep':    'Specific timestep',
-            '--output-file': 'Output file path',
+            '--timestep':    'Single timestep',
+            '--t1':          'Start step (alone: that step; with --t2: range)',
+            '--t2':          'End step of a range (consolidated output)',
+            '--freq':        'With --t1/--t2: keep steps that are multiples of FREQ',
+            '--output':      '(required) Output path (.csv / .vtu / .vtk / .vtp)',
             '--xmin': 'X minimum bound',
             '--xmax': 'X maximum bound',
             '--ymin': 'Y minimum bound',
@@ -757,7 +760,7 @@ class FlexFlowCompleter(Completer):
         # Contexts whose value is a filesystem path (directories)
         _PATH_CONTEXTS = {'case', 'rundir', 'dir'}
         # All supported context keys
-        _ALL_CONTEXTS = ['case', 'problem', 'rundir', 'dir', 'node', 't1', 't2', 'remote', 'var', 'zone']
+        _ALL_CONTEXTS = ['case', 'problem', 'rundir', 'dir', 'node', 't1', 't2', 'remote', 'var', 'zone', 'freq']
         _CONTEXT_DESCS = {
             'case':    'Set current case directory',
             'problem': 'Override problem name',
@@ -769,6 +772,7 @@ class FlexFlowCompleter(Completer):
             'remote':  'Set remote machine for uploads',
             'var':     'Default variable(s) for field extract',
             'zone':    'Default zone for field extract/convert/iso',
+            'freq':    'Output frequency for field extract / run post',
         }
 
         if self.shell is None:
@@ -844,6 +848,7 @@ class FlexFlowCompleter(Completer):
                 ('remote',  'Clear remote context'),
                 ('var',     'Clear variable context'),
                 ('zone',    'Clear zone context'),
+                ('freq',    'Clear frequency context'),
                 ('all',     'Clear all contexts'),
             ]
             for val, desc in subcommands:
@@ -920,6 +925,7 @@ class InteractiveShell:
         self._current_remote: Optional[str] = None  # Remote machine for uploads
         self._current_var: Optional[str] = None  # Default variable(s) for field extract
         self._current_zone: Optional[str] = None  # Default zone for field extract/convert/iso
+        self._current_freq: Optional[int] = None  # Output frequency for field extract / run post
         self._current_dir: Path = Path.cwd()  # Track current working directory
 
         # Piping mode state
@@ -1034,6 +1040,7 @@ class InteractiveShell:
             'remote': '#ffaaee',        # Light magenta for remote
             'var': '#00ddaa',           # Teal for variable
             'zone': '#dd88ff',          # Light purple for zone
+            'freq': '#ffcc00',          # Amber for frequency
             'sep': '#444444',           # Separator
         })
 
@@ -1097,6 +1104,8 @@ class InteractiveShell:
             contexts.append(f'<var>var:{self._current_var}</var>')
         if self._current_zone is not None:
             contexts.append(f'<zone>zone:{self._current_zone}</zone>')
+        if self._current_freq is not None:
+            contexts.append(f'<freq>freq:{self._current_freq}</freq>')
 
         # Multi-line prompt format
         if contexts:
@@ -1233,9 +1242,11 @@ class InteractiveShell:
                     self.use_var(value)
                 elif context == 'zone':
                     self.use_zone(value)
+                elif context == 'freq':
+                    self.use_freq(value)
                 else:
                     self.console.print(f"[yellow]Unknown context:[/yellow] {context}")
-                    self.console.print("[dim]Valid contexts: case, problem, rundir, dir, node, t1, t2, remote, var, zone[/dim]")
+                    self.console.print("[dim]Valid contexts: case, problem, rundir, dir, node, t1, t2, remote, var, zone, freq[/dim]")
             return True
 
         # Clear context with subcommands
@@ -1271,11 +1282,13 @@ class InteractiveShell:
                     self.unuse_var()
                 elif subcommand == 'zone':
                     self.unuse_zone()
+                elif subcommand == 'freq':
+                    self.unuse_freq()
                 elif subcommand == 'all':
                     self.unuse_all()
                 else:
                     self.console.print(f"[yellow]Unknown subcommand:[/yellow] {subcommand}")
-                    self.console.print("[dim]Use: unuse [case|problem|rundir|dir|node|t1|t2|remote|var|zone|all][/dim]")
+                    self.console.print("[dim]Use: unuse [case|problem|rundir|dir|node|t1|t2|remote|var|zone|freq|all][/dim]")
             return True
 
         # Show current directory and all contexts
@@ -1301,9 +1314,12 @@ class InteractiveShell:
                 self.console.print(f"Variable context: [cyan]{self._current_var}[/cyan]")
             if self._current_zone is not None:
                 self.console.print(f"Zone context: [cyan]{self._current_zone}[/cyan]")
+            if self._current_freq is not None:
+                self.console.print(f"Frequency context: [cyan]{self._current_freq}[/cyan]")
             if not any([self._current_case, self._current_problem, self._current_rundir, self._current_output_dir,
                        self._current_node is not None, self._current_t1 is not None, self._current_t2 is not None,
-                       self._current_remote, self._current_var is not None, self._current_zone is not None]):
+                       self._current_remote, self._current_var is not None, self._current_zone is not None,
+                       self._current_freq is not None]):
                 self.console.print("[dim]No context set[/dim]")
             return True
 
@@ -2564,6 +2580,23 @@ class InteractiveShell:
         self._current_zone = zone_input
         self.console.print(f"[green]✓[/green] Zone set to: [cyan]{zone_input}[/cyan]")
 
+    def use_freq(self, freq_input: str) -> None:
+        """
+        Set output-frequency context, injected as --freq for field extract / run post.
+
+        Args:
+            freq_input: Output frequency (positive integer)
+        """
+        try:
+            freq = int(freq_input)
+            if freq <= 0:
+                raise ValueError
+        except ValueError:
+            self.console.print(f"[red]Error:[/red] invalid frequency '{freq_input}' (use a positive integer)")
+            return
+        self._current_freq = freq
+        self.console.print(f"[green]✓[/green] Frequency set to: [cyan]{freq}[/cyan]")
+
     def unuse_case(self) -> None:
         """Clear case context."""
         if self._current_case or self._current_case_name == "*":
@@ -2658,6 +2691,15 @@ class InteractiveShell:
         else:
             self.console.print("[dim]No zone context is set[/dim]")
 
+    def unuse_freq(self) -> None:
+        """Clear frequency context."""
+        if self._current_freq is not None:
+            old = self._current_freq
+            self._current_freq = None
+            self.console.print(f"[green]✓[/green] Frequency context cleared: [dim]{old}[/dim]")
+        else:
+            self.console.print("[dim]No frequency context is set[/dim]")
+
     def unuse_all(self) -> None:
         """Clear all contexts."""
         cleared = []
@@ -2692,6 +2734,9 @@ class InteractiveShell:
         if self._current_zone is not None:
             cleared.append(f"zone: {self._current_zone}")
             self._current_zone = None
+        if self._current_freq is not None:
+            cleared.append(f"freq: {self._current_freq}")
+            self._current_freq = None
 
         if cleared:
             self.console.print(f"[green]✓[/green] All contexts cleared:")
@@ -3839,10 +3884,19 @@ class InteractiveShell:
                 if self._current_t2 is not None and '--t2' not in args:
                     args.append('--t2'); args.append(str(self._current_t2))
                     context_added.append(f"t2: {self._current_t2}")
+                if self._current_freq is not None and '--freq' not in args:
+                    args.append('--freq'); args.append(str(self._current_freq))
+                    context_added.append(f"freq: {self._current_freq}")
             elif subcmd in ('convert', 'iso'):
                 if self._current_t1 is not None and '--timestep' not in args:
                     args.append('--timestep'); args.append(str(int(self._current_t1)))
                     context_added.append(f"timestep: {int(self._current_t1)}")
+
+        # freq context -> --freq for `run post`
+        if (cmd == 'run' and len(args) >= 2 and args[1] == 'post'
+                and self._current_freq is not None and '--freq' not in args):
+            args.append('--freq'); args.append(str(self._current_freq))
+            context_added.append(f"freq: {self._current_freq}")
 
         # node/t1/t2 are injected ONLY where the target command+subcommand
         # actually defines those flags (otherwise argparse would reject them).

@@ -24,7 +24,11 @@ def _resolve_steps(args, binary_dir, problem):
     t1, t2 = getattr(args, "t1", None), getattr(args, "t2", None)
     if t1 is not None and t2 is not None:
         lo, hi = sorted((t1, t2))
-        return [s for s in list_steps(binary_dir, problem) if lo <= s <= hi], "range"
+        freq = getattr(args, "freq", None)
+        sel = [s for s in list_steps(binary_dir, problem) if lo <= s <= hi]
+        if freq and freq > 0:
+            sel = [s for s in sel if s % freq == 0]
+        return sel, "range"
     if t1 is not None:
         return [int(t1)], "single"
     if t2 is not None:
@@ -44,6 +48,9 @@ def execute_extract(args):
     for req in ("variables", "zone"):
         if not getattr(args, req, None):
             logger.error(f"--{req} flag is required"); print(); print_extract_help(); sys.exit(1)
+    if not getattr(args, "output_file", None):
+        logger.error("--output is required (e.g. --output results.csv or results.vtu)")
+        print(); print_extract_help(); sys.exit(1)
 
     case_dir = Path(args.case)
     binary_dir = case_dir / "binary"
@@ -128,14 +135,7 @@ def execute_extract(args):
     if applied:
         logger.info(f"Subdomain filter {applied}: {len(P):,} nodes kept")
 
-    # default output name
-    if args.output_file:
-        out_path = Path(args.output_file)
-    elif mode == "range":
-        out_path = case_dir / f"extracted_{steps[0]}_{steps[-1]}.csv"
-    else:
-        out_path = case_dir / f"extracted_{steps[0]}.csv"
-
+    out_path = Path(args.output_file)
     ext = out_path.suffix.lower()
     if ext in (".vtu", ".vtk", ".vtp"):
         from ....plt.convert import write_point_cloud

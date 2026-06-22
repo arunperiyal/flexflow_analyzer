@@ -16,7 +16,8 @@
   chosen by the output-file extension). Supports a **timestep range** via
   `--t1`/`--t2` (or the `t1`/`t2` context): all PLTs in the range are
   consolidated into a single output with a `timestep` column/array; `--t1`
-  alone (or `--timestep`) extracts one step.
+  alone (or `--timestep`) extracts one step. `--freq N` sub-samples the range to
+  steps that are multiples of N. `--output` (alias `--output-file`) is required.
 - **`field convert`** *(new)* — PLT volume zone → VTK `.vtu` (meshio), with
   `--nen` override, `--audit-only`, and an `--xmin…--zmax` **box crop** that
   exports a sub-region mesh (cells preserved).
@@ -29,8 +30,9 @@
   `.yml`). Auto-converts a case's PLT to a cached `.vtu`.
 - **`use var:` / `use zone:` context** — set a default variable list / zone once
   and they're auto-injected into `field extract` (`--variables`, `--zone`) and
-  `--zone` into `field convert`/`iso`. Shown in `pwd`, cleared via
-  `unuse var`/`unuse zone`/`unuse all`, with tab completion.
+  `--zone` into `field convert`/`iso`. A **`freq`** context injects `--freq`
+  into `field extract` and `run post`. Shown in `pwd`, cleared via
+  `unuse var`/`zone`/`freq`/`all`, with tab completion.
 - **Fixed context injection scope**: `node`/`t1`/`t2` are now injected only where
   the target actually defines those flags — `data show` (node/t1/t2),
   `data stats` (node only), `plot` (node/t1/t2). They are no longer pushed into
