@@ -37,6 +37,14 @@
 
 ### ✨ New Features
 
+#### `set` command — program settings
+- New interactive **`set`** command for program settings (separate from the
+  data/analysis commands), extensible with future subcommands.
+- **`set prompt --level N`** — show only the last N path components in the
+  prompt (`0` = full path); `set prompt` shows the current value.
+- Persisted to `~/.flexflow/settings.json`; tab completion for `set` / `prompt` /
+  `--level`.
+
 #### Command Chaining with Semicolons
 - **Semicolon separator** - Chain multiple commands on one line
   - Example: `use case:Case005; data show --pendulum; plot --data-type pendulum`

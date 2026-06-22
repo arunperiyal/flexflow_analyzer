@@ -453,6 +453,7 @@ class FlexFlowCompleter(Completer):
         ('ls',      'List files'),
         ('alias',   'Define or list command aliases'),
         ('unalias', 'Remove a command alias'),
+        ('set',     'Program settings (e.g. set prompt --level 3)'),
         ('cd',      'Change directory'),
         ('cat',     'View file contents'),
         ('head',    'Show first lines of file'),
@@ -610,6 +611,22 @@ class FlexFlowCompleter(Completer):
             return
         if cmd_name == 'unuse':
             yield from self._complete_unuse_command(words, ends_with_space)
+            return
+
+        # ── set (program settings) ───────────────────────────────────────────
+        if cmd_name == 'set':
+            current_word = '' if ends_with_space else words[-1]
+            # complete the setting name (first token after `set`)
+            if len(words) == 1 or (len(words) == 2 and not ends_with_space):
+                for name, desc in (('prompt', 'Prompt path display level'),):
+                    if name.startswith(current_word):
+                        yield Completion(name, start_position=-len(current_word), display_meta=desc)
+                return
+            # `set prompt` → offer --level
+            if words[1] == 'prompt' and (current_word.startswith('-') or ends_with_space):
+                if '--level'.startswith(current_word):
+                    yield Completion('--level', start_position=-len(current_word),
+                                     display_meta='Last N path components (0 = full)')
             return
 
         # ── history ─────────────────────────────────────────────────────────────
@@ -888,6 +905,7 @@ class InteractiveShell:
         self.history_file = self._get_history_file()
         self._compact_history_file(log_summary=False)
         self._aliases: dict = self._load_aliases()
+        self._settings: dict = self._load_settings()
         self.session = self._create_session()
 
         # Context tracking
@@ -956,6 +974,32 @@ class InteractiveShell:
         with open(path, 'w') as f:
             json.dump(self._aliases, f, indent=2)
 
+    def _get_settings_file(self) -> Path:
+        """Return path to the persistent settings file (~/.flexflow/settings.json)."""
+        settings_dir = Path.home() / '.flexflow'
+        settings_dir.mkdir(exist_ok=True)
+        return settings_dir / 'settings.json'
+
+    def _load_settings(self) -> dict:
+        """Load program settings, returning an empty dict if absent or corrupt."""
+        import json
+        path = self._get_settings_file()
+        if path.exists():
+            try:
+                with open(path) as f:
+                    data = json.load(f)
+                if isinstance(data, dict):
+                    return data
+            except Exception:
+                pass
+        return {}
+
+    def _save_settings(self) -> None:
+        """Persist the current settings to disk."""
+        import json
+        with open(self._get_settings_file(), 'w') as f:
+            json.dump(self._settings, f, indent=2)
+
     def _expand_alias_str(self, command_line: str) -> str:
         """
         If the first token of command_line is an alias, return the expanded
@@ -1019,6 +1063,13 @@ class InteractiveShell:
                 dir_display = str(self._current_dir)
         except (ValueError, RuntimeError):
             dir_display = str(self._current_dir)
+
+        # Limit to the last N path components if the user set a prompt level
+        level = self._settings.get('prompt_level', 0) if hasattr(self, '_settings') else 0
+        if level and level > 0:
+            segs = dir_display.strip('/').split('/')
+            if len(segs) > level:
+                dir_display = '…/' + '/'.join(segs[-level:])
 
         # Don't limit path length for multi-line prompt
 
@@ -1263,6 +1314,11 @@ class InteractiveShell:
 
         if cmd == 'unalias':
             self._handle_unalias(parts[1:])
+            return True
+
+        # Program settings
+        if cmd == 'set':
+            self._handle_set(parts[1:])
             return True
 
         # Change directory
@@ -1816,6 +1872,50 @@ class InteractiveShell:
                 self.console.print(f"[green]Removed alias:[/green] {name}")
             else:
                 self.console.print(f"[yellow]unalias: {name}: not found[/yellow]")
+
+    def _handle_set(self, args: list) -> None:
+        """Handle the `set` command for program settings (e.g. `set prompt --level 3`)."""
+        if not args or args[0] in ('-h', '--help', 'help'):
+            self.console.print("[bold]Usage:[/bold] set <setting> [options]")
+            self.console.print("[dim]Program settings (persisted to ~/.flexflow/settings.json).[/dim]")
+            self.console.print("\n[bold]Settings:[/bold]")
+            self.console.print("  [cyan]prompt --level N[/cyan]   Show only the last N path components "
+                               "in the prompt (0 = full path)")
+            self.console.print("\n[bold]Examples:[/bold]")
+            self.console.print("  set prompt --level 3")
+            self.console.print("  set prompt --level 0     # full path")
+            self.console.print("  set prompt               # show current value")
+            return
+
+        setting = args[0]
+        if setting == 'prompt':
+            rest = args[1:]
+            if not rest:
+                level = self._settings.get('prompt_level', 0)
+                self.console.print(f"prompt level: [cyan]{level}[/cyan] "
+                                   f"({'full path' if not level else f'last {level} component(s)'})")
+                return
+            if rest[0] == '--level':
+                if len(rest) < 2:
+                    self.console.print("[red]Error:[/red] --level requires a value (e.g. set prompt --level 3)")
+                    return
+                try:
+                    level = int(rest[1])
+                    if level < 0:
+                        raise ValueError
+                except ValueError:
+                    self.console.print(f"[red]Error:[/red] invalid level '{rest[1]}' (use a non-negative integer)")
+                    return
+                self._settings['prompt_level'] = level
+                self._save_settings()
+                desc = 'full path' if level == 0 else f'last {level} path component(s)'
+                self.console.print(f"[green]✓[/green] Prompt level set to: [cyan]{level}[/cyan] ({desc})")
+            else:
+                self.console.print(f"[yellow]Unknown option for 'set prompt':[/yellow] {rest[0]}")
+                self.console.print("[dim]Use: set prompt --level N[/dim]")
+        else:
+            self.console.print(f"[yellow]Unknown setting:[/yellow] {setting}")
+            self.console.print("[dim]Available settings: prompt[/dim]")
 
     def change_directory(self, path: str) -> None:
         """
