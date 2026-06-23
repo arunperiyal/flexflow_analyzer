@@ -12,8 +12,10 @@
   audit** that flags an 8-node brick mesh mis-written as 4-node tetrahedra
   (`simflow.config nen=4` → advises `nen=8`) and checks file-size consistency.
 - **`field extract`** rewritten Tecplot-free: nodal variables with x/y/z
-  subdomain filtering, to **CSV or a point-cloud `.vtu`/`.vtk`/`.vtp`** (format
-  chosen by the output-file extension). Supports a **timestep range** via
+  subdomain filtering. Output by extension: **`.csv`** (tabular), **`.vtu`/`.vtk`**
+  (a trimmed *mesh* carrying only the selected variables — cells kept, so it is
+  contourable in ParaView), or **`.pvd`** (a time series of per-step trimmed
+  meshes for a range). Supports a **timestep range** via
   `--t1`/`--t2` (or the `t1`/`t2` context): all PLTs in the range are
   consolidated into a single output with a `timestep` column/array; `--t1`
   alone (or `--timestep`) extracts one step. `--freq N` sub-samples the range to

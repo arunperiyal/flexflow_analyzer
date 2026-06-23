@@ -279,7 +279,7 @@ class FlexFlowCompleter(Completer):
             '--t1':          'Start step (alone: that step; with --t2: range)',
             '--t2':          'End step of a range (consolidated output)',
             '--freq':        'With --t1/--t2: keep steps that are multiples of FREQ',
-            '--output':      '(required) Output path (.csv / .vtu / .vtk / .vtp)',
+            '--output':      '(required) Output (.csv / .vtu / .vtk mesh / .pvd series)',
             '--xmin': 'X minimum bound',
             '--xmax': 'X maximum bound',
             '--ymin': 'Y minimum bound',

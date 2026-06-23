@@ -29,9 +29,13 @@ Extract nodal data from binary PLT files to CSV (Tecplot-free; pure numpy).
     {Colors.YELLOW}--freq N{Colors.RESET}               With --t1/--t2: keep only steps that are multiples of N
     {Colors.DIM}Setting the t1/t2/freq context (use t1:.. t2:.. freq:..) supplies these automatically.{Colors.RESET}
 
-    {Colors.YELLOW}--output FILE{Colors.RESET}          (required) Output path; format from the extension:
-                             .csv (table), or .vtu/.vtk/.vtp (point cloud for
-                             ParaView). Alias: --output-file
+    {Colors.YELLOW}--output FILE{Colors.RESET}          (required) Output; format from the extension:
+                             .csv      tabular point values (range -> 'timestep' column)
+                             .vtu/.vtk a trimmed MESH with only the selected vars
+                                       (cells kept -> contourable in ParaView; one step)
+                             .pvd      time series: one <stem>_<step>.vtu per step
+                                       + the .pvd collection (for a --t1/--t2 range)
+                             Alias: --output-file
 
 {Colors.BOLD}OPTIONAL:{Colors.RESET}
     {Colors.YELLOW}--verbose, -v{Colors.RESET}          Show detailed extraction progress
@@ -56,11 +60,15 @@ Extract nodal data from binary PLT files to CSV (Tecplot-free; pure numpy).
   {Colors.BOLD}Single variable to CSV:{Colors.RESET}
     flexflow field extract CS4SG1U1 --timestep 1000 --variables Y --zone FIELD --output y.csv
 
-  {Colors.BOLD}Multiple variables to a point cloud (.vtu):{Colors.RESET}
-    flexflow field extract CS4SG1U1 --timestep 1000 --variables U,V,W --zone FIELD --output snap.vtu
+  {Colors.BOLD}Single timestep to a contourable mesh (.vtu):{Colors.RESET}
+    flexflow field extract CS4SG1U1 --timestep 1000 --variables U,QCriterion --zone FIELD --output snap.vtu
 
-  {Colors.BOLD}Timestep range, consolidated into one file:{Colors.RESET}
+  {Colors.BOLD}Range to a CSV table (one file, 'timestep' column):{Colors.RESET}
     flexflow field extract CS4SG1U1 --t1 1000 --t2 5000 --variables U,V --zone FIELD --output range.csv
+
+  {Colors.BOLD}Range to a ParaView time series of meshes (.pvd):{Colors.RESET}
+    flexflow field extract CS4SG1U1 --t1 1000 --t2 5000 --freq 1000 --variables U,QCriterion \\
+      --zone FIELD --output wake.pvd     # -> wake_1000.vtu, wake_2000.vtu, ... + wake.pvd
 
   {Colors.BOLD}3D subdomain box:{Colors.RESET}
     flexflow field extract CS4SG1U1 --timestep 1000 --variables U,V --zone FIELD --output box.csv \\
