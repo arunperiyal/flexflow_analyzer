@@ -23,9 +23,10 @@
 - **`field convert`** *(new)* — PLT volume zone → VTK `.vtu` (meshio), with
   `--nen` override, `--audit-only`, and an `--xmin…--zmax` **box crop** that
   exports a sub-region mesh (cells preserved).
-- **`field check`** *(new)* — validate a produced VTK file (`.vtu`/`.vtk`/`.vtp`):
-  reports points, cells, bounds, and per-array ranges; flags empty files or
-  NaN/Inf and exits non-zero on problems.
+- **`field check`** *(new)* — validate a produced file (`.vtu`/`.vtk`/`.vtp`, or
+  a `.pvd` time-series collection): reports points, cells, bounds, and per-array
+  ranges; for `.pvd` it lists timesteps, verifies every member file exists, and
+  summarises one member. Flags empty files / NaN/Inf and exits non-zero on problems.
 - **`field iso`** *(new)* — isosurface PNGs via **pyvista** (config-driven YAML:
   background, resolution, domain crop, threshold, camera orientation, and
   reusable camera frames from ParaView `.pvsm`/`.py` Save State or a saved
