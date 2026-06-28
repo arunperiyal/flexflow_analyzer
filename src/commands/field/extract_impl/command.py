@@ -46,6 +46,32 @@ def _domain(args):
     return {k: getattr(args, k, None) for k in ("xmin", "xmax", "ymin", "ymax", "zmin", "zmax")}
 
 
+def _resolve_output(args, steps, mode, logger):
+    """Resolve --output to (file_path, ext).
+
+    Relative paths are placed under the case directory (cwd if no case). A name
+    WITH a known extension (.csv/.vtu/.vtk/.pvd) is a single file; a name with NO
+    extension becomes a directory holding the outputs, named after the directory
+    (e.g. `--output wake` -> <case>/wake/wake.pvd + wake/wake_<step>.vtu).
+    """
+    base = Path(args.case) if args.case else Path.cwd()
+    raw = Path(args.output_file)
+    target = raw if raw.is_absolute() else base / raw
+    ext = target.suffix.lower()
+
+    if ext == "":
+        chosen = ".pvd" if (mode == "range" and len(steps) > 1) else ".vtu"
+        target.mkdir(parents=True, exist_ok=True)
+        logger.info(f"output directory: {target}")
+        return target / (target.name + chosen), chosen
+    if ext in (".csv", ".vtu", ".vtk", ".pvd"):
+        target.parent.mkdir(parents=True, exist_ok=True)
+        return target, ext
+    logger.error(f"Unsupported output extension '{ext}'. "
+                 "Use .csv / .vtu / .vtk / .pvd, or a bare name for a folder.")
+    sys.exit(1)
+
+
 def _resolve_cols(plt, columns, requested, logger):
     """Map requested variable names (case-insensitive) to file keys, or exit."""
     lower = {k.lower(): k for k in columns}
@@ -187,8 +213,7 @@ def execute_extract(args):
         sys.exit(1)
 
     requested = [v.strip() for v in args.variables.split(",")]
-    out_path = Path(args.output_file)
-    ext = out_path.suffix.lower()
+    out_path, ext = _resolve_output(args, steps, mode, logger)
     domain = _domain(args)
 
     if ext == ".csv":
@@ -223,6 +248,3 @@ def execute_extract(args):
         _write_pvd(out_path, entries)
         logger.success(f"Wrote time series: {len(entries)} mesh file(s) + {out_path}")
         return
-
-    logger.error(f"Unsupported output '{ext}'. Use .csv, .vtu/.vtk (single step), or .pvd (range).")
-    sys.exit(1)

@@ -29,13 +29,16 @@ Extract nodal data from binary PLT files to CSV (Tecplot-free; pure numpy).
     {Colors.YELLOW}--freq N{Colors.RESET}               With --t1/--t2: keep only steps that are multiples of N
     {Colors.DIM}Setting the t1/t2/freq context (use t1:.. t2:.. freq:..) supplies these automatically.{Colors.RESET}
 
-    {Colors.YELLOW}--output FILE{Colors.RESET}          (required) Output; format from the extension:
+    {Colors.YELLOW}--output NAME{Colors.RESET}          (required) Output; format from the extension:
                              .csv      tabular point values (range -> 'timestep' column)
                              .vtu/.vtk a trimmed MESH with only the selected vars
                                        (cells kept -> contourable in ParaView; one step)
                              .pvd      time series: one <stem>_<step>.vtu per step
                                        + the .pvd collection (for a --t1/--t2 range)
-                             Alias: --output-file
+                             {Colors.DIM}A bare NAME (no extension) makes a directory NAME/ holding the
+                             outputs (NAME/NAME.pvd + per-step .vtu for a range, else
+                             NAME/NAME.vtu). Relative paths go under the case directory.
+                             Alias: --output-file{Colors.RESET}
 
 {Colors.BOLD}OPTIONAL:{Colors.RESET}
     {Colors.YELLOW}--verbose, -v{Colors.RESET}          Show detailed extraction progress

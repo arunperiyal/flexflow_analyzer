@@ -15,7 +15,10 @@
   subdomain filtering. Output by extension: **`.csv`** (tabular), **`.vtu`/`.vtk`**
   (a trimmed *mesh* carrying only the selected variables — cells kept, so it is
   contourable in ParaView), or **`.pvd`** (a time series of per-step trimmed
-  meshes for a range). Supports a **timestep range** via
+  meshes for a range). A bare `--output NAME` (no extension) creates a directory
+  `NAME/` and writes the outputs inside it (`NAME/NAME.pvd` + per-step `.vtu`, or
+  `NAME/NAME.vtu`); relative output paths are placed under the case directory.
+  Supports a **timestep range** via
   `--t1`/`--t2` (or the `t1`/`t2` context): all PLTs in the range are
   consolidated into a single output with a `timestep` column/array; `--t1`
   alone (or `--timestep`) extracts one step. `--freq N` sub-samples the range to

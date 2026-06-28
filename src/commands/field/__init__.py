@@ -69,7 +69,8 @@ class FieldCommand(BaseCommand):
         extract_parser.add_argument('--freq', type=int,
                                    help='With --t1/--t2: keep only steps that are multiples of FREQ')
         extract_parser.add_argument('--output', '--output-file', dest='output_file', type=str,
-                                   help='REQUIRED output path; .csv or point-cloud .vtu/.vtk/.vtp')
+                                   help='REQUIRED output: .csv / .vtu/.vtk (mesh) / .pvd (series), '
+                                        'or a bare NAME -> a directory NAME/ (relative -> under the case dir)')
         extract_parser.add_argument('--xmin', type=float,
                                    help='Minimum X coordinate')
         extract_parser.add_argument('--xmax', type=float,
