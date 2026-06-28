@@ -181,6 +181,23 @@ class CaseCommand(BaseCommand):
         upload_parser.add_argument('--examples', action='store_true',
                                   help='Show usage examples')
 
+        # case download
+        download_parser = case_subparsers.add_parser('download', add_help=False,
+                                                     help='Download case directories from remote to local')
+        download_parser.add_argument('case', nargs='?', help='Local case directory path (destination)')
+        download_parser.add_argument('--dir', type=str, metavar='DIRS',
+                                    help='Directories to download (comma-separated, default: othd_files,oisd_files,binary)')
+        download_parser.add_argument('--from', dest='from_remote', type=str, required=False, metavar='REMOTE',
+                                    help='Remote machine name (or use context with "use remote:name")')
+        download_parser.add_argument('--remote-path', type=str, metavar='PATH',
+                                    help='Override remote base path (default: use remote config)')
+        download_parser.add_argument('--force', action='store_true',
+                                    help='Create the local case directory if it does not exist')
+        download_parser.add_argument('-h', '--help', action='store_true',
+                                    help='Show help for download command')
+        download_parser.add_argument('--examples', action='store_true',
+                                    help='Show usage examples')
+
         # Main case help flags
         parser.add_argument('-h', '--help', action='store_true',
                            help='Show help for case command')
@@ -220,6 +237,9 @@ class CaseCommand(BaseCommand):
         elif hasattr(args, 'case_subcommand') and args.case_subcommand == 'upload':
             from .download_impl.command import execute_upload
             sys.exit(execute_upload(args))
+        elif hasattr(args, 'case_subcommand') and args.case_subcommand == 'download':
+            from .download_impl.command import execute_download
+            sys.exit(execute_download(args))
         else:
             # Show help for case group
             self.show_help()
@@ -254,6 +274,7 @@ class CaseCommand(BaseCommand):
         table.add_row("add", "Scan a directory and build the .cases registry")
         table.add_row("report", "Print a compact status table for all registered cases")
         table.add_row("upload", "Upload case directories from local to remote server")
+        table.add_row("download", "Download case directories from remote server to local")
 
         console.print("[bold]SUBCOMMANDS:[/bold]")
         console.print(table)
@@ -274,6 +295,9 @@ class CaseCommand(BaseCommand):
         console.print("    flexflow case upload ./myCase --to remote-server")
         console.print("    flexflow case upload ./myCase --to remote-server --dir othd_files,oisd_files")
         console.print("    flexflow case upload ./myCase --to remote-server --dir othd_files --force")
+        console.print("    flexflow case download ./myCase --from remote-server")
+        console.print("    flexflow case download ./myCase --from remote-server --dir othd_files,oisd_files")
+        console.print("    flexflow case download ./myCase --from remote-server --force")
         console.print()
 
 

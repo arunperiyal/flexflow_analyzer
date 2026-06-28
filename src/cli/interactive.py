@@ -139,7 +139,7 @@ class FlexFlowCompleter(Completer):
     # ---------------------------------------------------------------------------
 
     _SUBCOMMANDS: Dict[str, List[str]] = {
-        'case':     ['show', 'create', 'run', 'organise', 'check', 'status', 'add', 'report', 'upload'],
+        'case':     ['show', 'create', 'run', 'organise', 'check', 'status', 'add', 'report', 'upload', 'download'],
         'data':     ['show', 'stats'],
         'field':    ['info', 'extract', 'convert', 'iso', 'check'],
         'def':      ['var'],
@@ -221,6 +221,13 @@ class FlexFlowCompleter(Completer):
             '--to':           'Remote machine name (or use context: use remote:<name>)',
             '--remote-path':  'Override remote base path (default: use remote config)',
             '--force':        'Create missing remote directories before upload',
+        },
+        ('case', 'download'): {
+            **_COMMON_FLAGS,
+            '--dir':          'Directories to download (comma-separated, default: othd_files,oisd_files,binary)',
+            '--from':         'Remote machine name (or use context: use remote:<name>)',
+            '--remote-path':  'Override remote base path (default: use remote config)',
+            '--force':        'Create the local case directory if it does not exist',
         },
 
         # ── remote ──────────────────────────────────────────────────────────
@@ -3812,7 +3819,7 @@ class InteractiveShell:
 
         # Commands that take a case as their second or third argument
         case_commands = {
-            'case': {'show': 2, 'run': 2, 'organise': 2, 'check': 2, 'status': 2, 'upload': 2},  # case show <case>
+            'case': {'show': 2, 'run': 2, 'organise': 2, 'check': 2, 'status': 2, 'upload': 2, 'download': 2},  # case show <case>
             'data': {'show': 2, 'stats': 2},  # data show <case>
             'field': {'info': 2, 'extract': 2},  # field info <case>
             'run': {'check': 2, 'pre': 2, 'main': 2, 'post': 2},  # run check <case>
@@ -3946,12 +3953,13 @@ class InteractiveShell:
         if not self._current_remote or len(args) < 2:
             return args
 
-        # Check if this is a case upload command
-        if args[0] == 'case' and len(args) >= 2 and args[1] == 'upload':
-            # Check if --to flag is already present
-            if '--to' not in args:
-                # Add --to flag with the current remote
+        # Inject the remote into case upload (--to) / download (--from)
+        if args[0] == 'case' and len(args) >= 2:
+            if args[1] == 'upload' and '--to' not in args:
                 args.extend(['--to', self._current_remote])
+                self.console.print(f"[dim]Using remote: {self._current_remote}[/dim]")
+            elif args[1] == 'download' and '--from' not in args:
+                args.extend(['--from', self._current_remote])
                 self.console.print(f"[dim]Using remote: {self._current_remote}[/dim]")
 
         return args
