@@ -149,6 +149,19 @@ class TestAutocompletion:
         assert '--unique' in texts
         assert '--help' in texts
 
+    def test_set_setting_name_completion_includes_timeout(self, completer):
+        """Test set command suggests timeout setting."""
+        completions = list(completer.get_completions(Document("set t"), None))
+        texts = {c.text for c in completions}
+        assert 'timeout' in texts
+
+    def test_set_timeout_value_completion(self, completer):
+        """Test set timeout suggests common minute values."""
+        completions = list(completer.get_completions(Document("set timeout "), None))
+        texts = {c.text for c in completions}
+        assert '15' in texts
+        assert '20' in texts
+
     def test_grep_after_context_flag_completion(self, completer):
         """Test grep --after-context and -A flag completion."""
         completions = list(completer.get_completions(Document("grep --a"), None))
