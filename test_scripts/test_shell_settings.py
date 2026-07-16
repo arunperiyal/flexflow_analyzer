@@ -1,4 +1,5 @@
 from unittest.mock import patch
+from pathlib import Path
 
 from src.cli.interactive import InteractiveShell
 
@@ -17,6 +18,18 @@ def _make_shell() -> InteractiveShell:
     shell._settings = {}
     shell._save_settings = lambda: None
     shell._arm_session_timeout_alarm = lambda: None
+    shell._current_case_name = None
+    shell._current_problem = None
+    shell._current_rundir = None
+    shell._current_output_dir = None
+    shell._current_remote = None
+    shell._current_node = None
+    shell._current_t1 = None
+    shell._current_t2 = None
+    shell._current_var = None
+    shell._current_zone = None
+    shell._current_freq = None
+    shell._current_dir = Path("/tmp")
     return shell
 
 
@@ -72,3 +85,24 @@ def test_is_session_timeout_reached_checks_deadline():
 
     with patch("src.cli.interactive.time.monotonic", return_value=200.1):
         assert shell._is_session_timeout_reached() is True
+
+
+def test_prompt_includes_remaining_timeout():
+    shell = _make_shell()
+    shell._session_deadline_monotonic = 1000.0
+
+    with patch("src.cli.interactive.time.monotonic", return_value=940.0):
+        prompt = shell._get_prompt_message()
+
+    assert "(ttl:01:00)" in prompt.value
+    assert "<box>[</box>" not in prompt.value
+
+
+def test_prompt_timeout_clamps_to_zero_after_deadline():
+    shell = _make_shell()
+    shell._session_deadline_monotonic = 1000.0
+
+    with patch("src.cli.interactive.time.monotonic", return_value=1005.0):
+        prompt = shell._get_prompt_message()
+
+    assert "(ttl:00:00)" in prompt.value

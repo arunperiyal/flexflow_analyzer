@@ -1043,6 +1043,20 @@ class InteractiveShell:
         except (TypeError, ValueError):
             return DEFAULT_SESSION_TIMEOUT_MINUTES
 
+    def _get_remaining_session_timeout_seconds(self) -> int:
+        """Return remaining session lifetime in seconds (rounded up, min 0)."""
+        remaining = self._session_deadline_monotonic - time.monotonic()
+        return max(0, int(remaining + 0.999))
+
+    def _format_remaining_session_timeout(self) -> str:
+        """Return remaining session lifetime as MM:SS (or H:MM:SS)."""
+        remaining_seconds = self._get_remaining_session_timeout_seconds()
+        hours, rem = divmod(remaining_seconds, 3600)
+        minutes, seconds = divmod(rem, 60)
+        if hours > 0:
+            return f"{hours}:{minutes:02d}:{seconds:02d}"
+        return f"{minutes:02d}:{seconds:02d}"
+
     def _set_session_timeout(self, timeout_minutes: int, persist: bool = True) -> None:
         """Set session timeout, reset deadline from now, and arm timer if supported."""
         self._session_timeout_minutes = timeout_minutes
@@ -1130,6 +1144,7 @@ class InteractiveShell:
             'var': '#00ddaa',           # Teal for variable
             'zone': '#dd88ff',          # Light purple for zone
             'freq': '#ffcc00',          # Amber for frequency
+            'timeout': '#ff6666 bold',  # Timeout countdown
             'sep': '#444444',           # Separator
         })
 
@@ -1169,6 +1184,11 @@ class InteractiveShell:
 
         # Don't limit path length for multi-line prompt
 
+        timeout_display = self._format_remaining_session_timeout()
+        dir_with_timeout = (
+            f'<path>{dir_display}</path><timeout>(ttl:{timeout_display})</timeout>'
+        )
+
         # Build context string with color coding
         contexts = []
         if self._current_case_name:
@@ -1200,11 +1220,11 @@ class InteractiveShell:
         if contexts:
             context_str = " <sep>|</sep> ".join(contexts)
             return HTML(
-                f'<box>╭─</box> <path>{dir_display}</path> <box>[</box>{context_str}<box>]</box>\n'
+                f'<box>╭─</box> {dir_with_timeout} <box>[</box>{context_str}<box>]</box>\n'
                 f'<box>╰─❯</box> '
             )
         return HTML(
-            f'<box>╭─</box> <path>{dir_display}</path>\n'
+            f'<box>╭─</box> {dir_with_timeout}\n'
             f'<box>╰─❯</box> '
         )
 
