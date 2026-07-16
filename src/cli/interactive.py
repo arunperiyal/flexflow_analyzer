@@ -10,6 +10,8 @@ import sys
 import shlex
 import subprocess
 import io
+import signal
+import time
 from datetime import datetime
 from contextlib import contextmanager
 from pathlib import Path
@@ -30,6 +32,8 @@ from rich import box
 from src.cli.registry import registry
 from src.utils.colors import Colors
 from src.utils.remote_config import RemoteConfig
+
+DEFAULT_SESSION_TIMEOUT_MINUTES = 15
 
 
 class PipeSegment:
@@ -139,7 +143,7 @@ class FlexFlowCompleter(Completer):
     # ---------------------------------------------------------------------------
 
     _SUBCOMMANDS: Dict[str, List[str]] = {
-        'case':     ['show', 'create', 'run', 'organise', 'check', 'status', 'add', 'report', 'upload'],
+        'case':     ['show', 'create', 'run', 'organise', 'check', 'status', 'add', 'report', 'upload', 'download'],
         'data':     ['show', 'stats'],
         'field':    ['info', 'extract', 'convert', 'iso', 'check'],
         'def':      ['var'],
@@ -221,6 +225,13 @@ class FlexFlowCompleter(Completer):
             '--to':           'Remote machine name (or use context: use remote:<name>)',
             '--remote-path':  'Override remote base path (default: use remote config)',
             '--force':        'Create missing remote directories before upload',
+        },
+        ('case', 'download'): {
+            **_COMMON_FLAGS,
+            '--dir':          'Directories to download (comma-separated, default: othd_files,oisd_files,binary)',
+            '--from':         'Remote machine name (or use context: use remote:<name>)',
+            '--remote-path':  'Override remote base path (default: use remote config)',
+            '--force':        'Create the local case directory if it does not exist',
         },
 
         # ── remote ──────────────────────────────────────────────────────────
@@ -456,7 +467,7 @@ class FlexFlowCompleter(Completer):
         ('ls',      'List files'),
         ('alias',   'Define or list command aliases'),
         ('unalias', 'Remove a command alias'),
-        ('set',     'Program settings (e.g. set prompt --level 3)'),
+        ('set',     'Program settings (e.g. set prompt --level 3, set timeout 20)'),
         ('cd',      'Change directory'),
         ('cat',     'View file contents'),
         ('head',    'Show first lines of file'),
@@ -621,7 +632,10 @@ class FlexFlowCompleter(Completer):
             current_word = '' if ends_with_space else words[-1]
             # complete the setting name (first token after `set`)
             if len(words) == 1 or (len(words) == 2 and not ends_with_space):
-                for name, desc in (('prompt', 'Prompt path display level'),):
+                for name, desc in (
+                    ('prompt', 'Prompt path display level'),
+                    ('timeout', 'Auto-exit shell after N minutes'),
+                ):
                     if name.startswith(current_word):
                         yield Completion(name, start_position=-len(current_word), display_meta=desc)
                 return
@@ -630,6 +644,12 @@ class FlexFlowCompleter(Completer):
                 if '--level'.startswith(current_word):
                     yield Completion('--level', start_position=-len(current_word),
                                      display_meta='Last N path components (0 = full)')
+            # `set timeout` → offer common minute values
+            if words[1] == 'timeout':
+                for value in ('15', '20', '30', '60'):
+                    if value.startswith(current_word):
+                        yield Completion(value, start_position=-len(current_word),
+                                         display_meta='Timeout in minutes')
             return
 
         # ── history ─────────────────────────────────────────────────────────────
@@ -912,6 +932,12 @@ class InteractiveShell:
         self._aliases: dict = self._load_aliases()
         self._settings: dict = self._load_settings()
         self.session = self._create_session()
+        self._session_timeout_minutes: int = self._get_session_timeout_minutes()
+        self._session_deadline_monotonic: float = 0.0
+        self._session_timeout_reached: bool = False
+        self._previous_sigalrm_handler = None
+        self._set_session_timeout(self._session_timeout_minutes, persist=False)
+        self._initialize_session_timeout_alarm()
 
         # Context tracking
         self._current_case: Optional[str] = None  # Full path to case
@@ -1006,6 +1032,83 @@ class InteractiveShell:
         with open(self._get_settings_file(), 'w') as f:
             json.dump(self._settings, f, indent=2)
 
+    def _get_session_timeout_minutes(self) -> int:
+        """Return configured session timeout in minutes, with safe default."""
+        raw_value = self._settings.get('timeout_minutes', DEFAULT_SESSION_TIMEOUT_MINUTES)
+        try:
+            timeout_minutes = int(raw_value)
+            if timeout_minutes < 1:
+                raise ValueError
+            return timeout_minutes
+        except (TypeError, ValueError):
+            return DEFAULT_SESSION_TIMEOUT_MINUTES
+
+    def _get_remaining_session_timeout_seconds(self) -> int:
+        """Return remaining session lifetime in seconds (rounded up, min 0)."""
+        remaining = self._session_deadline_monotonic - time.monotonic()
+        return max(0, int(remaining + 0.999))
+
+    def _format_remaining_session_timeout(self) -> str:
+        """Return remaining session lifetime as MM:SS (or H:MM:SS)."""
+        remaining_seconds = self._get_remaining_session_timeout_seconds()
+        hours, rem = divmod(remaining_seconds, 3600)
+        minutes, seconds = divmod(rem, 60)
+        if hours > 0:
+            return f"{hours}:{minutes:02d}:{seconds:02d}"
+        return f"{minutes:02d}:{seconds:02d}"
+
+    def _set_session_timeout(self, timeout_minutes: int, persist: bool = True) -> None:
+        """Set session timeout, reset deadline from now, and arm timer if supported."""
+        self._session_timeout_minutes = timeout_minutes
+        self._session_deadline_monotonic = time.monotonic() + (timeout_minutes * 60)
+        self._session_timeout_reached = False
+        self._settings['timeout_minutes'] = timeout_minutes
+        if persist:
+            self._save_settings()
+        self._arm_session_timeout_alarm()
+
+    def _supports_session_timeout_alarm(self) -> bool:
+        """Return True when SIGALRM-based timeout is supported."""
+        return os.name != 'nt' and hasattr(signal, 'SIGALRM')
+
+    def _initialize_session_timeout_alarm(self) -> None:
+        """Install SIGALRM handler for immediate timeout while waiting at prompt."""
+        if not self._supports_session_timeout_alarm():
+            return
+        try:
+            self._previous_sigalrm_handler = signal.getsignal(signal.SIGALRM)
+            signal.signal(signal.SIGALRM, self._on_session_timeout_alarm)
+            self._arm_session_timeout_alarm()
+        except ValueError:
+            # Not in main thread: fallback to deadline checks in the run loop.
+            self._previous_sigalrm_handler = None
+
+    def _arm_session_timeout_alarm(self) -> None:
+        """Arm SIGALRM to fire when the current session deadline is reached."""
+        if not self._supports_session_timeout_alarm():
+            return
+        remaining_seconds = max(1, int(self._session_deadline_monotonic - time.monotonic()))
+        signal.alarm(remaining_seconds)
+
+    def _clear_session_timeout_alarm(self) -> None:
+        """Clear SIGALRM and restore prior handler."""
+        if not self._supports_session_timeout_alarm():
+            return
+        signal.alarm(0)
+        if self._previous_sigalrm_handler is not None:
+            signal.signal(signal.SIGALRM, self._previous_sigalrm_handler)
+            self._previous_sigalrm_handler = None
+
+    def _on_session_timeout_alarm(self, _signum, _frame) -> None:
+        """Handle SIGALRM by exiting the interactive shell."""
+        self._session_timeout_reached = True
+        self.running = False
+        raise TimeoutError("Session timeout reached")
+
+    def _is_session_timeout_reached(self) -> bool:
+        """Check if the configured session timeout has been reached."""
+        return time.monotonic() >= self._session_deadline_monotonic
+
     def _expand_alias_str(self, command_line: str) -> str:
         """
         If the first token of command_line is an alias, return the expanded
@@ -1041,6 +1144,7 @@ class InteractiveShell:
             'var': '#00ddaa',           # Teal for variable
             'zone': '#dd88ff',          # Light purple for zone
             'freq': '#ffcc00',          # Amber for frequency
+            'timeout': '#ff6666 bold',  # Timeout countdown
             'sep': '#444444',           # Separator
         })
 
@@ -1080,6 +1184,11 @@ class InteractiveShell:
 
         # Don't limit path length for multi-line prompt
 
+        timeout_display = self._format_remaining_session_timeout()
+        dir_with_timeout = (
+            f'<path>{dir_display}</path><timeout>(ttl:{timeout_display})</timeout>'
+        )
+
         # Build context string with color coding
         contexts = []
         if self._current_case_name:
@@ -1111,11 +1220,11 @@ class InteractiveShell:
         if contexts:
             context_str = " <sep>|</sep> ".join(contexts)
             return HTML(
-                f'<box>╭─</box> <path>{dir_display}</path> <box>[</box>{context_str}<box>]</box>\n'
+                f'<box>╭─</box> {dir_with_timeout} <box>[</box>{context_str}<box>]</box>\n'
                 f'<box>╰─❯</box> '
             )
         return HTML(
-            f'<box>╭─</box> <path>{dir_display}</path>\n'
+            f'<box>╭─</box> {dir_with_timeout}\n'
             f'<box>╰─❯</box> '
         )
 
@@ -1659,6 +1768,7 @@ class InteractiveShell:
             ("exit, quit", "Exit FlexFlow"),
             ("clear", "Clear the screen"),
             ("history [--unique]", "Show command history (deduped with --unique)"),
+            ("set timeout 20", "Set auto-exit timeout in minutes (default: 15)"),
             ("pwd", "Show current directory and contexts"),
             ("quota", "Show disk quota for /home and /scratch"),
         ]
@@ -1897,13 +2007,16 @@ class InteractiveShell:
             self.console.print("\n[bold]Settings:[/bold]")
             self.console.print("  [cyan]prompt --level N[/cyan]   Show only the last N path components "
                                "in the prompt (0 = full path)")
+            self.console.print("  [cyan]timeout N[/cyan]          Auto-exit shell after N minutes (default: 15)")
             self.console.print("\n[bold]Examples:[/bold]")
             self.console.print("  set prompt --level 3")
             self.console.print("  set prompt --level 0     # full path")
             self.console.print("  set prompt               # show current value")
+            self.console.print("  set timeout 20")
+            self.console.print("  set timeout              # show current value")
             return
 
-        setting = args[0]
+        setting = args[0].lower()
         if setting == 'prompt':
             rest = args[1:]
             if not rest:
@@ -1929,9 +2042,35 @@ class InteractiveShell:
             else:
                 self.console.print(f"[yellow]Unknown option for 'set prompt':[/yellow] {rest[0]}")
                 self.console.print("[dim]Use: set prompt --level N[/dim]")
+        elif setting == 'timeout':
+            rest = args[1:]
+            if not rest:
+                timeout_minutes = self._get_session_timeout_minutes()
+                unit = "minute" if timeout_minutes == 1 else "minutes"
+                self.console.print(f"session timeout: [cyan]{timeout_minutes}[/cyan] {unit}")
+                return
+            if len(rest) != 1:
+                self.console.print("[red]Error:[/red] usage: set timeout <minutes>")
+                return
+            try:
+                timeout_minutes = int(rest[0])
+                if timeout_minutes < 1:
+                    raise ValueError
+            except ValueError:
+                self.console.print(
+                    f"[red]Error:[/red] invalid timeout '{rest[0]}' "
+                    "(use a positive integer in minutes)"
+                )
+                return
+
+            self._set_session_timeout(timeout_minutes)
+            unit = "minute" if timeout_minutes == 1 else "minutes"
+            self.console.print(
+                f"[green]✓[/green] Session timeout set to: [cyan]{timeout_minutes}[/cyan] {unit}"
+            )
         else:
             self.console.print(f"[yellow]Unknown setting:[/yellow] {setting}")
-            self.console.print("[dim]Available settings: prompt[/dim]")
+            self.console.print("[dim]Available settings: prompt, timeout[/dim]")
 
     def change_directory(self, path: str) -> None:
         """
@@ -3812,7 +3951,7 @@ class InteractiveShell:
 
         # Commands that take a case as their second or third argument
         case_commands = {
-            'case': {'show': 2, 'run': 2, 'organise': 2, 'check': 2, 'status': 2, 'upload': 2},  # case show <case>
+            'case': {'show': 2, 'run': 2, 'organise': 2, 'check': 2, 'status': 2, 'upload': 2, 'download': 2},  # case show <case>
             'data': {'show': 2, 'stats': 2},  # data show <case>
             'field': {'info': 2, 'extract': 2},  # field info <case>
             'run': {'check': 2, 'pre': 2, 'main': 2, 'post': 2},  # run check <case>
@@ -3946,12 +4085,13 @@ class InteractiveShell:
         if not self._current_remote or len(args) < 2:
             return args
 
-        # Check if this is a case upload command
-        if args[0] == 'case' and len(args) >= 2 and args[1] == 'upload':
-            # Check if --to flag is already present
-            if '--to' not in args:
-                # Add --to flag with the current remote
+        # Inject the remote into case upload (--to) / download (--from)
+        if args[0] == 'case' and len(args) >= 2:
+            if args[1] == 'upload' and '--to' not in args:
                 args.extend(['--to', self._current_remote])
+                self.console.print(f"[dim]Using remote: {self._current_remote}[/dim]")
+            elif args[1] == 'download' and '--from' not in args:
+                args.extend(['--from', self._current_remote])
                 self.console.print(f"[dim]Using remote: {self._current_remote}[/dim]")
 
         return args
@@ -3966,57 +4106,79 @@ class InteractiveShell:
         """
         self.print_welcome()
 
-        while self.running:
-            try:
-                # Get user input
-                user_input = self.session.prompt(
-                    self._get_prompt_message(),
-                    refresh_interval=0.5
-                ).strip()
+        try:
+            while self.running:
+                if self._is_session_timeout_reached():
+                    self._session_timeout_reached = True
+                    self.running = False
+                    break
+                try:
+                    # Get user input
+                    user_input = self.session.prompt(
+                        self._get_prompt_message(),
+                        refresh_interval=0.5
+                    ).strip()
 
-                # Skip empty input
-                if not user_input:
+                    # Skip empty input
+                    if not user_input:
+                        continue
+
+                    # Expand alias before routing (so aliases to shell built-ins work)
+                    user_input = self._expand_alias_str(user_input)
+
+                    # Split by semicolon to support command chaining
+                    commands = self._split_by_semicolon(user_input)
+                    
+                    # Normal command processing with support for command chaining
+                    for cmd in commands:
+                        cmd = cmd.strip()
+                        if not cmd:
+                            continue
+                        if self._is_session_timeout_reached():
+                            self._session_timeout_reached = True
+                            self.running = False
+                            break
+                        
+                        # Check for pipes first (they take precedence over semicolon chaining)
+                        if self._has_pipe(cmd):
+                            # Handle piped command
+                            self._handle_piped_command(cmd)
+                            continue
+                        
+                        # Handle shell commands
+                        if self.handle_shell_command(cmd):
+                            continue
+
+                        # Execute FlexFlow command
+                        self.execute_command(cmd)
+
+                except TimeoutError:
+                    self._session_timeout_reached = True
+                    self.running = False
+                    break
+
+                except KeyboardInterrupt:
+                    # Ctrl+C pressed - don't exit, just show new prompt
+                    self.console.print()
                     continue
 
-                # Expand alias before routing (so aliases to shell built-ins work)
-                user_input = self._expand_alias_str(user_input)
+                except EOFError:
+                    # Ctrl+D pressed - exit gracefully
+                    self.running = False
+                    break
 
-                # Split by semicolon to support command chaining
-                commands = self._split_by_semicolon(user_input)
-                
-                # Normal command processing with support for command chaining
-                for cmd in commands:
-                    cmd = cmd.strip()
-                    if not cmd:
-                        continue
-                    
-                    # Check for pipes first (they take precedence over semicolon chaining)
-                    if self._has_pipe(cmd):
-                        # Handle piped command
-                        self._handle_piped_command(cmd)
-                        continue
-                    
-                    # Handle shell commands
-                    if self.handle_shell_command(cmd):
-                        continue
+                except Exception as e:
+                    self.console.print(f"[red]Unexpected error: {e}[/red]")
+                    import traceback
+                    traceback.print_exc()
+        finally:
+            self._clear_session_timeout_alarm()
 
-                    # Execute FlexFlow command
-                    self.execute_command(cmd)
-
-            except KeyboardInterrupt:
-                # Ctrl+C pressed - don't exit, just show new prompt
-                self.console.print()
-                continue
-
-            except EOFError:
-                # Ctrl+D pressed - exit gracefully
-                self.running = False
-                break
-
-            except Exception as e:
-                self.console.print(f"[red]Unexpected error: {e}[/red]")
-                import traceback
-                traceback.print_exc()
+        if self._session_timeout_reached:
+            unit = "minute" if self._session_timeout_minutes == 1 else "minutes"
+            self.console.print(
+                f"[yellow]Session timeout reached after {self._session_timeout_minutes} {unit}. Exiting.[/yellow]"
+            )
 
         self._compact_history_file(log_summary=False)
         self.print_goodbye()

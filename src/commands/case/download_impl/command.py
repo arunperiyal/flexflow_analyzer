@@ -51,6 +51,45 @@ Upload case directories from local machine to a remote server.
 """)
 
 
+def show_download_help() -> None:
+    """Print help for case download command."""
+    print(f"""
+{Colors.BOLD}{Colors.CYAN}FlexFlow Case Download Command{Colors.RESET}
+
+Download case directories from a remote server to the local machine.
+
+{Colors.BOLD}USAGE:{Colors.RESET}
+    flexflow case download [{Colors.YELLOW}case{Colors.RESET}] --from {Colors.YELLOW}REMOTE{Colors.RESET} [options]
+
+{Colors.BOLD}ARGUMENTS:{Colors.RESET}
+    {Colors.YELLOW}case{Colors.RESET}                   Local case directory path (destination; use * for all cases in .cases)
+
+{Colors.BOLD}OPTIONS:{Colors.RESET}
+    {Colors.YELLOW}--from REMOTE{Colors.RESET}          Remote machine name (required)
+    {Colors.YELLOW}--dir DIRS{Colors.RESET}             Comma-separated directories to download
+                           (default: othd_files,oisd_files,binary)
+    {Colors.YELLOW}--remote-path PATH{Colors.RESET}     Override remote base path (default: remote config path)
+    {Colors.YELLOW}--force{Colors.RESET}                Create the local case directory if it does not exist
+    {Colors.YELLOW}--examples{Colors.RESET}             Show usage examples
+    {Colors.YELLOW}-h, --help{Colors.RESET}             Show this help message
+
+{Colors.BOLD}DESCRIPTION:{Colors.RESET}
+    Downloads one or more case directories from a configured remote server via
+    SFTP into the local case directory. The remote server must be registered
+    with 'remote add'.
+
+    Use 'use remote:<name>' in the interactive shell to set a default remote
+    so --from can be omitted.
+
+    Wildcard mode ('case download *') downloads all cases listed in the .cases
+    file in the current directory.
+
+{Colors.BOLD}CONTEXT:{Colors.RESET}
+    Set remote context:    use remote:myserver
+    Then run:              case download CS4SG1U1
+""")
+
+
 class CaseUploadCommand:
     """Upload case directories from local machine to remote server."""
 
@@ -268,22 +307,79 @@ class CaseUploadCommand:
             self.console.print(f"[red]Error:[/red] Failed to upload {directory_name}: {e}")
             return False
 
-    def download_directory(
+    def download_case_directory(
         self,
         ssh: SSHClientWrapper,
         remote_case_path: str,
         local_case_path: str,
         directory_name: str,
-        force: bool = False
     ) -> bool:
-        """Backward-compatible alias; uses upload behavior."""
-        return self.upload_directory(
-            ssh=ssh,
-            remote_case_path=remote_case_path,
-            local_case_path=local_case_path,
-            directory_name=directory_name,
-            force=force
-        )
+        """
+        Download a single directory from a remote case to the local case.
+
+        Args:
+            ssh: SSH client wrapper
+            remote_case_path: Source case path on remote
+            local_case_path: Destination local case path
+            directory_name: Name of directory to download (e.g., "othd_files")
+
+        Returns:
+            True if successful, False otherwise
+        """
+        remote_dir = f"{remote_case_path}/{directory_name}"
+        local_dir = os.path.join(local_case_path, directory_name)
+
+        # The remote source directory must exist; we cannot create it.
+        if not ssh.remote_path_exists(remote_dir):
+            self.console.print(
+                f"[yellow]Warning:[/yellow] Remote directory not found: {remote_dir}"
+            )
+            return False
+
+        if not ssh.remote_is_dir(remote_dir):
+            self.console.print(
+                f"[yellow]Warning:[/yellow] Remote path is not a directory: {remote_dir}"
+            )
+            return False
+
+        self.console.print(f"[cyan]Downloading:[/cyan] {directory_name}")
+
+        try:
+            with Progress(
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                DownloadColumn(),
+                TransferSpeedColumn(),
+                TimeRemainingColumn(),
+            ) as progress:
+                # Remote total size is unknown up front, so track bytes as they arrive.
+                task = progress.add_task(
+                    f"Transferring {directory_name}...",
+                    total=None,
+                )
+
+                state = {"done": 0, "last": 0}
+
+                def update_progress(transferred, _file_total):
+                    if transferred < state["last"]:
+                        state["done"] += state["last"]
+                    state["last"] = transferred
+                    progress.update(task, completed=state["done"] + transferred)
+
+                files_count = ssh.download_directory(
+                    remote_dir,
+                    local_dir,
+                    callback=update_progress,
+                )
+
+            self.console.print(
+                f"[green]✓[/green] Downloaded {files_count} files to {local_dir}"
+            )
+            return True
+
+        except Exception as e:
+            self.console.print(f"[red]Error:[/red] Failed to download {directory_name}: {e}")
+            return False
 
     def execute_upload(self, args) -> int:
         """
@@ -483,8 +579,220 @@ class CaseUploadCommand:
             return 1
 
     def execute_download(self, args) -> int:
-        """Backward-compatible alias; uses upload behavior."""
-        return self.execute_upload(args)
+        """
+        Execute case download command (remote -> local).
+
+        Args:
+            args: Parsed arguments
+
+        Returns:
+            Exit code (0 for success, 1 for failure)
+        """
+        if getattr(args, "help", False) or getattr(args, "examples", False):
+            show_download_help()
+            return 0
+
+        # Validate case path (destination)
+        case_path = self.validate_case_path(args.case)
+        if not case_path:
+            return 1
+
+        remote_name = getattr(args, "from_remote", None)
+        if not remote_name:
+            self.console.print(
+                "[red]Error:[/red] Remote machine not provided. Use --from or 'use remote:<name>' in interactive shell."
+            )
+            return 1
+
+        force_enabled = bool(getattr(args, "force", False))
+
+        # Validate remote
+        remote = self.validate_remote(remote_name)
+        if not remote:
+            return 1
+
+        # Parse directories to download
+        directories = self.parse_directories(args.dir)
+
+        # Get remote base path
+        remote_base = self.get_remote_base_path(remote, args.remote_path)
+
+        # Wildcard mode: iterate all cases from .cases
+        if is_wildcard_case(case_path):
+            base_dir = self._get_cases_base_dir()
+            cases = load_cases_from_directory(base_dir)
+            if not cases:
+                self.console.print(
+                    f"[red]Error:[/red] No cases found in .cases at {base_dir}"
+                )
+                return 1
+
+            self.console.print()
+            self.console.print(
+                f"[bold cyan]Case Download Summary[/bold cyan] [dim](wildcard mode: {len(cases)} cases)[/dim]"
+            )
+            self.console.print()
+
+            table = Table(box=box.SIMPLE, show_header=True, header_style="bold yellow")
+            table.add_column("Parameter", style="cyan")
+            table.add_column("Value", style="white")
+            table.add_row("Case Selection", "* (all cases from .cases)")
+            table.add_row("Cases Base Dir", str(base_dir))
+            table.add_row("Remote Machine", remote_name)
+            table.add_row("Remote Host", f"{remote['user']}@{remote['ip']}:{remote['port']}")
+            table.add_row("Remote Base Path", remote_base)
+            table.add_row("Directories", ", ".join(directories))
+            table.add_row("Create Missing Local Dir", "Yes" if force_enabled else "No")
+            self.console.print(table)
+            self.console.print()
+
+            try:
+                ssh = SSHClientWrapper(
+                    host=remote["ip"],
+                    username=remote["user"],
+                    password=remote["password"],
+                    port=remote.get("port", 22)
+                )
+
+                self.console.print("[cyan]Connecting to remote server...[/cyan]")
+                ssh.connect()
+                self.console.print("[green]✓[/green] Connected successfully")
+                self.console.print()
+
+                success_count = 0
+                total_targets = len(cases) * len(directories)
+
+                for idx, case_entry in enumerate(cases, 1):
+                    entry_path = case_entry.get("path")
+                    entry_name = case_entry.get("name", f"case-{idx}")
+
+                    self.console.print(
+                        f"[bold]Case {idx}/{len(cases)}:[/bold] [cyan]{entry_name}[/cyan]"
+                    )
+
+                    if not entry_path:
+                        self.console.print("[yellow]Warning:[/yellow] Missing case path in .cases entry")
+                        self.console.print()
+                        continue
+
+                    if not self._ensure_local_case_dir(entry_path, force_enabled):
+                        self.console.print()
+                        continue
+
+                    remote_case_path = self.construct_remote_case_path(remote_base, entry_path)
+                    self.console.print(f"[dim]Remote case path: {remote_case_path}[/dim]")
+
+                    for directory in directories:
+                        if self.download_case_directory(
+                            ssh,
+                            remote_case_path,
+                            entry_path,
+                            directory,
+                        ):
+                            success_count += 1
+                    self.console.print()
+
+                ssh.disconnect()
+                self.console.print(
+                    f"[green]✓[/green] Download complete: {success_count}/{total_targets} directories"
+                )
+                return 0 if success_count > 0 else 1
+
+            except Exception as e:
+                self.console.print(f"[red]Error:[/red] {e}")
+                return 1
+
+        # Single-case mode
+        if not self._ensure_local_case_dir(case_path, force_enabled):
+            return 1
+
+        # Construct remote case path
+        remote_case_path = self.construct_remote_case_path(remote_base, case_path)
+
+        # Show summary
+        self.console.print()
+        self.console.print("[bold cyan]Case Download Summary[/bold cyan]")
+        self.console.print()
+
+        table = Table(box=box.SIMPLE, show_header=True, header_style="bold yellow")
+        table.add_column("Parameter", style="cyan")
+        table.add_column("Value", style="white")
+
+        table.add_row("Local Case Path", case_path)
+        table.add_row("Remote Machine", remote_name)
+        table.add_row("Remote Host", f"{remote['user']}@{remote['ip']}:{remote['port']}")
+        table.add_row("Remote Case Path", remote_case_path)
+        table.add_row("Directories", ", ".join(directories))
+        table.add_row("Create Missing Local Dir", "Yes" if force_enabled else "No")
+
+        self.console.print(table)
+        self.console.print()
+
+        # Connect to remote and download
+        try:
+            ssh = SSHClientWrapper(
+                host=remote["ip"],
+                username=remote["user"],
+                password=remote["password"],
+                port=remote.get("port", 22)
+            )
+
+            self.console.print("[cyan]Connecting to remote server...[/cyan]")
+            ssh.connect()
+            self.console.print("[green]✓[/green] Connected successfully")
+            self.console.print()
+
+            # Download each directory
+            success_count = 0
+            for directory in directories:
+                if self.download_case_directory(
+                    ssh,
+                    remote_case_path,
+                    case_path,
+                    directory,
+                ):
+                    success_count += 1
+
+            ssh.disconnect()
+            self.console.print()
+            self.console.print(
+                f"[green]✓[/green] Download complete: {success_count}/{len(directories)} directories"
+            )
+            return 0 if success_count > 0 else 1
+
+        except Exception as e:
+            self.console.print(f"[red]Error:[/red] {e}")
+            return 1
+
+    def _ensure_local_case_dir(self, case_path: str, force: bool) -> bool:
+        """
+        Ensure the local destination case directory exists.
+
+        With force, create it (and parents) if missing; otherwise warn and skip.
+        Returns True if the directory is present (or was created), else False.
+        """
+        if os.path.isdir(case_path):
+            return True
+        if os.path.exists(case_path):
+            self.console.print(
+                f"[yellow]Warning:[/yellow] Local case path is not a directory: {case_path}"
+            )
+            return False
+        if force:
+            try:
+                os.makedirs(case_path, exist_ok=True)
+                self.console.print(f"[green]✓[/green] Created local case directory: {case_path}")
+                return True
+            except OSError as e:
+                self.console.print(
+                    f"[red]Error:[/red] Failed to create local case directory {case_path}: {e}"
+                )
+                return False
+        self.console.print(
+            f"[yellow]Warning:[/yellow] Local case directory not found: {case_path}"
+        )
+        self.console.print("[dim]Use --force to create the local directory[/dim]")
+        return False
 
 
 # Backward-compatible alias for older imports/tests.
@@ -501,5 +809,5 @@ def execute_upload(args) -> int:
 
 
 def execute_download(args) -> int:
-    """Backward-compatible alias for older imports."""
-    return execute_upload(args)
+    """Execute download command (remote -> local)."""
+    return command.execute_download(args)

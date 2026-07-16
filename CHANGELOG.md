@@ -48,6 +48,15 @@
 
 ### ✨ New Features
 
+#### `case download` — fetch case directories from a remote
+- New **`case download [case] --from REMOTE`** that pulls case directories
+  (default `othd_files,oisd_files,binary`, override with `--dir`) from a
+  configured remote server down to the local case via SFTP — the mirror image of
+  `case upload`. Supports wildcard mode (`case download *` over `.cases`),
+  `--remote-path` to override the remote base, and `--force` to create the local
+  case directory when it does not exist. Honours the `use remote:<name>` context
+  (injected as `--from`).
+
 #### `set` command — program settings
 - New interactive **`set`** command for program settings (separate from the
   data/analysis commands), extensible with future subcommands.
