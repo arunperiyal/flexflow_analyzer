@@ -162,6 +162,12 @@ class TestAutocompletion:
         assert '15' in texts
         assert '20' in texts
 
+    def test_use_last_completion(self, completer):
+        """Test use command suggests 'last' shortcut."""
+        completions = list(completer.get_completions(Document("use la"), None))
+        texts = {c.text for c in completions}
+        assert 'last' in texts
+
     def test_grep_after_context_flag_completion(self, completer):
         """Test grep --after-context and -A flag completion."""
         completions = list(completer.get_completions(Document("grep --a"), None))

@@ -18,6 +18,7 @@ def _make_shell() -> InteractiveShell:
     shell._settings = {}
     shell._save_settings = lambda: None
     shell._arm_session_timeout_alarm = lambda: None
+    shell._current_case = None
     shell._current_case_name = None
     shell._current_problem = None
     shell._current_rundir = None
@@ -106,3 +107,39 @@ def test_prompt_timeout_clamps_to_zero_after_deadline():
         prompt = shell._get_prompt_message()
 
     assert "(ttl:00:00)" in prompt.value
+
+
+def test_use_command_saves_last_context_tokens():
+    shell = _make_shell()
+    save_calls = []
+    shell._save_settings = lambda: save_calls.append(True)
+
+    handled = shell.handle_shell_command("use problem:rigid node:24 t1:50.0")
+
+    assert handled is True
+    assert shell._current_problem == "rigid"
+    assert shell._current_node == 24
+    assert shell._current_t1 == 50.0
+    assert shell._settings["last_use_context_tokens"] == ["problem:rigid", "node:24", "t1:50.0"]
+    assert save_calls == [True]
+
+
+def test_use_last_restores_saved_context():
+    shell = _make_shell()
+    shell._settings["last_use_context_tokens"] = ["problem:rigid", "node:42", "t2:150.5"]
+
+    handled = shell.handle_shell_command("use last")
+
+    assert handled is True
+    assert shell._current_problem == "rigid"
+    assert shell._current_node == 42
+    assert shell._current_t2 == 150.5
+
+
+def test_use_last_without_saved_context_shows_message():
+    shell = _make_shell()
+
+    handled = shell.handle_shell_command("use last")
+
+    assert handled is True
+    assert any("No saved context found" in msg for msg in shell.console.messages)

@@ -795,19 +795,29 @@ class FlexFlowCompleter(Completer):
             'freq':    'Output frequency for field extract / run post',
         }
 
-        if self.shell is None:
-            return
-
         # Determine the token currently being typed
         if ends_with_space:
             current_word = ''
         else:
             current_word = words[-1] if len(words) > 1 else ''
 
+        # Support restoring previously saved context set.
+        if (len(words) == 1 or (len(words) == 2 and not ends_with_space)) and 'last'.startswith(current_word):
+            yield Completion(
+                'last',
+                start_position=-len(current_word),
+                display_meta='Restore last saved use context',
+            )
+
+        if len(words) >= 2 and words[1] == 'last':
+            return
+
         if ':' in current_word:
             # User is typing  context:partial_value  — complete the value part
             ctx, partial_val = current_word.split(':', 1)
             if ctx in _PATH_CONTEXTS:
+                if self.shell is None:
+                    return
                 # Complete path relative to shell's current dir
                 if '/' in partial_val:
                     dir_part, name_part = partial_val.rsplit('/', 1)
@@ -1320,42 +1330,14 @@ class InteractiveShell:
                 self.show_use_help()
                 return True
 
-            # Use colon syntax: use case:Case015 OR use case:Case015 node:24
-            for part in parts[1:]:
-                if ':' not in part:
-                    self.console.print(f"[yellow]Invalid format:[/yellow] {part}")
-                    self.console.print("[dim]Use: context:value (e.g., case:Case015)[/dim]")
-                    continue
+            if parts[1].lower() == 'last':
+                if len(parts) > 2:
+                    self.console.print("[yellow]Usage:[/yellow] use last")
+                    return True
+                self._use_last_context()
+                return True
 
-                context, value = part.split(':', 1)
-                context = context.strip().lower()
-                value = value.strip()
-
-                if context == 'case':
-                    self.use_case(value)
-                elif context == 'problem':
-                    self.use_problem(value)
-                elif context == 'rundir':
-                    self.use_rundir(value)
-                elif context == 'dir':
-                    self.use_dir(value)
-                elif context == 'node':
-                    self.use_node(value)
-                elif context == 't1':
-                    self.use_t1(value)
-                elif context == 't2':
-                    self.use_t2(value)
-                elif context == 'remote':
-                    self.use_remote(value)
-                elif context == 'var':
-                    self.use_var(value)
-                elif context == 'zone':
-                    self.use_zone(value)
-                elif context == 'freq':
-                    self.use_freq(value)
-                else:
-                    self.console.print(f"[yellow]Unknown context:[/yellow] {context}")
-                    self.console.print("[dim]Valid contexts: case, problem, rundir, dir, node, t1, t2, remote, var, zone, freq[/dim]")
+            self._apply_use_context_tokens(parts[1:], save_as_last=True)
             return True
 
         # Clear context with subcommands
@@ -2435,6 +2417,7 @@ class InteractiveShell:
         self.console.print()
         self.console.print("[bold]USAGE:[/bold]")
         self.console.print("  use context:value [context:value ...]")
+        self.console.print("  use last")
         self.console.print()
         self.console.print("[bold]CONTEXTS:[/bold]")
         self.console.print("  case       Case directory path (or * to iterate all cases from .cases file)")
@@ -2457,6 +2440,7 @@ class InteractiveShell:
         self.console.print("  use case:Case015 problem:rigid node:0")
         self.console.print("  use case:Case015 node:24 t1:50.0 t2:100.0")
         self.console.print("  use node:0 t1:150.0 t2:200.0")
+        self.console.print("  use last                         [dim]# Restore the most recent successful use command[/dim]")
         self.console.print()
         self.console.print("[bold]ITERATE OVER ALL CASES (from .cases file):[/bold]")
         self.console.print("  [dim]# Use case:* to iterate over all cases in .cases registry[/dim]")
@@ -2497,7 +2481,106 @@ class InteractiveShell:
         self.console.print("  unuse                   [dim]# Clear everything[/dim]")
         self.console.print()
 
-    def use_case(self, case_input: str) -> None:
+    def _use_context_handlers(self) -> Dict[str, Any]:
+        """Return supported `use` context handlers."""
+        return {
+            'case': self.use_case,
+            'problem': self.use_problem,
+            'rundir': self.use_rundir,
+            'dir': self.use_dir,
+            'node': self.use_node,
+            't1': self.use_t1,
+            't2': self.use_t2,
+            'remote': self.use_remote,
+            'var': self.use_var,
+            'zone': self.use_zone,
+            'freq': self.use_freq,
+        }
+
+    def _valid_use_contexts_csv(self) -> str:
+        """Return comma-separated valid context names for user-facing errors."""
+        return ", ".join(self._use_context_handlers().keys())
+
+    def _get_last_use_context_tokens(self) -> List[str]:
+        """Return last saved `use` context tokens from settings."""
+        raw_value = self._settings.get('last_use_context_tokens', [])
+        if isinstance(raw_value, str):
+            raw_tokens = raw_value.split()
+        elif isinstance(raw_value, list):
+            raw_tokens = raw_value
+        else:
+            return []
+
+        valid_contexts = set(self._use_context_handlers().keys())
+        tokens: List[str] = []
+        for token in raw_tokens:
+            if not isinstance(token, str) or ':' not in token:
+                continue
+            context, value = token.split(':', 1)
+            context = context.strip().lower()
+            value = value.strip()
+            if context in valid_contexts and value:
+                tokens.append(f"{context}:{value}")
+        return tokens
+
+    def _save_last_use_context_tokens(self, tokens: List[str]) -> None:
+        """Persist last successful `use` context tokens."""
+        self._settings['last_use_context_tokens'] = tokens
+        self._save_settings()
+
+    def _apply_use_context_tokens(self, tokens: List[str], save_as_last: bool) -> List[str]:
+        """
+        Apply `use` context tokens and optionally persist them as the last context set.
+
+        Args:
+            tokens: Items such as ["case:Case015", "node:24"]
+            save_as_last: Whether to persist successful tokens to settings
+
+        Returns:
+            Successful normalized tokens
+        """
+        handlers = self._use_context_handlers()
+        applied_tokens: List[str] = []
+
+        for token in tokens:
+            if ':' not in token:
+                self.console.print(f"[yellow]Invalid format:[/yellow] {token}")
+                self.console.print("[dim]Use: context:value (e.g., case:Case015) or use last[/dim]")
+                continue
+
+            context, value = token.split(':', 1)
+            context = context.strip().lower()
+            value = value.strip()
+
+            if not value:
+                self.console.print(f"[yellow]Missing value for context:[/yellow] {context}")
+                continue
+
+            handler = handlers.get(context)
+            if handler is None:
+                self.console.print(f"[yellow]Unknown context:[/yellow] {context}")
+                self.console.print(f"[dim]Valid contexts: {self._valid_use_contexts_csv()}[/dim]")
+                continue
+
+            if handler(value):
+                applied_tokens.append(f"{context}:{value}")
+
+        if save_as_last and applied_tokens:
+            self._save_last_use_context_tokens(applied_tokens)
+
+        return applied_tokens
+
+    def _use_last_context(self) -> None:
+        """Restore the last successful multi-context `use` setting."""
+        tokens = self._get_last_use_context_tokens()
+        if not tokens:
+            self.console.print("[dim]No saved context found. Use 'use context:value ...' first.[/dim]")
+            return
+
+        self.console.print(f"[dim]Restoring last context: {' '.join(tokens)}[/dim]")
+        self._apply_use_context_tokens(tokens, save_as_last=False)
+
+    def use_case(self, case_input: str) -> bool:
         """
         Set current case context.
         
@@ -2515,7 +2598,7 @@ class InteractiveShell:
                 self._current_case_name = "*"
                 self.console.print(f"[green]✓[/green] Case set to: [cyan]* (all cases)[/cyan]")
                 self.console.print("[dim]Commands will iterate over all cases from .cases file[/dim]")
-                return
+                return True
             
             # Single case resolution
             case_path = Path(case_input)
@@ -2530,17 +2613,19 @@ class InteractiveShell:
             # Check if it exists
             if not case_path.exists():
                 self.console.print(f"[red]Error:[/red] Case directory does not exist: {case_path}")
-                return
+                return False
 
             self._current_case = str(case_path)
             self._current_case_name = case_path.name  # Show just the name in prompt
             self.console.print(f"[green]✓[/green] Case set to: [cyan]{self._current_case_name}[/cyan]")
             self.console.print(f"[dim]Path: {case_path}[/dim]")
+            return True
 
         except Exception as e:
             self.console.print(f"[red]Error resolving path: {e}[/red]")
+            return False
 
-    def use_problem(self, problem_name: str) -> None:
+    def use_problem(self, problem_name: str) -> bool:
         """
         Set current problem context.
 
@@ -2549,9 +2634,10 @@ class InteractiveShell:
         """
         self._current_problem = problem_name
         self.console.print(f"[green]✓[/green] Problem set to: [cyan]{problem_name}[/cyan]")
+        return True
 
 
-    def use_remote(self, remote_name: str) -> None:
+    def use_remote(self, remote_name: str) -> bool:
         """
         Set current remote machine context for uploads.
 
@@ -2565,12 +2651,14 @@ class InteractiveShell:
         if not remote_config.remote_exists(remote_name):
             self.console.print(f"[red]Error:[/red] Remote '{remote_name}' not found.")
             self.console.print("[dim]Use 'ff remote list' to see available remotes[/dim]")
-            return
-        
+            return False
+
         self._current_remote = remote_name
         self.console.print(f"[green]✓[/green] Remote set to: [cyan]{remote_name}[/cyan]")
         self.console.print("[dim]Commands like 'case upload' will use this remote by default[/dim]")
-    def use_dir(self, dir_input: str) -> None:
+        return True
+
+    def use_dir(self, dir_input: str) -> bool:
         """
         Set current output directory context (from simflow.config dir field).
 
@@ -2586,7 +2674,7 @@ class InteractiveShell:
             self.console.print("[dim]Setting output directory anyway - will be relative to case when case is set[/dim]")
             self._current_output_dir = dir_input
             self.console.print(f"[green]✓[/green] Output directory set to: [cyan]{dir_input}[/cyan]")
-            return
+            return True
 
         try:
             # Output directory is relative to case directory
@@ -2607,11 +2695,13 @@ class InteractiveShell:
             self._current_output_dir = str(dir_path)
             self.console.print(f"[green]✓[/green] Output directory set to: [cyan]{dir_path.name}[/cyan]")
             self.console.print(f"[dim]Path: {dir_path}[/dim]")
+            return True
 
         except Exception as e:
             self.console.print(f"[red]Error resolving path: {e}[/red]")
+            return False
 
-    def use_rundir(self, rundir_input: str) -> None:
+    def use_rundir(self, rundir_input: str) -> bool:
         """
         Set current run directory context (output directory within case).
 
@@ -2626,7 +2716,7 @@ class InteractiveShell:
             self.console.print("[dim]Setting run directory anyway - will be relative to case when case is set[/dim]")
             self._current_rundir = rundir_input
             self.console.print(f"[green]✓[/green] Run directory set to: [cyan]{rundir_input}[/cyan]")
-            return
+            return True
 
         try:
             # Run directory is relative to case directory
@@ -2647,11 +2737,13 @@ class InteractiveShell:
             self._current_rundir = str(rundir_path)
             self.console.print(f"[green]✓[/green] Run directory set to: [cyan]{rundir_path.name}[/cyan]")
             self.console.print(f"[dim]Path: {rundir_path}[/dim]")
+            return True
 
         except Exception as e:
             self.console.print(f"[red]Error resolving path: {e}[/red]")
+            return False
 
-    def use_node(self, node_input: str) -> None:
+    def use_node(self, node_input: str) -> bool:
         """
         Set current node context for data/field commands.
 
@@ -2662,14 +2754,16 @@ class InteractiveShell:
             node_id = int(node_input)
             if node_id < 0:
                 self.console.print("[red]Error:[/red] Node ID must be non-negative")
-                return
+                return False
             self._current_node = node_id
             self.console.print(f"[green]✓[/green] Node set to: [cyan]{node_id}[/cyan]")
+            return True
         except ValueError:
             self.console.print(f"[red]Error:[/red] Invalid node ID: {node_input}")
             self.console.print("[dim]Node ID must be an integer[/dim]")
+            return False
 
-    def use_t1(self, time_input: str) -> None:
+    def use_t1(self, time_input: str) -> bool:
         """
         Set start time context for data/field/plot commands.
 
@@ -2680,11 +2774,13 @@ class InteractiveShell:
             start_time = float(time_input)
             self._current_t1 = start_time
             self.console.print(f"[green]✓[/green] Start time (t1) set to: [cyan]{start_time}[/cyan]")
+            return True
         except ValueError:
             self.console.print(f"[red]Error:[/red] Invalid time value: {time_input}")
             self.console.print("[dim]Time must be a number[/dim]")
+            return False
 
-    def use_t2(self, time_input: str) -> None:
+    def use_t2(self, time_input: str) -> bool:
         """
         Set end time context for data/field/plot commands.
 
@@ -2695,11 +2791,13 @@ class InteractiveShell:
             end_time = float(time_input)
             self._current_t2 = end_time
             self.console.print(f"[green]✓[/green] End time (t2) set to: [cyan]{end_time}[/cyan]")
+            return True
         except ValueError:
             self.console.print(f"[red]Error:[/red] Invalid time value: {time_input}")
             self.console.print("[dim]Time must be a number[/dim]")
+            return False
 
-    def use_var(self, var_input: str) -> None:
+    def use_var(self, var_input: str) -> bool:
         """
         Set default variable(s) context, injected as --variables for field extract.
 
@@ -2708,8 +2806,9 @@ class InteractiveShell:
         """
         self._current_var = var_input
         self.console.print(f"[green]✓[/green] Variable(s) set to: [cyan]{var_input}[/cyan]")
+        return True
 
-    def use_zone(self, zone_input: str) -> None:
+    def use_zone(self, zone_input: str) -> bool:
         """
         Set default zone context, injected as --zone for field extract/convert/iso.
 
@@ -2718,8 +2817,9 @@ class InteractiveShell:
         """
         self._current_zone = zone_input
         self.console.print(f"[green]✓[/green] Zone set to: [cyan]{zone_input}[/cyan]")
+        return True
 
-    def use_freq(self, freq_input: str) -> None:
+    def use_freq(self, freq_input: str) -> bool:
         """
         Set output-frequency context, injected as --freq for field extract / run post.
 
@@ -2732,9 +2832,10 @@ class InteractiveShell:
                 raise ValueError
         except ValueError:
             self.console.print(f"[red]Error:[/red] invalid frequency '{freq_input}' (use a positive integer)")
-            return
+            return False
         self._current_freq = freq
         self.console.print(f"[green]✓[/green] Frequency set to: [cyan]{freq}[/cyan]")
+        return True
 
     def unuse_case(self) -> None:
         """Clear case context."""
