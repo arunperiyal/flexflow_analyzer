@@ -131,7 +131,7 @@ class TestCaseDownloadCommand:
         mock_ssh = Mock()
         mock_ssh.remote_path_exists.return_value = True
         mock_ssh.remote_is_dir.return_value = True
-        mock_ssh.upload_directory.return_value = 5
+        mock_ssh.download_directory.return_value = 5
 
         with tempfile.TemporaryDirectory() as tmpdir:
             os.makedirs(os.path.join(tmpdir, 'othd_files'), exist_ok=True)
@@ -292,7 +292,7 @@ class TestCaseDownloadCommand:
         mock_ssh = Mock()
         mock_ssh.remote_path_exists.return_value = True
         mock_ssh.remote_is_dir.return_value = True
-        mock_ssh.upload_directory.return_value = 3
+        mock_ssh.download_directory.return_value = 3
         mock_ssh_class.return_value = mock_ssh
 
         args = Mock()
@@ -331,7 +331,7 @@ class TestCaseDownloadCommand:
                     with patch('src.commands.case.download_impl.command.load_cases_from_directory', return_value=cases):
                         result = download_cmd.execute_download(args)
                         assert result == 0
-                        assert mock_ssh.upload_directory.call_count == 2
+                        assert mock_ssh.download_directory.call_count == 2
 
     @patch('src.commands.case.download_impl.command.SSHClientWrapper')
     def test_execute_download_success(self, mock_ssh_class, download_cmd):
@@ -339,7 +339,7 @@ class TestCaseDownloadCommand:
         mock_ssh = Mock()
         mock_ssh.remote_path_exists.return_value = True
         mock_ssh.remote_is_dir.return_value = True
-        mock_ssh.upload_directory.return_value = 5
+        mock_ssh.download_directory.return_value = 5
         mock_ssh_class.return_value = mock_ssh
 
         args = Mock()
@@ -408,6 +408,137 @@ class TestCaseDownloadCommand:
                 ):
                     result = download_cmd.execute_download(args)
                     assert result == 1
+
+
+    def test_transfer_state_round_trip(self, download_cmd, tmp_path):
+        state_file = tmp_path / 'transfer_state.json'
+        download_cmd._get_transfer_state_file = lambda: state_file
+
+        state = {
+            'direction': 'download',
+            'status': 'interrupted',
+            'remote_name': 'test-remote',
+            'remote_base_path': '/home/testuser/cases',
+            'case_selection': './mycase',
+            'case_mode': 'single',
+            'directories': ['othd_files', 'binary'],
+            'force': False,
+            'cases': [{'name': 'mycase', 'path': '/tmp/mycase'}],
+            'completed_targets': ['/tmp/mycase::othd_files'],
+        }
+
+        download_cmd._save_transfer_state(state)
+        loaded = download_cmd._load_transfer_state()
+
+        assert loaded == state
+
+    @patch('src.commands.case.download_impl.command.SSHClientWrapper')
+    def test_execute_download_resume_skips_completed_targets(self, mock_ssh_class, download_cmd, tmp_path):
+        state_file = tmp_path / 'transfer_state.json'
+        download_cmd._get_transfer_state_file = lambda: state_file
+
+        mock_ssh = Mock()
+        mock_ssh.connect.return_value = True
+        mock_ssh.disconnect.return_value = None
+        mock_ssh_class.return_value = mock_ssh
+
+        case_path = tmp_path / 'mycase'
+        case_path.mkdir()
+        (case_path / 'othd_files').mkdir()
+        (case_path / 'binary').mkdir()
+
+        state = {
+            'direction': 'download',
+            'status': 'interrupted',
+            'remote_name': 'test-remote',
+            'remote_base_path': '/home/testuser/cases',
+            'case_selection': str(case_path),
+            'case_mode': 'single',
+            'directories': ['othd_files', 'binary'],
+            'force': False,
+            'cases': [{'name': 'mycase', 'path': str(case_path)}],
+            'completed_targets': [f'{case_path}::othd_files'],
+        }
+        download_cmd._save_transfer_state(state)
+
+        args = Mock()
+        args.case = None
+        args.from_remote = None
+        args.dir = None
+        args.remote_path = None
+        args.force = False
+        args.resume = True
+        args.help = False
+        args.examples = False
+
+        with patch.object(download_cmd, 'validate_remote', return_value={
+            'user': 'testuser',
+            'ip': '192.168.1.100',
+            'port': 22,
+            'password': 'testpass',
+            'path': '/home/testuser/cases'
+        }):
+            with patch.object(download_cmd, 'download_case_directory', return_value=True) as mock_download:
+                result = download_cmd.execute_download(args)
+
+        assert result == 0
+        assert mock_download.call_count == 1
+        assert mock_download.call_args.args[3] == 'binary'
+        assert not state_file.exists()
+
+    @patch('src.commands.case.download_impl.command.SSHClientWrapper')
+    def test_execute_upload_resume_skips_completed_targets(self, mock_ssh_class, download_cmd, tmp_path):
+        state_file = tmp_path / 'transfer_state.json'
+        download_cmd._get_transfer_state_file = lambda: state_file
+
+        mock_ssh = Mock()
+        mock_ssh.connect.return_value = True
+        mock_ssh.disconnect.return_value = None
+        mock_ssh_class.return_value = mock_ssh
+
+        case_path = tmp_path / 'mycase'
+        case_path.mkdir()
+        (case_path / 'othd_files').mkdir()
+        (case_path / 'binary').mkdir()
+
+        state = {
+            'direction': 'upload',
+            'status': 'interrupted',
+            'remote_name': 'test-remote',
+            'remote_base_path': '/home/testuser/cases',
+            'case_selection': str(case_path),
+            'case_mode': 'single',
+            'directories': ['othd_files', 'binary'],
+            'force': False,
+            'cases': [{'name': 'mycase', 'path': str(case_path)}],
+            'completed_targets': [f'{case_path}::othd_files'],
+        }
+        download_cmd._save_transfer_state(state)
+
+        args = Mock()
+        args.case = None
+        args.to = None
+        args.dir = None
+        args.remote_path = None
+        args.force = False
+        args.resume = True
+        args.help = False
+        args.examples = False
+
+        with patch.object(download_cmd, 'validate_remote', return_value={
+            'user': 'testuser',
+            'ip': '192.168.1.100',
+            'port': 22,
+            'password': 'testpass',
+            'path': '/home/testuser/cases'
+        }):
+            with patch.object(download_cmd, 'upload_directory', return_value=True) as mock_upload:
+                result = download_cmd.execute_upload(args)
+
+        assert result == 0
+        assert mock_upload.call_count == 1
+        assert mock_upload.call_args.args[3] == 'binary'
+        assert not state_file.exists()
 
 
 if __name__ == "__main__":

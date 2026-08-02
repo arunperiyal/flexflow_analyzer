@@ -1,8 +1,9 @@
 """Case upload command implementation."""
 
+import json
 import os
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from src.utils.ssh_client import SSHClientWrapper
 from src.utils.remote_config import RemoteConfig
 from ...case_iteration import is_wildcard_case, load_cases_from_directory
@@ -32,6 +33,7 @@ Upload case directories from local machine to a remote server.
                            (default: othd_files,oisd_files,binary)
     {Colors.YELLOW}--remote-path PATH{Colors.RESET}     Override remote base path (default: remote config path)
     {Colors.YELLOW}--force{Colors.RESET}                Create remote directories if they do not exist
+    {Colors.YELLOW}--resume{Colors.RESET}               Resume the last interrupted upload
     {Colors.YELLOW}--examples{Colors.RESET}             Show usage examples
     {Colors.YELLOW}-h, --help{Colors.RESET}             Show this help message
 
@@ -70,6 +72,7 @@ Download case directories from a remote server to the local machine.
                            (default: othd_files,oisd_files,binary)
     {Colors.YELLOW}--remote-path PATH{Colors.RESET}     Override remote base path (default: remote config path)
     {Colors.YELLOW}--force{Colors.RESET}                Create the local case directory if it does not exist
+    {Colors.YELLOW}--resume{Colors.RESET}               Resume the last interrupted download
     {Colors.YELLOW}--examples{Colors.RESET}             Show usage examples
     {Colors.YELLOW}-h, --help{Colors.RESET}             Show this help message
 
@@ -96,6 +99,357 @@ class CaseUploadCommand:
     def __init__(self):
         self.console = Console()
         self.remote_config = RemoteConfig()
+
+
+    def _get_transfer_state_file(self) -> Path:
+        """Return the path used to persist resumable transfer state."""
+        state_dir = Path.home() / '.flexflow'
+        state_dir.mkdir(exist_ok=True)
+        return state_dir / 'transfer_state.json'
+
+    def _load_transfer_state(self) -> Optional[dict]:
+        """Load the current transfer state from disk."""
+        state_file = self._get_transfer_state_file()
+        if not state_file.exists():
+            return None
+        try:
+            with open(state_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            return data if isinstance(data, dict) else None
+        except Exception:
+            return None
+
+    def _save_transfer_state(self, state: dict) -> None:
+        """Persist transfer state to disk."""
+        state_file = self._get_transfer_state_file()
+        with open(state_file, 'w', encoding='utf-8') as f:
+            json.dump(state, f, indent=2)
+
+    def _clear_transfer_state(self) -> None:
+        """Remove any persisted transfer state."""
+        try:
+            self._get_transfer_state_file().unlink()
+        except FileNotFoundError:
+            pass
+        except Exception:
+            pass
+
+    def _get_arg(self, args, name: str, default=None):
+        """Read a parsed argument without Mock fallthrough creating truthy values."""
+        return getattr(args, '__dict__', {}).get(name, default)
+
+    def _target_key(self, case_path: str, directory: str) -> str:
+        """Build a stable key for a case-directory transfer target."""
+        return f"{os.path.abspath(case_path)}::{directory}"
+
+    def _normalize_case_entries(self, cases: List[dict]) -> List[dict]:
+        """Normalize wildcard case entries into absolute path records."""
+        entries: List[dict] = []
+        for case_entry in cases:
+            entry_path = case_entry.get('path')
+            if not entry_path:
+                continue
+            entries.append({
+                'name': case_entry.get('name') or Path(entry_path).name,
+                'path': os.path.abspath(entry_path),
+            })
+        return entries
+
+    def _build_single_case_entries(self, case_path: str) -> List[dict]:
+        """Build a single-case transfer entry list."""
+        return [{'name': Path(case_path).name, 'path': os.path.abspath(case_path)}]
+
+    def _build_transfer_state(
+        self,
+        direction: str,
+        remote_name: str,
+        remote_base: str,
+        case_selection: str,
+        case_entries: List[dict],
+        directories: List[str],
+        force: bool,
+        wildcard: bool,
+    ) -> dict:
+        """Construct a new resumable transfer state document."""
+        return {
+            'direction': direction,
+            'status': 'in_progress',
+            'remote_name': remote_name,
+            'remote_base_path': remote_base,
+            'case_selection': case_selection,
+            'case_mode': 'wildcard' if wildcard else 'single',
+            'directories': directories,
+            'force': force,
+            'cases': case_entries,
+            'completed_targets': [],
+        }
+
+    def _load_resume_state(self, expected_direction: str) -> Optional[dict]:
+        """Load a resumable transfer state, if one exists for this direction."""
+        state = self._load_transfer_state()
+        if not state:
+            return None
+        if state.get('direction') != expected_direction:
+            return None
+        if state.get('status') not in {'in_progress', 'interrupted'}:
+            return None
+        if not isinstance(state.get('cases'), list) or not state.get('directories'):
+            return None
+        return state
+
+    def _finalize_transfer_state(self, state: dict, success: bool) -> None:
+        """Persist or clear the transfer state after a run completes."""
+        if success:
+            self._clear_transfer_state()
+            return
+        state['status'] = 'interrupted'
+        self._save_transfer_state(state)
+
+    def _mark_transfer_target_complete(self, state: dict, target_key: str) -> None:
+        """Record a completed directory target and persist the updated state."""
+        completed = set(state.get('completed_targets', []))
+        completed.add(target_key)
+        state['completed_targets'] = sorted(completed)
+        state['status'] = 'in_progress'
+        self._save_transfer_state(state)
+
+    def _validate_resume_inputs(
+        self,
+        direction: str,
+        args,
+        state: dict,
+    ) -> Optional[str]:
+        """Validate resume arguments against the saved state, if explicitly provided."""
+        upload_remote = self._get_arg(args, 'to')
+        download_remote = self._get_arg(args, 'from_remote')
+        case_arg = self._get_arg(args, 'case')
+
+        if direction == 'upload' and upload_remote and upload_remote != state.get('remote_name'):
+            return f"[red]Error:[/red] Resume state is for remote '{state.get('remote_name')}', not '{upload_remote}'."
+        if direction == 'download' and download_remote and download_remote != state.get('remote_name'):
+            return f"[red]Error:[/red] Resume state is for remote '{state.get('remote_name')}', not '{download_remote}'."
+
+        if case_arg and case_arg != state.get('case_selection'):
+            return (
+                f"[red]Error:[/red] Resume state is for case selection '{state.get('case_selection')}', "
+                f"not '{case_arg}'."
+            )
+        return None
+
+    def _execute_transfer(self, args, direction: str) -> int:
+        """Shared implementation for resumable case upload/download."""
+        is_upload = direction == 'upload'
+        help_fn = show_upload_help if is_upload else show_download_help
+        remote_arg_name = 'to' if is_upload else 'from_remote'
+        remote_prompt = '--to' if is_upload else '--from'
+        action_label = 'Upload' if is_upload else 'Download'
+        target_label = 'upload' if is_upload else 'download'
+
+        if self._get_arg(args, 'help', False) is True or self._get_arg(args, 'examples', False) is True:
+            help_fn()
+            return 0
+
+        resume_requested = bool(self._get_arg(args, 'resume', False))
+        state = None
+        completed_targets = set()
+
+        if resume_requested:
+            state = self._load_resume_state(direction)
+            if not state:
+                self.console.print(
+                    f"[red]Error:[/red] No interrupted {target_label} found to resume."
+                )
+                return 1
+            resume_error = self._validate_resume_inputs(direction, args, state)
+            if resume_error:
+                self.console.print(resume_error)
+                return 1
+
+            remote_name = state['remote_name']
+            remote_base = state['remote_base_path']
+            force_enabled = bool(state.get('force', False))
+            directories = list(state.get('directories', []))
+            case_entries = list(state.get('cases', []))
+            case_selection = state.get('case_selection', '')
+            wildcard = state.get('case_mode') == 'wildcard'
+            completed_targets = set(state.get('completed_targets', []))
+        else:
+            case_selection = self.validate_case_path(self._get_arg(args, 'case'))
+            if not case_selection:
+                return 1
+
+            remote_name = self._get_arg(args, remote_arg_name)
+            if not remote_name and not is_upload:
+                remote_name = self._get_arg(args, 'to')
+            if not remote_name:
+                self.console.print(
+                    f"[red]Error:[/red] Remote machine not provided. Use {remote_prompt} or 'use remote:<name>' in interactive shell."
+                )
+                return 1
+
+            force_enabled = bool(self._get_arg(args, 'force', False))
+            directories = self.parse_directories(self._get_arg(args, 'dir'))
+            remote = self.validate_remote(remote_name)
+            if not remote:
+                return 1
+            remote_base = self.get_remote_base_path(remote, self._get_arg(args, 'remote_path'))
+            wildcard = is_wildcard_case(case_selection)
+
+            if wildcard:
+                base_dir = self._get_cases_base_dir()
+                cases = load_cases_from_directory(base_dir)
+                if not cases:
+                    self.console.print(
+                        f"[red]Error:[/red] No cases found in .cases at {base_dir}"
+                    )
+                    return 1
+                case_entries = self._normalize_case_entries(cases)
+            else:
+                if is_upload:
+                    if not os.path.exists(case_selection):
+                        self.console.print(
+                            f"[red]Error:[/red] Local case path not found: {case_selection}"
+                        )
+                        return 1
+                    if not os.path.isdir(case_selection):
+                        self.console.print(
+                            f"[red]Error:[/red] Local case path is not a directory: {case_selection}"
+                        )
+                        return 1
+                else:
+                    if not self._ensure_local_case_dir(case_selection, force_enabled):
+                        return 1
+                case_entries = self._build_single_case_entries(case_selection)
+
+            state = self._build_transfer_state(
+                direction,
+                remote_name,
+                remote_base,
+                case_selection,
+                case_entries,
+                directories,
+                force_enabled,
+                wildcard,
+            )
+            self._save_transfer_state(state)
+
+        remote = self.validate_remote(remote_name)
+        if not remote:
+            return 1
+
+        if not case_entries:
+            self.console.print(f"[red]Error:[/red] No case entries available for {target_label}.")
+            return 1
+
+        total_targets = len(case_entries) * len(directories)
+        remaining_targets = total_targets - len(completed_targets)
+        resume_note = ' (resuming)' if resume_requested else ''
+
+        self.console.print()
+        self.console.print(f"[bold cyan]Case {action_label} Summary[/bold cyan]{resume_note}")
+        self.console.print()
+
+        table = Table(box=box.SIMPLE, show_header=True, header_style='bold yellow')
+        table.add_column('Parameter', style='cyan')
+        table.add_column('Value', style='white')
+        table.add_row('Case Selection', case_selection)
+        table.add_row('Cases', str(len(case_entries)))
+        table.add_row('Remote Machine', remote_name)
+        table.add_row('Remote Host', f"{remote['user']}@{remote['ip']}:{remote['port']}")
+        table.add_row('Remote Base Path', remote_base)
+        table.add_row('Directories', ', '.join(directories))
+        table.add_row('Force Create Missing Dir', 'Yes' if force_enabled else 'No')
+        if resume_requested:
+            table.add_row('Completed Targets', str(len(completed_targets)))
+            table.add_row('Remaining Targets', str(remaining_targets))
+        self.console.print(table)
+        self.console.print()
+
+        try:
+            ssh = SSHClientWrapper(
+                host=remote['ip'],
+                username=remote['user'],
+                password=remote['password'],
+                port=remote.get('port', 22)
+            )
+
+            self.console.print('[cyan]Connecting to remote server...[/cyan]')
+            ssh.connect()
+            self.console.print('[green]✓[/green] Connected successfully')
+            self.console.print()
+
+            success_count = len(completed_targets)
+            all_targets: list[dict] = []
+            for entry in case_entries:
+                entry_path = entry.get('path')
+                if not entry_path:
+                    continue
+                remote_case_path = self.construct_remote_case_path(remote_base, entry_path)
+                for directory in directories:
+                    all_targets.append({
+                        'case_name': entry.get('name') or Path(entry_path).name,
+                        'case_path': entry_path,
+                        'remote_case_path': remote_case_path,
+                        'directory': directory,
+                        'key': self._target_key(entry_path, directory),
+                    })
+
+            for idx, target in enumerate(all_targets, 1):
+                if target['key'] in completed_targets:
+                    continue
+
+                if len(case_entries) > 1:
+                    self.console.print(
+                        f"[bold]Case {target['case_name']}[/bold] [cyan]{idx}/{len(all_targets)}[/cyan]"
+                    )
+
+                if is_upload:
+                    ok = self.upload_directory(
+                        ssh,
+                        target['remote_case_path'],
+                        target['case_path'],
+                        target['directory'],
+                        force=force_enabled,
+                    )
+                else:
+                    ok = self.download_case_directory(
+                        ssh,
+                        target['remote_case_path'],
+                        target['case_path'],
+                        target['directory'],
+                    )
+
+                if ok:
+                    success_count += 1
+                    completed_targets.add(target['key'])
+                    state['completed_targets'] = sorted(completed_targets)
+                    self._save_transfer_state(state)
+
+                if len(case_entries) > 1:
+                    self.console.print()
+
+            ssh.disconnect()
+            self.console.print()
+
+            all_completed = success_count == total_targets and total_targets > 0
+            if all_completed:
+                self.console.print(
+                    f"[green]✓[/green] {action_label} complete: {success_count}/{total_targets} directories"
+                )
+                self._clear_transfer_state()
+                return 0
+
+            self.console.print(
+                f"[yellow]Incomplete:[/yellow] {success_count}/{total_targets} directories finished. Use --resume to continue."
+            )
+            self._finalize_transfer_state(state, success=False)
+            return 1
+
+        except Exception as e:
+            self.console.print(f"[red]Error:[/red] {e}")
+            if state is not None:
+                self._finalize_transfer_state(state, success=False)
+            return 1
 
     def validate_remote(self, remote_name: str) -> Optional[dict]:
         """
@@ -307,6 +661,17 @@ class CaseUploadCommand:
             self.console.print(f"[red]Error:[/red] Failed to upload {directory_name}: {e}")
             return False
 
+    def download_directory(
+        self,
+        ssh: SSHClientWrapper,
+        remote_case_path: str,
+        local_case_path: str,
+        directory_name: str,
+        force: bool = False,
+    ) -> bool:
+        """Backward-compatible alias used by older tests/imports."""
+        return self.upload_directory(ssh, remote_case_path, local_case_path, directory_name, force=force)
+
     def download_case_directory(
         self,
         ssh: SSHClientWrapper,
@@ -391,6 +756,8 @@ class CaseUploadCommand:
         Returns:
             Exit code (0 for success, 1 for failure)
         """
+        return self._execute_transfer(args, 'upload')
+
         if hasattr(args, "help") and args.help:
             show_upload_help()
             return 0
@@ -588,6 +955,8 @@ class CaseUploadCommand:
         Returns:
             Exit code (0 for success, 1 for failure)
         """
+        return self._execute_transfer(args, 'download')
+
         if getattr(args, "help", False) or getattr(args, "examples", False):
             show_download_help()
             return 0

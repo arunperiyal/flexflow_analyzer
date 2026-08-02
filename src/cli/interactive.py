@@ -225,6 +225,7 @@ class FlexFlowCompleter(Completer):
             '--to':           'Remote machine name (or use context: use remote:<name>)',
             '--remote-path':  'Override remote base path (default: use remote config)',
             '--force':        'Create missing remote directories before upload',
+            '--resume':       'Resume the last interrupted upload',
         },
         ('case', 'download'): {
             **_COMMON_FLAGS,
@@ -232,6 +233,7 @@ class FlexFlowCompleter(Completer):
             '--from':         'Remote machine name (or use context: use remote:<name>)',
             '--remote-path':  'Override remote base path (default: use remote config)',
             '--force':        'Create the local case directory if it does not exist',
+            '--resume':       'Resume the last interrupted download',
         },
 
         # ── remote ──────────────────────────────────────────────────────────

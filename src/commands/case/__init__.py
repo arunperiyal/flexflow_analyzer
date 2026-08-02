@@ -176,6 +176,8 @@ class CaseCommand(BaseCommand):
                                   help='Override remote base path (default: use remote config)')
         upload_parser.add_argument('--force', action='store_true',
                                   help='Create remote directories if they do not exist')
+        upload_parser.add_argument('--resume', action='store_true',
+                                  help='Resume the last interrupted transfer')
         upload_parser.add_argument('-h', '--help', action='store_true',
                                   help='Show help for upload command')
         upload_parser.add_argument('--examples', action='store_true',
@@ -193,6 +195,8 @@ class CaseCommand(BaseCommand):
                                     help='Override remote base path (default: use remote config)')
         download_parser.add_argument('--force', action='store_true',
                                     help='Create the local case directory if it does not exist')
+        download_parser.add_argument('--resume', action='store_true',
+                                    help='Resume the last interrupted transfer')
         download_parser.add_argument('-h', '--help', action='store_true',
                                     help='Show help for download command')
         download_parser.add_argument('--examples', action='store_true',
@@ -295,9 +299,11 @@ class CaseCommand(BaseCommand):
         console.print("    flexflow case upload ./myCase --to remote-server")
         console.print("    flexflow case upload ./myCase --to remote-server --dir othd_files,oisd_files")
         console.print("    flexflow case upload ./myCase --to remote-server --dir othd_files --force")
+        console.print("    flexflow case upload ./myCase --to remote-server --resume")
         console.print("    flexflow case download ./myCase --from remote-server")
         console.print("    flexflow case download ./myCase --from remote-server --dir othd_files,oisd_files")
         console.print("    flexflow case download ./myCase --from remote-server --force")
+        console.print("    flexflow case download ./myCase --from remote-server --resume")
         console.print()
 
 

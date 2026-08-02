@@ -50,6 +50,7 @@ class TestAutocompletion:
         assert '--dir' in flags
         assert '--remote-path' in flags
         assert '--force' in flags
+        assert '--resume' in flags
         assert '--help' in flags
 
     def test_remote_add_flags_defined(self, completer):
@@ -59,6 +60,16 @@ class TestAutocompletion:
         assert '--ip' in flags
         assert '--password' in flags
         assert '--port' in flags
+
+    def test_case_download_flags_defined(self, completer):
+        """Test flags for case download are defined."""
+        flags = completer._flags_for('case', 'download')
+        assert '--from' in flags
+        assert '--dir' in flags
+        assert '--remote-path' in flags
+        assert '--force' in flags
+        assert '--resume' in flags
+        assert '--help' in flags
 
     def test_remote_modify_flags_defined(self, completer):
         """Test flags for remote modify are defined."""
@@ -123,6 +134,7 @@ class TestAutocompletion:
         assert '--dir' in upload_flags
         assert '--remote-path' in upload_flags
         assert '--force' in upload_flags
+        assert '--resume' in upload_flags
         assert 'remote:<name>' in upload_flags['--to']
 
     def test_flag_descriptions(self, completer):
@@ -137,6 +149,7 @@ class TestAutocompletion:
         upload_flags = completer._flags_for('case', 'upload')
         assert len(upload_flags['--to']) > 0
         assert 'remote' in upload_flags['--to'].lower()
+        assert '--resume' in upload_flags
 
     def test_history_flag_completion(self, completer):
         """Test history command flag completions."""
