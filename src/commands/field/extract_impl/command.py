@@ -290,8 +290,9 @@ def _probe_notes(points, axes, nearest, bounds, npts, steps, fell_back, nudged, 
         ratio = f" ({dist / spacing:.0f}x the mean node spacing)" if spacing else ""
         note = (f"probe {pi} {probe_util.label(points[pi - 1], axes[pi - 1])}: inside the "
                 f"zone's bounds but in no element, at {count} of {len(steps)} step(s) -- the "
-                "point is in a hole of the mesh, most likely inside the structure itself. "
-                f"Nearest node is {dist:g} away{ratio}; its value was used instead.")
+                "point is in a hole of the mesh (inside the structure, or on a boundary the "
+                f"inward nudge could not resolve). Nearest node is {dist:g} away{ratio}; its "
+                "value was used instead.")
         logger.warning(note)
         notes.append(note)
     for pi, moved in sorted(nudged.items()):
