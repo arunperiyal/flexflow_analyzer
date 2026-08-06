@@ -91,6 +91,9 @@ class FieldCommand(BaseCommand):
                                    metavar='TOL',
                                    help='Slack on the inside-domain check for probes '
                                         'sitting on a boundary (default 0)')
+        extract_parser.add_argument('--interpolate', action='store_true',
+                                   help='With --probe: interpolate inside the cell holding '
+                                        'the probe instead of taking the nearest node')
         extract_parser.add_argument('--no-progress', dest='no_progress', action='store_true',
                                    help='Do not draw the progress bar')
 

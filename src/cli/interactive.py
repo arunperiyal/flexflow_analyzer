@@ -294,6 +294,7 @@ class FlexFlowCompleter(Completer):
             '--freq':        'With --t1/--t2: keep steps that are multiples of FREQ',
             '--output':      '(required) Output (.csv / .vtu / .vtk mesh / .pvd series)',
             '--probe':       'Sample at a point X,Y,Z (nearest node); repeatable',
+            '--interpolate': 'With --probe: interpolate in the containing cell',
             '--probe-tol':   'Slack on the inside-domain check for probes',
             '--no-progress': 'Do not draw the progress bar',
             '--xmin': 'X minimum bound',

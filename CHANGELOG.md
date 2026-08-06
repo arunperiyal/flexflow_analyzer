@@ -60,14 +60,24 @@
   checked against the zone, which now says *"not available in zone 'X'"* and
   points at the volume zone when the variable exists but carries no data there.
   **`--probe-tol TOL`** allows slack for a probe sitting exactly on a boundary.
-- Values come from the **nearest mesh node** (no interpolation); the output
-  carries that node's index, coordinates and its distance from the probe, so what
-  was sampled is visible. A warning fires when the nearest node is much farther
-  than the mean node spacing (probe in a hole of the mesh). Nodes are re-matched
-  every timestep, so moving/deforming meshes are followed correctly.
+- Values come from the **nearest mesh node** by default; the output carries that
+  node's index, coordinates and its distance from the probe, so what was sampled
+  is visible. A warning fires when the nearest node is much farther than the mean
+  node spacing (probe in a hole of the mesh). Points are located again every
+  timestep, so moving/deforming meshes are followed correctly.
+- **`--interpolate`** reports the value at the point itself instead, linearly
+  interpolated inside the element containing it (VTK's probe filter via pyvista —
+  the same as ParaView's *Probe Location*), and drops the nearest-node columns.
+  Only a small box of mesh around the probes is handed to VTK, which keeps a time
+  series 5–9x quicker than probing the whole zone; the box grows, and finally
+  falls back to the nearest node with a warning, for a probe that lies in no
+  element at all. Needs connectivity, so a volume zone.
 - Probe output is a table of point values: `--output NAME.csv`, or **no
   `--output` at all** to print it on screen (the only mode where `--output` is
-  optional).
+  optional). The probe coordinates are not repeated on every row — the case,
+  zone, variables, sampling method and probe list head the file as `#` comment
+  lines (`pandas.read_csv(path, comment='#')`), and the rows carry a plain probe
+  number.
 - **Progress bar** across timesteps for every `field extract` mode (csv, `.pvd`
   series, probes), and a spinner for a single large step, so a long extraction
   visibly makes headway. Skipped when output is redirected, with `--no-progress`,

@@ -73,9 +73,18 @@ def make_args(case, **kw):
     defaults = dict(case=str(case), verbose=False, help=False, variables="U,P", zone="FIELD",
                     timestep=None, t1=None, t2=None, freq=None, output_file=None,
                     xmin=None, xmax=None, ymin=None, ymax=None, zmin=None, zmax=None,
-                    probe=None, probe_tol=None, no_progress=True)
+                    probe=None, probe_tol=None, no_progress=True, interpolate=False)
     defaults.update(kw)
     return argparse.Namespace(**defaults)
+
+
+def read_csv(path):
+    """Split a probe CSV into its '#' block and its parsed rows."""
+    lines = path.read_text().strip().split("\n")
+    comments = [ln[2:] for ln in lines if ln.startswith("# ")]
+    body = [ln for ln in lines if not ln.startswith("#")]
+    header = body[0].split(",")
+    return comments, header, [dict(zip(header, ln.split(","))) for ln in body[1:]]
 
 
 class TestParseProbes:
@@ -168,27 +177,46 @@ class TestDomainChecks:
 class TestExtractProbe:
     """End-to-end `field extract --probe` against the synthetic case."""
 
-    def test_writes_a_row_per_probe_per_step(self, case, capsys):
+    def test_writes_a_row_per_probe_per_step(self, case):
         out = case / "probes.csv"
         execute_extract(make_args(case, t1=1000, t2=3000, probe=["0.5,0.5,0.5", "0,0,0"],
                                   output_file=str(out)))
-        lines = out.read_text().strip().split("\n")
-        header = lines[0].split(",")
-        assert header[:3] == ["timestep", "probe", "x_probe"]
-        assert header[-2:] == ["U", "P"]
-        assert len(lines) == 1 + 3 * 2                          # 3 steps x 2 probes
+        _, header, rows = read_csv(out)
+        assert header == ["timestep", "probe", "node", "x_node", "y_node", "z_node",
+                          "distance", "U", "P"]
+        assert len(rows) == 3 * 2                               # 3 steps x 2 probes
 
-        rows = [dict(zip(header, ln.split(","))) for ln in lines[1:]]
-        p1 = [r for r in rows if r["probe"] == "P1"]
+        p1 = [r for r in rows if r["probe"] == "1"]
         assert [int(r["timestep"]) for r in p1] == [1000, 2000, 3000]
         # U = 10x + step/1000 at the sampled node, which sits exactly on the probe
         assert [float(r["U"]) for r in p1] == [6.0, 7.0, 8.0]
         assert all(float(r["distance"]) == 0.0 for r in rows)
 
+    def test_probe_details_head_the_file_as_comments(self, case):
+        out = case / "probes.csv"
+        execute_extract(make_args(case, timestep=1000, probe=["0.5,0.5,0.5", "0,0,0"],
+                                  output_file=str(out)))
+        comments, header, rows = read_csv(out)
+        assert "zone: FIELD" in comments[1]
+        assert "sampling: nearest node" in comments
+        assert "probe 1: (0.5, 0.5, 0.5)" in comments
+        assert "probe 2: (0, 0, 0)" in comments
+        # the coordinates are in the block, not repeated on every row
+        assert not [name for name in header if name.endswith("_probe")]
+
+    def test_comment_block_survives_a_pandas_round_trip(self, case):
+        pd = pytest.importorskip("pandas")
+        out = case / "probes.csv"
+        execute_extract(make_args(case, t1=1000, t2=3000, probe="0.5,0.5,0.5",
+                                  output_file=str(out)))
+        df = pd.read_csv(out, comment="#")
+        assert list(df.columns)[:2] == ["timestep", "probe"]
+        assert df["U"].tolist() == [6.0, 7.0, 8.0]
+
     def test_prints_a_table_when_no_output_is_given(self, case, capsys):
         execute_extract(make_args(case, timestep=1000, probe="0.5,0.5,0.5"))
         printed = capsys.readouterr().out
-        assert "P1 (0.5, 0.5, 0.5)" in printed
+        assert "probe 1: (0.5, 0.5, 0.5)" in printed
         assert "distance" in printed
 
     def test_probe_outside_the_domain_exits(self, case):
@@ -207,6 +235,52 @@ class TestExtractProbe:
         with pytest.raises(SystemExit):
             execute_extract(make_args(case, timestep=1000, probe="0,0,0",
                                       output_file=str(case / "probes.vtu")))
+
+    def test_interpolate_without_a_probe_exits(self, case):
+        with pytest.raises(SystemExit):
+            execute_extract(make_args(case, timestep=1000, interpolate=True))
+
+
+class TestInterpolate:
+    """--interpolate must reproduce a linear field exactly, off-node included."""
+
+    def test_reproduces_the_linear_field_between_nodes(self, case):
+        pytest.importorskip("pyvista")
+        out = case / "probes.csv"
+        # U = 10x + step/1000 and P = -5y are linear, so interpolation is exact.
+        # (0.25, 0.75, 0.5) sits inside a cell, not on any node.
+        execute_extract(make_args(case, t1=1000, t2=3000, probe="0.25,0.75,0.5",
+                                  interpolate=True, output_file=str(out)))
+        comments, header, rows = read_csv(out)
+        assert header == ["timestep", "probe", "U", "P"]     # no nearest-node columns
+        assert "sampling: linear interpolation inside the containing cell" in comments
+        assert [float(r["U"]) for r in rows] == pytest.approx([3.5, 4.5, 5.5])
+        assert [float(r["P"]) for r in rows] == pytest.approx([-3.75] * 3)
+
+    def test_differs_from_the_nearest_node_off_node(self, case):
+        pytest.importorskip("pyvista")
+        near, interp_out = case / "near.csv", case / "interp.csv"
+        args = dict(timestep=1000, probe="0.25,0.75,0.5")
+        execute_extract(make_args(case, output_file=str(near), **args))
+        execute_extract(make_args(case, output_file=str(interp_out), interpolate=True, **args))
+        near_u = float(read_csv(near)[2][0]["U"])
+        interp_u = float(read_csv(interp_out)[2][0]["U"])
+        assert near_u == pytest.approx(1.0)                  # snapped to the node at x=0
+        assert interp_u == pytest.approx(3.5)                # the value at x=0.25
+
+    def test_falls_back_to_the_nearest_node_outside_every_cell(self, case, tmp_path, capsys):
+        pytest.importorskip("pyvista")
+        # A zone whose cells fill only half the bounding box: the probe is inside
+        # the box (so it passes the domain check) but inside no element.
+        from src.commands.field.extract_impl import interp
+        pts = np.array([[0., 0., 0.], [1, 0, 0], [1, 1, 0], [0, 1, 0],
+                        [0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]], dtype=float)
+        conn = np.array([[0, 1, 2, 3, 4, 5, 6, 7]], dtype=np.int64)
+        data = {"U": pts[:, 0].copy()}
+        values, valid = interp.sample(pts, conn, "hexahedron", data,
+                                      np.array([[0.5, 0.5, 0.5], [9.0, 9.0, 9.0]]), pad=0.1)
+        assert valid.tolist() == [True, False]
+        assert values["U"][0] == pytest.approx(0.5)
 
 
 class Logger:

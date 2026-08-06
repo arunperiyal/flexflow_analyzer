@@ -14,7 +14,7 @@ import numpy as np
 
 AXIS = ("x", "y", "z")
 TABLE_ROWS = 20          # rows shown on screen before falling back to the file
-TABLE_HIDDEN = ("x_probe", "y_probe", "z_probe", "x_node", "y_node", "z_node")
+TABLE_HIDDEN = ("x_node", "y_node", "z_node")
 
 
 def parse_probes(specs, logger):
@@ -124,31 +124,56 @@ def nearest_node(pts, point, axes, chunk=200_000):
     return best_i, float(np.sqrt(best_d2))
 
 
+def mean_spacing(lo, hi, npts):
+    """Rough mean node spacing of a zone, from its bounding box and node count.
+
+    For a uniform grid this comes out ~1.7x the real spacing, so thresholds built
+    on it are forgiving on graded meshes. Returns None when it cannot be formed.
+    """
+    diag = float(np.linalg.norm(np.asarray(hi, dtype=float) - np.asarray(lo, dtype=float)))
+    if diag <= 0 or npts < 2:
+        return None
+    return diag / npts ** (1.0 / 3.0)
+
+
 def far_probe_warning(dist, lo, hi, npts, factor=2.0):
     """Message when the matched node is suspiciously far from the probe, else None.
 
     Inside the bounding box but far from any node means the probe sits in a hole
     of the meshed region (inside a body, outside an irregular boundary). "Far" is
-    measured against the mean node spacing estimated from the bounding box and
-    node count, so the check adapts to coarse and fine meshes alike.
+    measured against the mean node spacing, so the check adapts to coarse and fine
+    meshes alike.
     """
-    diag = float(np.linalg.norm(np.asarray(hi, dtype=float) - np.asarray(lo, dtype=float)))
-    if diag <= 0 or npts < 2:
+    spacing = mean_spacing(lo, hi, npts)
+    if spacing is None or dist <= factor * spacing:
         return None
-    spacing = diag / npts ** (1.0 / 3.0)
-    if dist > factor * spacing:
-        return (f"nearest node is {dist:g} away, {dist / spacing:.0f}x the mean node "
-                f"spacing (~{spacing:g}) -- the probe may sit in a hole of the mesh "
-                "(inside a body, or beyond an irregular boundary)")
-    return None
+    return (f"nearest node is {dist:g} away, {dist / spacing:.0f}x the mean node "
+            f"spacing (~{spacing:g}) -- the probe may sit in a hole of the mesh "
+            "(inside a body, or beyond an irregular boundary)")
 
 
-def build_header(cols, multi):
-    """CSV/table columns for probe output."""
-    return ((["timestep"] if multi else [])
-            + ["probe", "x_probe", "y_probe", "z_probe",
-               "node", "x_node", "y_node", "z_node", "distance"]
-            + list(cols))
+def build_header(cols, multi, interpolated=False):
+    """CSV/table columns for probe output.
+
+    The probe coordinates are not repeated on every row -- they head the file in
+    the comment block. Interpolated values belong to the requested point itself,
+    so the node columns that describe a nearest-node sample are left out there.
+    """
+    node_cols = [] if interpolated else ["node", "x_node", "y_node", "z_node", "distance"]
+    return (["timestep"] if multi else []) + ["probe"] + node_cols + list(cols)
+
+
+def info_block(points, axes, case, zone, variables, method, steps, notes=()):
+    """The comment lines that head a probe CSV (and precede the on-screen table)."""
+    lines = ["FlexFlow field extract -- point probes",
+             f"case: {case}   zone: {zone}   variables: {', '.join(variables)}",
+             f"sampling: {method}"]
+    if steps:
+        span = f"{steps[0]}" if len(steps) == 1 else f"{steps[0]}..{steps[-1]}"
+        lines.append(f"timesteps: {span} ({len(steps)} step(s))")
+    lines += [f"probe {i}: {label(point, ax)}"
+              for i, (point, ax) in enumerate(zip(points, axes), start=1)]
+    return lines + list(notes)
 
 
 def _fmt(value, precision="%.8e"):
@@ -161,20 +186,21 @@ def _fmt(value, precision="%.8e"):
     return str(value)
 
 
-def write_csv(path, header, rows):
-    """Write probe rows to CSV (blank cells for coordinates the user left out)."""
-    lines = [",".join(header)]
+def write_csv(path, header, rows, comments=()):
+    """Write probe rows to CSV, headed by the probe details as '#' comment lines."""
+    lines = [f"# {c}" for c in comments] + [",".join(header)]
     lines += [",".join(_fmt(v) for v in row) for row in rows]
     with open(path, "w") as fh:
         fh.write("\n".join(lines) + "\n")
 
 
-def print_table(header, rows, truncate=True):
-    """Print probe rows as a table, capped at TABLE_ROWS when `truncate`.
+def print_table(header, rows, comments=(), truncate=True):
+    """Print the probe details and rows, capped at TABLE_ROWS when `truncate`.
 
-    The six coordinate columns are folded away here -- the requested point rides
-    along in the probe label -- so the table stays readable in a terminal. The
-    CSV keeps every column.
+    The node coordinate columns are folded away here -- the probe list above the
+    table says where each point is, and `distance` says how far the sample sits
+    from it -- so the table stays readable in a terminal. The CSV keeps every
+    column.
     """
     from rich.console import Console
     from rich.table import Table
@@ -183,17 +209,15 @@ def print_table(header, rows, truncate=True):
     shown = rows[:TABLE_ROWS] if truncate else rows
     keep = [i for i, name in enumerate(header) if name not in TABLE_HIDDEN]
     name_at = header.index("probe")
-    coord_at = [header.index(f"{a}_probe") for a in AXIS]
 
     console = Console()
+    for line in comments:
+        console.print(f"[dim]{line}[/dim]", highlight=False)
     table = Table(box=box.SIMPLE, show_header=True, header_style="bold yellow")
     for i in keep:
         table.add_column(header[i], justify="left" if i == name_at else "right")
     for row in shown:
-        point = [row[i] for i in coord_at]
-        cells = [f"{row[i]} ({', '.join(_fmt(v, '%g') or '-' for v in point)})"
-                 if i == name_at else _fmt(row[i], "%.6g") for i in keep]
-        table.add_row(*cells)
+        table.add_row(*[_fmt(row[i], "%.6g") for i in keep])
     console.print(table)
     if len(rows) > len(shown):
         console.print(f"[dim]... {len(rows) - len(shown)} more row(s); "

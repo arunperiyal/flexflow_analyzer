@@ -11,7 +11,8 @@ or a range of timesteps. Output format is chosen by the output extension:
                     plus the <stem>.pvd collection (range)
 
 With --probe X,Y,Z the box is replaced by point sampling: the variables are read
-at the mesh node nearest each probe, giving a time signal in CSV (or on screen).
+at the mesh node nearest each probe (or interpolated inside the containing cell
+with --interpolate), giving a time signal in CSV (or on screen).
 """
 
 import os
@@ -25,6 +26,7 @@ from ....utils.progress import progress_enabled, spinner, step_bar
 from ....plt.fxplt import PltFile
 from ....plt.convert import cell_name, crop_mesh, has_domain
 from ..locate import problem_name, find_plt, zone_index, list_steps
+from . import interp
 from . import probe as probe_util
 
 
@@ -128,7 +130,8 @@ def _load_step(plt_path, zone, logger, want_conn):
                      f"Use the volume zone (e.g. {plt.zones[plt.first_volume_zone()]['name']}).")
         sys.exit(1)
     if want_conn and conn is None:
-        logger.error(f"Zone '{zone}' has no connectivity; mesh output needs a volume zone.")
+        logger.error(f"Zone '{zone}' has no connectivity; mesh output and --interpolate "
+                     "need a volume zone.")
         sys.exit(1)
     if info.get("truncated"):
         logger.warning(f"{Path(plt_path).name}: PLT connectivity incomplete; data still complete.")
@@ -241,16 +244,35 @@ def _probe_precheck(binary_dir, problem, steps, zone, points, axes, tol, logger)
     return bounds
 
 
+def _probe_targets(pts, points, axes):
+    """Resolve every probe to a full 3D point and its nearest node.
+
+    Coordinates the user left out (a 2D `X,Y` probe) are filled in from the
+    nearest node, so an interpolation target is always a real point in space.
+    Returns (targets[P,3], nearest[(index, distance), ...]).
+    """
+    nearest = [probe_util.nearest_node(pts, point, ax) for point, ax in zip(points, axes)]
+    targets = np.array([[point[a] if a in ax else float(pts[idx][a]) for a in range(3)]
+                        for point, ax, (idx, _) in zip(points, axes, nearest)], dtype=float)
+    return targets, nearest
+
+
 def _extract_probe(steps, mode, binary_dir, problem, args, requested, out_path, logger):
     """Sample the requested variables at fixed points, one row per probe per step."""
     points, axes = probe_util.parse_probes(args.probe, logger)
     if has_domain(_domain(args)):
         logger.warning("--xmin/--xmax/... are ignored with --probe (probes sample points)")
+    interpolating = bool(getattr(args, "interpolate", False))
+    if interpolating and not interp.available():
+        logger.error("--interpolate needs pyvista (pip install pyvista). "
+                     "Drop the flag to sample the nearest node instead.")
+        sys.exit(1)
 
     tol = getattr(args, "probe_tol", None) or 0.0
     bounds = _probe_precheck(binary_dir, problem, steps, args.zone, points, axes, tol, logger)
     multi = mode == "range"
-    cols, rows, warned = None, [], set()
+    cols, rows = None, []
+    warned, fell_back = set(), {}
     bar_on, spin_on = _feedback(args, steps)
     with step_bar(len(steps), "Probing", enabled=bar_on) as bar:
         for ts in steps:
@@ -260,7 +282,7 @@ def _extract_probe(steps, mode, binary_dir, problem, args, requested, out_path, 
                 logger.warning(f"no PLT for timestep {ts}; skipping"); bar.advance(); continue
             with spinner(f"Reading {Path(plt_path).name}", enabled=spin_on):
                 plt, zi, pts, conn, pdata, info = _load_step(plt_path, args.zone, logger,
-                                                             want_conn=False)
+                                                             want_conn=interpolating)
             columns = {plt.vars[0]: pts[:, 0], plt.vars[1]: pts[:, 1], plt.vars[2]: pts[:, 2]}
             columns.update(pdata)
             if cols is None:
@@ -270,26 +292,57 @@ def _extract_probe(steps, mode, binary_dir, problem, args, requested, out_path, 
                 probe_util.check_inside(points, axes, bounds[0], bounds[1], args.zone,
                                         logger, tol=tol)
                 logger.info(f"Domain bounds: {probe_util.format_bounds(*bounds)}")
+
+            targets, nearest = _probe_targets(pts, points, axes)
+            values = valid = None
+            if interpolating:
+                spacing = probe_util.mean_spacing(bounds[0], bounds[1], len(pts)) or 0.0
+                pad = max(4 * spacing, 4 * max(d for _, d in nearest), 1e-12)
+                cell = cell_name(info["npe"], info["ztype"])
+                try:
+                    values, valid = interp.sample(pts, conn, cell,
+                                                  {c: columns[c] for c in cols}, targets, pad)
+                except ValueError as exc:
+                    logger.error(f"--interpolate: {exc} (npe={info['npe']}). "
+                                 "Drop the flag to sample the nearest node.")
+                    sys.exit(1)
+
             for pi, (point, ax) in enumerate(zip(points, axes), start=1):
-                idx, dist = probe_util.nearest_node(pts, point, ax)
-                far = probe_util.far_probe_warning(dist, bounds[0], bounds[1], len(pts))
-                if far and pi not in warned:
-                    logger.warning(f"Probe P{pi} {probe_util.label(point, ax)}: {far}")
-                    warned.add(pi)
-                node = pts[idx]
-                rows.append(([ts] if multi else [])
-                            + [f"P{pi}", point[0], point[1], point[2],
-                               int(idx), float(node[0]), float(node[1]), float(node[2]), dist]
-                            + [float(columns[c][idx]) for c in cols])
+                idx, dist = nearest[pi - 1]
+                if interpolating and valid[pi - 1]:
+                    sampled = [float(values[c][pi - 1]) for c in cols]
+                else:
+                    sampled = [float(columns[c][idx]) for c in cols]
+                if interpolating and not valid[pi - 1]:
+                    fell_back[pi] = fell_back.get(pi, 0) + 1
+                elif not interpolating:
+                    far = probe_util.far_probe_warning(dist, bounds[0], bounds[1], len(pts))
+                    if far and pi not in warned:
+                        logger.warning(f"Probe {pi} {probe_util.label(point, ax)}: {far}")
+                        warned.add(pi)
+                node = [] if interpolating else [int(idx), float(pts[idx][0]),
+                                                 float(pts[idx][1]), float(pts[idx][2]), dist]
+                rows.append(([ts] if multi else []) + [pi] + node + sampled)
             bar.advance()
     if not rows:
         logger.error("Nothing probed (no matching PLT files)."); sys.exit(1)
 
-    header = probe_util.build_header(cols, multi)
+    notes = []
+    for pi, n in sorted(fell_back.items()):
+        note = (f"probe {pi}: not inside any cell at {n} of {len(steps)} step(s); "
+                "the nearest node value was used there")
+        logger.warning(note)
+        notes.append(note)
+    method = ("linear interpolation inside the containing cell"
+              if interpolating else "nearest node")
+    comments = probe_util.info_block(points, axes, Path(args.case).name, args.zone,
+                                     cols, method, steps, notes)
+
+    header = probe_util.build_header(cols, multi, interpolating)
     if out_path is None or len(rows) <= probe_util.TABLE_ROWS:
-        probe_util.print_table(header, rows, truncate=out_path is None)
+        probe_util.print_table(header, rows, comments, truncate=out_path is None)
     if out_path:
-        probe_util.write_csv(out_path, header, rows)
+        probe_util.write_csv(out_path, header, rows, comments)
         print(f"Wrote {len(rows):,} probe row(s) x {len(header)} cols -> {out_path}")
 
 
@@ -307,6 +360,10 @@ def execute_extract(args):
             logger.error(f"--{req} flag is required"); print(); print_extract_help(); sys.exit(1)
     probing = bool(getattr(args, "probe", None))
     wants_file = bool(getattr(args, "output_file", None))
+    if getattr(args, "interpolate", False) and not probing:
+        logger.error("--interpolate applies to --probe sampling; "
+                     "give a probe point (e.g. --probe 0,0,3)")
+        sys.exit(1)
     # Probes print a table when no file is asked for; every other mode needs a target.
     if not wants_file and not probing:
         logger.error("--output is required (e.g. --output results.csv / .vtu / .pvd)")
