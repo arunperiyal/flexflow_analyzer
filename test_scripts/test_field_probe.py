@@ -73,9 +73,23 @@ def make_args(case, **kw):
     defaults = dict(case=str(case), verbose=False, help=False, variables="U,P", zone="FIELD",
                     timestep=None, t1=None, t2=None, freq=None, output_file=None,
                     xmin=None, xmax=None, ymin=None, ymax=None, zmin=None, zmax=None,
-                    probe=None, probe_tol=None, no_progress=True, interpolate=False)
+                    probe=None, probe_tol=None, no_progress=True, interpolate=False, nen=None)
     defaults.update(kw)
     return argparse.Namespace(**defaults)
+
+
+def unit_cube_mesh(side=5):
+    """(points, hex connectivity) for a side^3 node grid on the unit cube."""
+    g = np.linspace(0.0, 1.0, side)
+    X, Y, Z = np.meshgrid(g, g, g, indexing="ij")
+    pts = np.column_stack([X.ravel(), Y.ravel(), Z.ravel()])
+    at = lambda i, j, k: (i * side + j) * side + k
+    conn = np.array([[at(i, j, k), at(i + 1, j, k), at(i + 1, j + 1, k), at(i, j + 1, k),
+                      at(i, j, k + 1), at(i + 1, j, k + 1), at(i + 1, j + 1, k + 1),
+                      at(i, j + 1, k + 1)]
+                     for i in range(side - 1) for j in range(side - 1)
+                     for k in range(side - 1)], dtype=np.int64)
+    return pts, conn
 
 
 def read_csv(path):
@@ -252,8 +266,9 @@ class TestInterpolate:
         execute_extract(make_args(case, t1=1000, t2=3000, probe="0.25,0.75,0.5",
                                   interpolate=True, output_file=str(out)))
         comments, header, rows = read_csv(out)
-        assert header == ["timestep", "probe", "U", "P"]     # no nearest-node columns
+        assert header == ["timestep", "probe", "source", "U", "P"]   # no node columns
         assert "sampling: linear interpolation inside the containing cell" in comments
+        assert [r["source"] for r in rows] == ["cell"] * 3
         assert [float(r["U"]) for r in rows] == pytest.approx([3.5, 4.5, 5.5])
         assert [float(r["P"]) for r in rows] == pytest.approx([-3.75] * 3)
 
@@ -268,19 +283,61 @@ class TestInterpolate:
         assert near_u == pytest.approx(1.0)                  # snapped to the node at x=0
         assert interp_u == pytest.approx(3.5)                # the value at x=0.25
 
-    def test_falls_back_to_the_nearest_node_outside_every_cell(self, case, tmp_path, capsys):
+    def test_reports_where_each_value_came_from(self, case):
         pytest.importorskip("pyvista")
-        # A zone whose cells fill only half the bounding box: the probe is inside
-        # the box (so it passes the domain check) but inside no element.
         from src.commands.field.extract_impl import interp
-        pts = np.array([[0., 0., 0.], [1, 0, 0], [1, 1, 0], [0, 1, 0],
-                        [0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]], dtype=float)
-        conn = np.array([[0, 1, 2, 3, 4, 5, 6, 7]], dtype=np.int64)
-        data = {"U": pts[:, 0].copy()}
-        values, valid = interp.sample(pts, conn, "hexahedron", data,
-                                      np.array([[0.5, 0.5, 0.5], [9.0, 9.0, 9.0]]), pad=0.1)
-        assert valid.tolist() == [True, False]
-        assert values["U"][0] == pytest.approx(0.5)
+        pts, conn = unit_cube_mesh()
+        data = {"U": (10 * pts[:, 0]).copy()}
+
+        def probe_at(point):
+            target = np.array([point], dtype=float)
+            node = [int(np.argmin(np.linalg.norm(pts - target[0], axis=1)))]
+            return interp.sample(pts, conn, "hexahedron", data, target, pad=0.5,
+                                 anchor_nodes=node)
+
+        values, source, moved = probe_at([0.3, 0.5, 0.5])           # inside an element
+        assert source == [interp.FOUND] and moved[0] == 0
+        assert values["U"][0] == pytest.approx(3.0)
+
+        values, source, moved = probe_at([0.0, 0.5, 0.5])           # exactly on the wall
+        assert source == [interp.FOUND]
+        assert values["U"][0] == pytest.approx(0.0)
+
+        values, source, moved = probe_at([-1e-9, 0.5, 0.5])         # a hair outside it
+        assert source == [interp.NUDGED]                             # stepped inward...
+        assert 0 < moved[0] < 1e-3                                   # ...but barely
+        assert values["U"][0] == pytest.approx(0.0, abs=1e-3)
+
+        values, source, moved = probe_at([-0.5, 0.5, 0.5])          # in a hole
+        assert source == [interp.MISSING] and moved[0] == 0
+
+    def test_falls_back_to_the_nearest_node_in_a_hole(self, case, capsys):
+        pytest.importorskip("pyvista")
+        # A cube of cells with the middle removed: the probe passes the bounding-box
+        # check but lies in no element, so the nearest node's value must be used.
+        from src.commands.field.extract_impl import interp
+        pts, conn = unit_cube_mesh(side=7)
+        middle = np.linalg.norm(pts[conn].mean(axis=1) - 0.5, axis=1) < 0.25
+        conn = conn[~middle]
+        data = {"U": (10 * pts[:, 0]).copy()}
+        target = np.array([[0.5, 0.5, 0.5]])
+        node = [int(np.argmin(np.linalg.norm(pts - target[0], axis=1)))]
+        _, source, _ = interp.sample(pts, conn, "hexahedron", data, target, pad=0.5,
+                                     anchor_nodes=node)
+        assert source == [interp.MISSING]
+
+    def test_flags_an_interpolant_outside_its_element_range(self, case):
+        pytest.importorskip("pyvista")
+        from src.commands.field.extract_impl import interp
+        pts, conn = unit_cube_mesh()
+        data = {"U": (10 * pts[:, 0]).copy()}
+        target = np.array([[0.3, 0.5, 0.5]])
+        values, _, _ = interp.sample(pts, conn, "hexahedron", data, target, pad=0.5)
+        assert interp.check_cells(pts, conn, "hexahedron", data, target, values) == []
+        # a value no convex combination of the element's nodes could produce
+        broken = interp.check_cells(pts, conn, "hexahedron", data, target,
+                                    {"U": np.array([999.0])})
+        assert len(broken) == 1 and "outside its element's nodal range" in broken[0]
 
 
 class Logger:

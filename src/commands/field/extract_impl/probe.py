@@ -157,10 +157,12 @@ def build_header(cols, multi, interpolated=False):
 
     The probe coordinates are not repeated on every row -- they head the file in
     the comment block. Interpolated values belong to the requested point itself,
-    so the node columns that describe a nearest-node sample are left out there.
+    so instead of the node columns that describe a nearest-node sample, those rows
+    carry `source`: where the value actually came from ('cell', 'nudged', 'node').
     """
-    node_cols = [] if interpolated else ["node", "x_node", "y_node", "z_node", "distance"]
-    return (["timestep"] if multi else []) + ["probe"] + node_cols + list(cols)
+    detail = (["source"] if interpolated
+              else ["node", "x_node", "y_node", "z_node", "distance"])
+    return (["timestep"] if multi else []) + ["probe"] + detail + list(cols)
 
 
 def info_block(points, axes, case, zone, variables, method, steps, notes=()):

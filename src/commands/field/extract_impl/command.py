@@ -120,11 +120,11 @@ def _zone_or_exit(plt, zone, plt_path, logger):
     return zi
 
 
-def _load_step(plt_path, zone, logger, want_conn):
+def _load_step(plt_path, zone, logger, want_conn, nen=None):
     """Load a zone; return (plt, zi, pts, conn, pdata). Exits on bad zone/shared data."""
     plt = PltFile(plt_path)
     zi = _zone_or_exit(plt, zone, plt_path, logger)
-    pts, conn, pdata, info = plt.load_zone(zi)
+    pts, conn, pdata, info = plt.load_zone(zi, nen=nen)
     if not pdata:
         logger.error(f"Zone '{zone}' carries no own data (variables are shared). "
                      f"Use the volume zone (e.g. {plt.zones[plt.first_volume_zone()]['name']}).")
@@ -148,10 +148,10 @@ def _node_mask(pts, domain):
     return mask
 
 
-def _write_mesh(plt_path, zone, requested, domain, out_vtu, logger):
+def _write_mesh(plt_path, zone, requested, domain, out_vtu, logger, nen=None):
     """Write one trimmed mesh (cells + selected non-coordinate vars) to out_vtu."""
     import meshio
-    plt, zi, pts, conn, pdata, info = _load_step(plt_path, zone, logger, want_conn=True)
+    plt, zi, pts, conn, pdata, info = _load_step(plt_path, zone, logger, want_conn=True, nen=nen)
     columns = {plt.vars[0]: pts[:, 0], plt.vars[1]: pts[:, 1], plt.vars[2]: pts[:, 2]}
     columns.update(pdata)
     cols = _resolve_cols(plt, columns, requested, logger, zone)
@@ -196,7 +196,8 @@ def _extract_csv(steps, mode, binary_dir, problem, args, requested, out_path, lo
                 logger.warning(f"no PLT for timestep {ts}; skipping"); bar.advance(); continue
             with spinner(f"Reading {Path(plt_path).name}", enabled=spin_on):
                 plt, zi, pts, conn, pdata, info = _load_step(plt_path, args.zone, logger,
-                                                             want_conn=False)
+                                                             want_conn=False,
+                                                             nen=getattr(args, "nen", None))
             columns = {plt.vars[0]: pts[:, 0], plt.vars[1]: pts[:, 1], plt.vars[2]: pts[:, 2]}
             columns.update(pdata)
             if cols is None:
@@ -257,6 +258,51 @@ def _probe_targets(pts, points, axes):
     return targets, nearest
 
 
+def _check_connectivity(pts, conn, cell, data, targets, values, info, logger):
+    """Flag interpolation that violates its own element's value range (run once).
+
+    A linear interpolant cannot leave the range of the nodal values it is built
+    from, so a violation means the cells are not what the file claims -- almost
+    always a brick mesh labelled as tetrahedra.
+    """
+    try:
+        problems = interp.check_cells(pts, conn, cell, data, targets, values)
+    except Exception as exc:                    # a diagnostic must never break the run
+        logger.debug(f"connectivity check skipped: {exc}")
+        return
+    for problem in problems:
+        logger.warning(problem)
+    if problems:
+        logger.warning(f"Interpolation is reading {cell} cells with {info['npe']} nodes each; "
+                       "if that is wrong the values are too. Run `field info --checks`, and "
+                       "pass --nen 8 for an 8-node brick mesh written as tetrahedra.")
+
+
+def _probe_notes(points, axes, nearest, bounds, npts, steps, fell_back, nudged, logger):
+    """Warn about, and record for the file header, probes that moved or were not located."""
+    notes = []
+    spacing = probe_util.mean_spacing(bounds[0], bounds[1], npts)
+    for pi, count in sorted(fell_back.items()):
+        # The bounding-box check already passed, so a probe found in no element is
+        # inside the box yet outside the mesh: it sits in a hole -- typically inside
+        # a body the mesh is built around.
+        dist = nearest[pi - 1][1]
+        ratio = f" ({dist / spacing:.0f}x the mean node spacing)" if spacing else ""
+        note = (f"probe {pi} {probe_util.label(points[pi - 1], axes[pi - 1])}: inside the "
+                f"zone's bounds but in no element, at {count} of {len(steps)} step(s) -- the "
+                "point is in a hole of the mesh, most likely inside the structure itself. "
+                f"Nearest node is {dist:g} away{ratio}; its value was used instead.")
+        logger.warning(note)
+        notes.append(note)
+    for pi, moved in sorted(nudged.items()):
+        note = (f"probe {pi} {probe_util.label(points[pi - 1], axes[pi - 1])}: on the mesh "
+                f"boundary; moved up to {moved:g} inward to land inside an element "
+                "(those rows are marked 'nudged')")
+        logger.warning(note)
+        notes.append(note)
+    return notes
+
+
 def _extract_probe(steps, mode, binary_dir, problem, args, requested, out_path, logger):
     """Sample the requested variables at fixed points, one row per probe per step."""
     points, axes = probe_util.parse_probes(args.probe, logger)
@@ -269,10 +315,11 @@ def _extract_probe(steps, mode, binary_dir, problem, args, requested, out_path, 
         sys.exit(1)
 
     tol = getattr(args, "probe_tol", None) or 0.0
+    nen = getattr(args, "nen", None)
     bounds = _probe_precheck(binary_dir, problem, steps, args.zone, points, axes, tol, logger)
     multi = mode == "range"
     cols, rows = None, []
-    warned, fell_back = set(), {}
+    warned, fell_back, nudged, checked = set(), {}, {}, False
     bar_on, spin_on = _feedback(args, steps)
     with step_bar(len(steps), "Probing", enabled=bar_on) as bar:
         for ts in steps:
@@ -282,7 +329,7 @@ def _extract_probe(steps, mode, binary_dir, problem, args, requested, out_path, 
                 logger.warning(f"no PLT for timestep {ts}; skipping"); bar.advance(); continue
             with spinner(f"Reading {Path(plt_path).name}", enabled=spin_on):
                 plt, zi, pts, conn, pdata, info = _load_step(plt_path, args.zone, logger,
-                                                             want_conn=interpolating)
+                                                             want_conn=interpolating, nen=nen)
             columns = {plt.vars[0]: pts[:, 0], plt.vars[1]: pts[:, 1], plt.vars[2]: pts[:, 2]}
             columns.update(pdata)
             if cols is None:
@@ -294,45 +341,52 @@ def _extract_probe(steps, mode, binary_dir, problem, args, requested, out_path, 
                 logger.info(f"Domain bounds: {probe_util.format_bounds(*bounds)}")
 
             targets, nearest = _probe_targets(pts, points, axes)
-            values = valid = None
+            values, source = None, None
             if interpolating:
+                data = {c: columns[c] for c in cols}
                 spacing = probe_util.mean_spacing(bounds[0], bounds[1], len(pts)) or 0.0
                 pad = max(4 * spacing, 4 * max(d for _, d in nearest), 1e-12)
                 cell = cell_name(info["npe"], info["ztype"])
                 try:
-                    values, valid = interp.sample(pts, conn, cell,
-                                                  {c: columns[c] for c in cols}, targets, pad)
+                    values, source, moved = interp.sample(pts, conn, cell, data, targets, pad,
+                                                          [i for i, _ in nearest])
                 except ValueError as exc:
                     logger.error(f"--interpolate: {exc} (npe={info['npe']}). "
                                  "Drop the flag to sample the nearest node.")
                     sys.exit(1)
+                for pi, (src, dx) in enumerate(zip(source, moved), start=1):
+                    if src == interp.NUDGED:
+                        nudged[pi] = max(nudged.get(pi, 0.0), float(dx))
+                if not checked and any(s == interp.FOUND for s in source):
+                    _check_connectivity(pts, conn, cell, data, targets, values, info, logger)
+                    checked = True
 
             for pi, (point, ax) in enumerate(zip(points, axes), start=1):
                 idx, dist = nearest[pi - 1]
-                if interpolating and valid[pi - 1]:
+                found = interpolating and source[pi - 1] != interp.MISSING
+                if found:
                     sampled = [float(values[c][pi - 1]) for c in cols]
                 else:
                     sampled = [float(columns[c][idx]) for c in cols]
-                if interpolating and not valid[pi - 1]:
+                if interpolating and not found:
                     fell_back[pi] = fell_back.get(pi, 0) + 1
                 elif not interpolating:
                     far = probe_util.far_probe_warning(dist, bounds[0], bounds[1], len(pts))
                     if far and pi not in warned:
                         logger.warning(f"Probe {pi} {probe_util.label(point, ax)}: {far}")
                         warned.add(pi)
-                node = [] if interpolating else [int(idx), float(pts[idx][0]),
-                                                 float(pts[idx][1]), float(pts[idx][2]), dist]
-                rows.append(([ts] if multi else []) + [pi] + node + sampled)
+                if interpolating:
+                    extra = [source[pi - 1] or "node"]
+                else:
+                    extra = [int(idx), float(pts[idx][0]), float(pts[idx][1]),
+                             float(pts[idx][2]), dist]
+                rows.append(([ts] if multi else []) + [pi] + extra + sampled)
             bar.advance()
     if not rows:
         logger.error("Nothing probed (no matching PLT files)."); sys.exit(1)
 
-    notes = []
-    for pi, n in sorted(fell_back.items()):
-        note = (f"probe {pi}: not inside any cell at {n} of {len(steps)} step(s); "
-                "the nearest node value was used there")
-        logger.warning(note)
-        notes.append(note)
+    notes = _probe_notes(points, axes, nearest, bounds, len(pts), steps,
+                         fell_back, nudged, logger)
     method = ("linear interpolation inside the containing cell"
               if interpolating else "nearest node")
     comments = probe_util.info_block(points, axes, Path(args.case).name, args.zone,
@@ -407,7 +461,8 @@ def execute_extract(args):
             logger.error(f"No PLT for timestep {steps[0]}"); sys.exit(1)
         _, spin_on = _feedback(args, steps)
         with spinner(f"Extracting {Path(plt_path).name}", enabled=spin_on):
-            n, c, arrs = _write_mesh(plt_path, args.zone, requested, domain, str(out_path), logger)
+            n, c, arrs = _write_mesh(plt_path, args.zone, requested, domain, str(out_path),
+                                     logger, getattr(args, "nen", None))
         logger.success(f"Wrote mesh {n:,} pts / {c:,} cells, vars {arrs} -> {out_path}")
         return
 
@@ -423,7 +478,8 @@ def execute_extract(args):
                     logger.warning(f"no PLT for timestep {ts}; skipping"); bar.advance(); continue
                 vtu = f"{stem}_{ts}.vtu"
                 with spinner(f"Extracting {Path(plt_path).name}", enabled=spin_on):
-                    n, c, arrs = _write_mesh(plt_path, args.zone, requested, domain, vtu, logger)
+                    n, c, arrs = _write_mesh(plt_path, args.zone, requested, domain, vtu,
+                                             logger, getattr(args, "nen", None))
                 logger.info(f"  step {ts}: {n:,} pts / {c:,} cells -> {os.path.basename(vtu)}")
                 entries.append((ts, os.path.basename(vtu)))
                 bar.advance()

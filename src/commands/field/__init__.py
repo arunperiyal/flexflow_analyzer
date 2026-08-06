@@ -94,6 +94,9 @@ class FieldCommand(BaseCommand):
         extract_parser.add_argument('--interpolate', action='store_true',
                                    help='With --probe: interpolate inside the cell holding '
                                         'the probe instead of taking the nearest node')
+        extract_parser.add_argument('--nen', type=int,
+                                   help='Force nodes-per-element (e.g. 8 for bricks) when the '
+                                        'PLT header mislabels the element type')
         extract_parser.add_argument('--no-progress', dest='no_progress', action='store_true',
                                    help='Do not draw the progress bar')
 

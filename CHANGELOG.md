@@ -67,11 +67,24 @@
   timestep, so moving/deforming meshes are followed correctly.
 - **`--interpolate`** reports the value at the point itself instead, linearly
   interpolated inside the element containing it (VTK's probe filter via pyvista —
-  the same as ParaView's *Probe Location*), and drops the nearest-node columns.
-  Only a small box of mesh around the probes is handed to VTK, which keeps a time
-  series 5–9x quicker than probing the whole zone; the box grows, and finally
-  falls back to the nearest node with a warning, for a probe that lies in no
-  element at all. Needs connectivity, so a volume zone.
+  the same as ParaView's *Probe Location*). Only a small box of mesh around the
+  probes is handed to VTK, which keeps a time series 5–9x quicker than probing the
+  whole zone. Needs connectivity, so a volume zone.
+- Interpolated rows carry **`source`** in place of the nearest-node columns,
+  saying where each value actually came from: `cell` (inside the containing
+  element), `nudged`, or `node`. A probe meant to sit on a wall lands a hair
+  *outside* the faceted boundary, where VTK finds no element at all and none of
+  its tolerance settings help; such a probe is now stepped a fraction of a cell
+  toward the interior until it lands inside one, and the displacement is
+  reported rather than silently applied. A probe in a genuine hole of the mesh
+  still falls back to its nearest node, and the warning now says so plainly —
+  inside the bounds but in no element means inside the structure — with the
+  nearest-node distance in units of mean node spacing.
+- `--interpolate` **checks itself once per run**: a linear interpolant cannot
+  leave the range of its own element's nodal values, so a violation means the
+  cells are not what the file claims. New **`--nen`** on `extract` (as on
+  `convert`) forces nodes-per-element for a brick mesh written as tetrahedra;
+  it applies to the mesh outputs too.
 - Probe output is a table of point values: `--output NAME.csv`, or **no
   `--output` at all** to print it on screen (the only mode where `--output` is
   optional). The probe coordinates are not repeated on every row — the case,

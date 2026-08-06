@@ -41,6 +41,8 @@ Extract nodal data from binary PLT files to CSV (Tecplot-free; pure numpy).
                              Alias: --output-file{Colors.RESET}
 
 {Colors.BOLD}OPTIONAL:{Colors.RESET}
+    {Colors.YELLOW}--nen N{Colors.RESET}                Force nodes-per-element when the PLT header
+                             mislabels the element type (e.g. --nen 8 for bricks)
     {Colors.YELLOW}--verbose, -v{Colors.RESET}          Show detailed extraction progress (per-step lines
                              instead of the progress bar)
     {Colors.YELLOW}--no-progress{Colors.RESET}          Do not draw the progress bar
@@ -72,9 +74,19 @@ Extract nodal data from binary PLT files to CSV (Tecplot-free; pure numpy).
     probe -- so you can see exactly what was sampled.
     {Colors.BOLD}--interpolate{Colors.RESET} reports the value at the point itself, linearly
     interpolated inside the element holding it (the same as ParaView's "Probe
-    Location"), and drops those node columns. It is slower, needs connectivity
-    (so a volume zone), and falls back to the nearest node -- with a warning --
-    for a probe that lies in no element at all.
+    Location"). It needs connectivity, so a volume zone, and replaces the node
+    columns with {Colors.YELLOW}source{Colors.RESET}, which says per row where the value came from:
+        {Colors.YELLOW}cell{Colors.RESET}    interpolated inside the element containing the probe
+        {Colors.YELLOW}nudged{Colors.RESET}  the probe sat on a wall, a hair outside the faceted
+                boundary, so it was stepped a fraction of a cell inward to land
+                inside an element (the displacement is reported)
+        {Colors.YELLOW}node{Colors.RESET}    no element contains the point -- it is in a hole of the
+                mesh, usually inside the structure -- so the nearest node's
+                value was used instead
+
+    A probe returning {Colors.YELLOW}node{Colors.RESET} for every step is the sign of a point placed
+    inside a body rather than in the fluid. Check the warning: it reports how far
+    the nearest node is in units of the mean node spacing.
 
     Output is a table of point values: {Colors.YELLOW}--output NAME.csv{Colors.RESET}, or no --output at all to
     print the table on screen. The probe coordinates are not repeated on every
@@ -144,8 +156,10 @@ Extract nodal data from binary PLT files to CSV (Tecplot-free; pure numpy).
   - --probe reports the nearest node's value unless --interpolate is given; check
     the 'distance' column to see how far that node was from the point you asked
     for, and use --interpolate when that offset matters
-  - --interpolate trusts the mesh connectivity; if `field info --checks` reports
-    a nodes-per-element mismatch, fix that first (see `field convert --nen`)
+  - --interpolate trusts the mesh connectivity. It checks itself once per run --
+    an interpolated value cannot leave the range of its own element's nodal
+    values -- and warns if that fails. Pass {Colors.YELLOW}--nen 8{Colors.RESET} when an 8-node brick
+    mesh is labelled as tetrahedra (`field info --checks` reports this)
   - Output CSV header is the comma-separated variable names
   - Coordinate variables (X,Y,Z) are available but only written if requested
     in --variables
