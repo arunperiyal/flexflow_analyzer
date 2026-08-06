@@ -48,6 +48,31 @@
 
 ### ✨ New Features
 
+#### `field extract --probe` — point probes and progress feedback
+- New **`--probe X,Y,Z`** on `field extract`: instead of a box, sample the
+  selected variables at fixed points — the usual way to pull a time signal
+  (velocity in the wake, pressure at a gauge point) out of a run. Repeat the flag
+  (or separate points with `;`) for several probes; give `X,Y` only on a 2D mesh
+  and Z is ignored when matching.
+- Each probe is **validated before any bulk data is read**: the coordinates are
+  checked against the zone's bounds taken from the PLT header (the error names
+  the offending axis and prints the domain box), and the requested variables are
+  checked against the zone, which now says *"not available in zone 'X'"* and
+  points at the volume zone when the variable exists but carries no data there.
+  **`--probe-tol TOL`** allows slack for a probe sitting exactly on a boundary.
+- Values come from the **nearest mesh node** (no interpolation); the output
+  carries that node's index, coordinates and its distance from the probe, so what
+  was sampled is visible. A warning fires when the nearest node is much farther
+  than the mean node spacing (probe in a hole of the mesh). Nodes are re-matched
+  every timestep, so moving/deforming meshes are followed correctly.
+- Probe output is a table of point values: `--output NAME.csv`, or **no
+  `--output` at all** to print it on screen (the only mode where `--output` is
+  optional).
+- **Progress bar** across timesteps for every `field extract` mode (csv, `.pvd`
+  series, probes), and a spinner for a single large step, so a long extraction
+  visibly makes headway. Skipped when output is redirected, with `--no-progress`,
+  and with `--verbose` (which prints per-step lines instead).
+
 #### `case download` — fetch case directories from a remote
 - New **`case download [case] --from REMOTE`** that pulls case directories
   (default `othd_files,oisd_files,binary`, override with `--dir`) from a

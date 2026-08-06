@@ -83,6 +83,16 @@ class FieldCommand(BaseCommand):
                                    help='Minimum Z coordinate')
         extract_parser.add_argument('--zmax', type=float,
                                    help='Maximum Z coordinate')
+        extract_parser.add_argument('--probe', action='append', metavar='X,Y,Z',
+                                   help='Sample at a point (nearest node); repeatable, '
+                                        'or several separated by ";". Output is .csv '
+                                        '(a table is printed when --output is omitted)')
+        extract_parser.add_argument('--probe-tol', dest='probe_tol', type=float,
+                                   metavar='TOL',
+                                   help='Slack on the inside-domain check for probes '
+                                        'sitting on a boundary (default 0)')
+        extract_parser.add_argument('--no-progress', dest='no_progress', action='store_true',
+                                   help='Do not draw the progress bar')
 
         # field convert (PLT -> VTU)
         convert_parser = field_subparsers.add_parser('convert', add_help=False,
@@ -196,7 +206,7 @@ class FieldCommand(BaseCommand):
         table.add_column("Description", style="white")
 
         table.add_row("info", "Show PLT file info (variables, zones, element-type audit)")
-        table.add_row("extract", "Extract variables to CSV (optional x/y/z box)")
+        table.add_row("extract", "Extract variables to CSV/mesh (x/y/z box or point probes)")
         table.add_row("convert", "Convert PLT volume zone to VTK .vtu (optional box crop)")
         table.add_row("iso", "Render isosurface PNGs (pyvista, YAML config)")
         table.add_row("check", "Validate a produced VTK file (.vtu/.vtk/.vtp)")
@@ -207,6 +217,7 @@ class FieldCommand(BaseCommand):
         console.print("[bold]EXAMPLES:[/bold]")
         console.print("    flexflow field info myCase --checks")
         console.print("    flexflow field extract myCase --variables U,V,Pressure --zone FIELD --timestep 100")
+        console.print("    flexflow field extract myCase --variables U,V --zone FIELD --t1 100 --t2 500 --probe 2.5,0,0")
         console.print("    flexflow field convert myCase --timestep 100")
         console.print("    flexflow field iso myCase --timestep 100 --iso 20 --color W")
         console.print("    flexflow field check results.vtk")

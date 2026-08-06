@@ -29,7 +29,7 @@ Extract nodal data from binary PLT files to CSV (Tecplot-free; pure numpy).
     {Colors.YELLOW}--freq N{Colors.RESET}               With --t1/--t2: keep only steps that are multiples of N
     {Colors.DIM}Setting the t1/t2/freq context (use t1:.. t2:.. freq:..) supplies these automatically.{Colors.RESET}
 
-    {Colors.YELLOW}--output NAME{Colors.RESET}          (required) Output; format from the extension:
+    {Colors.YELLOW}--output NAME{Colors.RESET}          (required, except with --probe) Output; format from the extension:
                              .csv      tabular point values (range -> 'timestep' column)
                              .vtu/.vtk a trimmed MESH with only the selected vars
                                        (cells kept -> contourable in ParaView; one step)
@@ -41,8 +41,35 @@ Extract nodal data from binary PLT files to CSV (Tecplot-free; pure numpy).
                              Alias: --output-file{Colors.RESET}
 
 {Colors.BOLD}OPTIONAL:{Colors.RESET}
-    {Colors.YELLOW}--verbose, -v{Colors.RESET}          Show detailed extraction progress
+    {Colors.YELLOW}--verbose, -v{Colors.RESET}          Show detailed extraction progress (per-step lines
+                             instead of the progress bar)
+    {Colors.YELLOW}--no-progress{Colors.RESET}          Do not draw the progress bar
     {Colors.YELLOW}--help, -h{Colors.RESET}             Show this help message
+
+    {Colors.DIM}A progress bar is drawn while stepping through timesteps (a spinner for a
+    single step), so a long extraction visibly makes headway. It is skipped when
+    output is redirected, with --no-progress, and with --verbose.{Colors.RESET}
+
+{Colors.BOLD}POINT PROBES:{Colors.RESET}
+    Sample the variables at fixed points instead of over a region -- the usual
+    way to pull a time signal (velocity in the wake, pressure at a gauge point)
+    out of a run.
+
+    {Colors.YELLOW}--probe X,Y,Z{Colors.RESET}          Sample at a point; repeat the flag for more probes,
+                             or separate them with ';' in one flag. Give X,Y only
+                             for a 2D mesh -- Z is then ignored when matching.
+    {Colors.YELLOW}--probe-tol TOL{Colors.RESET}        Slack on the inside-domain check, for a probe meant
+                             to sit exactly on a boundary (default 0)
+
+    Each probe is checked against the zone's coordinate bounds before any data is
+    read, and the requested variables are checked against the zone. The value
+    reported is the one at the nearest mesh node (no interpolation); the CSV
+    carries that node's index, coordinates and its distance from the probe, so
+    you can see exactly what was sampled. Nodes are matched again at every step,
+    so a moving or deforming mesh is followed correctly.
+
+    Output is a table of point values: {Colors.YELLOW}--output NAME.csv{Colors.RESET}, or no --output at all to
+    print the table on screen. The x/y/z box flags do not apply to probes.
 
 {Colors.BOLD}SUBDOMAIN EXTRACTION:{Colors.RESET}
     Extract data only from a specific spatial region using coordinate bounds.
@@ -77,6 +104,13 @@ Extract nodal data from binary PLT files to CSV (Tecplot-free; pure numpy).
     flexflow field extract CS4SG1U1 --timestep 1000 --variables U,V --zone FIELD --output box.csv \\
       --xmin -1.0 --xmax 1.0 --ymin -2.0 --ymax 2.0 --zmin -3.0 --zmax 3.0
 
+  {Colors.BOLD}Probe one point, printed on screen:{Colors.RESET}
+    flexflow field extract CS4SG1U1 --timestep 1000 --variables U,V --zone FIELD --probe 2.5,0,0
+
+  {Colors.BOLD}Time signal at three probes -> CSV:{Colors.RESET}
+    flexflow field extract CS4SG1U1 --t1 1000 --t2 5000 --variables U,V,Pressure --zone FIELD \\
+      --probe 2.5,0,0 --probe 5,0,0 --probe 10,0,0 --output wake_probes.csv
+
 {Colors.BOLD}WORKFLOW:{Colors.RESET}
 
   1. Discover variables and zones:
@@ -91,6 +125,8 @@ Extract nodal data from binary PLT files to CSV (Tecplot-free; pure numpy).
   - No Tecplot license or pytecplot needed; reads the .plt binary directly
   - Works on Python 3.13+
   - Extracts nodal (point) data; subdomain filtering is by node coordinates
+  - --probe reports the nearest node's value, not an interpolated one; check the
+    'distance' column to see how far that node was from the point you asked for
   - Output CSV header is the comma-separated variable names
   - Coordinate variables (X,Y,Z) are available but only written if requested
     in --variables

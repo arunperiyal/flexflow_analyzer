@@ -182,7 +182,7 @@ _flexflow_completions() {
                         fi
                         ;;
                     extract)
-                        local flags="--variables --zone --timestep --t1 --t2 --freq --output --output-file --xmin --xmax --ymin --ymax --zmin --zmax -v --verbose -h --help --examples"
+                        local flags="--variables --zone --timestep --t1 --t2 --freq --output --output-file --probe --probe-tol --no-progress --xmin --xmax --ymin --ymax --zmin --zmax -v --verbose -h --help --examples"
                         if [[ "$cur" == -* ]]; then
                             COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
                         else
@@ -688,6 +688,9 @@ _flexflow() {
                                         '--zone[Zone name]:zone:' \\
                                         '--timestep[Timestep to extract]:step:' \\
                                         '--output-file[Output file]:file:_files' \\
+                                        '*--probe[Sample at point X,Y,Z (nearest node)]:probe:' \\
+                                        '--probe-tol[Inside-domain slack for probes]:tol:' \\
+                                        '--no-progress[Do not draw the progress bar]' \\
                                         '--xmin[Minimum X coordinate]:xmin:' \\
                                         '--xmax[Maximum X coordinate]:xmax:' \\
                                         '--ymin[Minimum Y coordinate]:ymin:' \\
