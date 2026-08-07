@@ -48,6 +48,23 @@
 
 ### ✨ New Features
 
+#### Shared-variable (surface) zones — no Tecplot needed for surface data
+- The PLT reader now **follows Tecplot variable sharing**. A zone that stores no
+  data of its own — every variable flagged as shared from another zone, which is
+  how FlexFlow writes a cylinder-surface zone riding on the volume zone's node
+  array — is read by pulling each variable from the zone that owns it. Nothing has
+  to be declared: the share is recorded per variable in the file's own data-section
+  header, so `PltFile.variable_owner()` / `shared_from()` just read it.
+- Such a zone is **compacted to the nodes its own elements cover** and its
+  connectivity renumbered, so `field extract --zone cyl` yields the surface nodes
+  (6,272 for the bare-riser case) rather than the whole 1.8M-node volume. This
+  works for CSV, probes, and `.vtu` (a quad surface mesh for ParaView).
+  `field extract --zone cyl` previously failed outright with *"carries no own data
+  (variables are shared)"*; that error is now reserved for a zone whose variables
+  are genuinely passive.
+- **`field info --zones`** marks a zone that stores nothing of its own and names
+  the zone it borrows from, so the arrangement is discoverable.
+
 #### `field extract --probe` — point probes and progress feedback
 - New **`--probe X,Y,Z`** on `field extract`: instead of a box, sample the
   selected variables at fixed points — the usual way to pull a time signal

@@ -21,7 +21,12 @@ def _tstr(s):
 
 
 def write_plt(path, timestep, side=3):
-    """Write a `side`^3 unit-cube brick mesh with variables X,Y,Z,U,P."""
+    """Write a `side`^3 unit-cube brick mesh with variables X,Y,Z,U,P.
+
+    A second zone 'surf' covers the z=0 face with quads and stores no data of its
+    own: every variable is flagged as shared from zone 0, the way FlexFlow writes
+    a cylinder-surface zone riding on the volume zone's node array.
+    """
     g = np.linspace(0.0, 1.0, side)
     X, Y, Z = np.meshgrid(g, g, g, indexing="ij")
     pts = np.column_stack([X.ravel(), Y.ravel(), Z.ravel()]).astype(np.float32)
@@ -36,19 +41,26 @@ def write_plt(path, timestep, side=3):
                       at(i, j + 1, k + 1)]
                      for i in range(side - 1) for j in range(side - 1)
                      for k in range(side - 1)], dtype=np.int32)
+    surf = np.array([[at(i, j, 0), at(i + 1, j, 0), at(i + 1, j + 1, 0), at(i, j + 1, 0)]
+                     for i in range(side - 1) for j in range(side - 1)], dtype=np.int32)
+
+    def zone_header(name, ztype, nelem):
+        b = struct.pack("<f", 299.0) + _tstr(name)
+        b += struct.pack("<iid", -1, -1, float(timestep))   # parent, strand, time
+        b += struct.pack("<iiiii", -1, ztype, 0, 0, 0)      # colour, type, no varloc/neighbours
+        b += struct.pack("<ii", len(pts), nelem)
+        return b + struct.pack("<iiii", 0, 0, 0, 0)         # i/j/k dims, no aux pairs
 
     b = bytearray(b"#!TDV112")
     b += struct.pack("<ii", 1, 0)                       # byte-order check, filetype
     b += _tstr("test") + struct.pack("<i", len(names))
     for n in names:
         b += _tstr(n)
-    b += struct.pack("<f", 299.0) + _tstr("FIELD")      # zone header
-    b += struct.pack("<iid", -1, -1, float(timestep))   # parent, strand, solution time
-    b += struct.pack("<iiiii", -1, 5, 0, 0, 0)          # colour, FEBRICK, no varloc/neighbours
-    b += struct.pack("<ii", len(pts), len(conn))
-    b += struct.pack("<iiii", 0, 0, 0, 0)               # i/j/k dims, no aux pairs
+    b += zone_header("FIELD", 5, len(conn))             # FEBRICK
+    b += zone_header("surf", 3, len(surf))              # FEQUADRILATERAL
     b += struct.pack("<f", 357.0)                       # EOH
-    b += struct.pack("<f", 299.0)                       # data section
+
+    b += struct.pack("<f", 299.0)                       # zone 0 data
     b += b"".join(struct.pack("<i", 1) for _ in names)  # every variable float32
     b += struct.pack("<iii", 0, 0, -1)                  # no passive/shared, own connectivity
     for c in cols:
@@ -56,6 +68,14 @@ def write_plt(path, timestep, side=3):
     for c in cols:
         b += c.astype("<f4").tobytes()
     b += conn.astype("<i4").tobytes()
+
+    b += struct.pack("<f", 299.0)                       # zone 1 data
+    b += b"".join(struct.pack("<i", 1) for _ in names)
+    b += struct.pack("<i", 0)                           # no passive vars
+    b += struct.pack("<i", 1)                           # variable sharing follows...
+    b += b"".join(struct.pack("<i", 0) for _ in names)  # ...every one of them from zone 0
+    b += struct.pack("<i", -1)                          # its own connectivity
+    b += surf.astype("<i4").tobytes()                   # (no min/max: it stores nothing)
     path.write_bytes(bytes(b))
 
 
@@ -253,6 +273,58 @@ class TestExtractProbe:
     def test_interpolate_without_a_probe_exits(self, case):
         with pytest.raises(SystemExit):
             execute_extract(make_args(case, timestep=1000, interpolate=True))
+
+
+class TestSharedZone:
+    """A zone storing nothing of its own, riding on the volume zone's arrays."""
+
+    def test_reader_follows_the_share_to_the_owning_zone(self, case):
+        from src.plt.fxplt import PltFile
+        plt = PltFile(str(case / "binary" / "test.1000.plt"))
+        assert [z["name"] for z in plt.zones] == ["FIELD", "surf"]
+        assert plt.shared_from(0) == []                  # FIELD stores its own
+        assert plt.shared_from(1) == [0]                 # surf borrows all of them
+        assert [plt.variable_owner(1, v) for v in range(len(plt.vars))] == [0] * 5
+
+    def test_surface_zone_keeps_only_the_nodes_its_elements_use(self, case):
+        from src.plt.fxplt import PltFile
+        plt = PltFile(str(case / "binary" / "test.1000.plt"))
+        volume_pts, _, volume_data, _ = plt.load_zone(0)
+        pts, conn, pdata, info = plt.load_zone(1)
+
+        assert info["shared_from"] == [0]
+        assert info["npts_shared"] == len(volume_pts)    # what the header claimed
+        assert len(pts) == 9 and len(conn) == 4          # the 3x3 z=0 face
+        assert set(pdata) == {"U", "P"}                  # data arrived despite sharing
+        assert np.all(pts[:, 2] == 0.0)
+
+        # the compacted arrays must still be the parent's values at those nodes
+        on_face = np.flatnonzero(volume_pts[:, 2] == 0.0)
+        assert np.array_equal(pts, volume_pts[on_face])
+        assert np.array_equal(pdata["U"], volume_data["U"][on_face])
+        assert conn.max() == len(pts) - 1                # renumbered, not parent indices
+
+    def test_extracts_the_surface_to_csv(self, case):
+        out = case / "surface.csv"
+        execute_extract(make_args(case, zone="surf", variables="X,Y,Z,U",
+                                  t1=1000, t2=3000, output_file=str(out)))
+        rows = np.loadtxt(out, delimiter=",", skiprows=1)
+        assert len(rows) == 3 * 9                        # 3 steps x 9 surface nodes
+        assert set(rows[:, 0].astype(int)) == {1000, 2000, 3000}
+        assert np.all(rows[:, 3] == 0.0)                 # every row is on the z=0 face
+
+    def test_probes_the_surface_zone(self, case):
+        execute_extract(make_args(case, zone="surf", variables="U", timestep=1000,
+                                  probe="0.5,0.5,0.0"))
+
+    def test_writes_the_surface_as_a_quad_mesh(self, case):
+        meshio = pytest.importorskip("meshio")
+        out = case / "surface.vtu"
+        execute_extract(make_args(case, zone="surf", variables="U", timestep=1000,
+                                  output_file=str(out)))
+        mesh = meshio.read(out)
+        assert [c.type for c in mesh.cells] == ["quad"]
+        assert len(mesh.points) == 9 and len(mesh.cells[0].data) == 4
 
 
 class TestInterpolate:

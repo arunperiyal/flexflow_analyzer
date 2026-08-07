@@ -19,7 +19,13 @@ Extract nodal data from binary PLT files to CSV (Tecplot-free; pure numpy).
 {Colors.BOLD}REQUIRED OPTIONS:{Colors.RESET}
     {Colors.YELLOW}--variables VAR1,VAR2{Colors.RESET}  Comma-separated list of variables to extract
                              (e.g., Y, X,Y,Z, U,V,W)
-    {Colors.YELLOW}--zone ZONE{Colors.RESET}            Zone name to extract from (e.g., FIELD, BODY)
+    {Colors.YELLOW}--zone ZONE{Colors.RESET}            Zone name to extract from (e.g., FIELD, cyl)
+                             A surface zone that stores no data of its own (every
+                             variable shared from the volume zone) works too: the
+                             file records where each variable lives, so the values
+                             are followed automatically and you get the nodes that
+                             zone's own elements cover -- e.g. surface pressure on
+                             a cylinder. `field info --zones` marks such zones.
 
 {Colors.BOLD}TIMESTEP SELECTION (one of):{Colors.RESET}
     {Colors.YELLOW}--timestep STEP{Colors.RESET}        A single timestep (e.g., 1000)
@@ -134,6 +140,10 @@ Extract nodal data from binary PLT files to CSV (Tecplot-free; pure numpy).
   {Colors.BOLD}Time signal at three probes -> CSV:{Colors.RESET}
     flexflow field extract CS4SG1U1 --t1 1000 --t2 5000 --variables U,V,Pressure --zone FIELD \\
       --probe 2.5,0,0 --probe 5,0,0 --probe 10,0,0 --output wake_probes.csv
+
+  {Colors.BOLD}Surface pressure from a shared (surface) zone:{Colors.RESET}
+    flexflow field extract BR0SG0U1P0 --t1 50 --t2 5000 --variables X,Y,Z,Pressure \\
+      --zone cyl --output cyl_pressure.csv    # one row per surface node per step
 
   {Colors.BOLD}Interpolated at the exact point rather than the nearest node:{Colors.RESET}
     flexflow field extract CS4SG1U1 --t1 1000 --t2 5000 --variables Pressure --zone FIELD \\

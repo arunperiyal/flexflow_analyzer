@@ -126,9 +126,12 @@ def _load_step(plt_path, zone, logger, want_conn, nen=None):
     zi = _zone_or_exit(plt, zone, plt_path, logger)
     pts, conn, pdata, info = plt.load_zone(zi, nen=nen)
     if not pdata:
-        logger.error(f"Zone '{zone}' carries no own data (variables are shared). "
-                     f"Use the volume zone (e.g. {plt.zones[plt.first_volume_zone()]['name']}).")
+        logger.error(f"Zone '{zone}' has no variable data at all (every variable is passive).")
         sys.exit(1)
+    if info.get("shared_from"):
+        owners = ", ".join(plt.zones[j]["name"] for j in info["shared_from"])
+        logger.info(f"Zone '{zone}' shares its variables from {owners}; "
+                    f"extracting the {info['npts']:,} node(s) its own elements cover.")
     if want_conn and conn is None:
         logger.error(f"Zone '{zone}' has no connectivity; mesh output and --interpolate "
                      "need a volume zone.")
