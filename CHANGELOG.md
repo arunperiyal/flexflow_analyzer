@@ -48,6 +48,37 @@
 
 ### ✨ New Features
 
+#### `field compute force` — per-element pressure force on a surface zone
+- New **`field compute <quantity> <case> --zone ZONE`** subcommand. `force` writes,
+  for every surface element and every selected timestep, its centroid, **area**,
+  **outward unit normal**, face pressure and the pressure force **−p n dA**:
+  `timestep, element, x, y, z, area, nx, ny, nz, <Pressure>, Fx, Fy, Fz`.
+  Without `--output` it prints the integrated totals per timestep instead.
+- Areas and normals come from the **mesh itself**, so a grooved or otherwise
+  non-circular section needs no special handling — no assumed cross-section, no
+  `πD·dx` per-node area, no equal-chunk station binning. On the bare-riser case
+  this removes a **2.1% bias**: allocating `πD·dx` across 49 stations covers 12.25
+  units of span instead of 12.0, so the ends are double-counted.
+- Normals are oriented **against the volume zone**: a body is a hole in the mesh,
+  so each surface element belongs to exactly one volume cell, and that cell is on
+  the fluid side. Verified unanimous over all 6,144 faces of the riser. Elements
+  with no adjacent cell fall back to orienting the zone by its enclosed volume,
+  and that is reported rather than assumed.
+- The surface-to-volume mapping is built **once** and reused, since the element
+  list does not change between timesteps (checked: byte-identical connectivity
+  across `riser.100`…`riser.500`). If it ever does change, the command says so and
+  rebuilds instead of silently trusting it.
+- **No Cd/Cl, no sectional binning, no reference length** — those need a flow
+  direction and a reference area that belong to the user, and each is a sum over
+  these rows. `.vtu`/`.pvd` output carries the values as **cell data** for viewing
+  the force distribution on the deflecting surface in ParaView.
+- Deliberate limitation, stated in the help and the CSV header: this is the
+  **pressure (form) contribution only**. Viscous skin friction needs wall-normal
+  velocity gradients from the volume mesh and is not included.
+- New `src/plt/surface.py` (element geometry, face→cell matching, orientation) and
+  `PltFile.load_connectivity()`, which reads a zone's elements without touching
+  variable data.
+
 #### Shared-variable (surface) zones — no Tecplot needed for surface data
 - The PLT reader now **follows Tecplot variable sharing**. A zone that stores no
   data of its own — every variable flagged as shared from another zone, which is

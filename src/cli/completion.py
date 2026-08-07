@@ -160,7 +160,7 @@ _flexflow_completions() {
             local subcommand=""
             for (( i=2; i < cword; i++ )); do
                 case "${words[i]}" in
-                    info|extract|convert|iso|check)
+                    info|extract|compute|convert|iso|check)
                         subcommand="${words[i]}"
                         break
                         ;;
@@ -170,7 +170,7 @@ _flexflow_completions() {
             if [[ -z "$subcommand" ]]; then
                 # No subcommand yet
                 local flags="-v --verbose -h --help --examples"
-                COMPREPLY=( $(compgen -W "info extract convert iso check $flags" -- "$cur") )
+                COMPREPLY=( $(compgen -W "info extract compute convert iso check $flags" -- "$cur") )
             else
                 case "$subcommand" in
                     info)
@@ -188,6 +188,17 @@ _flexflow_completions() {
                         else
                             case "$prev" in
                                 --output|--output-file) _filedir ;;
+                                *) _flexflow_complete_cases ;;
+                            esac
+                        fi
+                        ;;
+                    compute)
+                        local flags="force --zone --timestep --t1 --t2 --freq --output --pressure --nen --no-progress -v --verbose -h --help"
+                        if [[ "$cur" == -* ]]; then
+                            COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
+                        else
+                            case "$prev" in
+                                --output) _filedir ;;
                                 *) _flexflow_complete_cases ;;
                             esac
                         fi

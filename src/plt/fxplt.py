@@ -181,6 +181,28 @@ class PltFile:
         self._layout_cache = layout
         return layout
 
+    def load_connectivity(self, zi, nen=None):
+        """Read one zone's connectivity alone, in the shared (parent) node indexing.
+
+        Cheap next to load_zone -- no variable data is touched -- which is what a
+        surface zone needs when its nodal values are being read from the volume
+        zone anyway. Returns None if the zone borrows its connectivity too.
+        """
+        entry = self._layout()[zi]
+        if entry["conn_offset"] is None:
+            return None
+        z = self.zones[zi]
+        npe = nen if nen is not None else NPE.get(z["ztype"], 8)
+        f = open(self.path, "rb")
+        f.seek(entry["conn_offset"])
+        raw = np.fromfile(f, dtype="<i4", count=z["nelem"] * npe)
+        f.close()
+        nelem = raw.size // npe
+        conn = raw[:nelem * npe].reshape(nelem, npe)
+        good = ((conn >= 0) & (conn < z["npts"])).all(axis=1)
+        nvalid = int(np.argmin(good)) if not good.all() else nelem
+        return conn[:nvalid].astype(np.int64)
+
     def variable_owner(self, zi, v, _depth=0):
         """Zone that actually stores variable `v` for zone `zi`, or None if passive."""
         entry = self._layout()[zi]
@@ -325,6 +347,7 @@ class PltFile:
                 pdata = {k: np.ascontiguousarray(v[used]) for k, v in pdata.items()}
                 info["npts_shared"] = npts
                 info["npts"] = len(used)
+                info["parent_nodes"] = used     # index back into the owning zone
         return pts, conn, pdata, info
 
 

@@ -25,28 +25,9 @@ from ....utils.logger import Logger
 from ....utils.progress import progress_enabled, spinner, step_bar
 from ....plt.fxplt import PltFile
 from ....plt.convert import cell_name, crop_mesh, has_domain
-from ..locate import problem_name, find_plt, zone_index, list_steps
+from ..locate import problem_name, find_plt, zone_index, resolve_steps as _resolve_steps
 from . import interp
 from . import probe as probe_util
-
-
-def _resolve_steps(args, binary_dir, problem):
-    """Decide which timesteps to extract. Returns (steps, mode) or (None, None)."""
-    if getattr(args, "timestep", None) is not None:
-        return [args.timestep], "single"
-    t1, t2 = getattr(args, "t1", None), getattr(args, "t2", None)
-    if t1 is not None and t2 is not None:
-        lo, hi = sorted((t1, t2))
-        freq = getattr(args, "freq", None)
-        sel = [s for s in list_steps(binary_dir, problem) if lo <= s <= hi]
-        if freq and freq > 0:
-            sel = [s for s in sel if s % freq == 0]
-        return sel, "range"
-    if t1 is not None:
-        return [int(t1)], "single"
-    if t2 is not None:
-        return [int(t2)], "single"
-    return None, None
 
 
 def _domain(args):

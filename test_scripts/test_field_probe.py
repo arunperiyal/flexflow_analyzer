@@ -14,6 +14,7 @@ import pytest
 
 from src.commands.field.extract_impl import probe as P
 from src.commands.field.extract_impl.command import execute_extract
+from src.commands.field.compute_impl.command import execute_compute
 
 
 def _tstr(s):
@@ -337,6 +338,102 @@ class TestSharedZone:
         mesh = meshio.read(out)
         assert [c.type for c in mesh.cells] == ["quad"]
         assert len(mesh.points) == 9 and len(mesh.cells[0].data) == 4
+
+
+class TestComputeForce:
+    """`field compute force` over the shared surface zone (the cube's z=0 face)."""
+
+    @staticmethod
+    def compute_args(case, **kw):
+        defaults = dict(quantity="force", case=str(case), verbose=False, help=False,
+                        zone="surf", timestep=None, t1=None, t2=None, freq=None,
+                        output_file=None, pressure="P", nen=None, no_progress=True)
+        defaults.update(kw)
+        return argparse.Namespace(**defaults)
+
+    def test_areas_and_normals_come_from_the_mesh(self, case):
+        from src.plt.fxplt import PltFile
+        from src.plt import surface
+        plt = PltFile(str(case / "binary" / "test.1000.plt"))
+        pts, vol_conn, _, _ = plt.load_zone(0)
+        surf_conn = plt.load_connectivity(1)
+        centroid, area, normal = surface.element_geometry(pts, surf_conn)
+
+        assert len(surf_conn) == 4                       # 2x2 quads on the z=0 face
+        assert area == pytest.approx(0.25)               # each 0.5 x 0.5
+        assert area.sum() == pytest.approx(1.0)
+        assert np.all(centroid[:, 2] == 0.0)
+        assert np.abs(normal[:, 2]) == pytest.approx(1.0)   # face normal is +/- z
+
+    def test_normals_are_oriented_by_the_adjacent_volume_cell(self, case):
+        from src.plt.fxplt import PltFile
+        from src.plt import surface
+        plt = PltFile(str(case / "binary" / "test.1000.plt"))
+        pts, vol_conn, _, _ = plt.load_zone(0)
+        surf_conn = plt.load_connectivity(1)
+        centroid, area, normal = surface.element_geometry(pts, surf_conn)
+        owners = surface.adjacent_cells(surf_conn, vol_conn)
+        assert np.all(owners >= 0)                       # every face found its cell
+
+        anchors = pts[vol_conn[owners]].mean(axis=1)
+        out = surface.orient_outward(normal, centroid, anchors)
+        # the mesh lies at z > 0, so "out of the body" is +z for this face
+        assert np.all(out[:, 2] > 0)
+
+    def test_force_matches_the_analytic_integral(self, case, capsys):
+        out = case / "forces.csv"
+        # P = -5y over the z=0 face, area 1, outward normal +z
+        #   Fz = -integral p dA = 5 * mean(y) * area = 5 * 0.5 * 1 = 2.5
+        execute_compute(self.compute_args(case, timestep=1000, output_file=str(out)))
+        rows = [ln for ln in out.read_text().splitlines() if not ln.startswith("#")]
+        header = rows[0].split(",")
+        assert header == ["element", "x", "y", "z", "area", "nx", "ny", "nz",
+                          "P", "Fx", "Fy", "Fz"]
+        data = np.array([[float(v) for v in ln.split(",")] for ln in rows[1:]])
+        assert len(data) == 4
+        col = {n: data[:, i] for i, n in enumerate(header)}
+        assert col["Fz"].sum() == pytest.approx(2.5)
+        assert col["Fx"].sum() == pytest.approx(0.0)
+        assert col["Fy"].sum() == pytest.approx(0.0)
+        assert col["area"].sum() == pytest.approx(1.0)
+
+    def test_element_ids_are_stable_across_timesteps(self, case):
+        out = case / "forces.csv"
+        execute_compute(self.compute_args(case, t1=1000, t2=3000, output_file=str(out)))
+        rows = [ln.split(",") for ln in out.read_text().splitlines()
+                if not ln.startswith("#")][1:]
+        by_step = {}
+        for r in rows:
+            by_step.setdefault(int(r[0]), []).append(int(r[1]))
+        assert sorted(by_step) == [1000, 2000, 3000]
+        assert all(v == [0, 1, 2, 3] for v in by_step.values())
+
+    def test_refuses_a_volume_zone(self, case):
+        with pytest.raises(SystemExit):
+            execute_compute(self.compute_args(case, zone="FIELD", timestep=1000))
+
+    def test_refuses_an_unknown_quantity(self, case):
+        with pytest.raises(SystemExit):
+            execute_compute(self.compute_args(case, quantity="lift", timestep=1000))
+
+    def test_missing_pressure_variable_exits(self, case):
+        with pytest.raises(SystemExit):
+            execute_compute(self.compute_args(case, pressure="Nope", timestep=1000))
+
+    def test_writes_the_surface_with_force_as_cell_data(self, case):
+        meshio = pytest.importorskip("meshio")
+        out = case / "forces.vtu"
+        execute_compute(self.compute_args(case, timestep=1000, output_file=str(out)))
+        mesh = meshio.read(out)
+        assert len(mesh.points) == 9 and mesh.cells[0].type == "quad"
+        assert set(mesh.cell_data) == {"area", "Pressure", "nx", "ny", "nz",
+                                       "Fx", "Fy", "Fz"}
+        assert float(np.sum(mesh.cell_data["Fz"][0])) == pytest.approx(2.5)
+
+    def test_prints_totals_without_an_output_file(self, case, capsys):
+        execute_compute(self.compute_args(case, timestep=1000))
+        printed = capsys.readouterr().out
+        assert "Fz" in printed and "elements" in printed
 
 
 class TestInterpolate:
