@@ -313,6 +313,18 @@ class TestSharedZone:
         assert set(rows[:, 0].astype(int)) == {1000, 2000, 3000}
         assert np.all(rows[:, 3] == 0.0)                 # every row is on the z=0 face
 
+    def test_warns_when_rows_carry_no_coordinates(self, case, capsys):
+        out = case / "surface.csv"
+        execute_extract(make_args(case, zone="surf", variables="U",
+                                  t1=1000, t2=3000, output_file=str(out)))
+        assert "carry no coordinates" in capsys.readouterr().err
+
+    def test_no_such_warning_once_coordinates_are_asked_for(self, case, capsys):
+        out = case / "surface.csv"
+        execute_extract(make_args(case, zone="surf", variables="X,Y,Z,U",
+                                  t1=1000, t2=3000, output_file=str(out)))
+        assert "carry no coordinates" not in capsys.readouterr().err
+
     def test_probes_the_surface_zone(self, case):
         execute_extract(make_args(case, zone="surf", variables="U", timestep=1000,
                                   probe="0.5,0.5,0.0"))

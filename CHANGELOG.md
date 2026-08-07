@@ -64,6 +64,10 @@
   are genuinely passive.
 - **`field info --zones`** marks a zone that stores nothing of its own and names
   the zone it borrows from, so the arrangement is discoverable.
+- A CSV extraction with **many nodes per timestep and no coordinate variable** now
+  warns: without X/Y/Z a row cannot be tied to a point. Coordinates are still only
+  written when asked for (`--variables X,Y,Z,Pressure`), and `.pvd` remains the
+  option that keeps geometry and connectivity with the values.
 
 #### `field extract --probe` — point probes and progress feedback
 - New **`--probe X,Y,Z`** on `field extract`: instead of a box, sample the

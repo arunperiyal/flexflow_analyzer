@@ -113,7 +113,10 @@ Extract nodal data from binary PLT files to CSV (Tecplot-free; pure numpy).
     {Colors.YELLOW}--zmax VALUE{Colors.RESET}           Maximum Z coordinate (for 3D)
 
     Note: Coordinate variables (X,Y,Z) are only included in output if
-          explicitly specified in --variables flag.
+          explicitly specified in --variables flag. Ask for them whenever the
+          output has many nodes per timestep -- without them a CSV row cannot be
+          tied to a point, and you get a warning saying so. For a whole zone over
+          time, .pvd keeps the mesh with the values instead.
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}  ({Colors.DIM}--output is required{Colors.RESET})
 

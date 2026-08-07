@@ -221,6 +221,12 @@ def _extract_csv(steps, mode, binary_dir, problem, args, requested, out_path, lo
     col_arrays = {c: np.concatenate(acc_cols[c]) for c in cols}
     if applied:
         logger.info(f"Subdomain filter {applied}: {len(ts_all):,} nodes kept")
+    # Many nodes per step and no coordinates means a row cannot be tied to a point.
+    if len(ts_all) > len(steps) and not (set(cols) & coord_names):
+        logger.warning(
+            f"These rows carry no coordinates, so a value cannot be tied to a point. "
+            f"Add {', '.join(sorted(coord_names))} to --variables, or write .vtu/.pvd "
+            "to keep the mesh with the data.")
     header = (["timestep"] if multi else []) + cols
     data_cols = ([ts_all] if multi else []) + [col_arrays[c] for c in cols]
     fmt = (["%d"] if multi else []) + ["%.8e"] * len(cols)
