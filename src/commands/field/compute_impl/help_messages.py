@@ -28,10 +28,13 @@ Quantities derived from a surface zone's own elements (Tecplot-free).
     {Colors.YELLOW}--freq N{Colors.RESET}              With --t1/--t2: keep steps that are multiples of N
 
 {Colors.BOLD}OPTIONAL:{Colors.RESET}
-    {Colors.YELLOW}--output NAME{Colors.RESET}         .csv (per-element table), .vtu/.vtk (surface mesh
-                          carrying the values as cell data, one step), or .pvd
-                          (a mesh series for a range). Without it you still get
-                          the integrated totals per timestep on screen.
+    {Colors.YELLOW}--output NAME{Colors.RESET}         A bare NAME makes a directory under the case holding
+                          one elements_<step>.csv per timestep plus summary.csv --
+                          the whole run split up, with nothing to script. Or give
+                          an extension for a single file: .csv (one combined
+                          table), .vtu/.vtk (surface mesh carrying the values as
+                          cell data, one step), .pvd (a mesh series). Without
+                          --output you still get the totals per timestep on screen.
     {Colors.YELLOW}--pressure VAR{Colors.RESET}        Pressure variable name (default: Pressure)
     {Colors.YELLOW}--nen N{Colors.RESET}               Force nodes-per-element on the volume zone
     {Colors.YELLOW}--no-progress{Colors.RESET}         Do not draw the progress bar
@@ -70,7 +73,11 @@ Quantities derived from a surface zone's own elements (Tecplot-free).
   {Colors.BOLD}Totals on screen, nothing written:{Colors.RESET}
     flexflow field compute force BR0SG0U1P0 --zone cyl --timestep 100
 
-  {Colors.BOLD}Per-element forces over a run:{Colors.RESET}
+  {Colors.BOLD}A run split into one file per timestep:{Colors.RESET}
+    flexflow field compute force BR0SG0U1P0 --zone cyl --t1 50 --t2 5000 --freq 50 \\
+      --output loads          # -> <case>/loads/elements_50.csv .. + summary.csv
+
+  {Colors.BOLD}The same run as one combined table:{Colors.RESET}
     flexflow field compute force BR0SG0U1P0 --zone cyl --t1 50 --t2 5000 --freq 50 \\
       --output cyl_forces.csv
 

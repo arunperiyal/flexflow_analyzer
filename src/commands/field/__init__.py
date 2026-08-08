@@ -118,8 +118,9 @@ class FieldCommand(BaseCommand):
         compute_parser.add_argument('--freq', type=int,
                                     help='With --t1/--t2: keep steps that are multiples of FREQ')
         compute_parser.add_argument('--output', '--output-file', dest='output_file', type=str,
-                                    help='Output .csv (per element), .vtu/.vtk or .pvd (surface '
-                                         'mesh carrying the values); omit for totals on screen')
+                                    help='Bare NAME -> a directory of per-timestep element '
+                                         'tables + summary.csv; or .csv / .vtu/.vtk / .pvd '
+                                         'for a single file; omit for totals on screen')
         compute_parser.add_argument('--pressure', type=str,
                                     help='Pressure variable name (default: Pressure)')
         compute_parser.add_argument('--nen', type=int,

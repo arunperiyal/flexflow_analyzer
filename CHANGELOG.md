@@ -68,6 +68,12 @@
   list does not change between timesteps (checked: byte-identical connectivity
   across `riser.100`…`riser.500`). If it ever does change, the command says so and
   rebuilds instead of silently trusting it.
+- A bare **`--output NAME`** writes a directory under the case holding one
+  `elements_<step>.csv` per timestep plus `summary.csv` (the per-timestep totals),
+  instead of one combined table — the per-step split that post-processing scripts
+  were doing by hand, and the part of that work which is general to any structure.
+  Each file is written as its step is computed, so a long run is never held in
+  memory. An extension still selects a single file: `.csv`, `.vtu`/`.vtk`, `.pvd`.
 - **No Cd/Cl, no sectional binning, no reference length** — those need a flow
   direction and a reference area that belong to the user, and each is a sum over
   these rows. `.vtu`/`.pvd` output carries the values as **cell data** for viewing

@@ -430,6 +430,28 @@ class TestComputeForce:
                                        "Fx", "Fy", "Fz"}
         assert float(np.sum(mesh.cell_data["Fz"][0])) == pytest.approx(2.5)
 
+    def test_bare_output_name_splits_the_run_into_one_file_per_step(self, case):
+        out = case / "loads"
+        execute_compute(self.compute_args(case, t1=1000, t2=3000, output_file=str(out)))
+        assert sorted(p.name for p in out.iterdir()) == [
+            "elements_1000.csv", "elements_2000.csv", "elements_3000.csv", "summary.csv"]
+
+        comments, header, rows = read_csv(out / "elements_2000.csv")
+        assert header == ["element", "x", "y", "z", "area", "nx", "ny", "nz",
+                          "P", "Fx", "Fy", "Fz"]          # no timestep: it is the name
+        assert "timestep: 2000" in comments[-1]
+        assert len(rows) == 4
+        assert sum(float(r["Fz"]) for r in rows) == pytest.approx(2.5)
+
+    def test_summary_carries_one_row_per_timestep(self, case):
+        out = case / "loads"
+        execute_compute(self.compute_args(case, t1=1000, t2=3000, output_file=str(out)))
+        _, header, rows = read_csv(out / "summary.csv")
+        assert header == ["timestep", "elements", "area", "Fx", "Fy", "Fz"]
+        assert [r["timestep"] for r in rows] == ["1000", "2000", "3000"]
+        assert all(r["elements"] == "4" for r in rows)     # integers, not 4.0e+00
+        assert all(float(r["Fz"]) == pytest.approx(2.5) for r in rows)
+
     def test_prints_totals_without_an_output_file(self, case, capsys):
         execute_compute(self.compute_args(case, timestep=1000))
         printed = capsys.readouterr().out

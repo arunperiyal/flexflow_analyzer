@@ -27,6 +27,18 @@ from ..locate import problem_name, find_plt, zone_index, resolve_steps
 QUANTITIES = ("force",)
 SURFACE_ZTYPES = (2, 3)          # FETRIANGLE, FEQUADRILATERAL
 COLUMNS = ["element", "x", "y", "z", "area", "nx", "ny", "nz"]
+SUMMARY_COLUMNS = ["timestep", "elements", "area", "Fx", "Fy", "Fz"]
+
+
+def _comment_block(case_dir, args, pressure_var, n_elements, span):
+    """The '#' header every table this command writes carries."""
+    return [
+        "FlexFlow field compute force -- pressure force per surface element",
+        f"case: {case_dir.name}   zone: {args.zone}   pressure: {pressure_var}",
+        "force: -p n dA, pressure only (no viscous skin friction)",
+        "normal: unit, pointing out of the body (oriented by the adjacent volume cell)",
+        f"elements: {n_elements:,}   {span}",
+    ]
 
 
 def _surface_zone(plt, name, logger):
@@ -61,7 +73,7 @@ def _orient(normal, centroid, area, pts, volume_conn, owners, logger, warned):
     return surface.orient_by_divergence(normal, centroid, area)
 
 
-INT_COLUMNS = ("timestep", "element")
+INT_COLUMNS = ("timestep", "element", "elements")
 
 
 def _write_csv(path, header, rows, comments):
@@ -100,7 +112,13 @@ def _write_pvd(path, entries):
 
 
 def _resolve_output(args, logger):
-    """Resolve --output to (path, ext), defaulting a bare name to a .csv in a folder."""
+    """Resolve --output to (path, kind).
+
+    A bare NAME is a directory holding one element table per timestep plus a
+    summary -- splitting a long run into per-step files without a script to do it.
+    A NAME with an extension is a single file: .csv for the combined table,
+    .vtu/.vtk or .pvd for the surface mesh.
+    """
     if not getattr(args, "output_file", None):
         return None, None
     base = Path(args.case) if args.case else Path.cwd()
@@ -109,11 +127,12 @@ def _resolve_output(args, logger):
     ext = target.suffix.lower()
     if ext == "":
         target.mkdir(parents=True, exist_ok=True)
-        return target / (target.name + ".csv"), ".csv"
+        return target, "dir"
     if ext in (".csv", ".vtu", ".vtk", ".pvd"):
         target.parent.mkdir(parents=True, exist_ok=True)
         return target, ext
-    logger.error(f"Unsupported output extension '{ext}'. Use .csv, .vtu/.vtk or .pvd.")
+    logger.error(f"Unsupported output extension '{ext}'. Use a bare NAME for a "
+                 "directory of per-timestep files, or .csv, .vtu/.vtk or .pvd.")
     sys.exit(1)
 
 
@@ -220,7 +239,16 @@ def execute_compute(args):
             totals.append([ts, len(surf_conn), area.sum(),
                            force[:, 0].sum(), force[:, 1].sum(), force[:, 2].sum()])
 
-            if ext == ".csv" or out_path is None:
+            if ext == "dir":
+                # One file per timestep, written as we go: a long run never has to
+                # be held in memory, and the step is named by the file.
+                block = np.column_stack([np.arange(len(surf_conn)), centroid, area,
+                                         normal, face_p, force])
+                _write_csv(out_path / f"elements_{ts}.csv",
+                           COLUMNS + [pressure_var, "Fx", "Fy", "Fz"], block,
+                           _comment_block(case_dir, args, pressure_var, len(block),
+                                          f"timestep: {ts}"))
+            elif ext == ".csv" or out_path is None:
                 block = np.column_stack([np.arange(len(surf_conn)), centroid, area,
                                          normal, face_p, force])
                 if multi:
@@ -242,22 +270,21 @@ def execute_compute(args):
     if not totals:
         logger.error("Nothing computed (no matching PLT files)."); sys.exit(1)
 
-    header = (["timestep"] if multi else []) + COLUMNS + [pressure_var, "Fx", "Fy", "Fz"]
-    comments = [
-        "FlexFlow field compute force -- pressure force per surface element",
-        f"case: {case_dir.name}   zone: {args.zone}   pressure: {pressure_var}",
-        "force: -p n dA, pressure only (no viscous skin friction)",
-        "normal: unit, pointing out of the body (oriented by the adjacent volume cell)",
-        f"elements: {totals[0][1]:,}   timesteps: "
-        f"{steps[0] if len(steps) == 1 else f'{steps[0]}..{steps[-1]}'} ({len(totals)} written)",
-    ]
+    span = (f"timesteps: {steps[0] if len(steps) == 1 else f'{steps[0]}..{steps[-1]}'} "
+            f"({len(totals)} written)")
+    comments = _comment_block(case_dir, args, pressure_var, int(totals[0][1]), span)
     for line in comments:
         logger.info(line)
     _print_totals(totals, multi)
 
     if out_path is None:
         return
-    if ext == ".csv":
+    if ext == "dir":
+        _write_csv(out_path / "summary.csv", SUMMARY_COLUMNS, np.asarray(totals), comments)
+        print(f"Wrote {len(totals)} element table(s) + summary.csv -> {out_path}/")
+    elif ext == ".csv":
+        header = (["timestep"] if multi else []) + COLUMNS + [pressure_var,
+                                                              "Fx", "Fy", "Fz"]
         _write_csv(out_path, header, np.vstack(rows), comments)
         print(f"Wrote {sum(len(r) for r in rows):,} element row(s) x {len(header)} cols "
               f"-> {out_path}")
