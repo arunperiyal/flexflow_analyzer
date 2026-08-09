@@ -160,6 +160,18 @@ class CaseCommand(BaseCommand):
                                   const=True, default=False, metavar='NAME',
                                   help='Write a node map per nodal outputTimeHistory block; '
                                        'NAME selects one by block or node-set name')
+        # Validated in the command, not with choices=: argparse's rejection surfaces
+        # here as "Unknown subcommand", which points at the wrong thing entirely.
+        write_parser.add_argument('--probe-type', dest='probe_type', type=str,
+                                  metavar='TYPE',
+                                  help='Declare how the probe set should be read: '
+                                       'point, line, helix, surface or cloud. Recorded '
+                                       'in the map; it cannot be derived from the '
+                                       'coordinates')
+        write_parser.add_argument('--closed', action='store_true',
+                                  help='With --probe-type line or helix: the curve '
+                                       'joins up (a ring), which needs different '
+                                       'arc-length handling from an open curve')
         write_parser.add_argument('-v', '--verbose', action='store_true',
                                   help='Enable verbose output')
         write_parser.add_argument('-h', '--help', action='store_true',
@@ -303,6 +315,7 @@ class CaseCommand(BaseCommand):
         table.add_row("organise", "Organize and clean up case directory")
         table.add_row("check", "Inspect OTHD/OISD ranges and validate config")
         table.add_row("status", "Check case data file completeness")
+        table.add_row("write", "Write derived files from a case's inputs (othd node maps)")
         table.add_row("add", "Scan a directory and build the .cases registry")
         table.add_row("report", "Print a compact status table for all registered cases")
         table.add_row("upload", "Upload case directories from local to remote server")

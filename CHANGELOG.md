@@ -49,28 +49,64 @@
 ### ✨ New Features
 
 #### `case write --othd-map` — keep othd files readable without the mesh
-- New **`case write`** subcommand. `--othd-map` writes one `othd.<set>.map` per
-  **nodal** `outputTimeHistory` block in the case's `.def`, giving `row, node, x,
-  y, z`: the record's index within each `aleDisp` block, the mesh node it belongs
-  to, and that node's **undeformed** coordinates.
+- New **`case write`** subcommand (listed in `case --help`). `--othd-map` writes
+  one `othd.<set>.map` per `outputTimeHistory` block in the case's `.def` that
+  names a file its records are indexed by:
+  - **`type = nodal`** → `row, node, x, y, z` — the record's index, the mesh node
+    it belongs to, and that node's **undeformed** coordinates from the mesh.
+  - **`type = coordinates`** → `row, x, y, z` — the points the block asked for,
+    read straight from its own probe file. No mesh is touched, and there is no
+    node column: a requested point need not sit on one.
+  - Any other type names no file to index its records by, so it is reported and
+    skipped. The mesh file is only required when a nodal block is present, so a
+    case of nothing but coordinates blocks maps without it.
 - Why: a nodal history is written *positionally* — row k is the k-th node of the
   block's node file, with no id and no coordinate in the othd itself. Reading one
   back has therefore required the node file **and** the mesh coordinates, and the
   coordinates file is usually the largest input in a case (137 MB for a 1.8M-node
   riser) even when the output covers 49 nodes. With the map written, it can be
   deleted.
-- Rows keep the node file's order, because that order is what indexes the othd —
-  they are deliberately not sorted by node id.
+- Rows keep the source file's order, because that order is what indexes the othd —
+  they are deliberately not sorted.
+- Each map carries **`# othId: <n>`**, the output's index within the othd, so a
+  reader holding two maps can tell which belongs to which block. Declaration order
+  does not give it: an output whose input file is **missing or empty is not written
+  at all**, and every id after it shifts down — on `BR0SG0U1P0`, `probe_dat.txt` is
+  absent, so `"riser_probe"` is othId 0 rather than 1. The id is *predicted* from
+  the `.def` and the files present rather than read from an othd, and the header
+  states that basis: a reader that trusts a wrong id is worse off than one with
+  none. When an input file is **newer than the case's othd files** — those were
+  written without it, so their ids are lower — that is warned about and noted in
+  the map.
+- A `coordinates` point file is read as **`index x y z`** when it has four columns
+  and the first reads as a row index, or `x y z` when it has three; the layout is
+  checked rather than assumed, and anything else errors. Taking the first three
+  fields of a four-column file turns the point `(0, 0, 3)` into `(1, 0, 0)` with
+  nothing downstream able to detect it.
+- A block whose input file is missing or empty is now **skipped rather than fatal**
+  when scanning every block, matching what the solver does — naming it explicitly
+  with `--othd-map NAME` still errors. This also fixes a regression from mapping
+  coordinates blocks: `case write --othd-map` had started failing outright on
+  `BR0SG0U1P0`, whose `.def` references an absent `probe_dat.txt`.
 - The coordinates file is read from the `.def`'s `nodeCoordinates` block rather
   than assumed to be `<problem>.crd`, and every map in a case is built from a
-  single streamed pass over it. Blocks of another type (e.g. `type = coordinates`)
-  are reported and skipped: their records are not indexed by a node file.
-  `--othd-map NAME` restricts it to one block, by block name or node-set name.
+  single streamed pass over it. `--othd-map NAME` restricts it to one block, by
+  block name or node/point-set name.
 - Accepts the **`*` wildcard case** (including via `use case:*`), mapping every
   case in the `.cases` registry in turn. A case with nothing to map is *skipped*
   and one that genuinely fails is *reported*, and neither ends the batch — so a
   registry holding cases at different stages still gets the ones it can. The run
   exits non-zero only when no case could be mapped at all.
+- **`--probe-type point|line|helix|surface|cloud`** declares how a probe set should
+  be read — arc length along a line, axial position and angle along a helix, two
+  coordinates on a surface, nothing shared between independent points — with
+  **`--closed`** marking a curve that joins up.
+  Recorded in the map as `# probe:` / `# closed:` and explicitly marked
+  **declared, not derived**: it cannot be inferred from the coordinates (a dense
+  grid snakes into a uniform-step path indistinguishable from a curve; rank alone
+  does not separate a ring from a grid) and it is not in the `.def` or `.nbc`
+  either. It applies to the maps a run writes, so `--othd-map NAME` gives
+  different sets different types.
 - `def_parser` gained `parse_output_time_history()` and `parse_node_coordinates()`,
   both of which strip `#` comments first so a commented-out block is never read
   as live.

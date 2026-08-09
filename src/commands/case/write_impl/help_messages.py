@@ -15,38 +15,97 @@ Build small derived files from a case's own inputs.
     flexflow case write * --othd-map            {Colors.DIM}# every case in .cases{Colors.RESET}
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
-    {Colors.YELLOW}--othd-map [NAME]{Colors.RESET}  Write a node map for every nodal outputTimeHistory
-                       block in the .def. Give NAME to do just one, matched
-                       against the block name or the node-set name.
+    {Colors.YELLOW}--othd-map [NAME]{Colors.RESET}  Write a map for every outputTimeHistory block in the
+                       .def that names a file its records are indexed by.
+                       Give NAME to do just one, matched against the block
+                       name or the node/point-set name.
+    {Colors.YELLOW}--probe-type TYPE{Colors.RESET}  Declare how the probe set should be read:
+                       {Colors.YELLOW}point{Colors.RESET} independent locations, nothing shared between them
+                       {Colors.YELLOW}line{Colors.RESET}  ordered samples along a curve -- parameterise by arc length
+                       {Colors.YELLOW}helix{Colors.RESET} a curve wrapping a body -- axial position and angle,
+                             not arc length alone
+                       {Colors.YELLOW}surface{Colors.RESET} a patch -- parameterise by two coordinates
+                       {Colors.YELLOW}cloud{Colors.RESET} scattered, no structure to exploit
+    {Colors.YELLOW}--closed{Colors.RESET}           With --probe-type line or helix: the curve joins up
+                       (a ring), needing different handling from an open curve
     {Colors.YELLOW}--verbose, -v{Colors.RESET}      Show which files were read
     {Colors.YELLOW}--help, -h{Colors.RESET}         Show this help message
 
 {Colors.BOLD}WHY:{Colors.RESET}
 
-    A nodal outputTimeHistory writes its records {Colors.BOLD}positionally{Colors.RESET}: row k of
-    every aleDisp block is the k-th node of the node file the block was given.
-    The othd carries no node id and no coordinate, so reading one back needs
-    both the node file and the mesh coordinates -- and the coordinates file is
-    usually the largest input in the case (137 MB for a 1.8M-node riser) even
-    when the output covers a few dozen nodes.
+    An outputTimeHistory writes its records {Colors.BOLD}positionally{Colors.RESET}: row k of every
+    output block is the k-th entry of the file the block was given. The othd
+    carries no id and no coordinate of its own, so reading one back needs that
+    file -- and for a nodal block, the mesh coordinates too, which are usually
+    the largest input in the case (137 MB for a 1.8M-node riser) even when the
+    output covers a few dozen nodes.
 
-    This writes those nodes out once, so the coordinates file can be deleted
-    and the othd stays readable.
+    This writes the few dozen out once, so the mesh can be deleted and the othd
+    stays readable.
 
 {Colors.BOLD}OUTPUT:{Colors.RESET}
 
-    One {Colors.YELLOW}othd.<set>.map{Colors.RESET} per nodal block, in the case directory:
+    One {Colors.YELLOW}othd.<set>.map{Colors.RESET} per mappable block, in the case directory. What a
+    row says depends on what the block is indexed by:
+
+    {Colors.BOLD}type = nodal{Colors.RESET} -- indexed by a node file, resolved against the mesh:
 
         row,node,x,y,z
         0,2,-2.1648901405887341e-17,3.5355339059327368e-01,-3.5355339059327379e-01
 
-    {Colors.YELLOW}row{Colors.RESET}      index of the record within each aleDisp block of the othd
-    {Colors.YELLOW}node{Colors.RESET}     mesh node id
-    {Colors.YELLOW}x, y, z{Colors.RESET}  {Colors.BOLD}undeformed{Colors.RESET} coordinates -- add the othd displacement
-             to get where the node moved to
+        {Colors.YELLOW}x, y, z{Colors.RESET} are {Colors.BOLD}undeformed{Colors.RESET} -- add the othd displacement to get
+        where the node moved to.
 
-    Rows keep the node file's order, because that order is what indexes the
-    othd. They are not sorted by node id.
+    {Colors.BOLD}type = coordinates{Colors.RESET} -- indexed by its own point file, so no mesh is
+    read and there is no node column: a requested point need not sit on a node.
+
+        row,x,y,z
+        0,0.0000000000000000e+00,0.0000000000000000e+00,3.0000000000000000e+00
+
+    A point file is read as {Colors.YELLOW}index x y z{Colors.RESET} when it has four columns and the
+    first reads as a row index, or {Colors.YELLOW}x y z{Colors.RESET} when it has three. The layout is
+    checked rather than assumed -- taking the first three fields of a four-column
+    file turns the point (0, 0, 3) into (1, 0, 0), which nothing downstream can
+    detect. Anything else is an error rather than a guess.
+
+    Rows keep the source file's order, because that order is what indexes the
+    othd. They are not sorted.
+
+    A block whose type names no file to index its records by is reported and
+    skipped -- there is nothing to map it against. So is one whose input file is
+    missing or empty: the solver writes no record for it either. Naming such a
+    block with --othd-map NAME is an error rather than a silent skip.
+
+{Colors.BOLD}othId:{Colors.RESET}
+
+    Each map carries {Colors.YELLOW}# othId: <n>{Colors.RESET} -- which output within the othd it
+    describes. Declaration order in the .def does not give it: an output whose
+    input file is missing or empty is not written at all, and every id after it
+    shifts down. On BR0SG0U1P0, probe_dat.txt is absent, so "riser_probe" is
+    othId 0 rather than 1.
+
+    The id is {Colors.BOLD}predicted{Colors.RESET} from the .def and the files present, not read
+    from an othd, and the header says so alongside it -- a reader that trusts a
+    wrong id is worse off than one that has none.
+
+    If an input file is {Colors.BOLD}newer{Colors.RESET} than the case's othd files, those were written
+    without it and their ids are lower than the ones predicted here. That is
+    reported and noted in the map. Read the ids from the othd and prefer them.
+
+{Colors.BOLD}PROBE GEOMETRY:{Colors.RESET}
+
+    --probe-type is {Colors.BOLD}declared, never derived{Colors.RESET}, and the map says so. It cannot
+    be worked out from the coordinates: a dense square grid snakes into a path
+    with perfectly uniform steps, indistinguishable from a curve, and rank alone
+    does not separate a ring from a grid. Nor is it in the .def or the .nbc,
+    which carry node ids and nothing about shape. Three collinear points are
+    either a coarse line or three independent probes, and only you know which.
+
+    It applies to whichever maps the run writes, so use {Colors.YELLOW}--othd-map NAME{Colors.RESET} to
+    give different sets different types:
+
+        case write BR0SG0U1P0 --othd-map cyl_nodes --probe-type line
+        case write BR0SG0U1P0 --othd-map probe_dat --probe-type point
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
 
