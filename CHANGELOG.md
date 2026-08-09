@@ -181,9 +181,9 @@
   visibly makes headway. Skipped when output is redirected, with `--no-progress`,
   and with `--verbose` (which prints per-step lines instead).
 
-#### `case upload --files` — carry a case's definition, not just its data
-- New **`--files [PATTERNS]`** on `case upload`, for the loose files in a case
-  root rather than its data directories. On its own it takes the defaults
+#### `case upload/download --files` — carry a case's definition, not just its data
+- New **`--files [PATTERNS]`** on `case upload` **and `case download`**, for the
+  loose files in a case root rather than its data directories. On its own it takes the defaults
   `simflow.config,*.def,*.geo,*.map` — what defines the run, its settings, and any
   `othd.<set>.map` written by `case write`. They are globs, so the defaults hold
   whatever a case calls its problem.
@@ -193,10 +193,13 @@
 - Only files sitting **directly in the case root** are matched — a recursive glob
   would sweep up the very data `--files` exists to avoid (`binary/nested.map`
   matches `*.map` but is correctly left alone).
+- Downloading matches the patterns against the **remote** listing, and drops
+  remote subdirectories so a directory named like a pattern is never fetched as a
+  file. The local case directory is created for the incoming files.
 - Matching nothing is reported but not treated as a failure: a case that has no
   maps yet is not an error. File patterns are carried in the resumable transfer
   state, so `--resume` does not silently drop them, and the file target is counted
-  alongside the directory targets so a files-only upload reports as complete.
+  alongside the directory targets so a files-only transfer reports as complete.
 
 #### `case download` — fetch case directories from a remote
 - New **`case download [case] --from REMOTE`** that pulls case directories

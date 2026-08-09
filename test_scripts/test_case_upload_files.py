@@ -139,6 +139,65 @@ class TestUploadFiles:
         assert ssh.upload_file.call_count == 5
 
 
+class TestResolveRemoteFiles:
+    """Downloading matches against the remote listing, not the local one."""
+
+    @staticmethod
+    def remote(entries, dirs=()):
+        ssh = MagicMock()
+        ssh.list_remote_dir.return_value = list(entries)
+        ssh.remote_is_dir.side_effect = lambda path: path.rsplit("/", 1)[-1] in dirs
+        return ssh
+
+    def test_matches_the_defaults_against_the_listing(self, uploader):
+        ssh = self.remote(["simflow.config", "riser.def", "riser.geo", "riser.crd",
+                           "othd.cyl_nodes.map", "binary", "othd_files"],
+                          dirs={"binary", "othd_files"})
+        assert uploader.resolve_remote_files(ssh, "/r/BR0", DEFAULT_UPLOAD_FILES) == [
+            "othd.cyl_nodes.map", "riser.def", "riser.geo", "simflow.config"]
+
+    def test_remote_directories_are_not_treated_as_files(self, uploader):
+        # a directory called 'results.map' would otherwise be fetched as a file
+        ssh = self.remote(["othd.a.map", "results.map"], dirs={"results.map"})
+        assert uploader.resolve_remote_files(ssh, "/r/BR0", ["*.map"]) == ["othd.a.map"]
+
+    def test_an_unlistable_remote_yields_nothing(self, uploader):
+        ssh = MagicMock()
+        ssh.list_remote_dir.side_effect = IOError("no such directory")
+        assert uploader.resolve_remote_files(ssh, "/r/BR0", ["*.map"]) == []
+
+
+class TestDownloadFiles:
+    """The download itself, against a stubbed SSH connection."""
+
+    def test_fetches_matched_files_into_the_case_root(self, uploader, tmp_path):
+        ssh = MagicMock()
+        ssh.remote_path_exists.return_value = True
+        ssh.list_remote_dir.return_value = ["simflow.config", "riser.def", "riser.crd"]
+        ssh.remote_is_dir.return_value = False
+        local = tmp_path / "BR0"
+        assert uploader.download_files(ssh, "/r/BR0", str(local),
+                                       DEFAULT_UPLOAD_FILES) is True
+        pulled = {call.args[0] for call in ssh.download_file.call_args_list}
+        assert pulled == {"/r/BR0/simflow.config", "/r/BR0/riser.def"}
+        assert local.is_dir()                       # created for the incoming files
+
+    def test_matching_nothing_is_not_a_failure(self, uploader, tmp_path):
+        ssh = MagicMock()
+        ssh.remote_path_exists.return_value = True
+        ssh.list_remote_dir.return_value = ["riser.crd"]
+        ssh.remote_is_dir.return_value = False
+        assert uploader.download_files(ssh, "/r/BR0", str(tmp_path), ["*.map"]) is True
+        ssh.download_file.assert_not_called()
+
+    def test_a_missing_remote_case_fails(self, uploader, tmp_path):
+        ssh = MagicMock()
+        ssh.remote_path_exists.return_value = False
+        assert uploader.download_files(ssh, "/r/BR0", str(tmp_path),
+                                       DEFAULT_UPLOAD_FILES) is False
+        ssh.download_file.assert_not_called()
+
+
 class TestResumeState:
     """File patterns have to survive into the resumable state, or a resume drops them."""
 

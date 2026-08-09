@@ -95,6 +95,9 @@ Download case directories from a remote server to the local machine.
     {Colors.YELLOW}--from REMOTE{Colors.RESET}          Remote machine name (required)
     {Colors.YELLOW}--dir DIRS{Colors.RESET}             Comma-separated directories to download
                            (default: othd_files,oisd_files,binary)
+    {Colors.YELLOW}--files [PATTERNS]{Colors.RESET}     Loose files from the remote case root, as
+                           comma-separated globs
+                           (default: simflow.config,*.def,*.geo,*.map)
     {Colors.YELLOW}--remote-path PATH{Colors.RESET}     Override remote base path (default: remote config path)
     {Colors.YELLOW}--force{Colors.RESET}                Create the local case directory if it does not exist
     {Colors.YELLOW}--resume{Colors.RESET}               Resume the last interrupted download
@@ -111,6 +114,19 @@ Download case directories from a remote server to the local machine.
 
     Wildcard mode ('case download *') downloads all cases listed in the .cases
     file in the current directory.
+
+{Colors.BOLD}FILES:{Colors.RESET}
+    --files fetches the small things that describe a case rather than its data:
+    what defines the run, its settings, and any othd maps. Patterns are matched
+    against the remote case root only -- subdirectories are left alone.
+
+    Given {Colors.BOLD}without --dir{Colors.RESET} it downloads only those files, so a case's
+    definition can be pulled without its data directories.
+
+{Colors.BOLD}EXAMPLES:{Colors.RESET}
+    case download CS4SG1U1 --from server --files
+    case download CS4SG1U1 --from server --files "*.map"
+    case download * --from server --files --force
 
 {Colors.BOLD}CONTEXT:{Colors.RESET}
     Set remote context:    use remote:myserver
@@ -316,7 +332,7 @@ class CaseUploadCommand:
                 return 1
 
             force_enabled = bool(self._get_arg(args, 'force', False))
-            file_patterns = self.parse_files(self._get_arg(args, 'files')) if is_upload else []
+            file_patterns = self.parse_files(self._get_arg(args, 'files'))
             dir_arg = self._get_arg(args, 'dir')
             # --files on its own means just the files: the default directories
             # include binary/, which is the opposite of a quick definition push.
@@ -450,8 +466,9 @@ class CaseUploadCommand:
                         f"[bold]Case {target['case_name']}[/bold] [cyan]{idx}/{len(all_targets)}[/cyan]"
                     )
 
-                if is_upload and target.get('kind') == 'files':
-                    ok = self.upload_files(
+                if target.get('kind') == 'files':
+                    transfer = self.upload_files if is_upload else self.download_files
+                    ok = transfer(
                         ssh,
                         target['remote_case_path'],
                         target['case_path'],
@@ -631,6 +648,68 @@ class CaseUploadCommand:
         """
         case_name = os.path.basename(case_path.rstrip("/"))
         return f"{remote_base}/{case_name}"
+
+    def resolve_remote_files(
+        self,
+        ssh: SSHClientWrapper,
+        remote_case_path: str,
+        patterns: List[str],
+    ) -> List[str]:
+        """Names in the remote case root matching `patterns`, de-duplicated and sorted.
+
+        The listing has to come from the remote, so this is the mirror of
+        resolve_files() rather than a shared helper: subdirectories are dropped so
+        a name like `binary` never gets pulled as if it were a file.
+        """
+        from fnmatch import fnmatch
+
+        try:
+            entries = ssh.list_remote_dir(remote_case_path)
+        except Exception as exc:
+            self.console.print(f"[yellow]Warning:[/yellow] Could not list {remote_case_path}: {exc}")
+            return []
+        names = {name for name in entries
+                 if any(fnmatch(name, pattern) for pattern in patterns)}
+        return sorted(name for name in names
+                      if not ssh.remote_is_dir(f"{remote_case_path}/{name}"))
+
+    def download_files(
+        self,
+        ssh: SSHClientWrapper,
+        remote_case_path: str,
+        local_case_path: str,
+        patterns: List[str],
+        force: bool = False
+    ) -> bool:
+        """Download loose files from the remote case root into the local case root.
+
+        Matching nothing is reported and treated as done: a remote case that has
+        no maps yet is not a failure.
+        """
+        if not ssh.remote_path_exists(remote_case_path):
+            self.console.print(
+                f"[yellow]Warning:[/yellow] Remote directory not found: {remote_case_path}"
+            )
+            return False
+
+        names = self.resolve_remote_files(ssh, remote_case_path, patterns)
+        if not names:
+            self.console.print(
+                f"[yellow]Warning:[/yellow] No files matching {', '.join(patterns)} "
+                f"in {remote_case_path}"
+            )
+            return True
+
+        os.makedirs(local_case_path, exist_ok=True)
+        self.console.print(f"[cyan]Downloading:[/cyan] {len(names)} file(s)")
+        for name in names:
+            ssh.download_file(f"{remote_case_path}/{name}",
+                              os.path.join(local_case_path, name))
+            self.console.print(f"    [dim]{name}[/dim]")
+        self.console.print(
+            f"[green]✓[/green] Downloaded {len(names)} file(s) to {local_case_path}"
+        )
+        return True
 
     def upload_files(
         self,

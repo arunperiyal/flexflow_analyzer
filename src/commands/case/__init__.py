@@ -208,6 +208,12 @@ class CaseCommand(BaseCommand):
         download_parser.add_argument('case', nargs='?', help='Local case directory path (destination)')
         download_parser.add_argument('--dir', type=str, metavar='DIRS',
                                     help='Directories to download (comma-separated, default: othd_files,oisd_files,binary)')
+        download_parser.add_argument('--files', nargs='?', const=True, default=None,
+                                    metavar='PATTERNS',
+                                    help='Also download loose files from the remote case root '
+                                         '(comma-separated globs; default: '
+                                         'simflow.config,*.def,*.geo,*.map). Given without '
+                                         '--dir it downloads only those files')
         download_parser.add_argument('--from', dest='from_remote', type=str, required=False, metavar='REMOTE',
                                     help='Remote machine name (or use context with "use remote:name")')
         download_parser.add_argument('--remote-path', type=str, metavar='PATH',
