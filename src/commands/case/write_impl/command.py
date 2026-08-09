@@ -34,7 +34,11 @@ POINT_MAP_HEADER = ["row", "x", "y", "z"]
 # perfectly uniform steps, indistinguishable from a curve, and rank alone does not
 # separate a ring from a grid. Nor is it in the .def or the .nbc, which carry only
 # node ids and whether the block is nodal or coordinates. So it is declared.
-PROBE_TYPES = ("point", "line", "surface", "cloud")
+PROBE_TYPES = ("point", "line", "helix", "surface", "cloud")
+# Types that trace a curve, and so can be asked whether they join up. A helix is
+# not merely a line: it wraps a body, so a reader may parameterise it by axial
+# position and angle rather than by arc length alone.
+CURVE_TYPES = ("line", "helix")
 
 
 class WriteError(Exception):
@@ -484,11 +488,11 @@ def execute_write(args):
                      f"{', '.join(PROBE_TYPES)}")
         sys.exit(1)
     closed = getattr(args, "closed", False)
-    if closed and probe != "line":
-        logger.error("--closed describes whether a line joins up, so it needs "
-                     "--probe-type line.")
+    if closed and probe not in CURVE_TYPES:
+        logger.error("--closed describes whether a curve joins up, so it needs "
+                     f"--probe-type {' or '.join(CURVE_TYPES)}.")
         sys.exit(1)
-    closed = closed if probe == "line" else None
+    closed = closed if probe in CURVE_TYPES else None
 
     if is_wildcard_case(args.case):
         _write_all_cases(args, wanted, logger, probe, closed)

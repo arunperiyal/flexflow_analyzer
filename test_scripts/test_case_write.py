@@ -318,7 +318,13 @@ class TestProbeDeclaration:
         execute_write(make_args(case, probe_type="line"))
         assert "# closed: no" in (case / "othd.cyl_nodes.map").read_text()
 
-    def test_closed_is_only_meaningful_for_a_line(self, case):
+    def test_a_helix_is_its_own_type(self, case):
+        """A helix wraps a body: axial position and angle, not arc length alone."""
+        execute_write(make_args(case, probe_type="helix", closed=True))
+        header = (case / "othd.cyl_nodes.map").read_text()
+        assert "# probe: helix" in header and "# closed: yes" in header
+
+    def test_closed_is_only_meaningful_for_a_curve(self, case):
         execute_write(make_args(case, probe_type="surface"))
         assert "# closed:" not in (case / "othd.cyl_nodes.map").read_text()
 
@@ -330,7 +336,7 @@ class TestProbeDeclaration:
 
     def test_an_unknown_type_exits(self, case):
         with pytest.raises(SystemExit):
-            execute_write(make_args(case, probe_type="helix"))
+            execute_write(make_args(case, probe_type="spiral"))
 
     def test_it_applies_to_coordinates_blocks_too(self, case):
         """Three collinear points are a line or three points; only a human knows."""

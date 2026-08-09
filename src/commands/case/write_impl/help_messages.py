@@ -22,10 +22,12 @@ Build small derived files from a case's own inputs.
     {Colors.YELLOW}--probe-type TYPE{Colors.RESET}  Declare how the probe set should be read:
                        {Colors.YELLOW}point{Colors.RESET} independent locations, nothing shared between them
                        {Colors.YELLOW}line{Colors.RESET}  ordered samples along a curve -- parameterise by arc length
+                       {Colors.YELLOW}helix{Colors.RESET} a curve wrapping a body -- axial position and angle,
+                             not arc length alone
                        {Colors.YELLOW}surface{Colors.RESET} a patch -- parameterise by two coordinates
                        {Colors.YELLOW}cloud{Colors.RESET} scattered, no structure to exploit
-    {Colors.YELLOW}--closed{Colors.RESET}           With --probe-type line: the line joins up (a ring),
-                       which needs different arc-length handling from an open line
+    {Colors.YELLOW}--closed{Colors.RESET}           With --probe-type line or helix: the curve joins up
+                       (a ring), needing different handling from an open curve
     {Colors.YELLOW}--verbose, -v{Colors.RESET}      Show which files were read
     {Colors.YELLOW}--help, -h{Colors.RESET}         Show this help message
 

@@ -165,12 +165,13 @@ class CaseCommand(BaseCommand):
         write_parser.add_argument('--probe-type', dest='probe_type', type=str,
                                   metavar='TYPE',
                                   help='Declare how the probe set should be read: '
-                                       'point, line, surface or cloud. Recorded in the '
-                                       'map; it cannot be derived from the coordinates')
+                                       'point, line, helix, surface or cloud. Recorded '
+                                       'in the map; it cannot be derived from the '
+                                       'coordinates')
         write_parser.add_argument('--closed', action='store_true',
-                                  help='With --probe-type line: the line joins up '
-                                       '(a ring), which needs different arc-length '
-                                       'handling from an open line')
+                                  help='With --probe-type line or helix: the curve '
+                                       'joins up (a ring), which needs different '
+                                       'arc-length handling from an open curve')
         write_parser.add_argument('-v', '--verbose', action='store_true',
                                   help='Enable verbose output')
         write_parser.add_argument('-h', '--help', action='store_true',

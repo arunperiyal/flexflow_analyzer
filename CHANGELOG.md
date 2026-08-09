@@ -97,9 +97,10 @@
   and one that genuinely fails is *reported*, and neither ends the batch — so a
   registry holding cases at different stages still gets the ones it can. The run
   exits non-zero only when no case could be mapped at all.
-- **`--probe-type point|line|surface|cloud`** declares how a probe set should be
-  read — arc length along a line, two coordinates on a surface, nothing shared
-  between independent points — with **`--closed`** marking a line that joins up.
+- **`--probe-type point|line|helix|surface|cloud`** declares how a probe set should
+  be read — arc length along a line, axial position and angle along a helix, two
+  coordinates on a surface, nothing shared between independent points — with
+  **`--closed`** marking a curve that joins up.
   Recorded in the map as `# probe:` / `# closed:` and explicitly marked
   **declared, not derived**: it cannot be inferred from the coordinates (a dense
   grid snakes into a uniform-step path indistinguishable from a curve; rank alone
