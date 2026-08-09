@@ -92,11 +92,20 @@ def execute_info(args):
 
     if show("zones"):
         _hdr("Zones")
-        for z in plt.zones:
+        for zi, z in enumerate(plt.zones):
             npe = {1: 2, 2: 3, 3: 4, 4: 4, 5: 8}.get(z["ztype"], 8)
             print(f"  {Colors.BOLD}{z['name']}{Colors.RESET}: "
                   f"{ZTYPE_VTK.get(z['ztype'], 'type%d' % z['ztype'])}, "
                   f"{npe} nodes/elem, nodes={z['npts']:,}, elements={z['nelem']:,}")
+            try:
+                owners = plt.shared_from(zi)
+            except Exception:
+                owners = []
+            if owners:
+                names = ", ".join(plt.zones[j]["name"] for j in owners)
+                print(f"    {Colors.DIM}stores no data of its own -- every variable is "
+                      f"shared from {names}; extracting this zone gives the nodes its "
+                      f"own elements cover{Colors.RESET}")
 
     if show("checks"):
         _hdr("Consistency checks")

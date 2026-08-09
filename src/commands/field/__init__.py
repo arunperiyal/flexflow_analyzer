@@ -83,6 +83,50 @@ class FieldCommand(BaseCommand):
                                    help='Minimum Z coordinate')
         extract_parser.add_argument('--zmax', type=float,
                                    help='Maximum Z coordinate')
+        extract_parser.add_argument('--probe', action='append', metavar='X,Y,Z',
+                                   help='Sample at a point (nearest node); repeatable, '
+                                        'or several separated by ";". Output is .csv '
+                                        '(a table is printed when --output is omitted)')
+        extract_parser.add_argument('--probe-tol', dest='probe_tol', type=float,
+                                   metavar='TOL',
+                                   help='Slack on the inside-domain check for probes '
+                                        'sitting on a boundary (default 0)')
+        extract_parser.add_argument('--interpolate', action='store_true',
+                                   help='With --probe: interpolate inside the cell holding '
+                                        'the probe instead of taking the nearest node')
+        extract_parser.add_argument('--nen', type=int,
+                                   help='Force nodes-per-element (e.g. 8 for bricks) when the '
+                                        'PLT header mislabels the element type')
+        extract_parser.add_argument('--no-progress', dest='no_progress', action='store_true',
+                                   help='Do not draw the progress bar')
+
+        # field compute (surface-element quantities)
+        compute_parser = field_subparsers.add_parser('compute', add_help=False,
+                                                     help='Compute quantities on a surface zone')
+        compute_parser.add_argument('quantity', nargs='?',
+                                    help='Quantity to compute (force)')
+        compute_parser.add_argument('case', nargs='?', help='Case directory path')
+        compute_parser.add_argument('-v', '--verbose', action='store_true',
+                                    help='Enable verbose output')
+        compute_parser.add_argument('-h', '--help', action='store_true',
+                                    help='Show help for compute command')
+        compute_parser.add_argument('--zone', type=str,
+                                    help='Surface zone to integrate over (e.g. cyl)')
+        compute_parser.add_argument('--timestep', type=int, help='Single timestep')
+        compute_parser.add_argument('--t1', type=float, help='Start step (or a single step)')
+        compute_parser.add_argument('--t2', type=float, help='End step of a range')
+        compute_parser.add_argument('--freq', type=int,
+                                    help='With --t1/--t2: keep steps that are multiples of FREQ')
+        compute_parser.add_argument('--output', '--output-file', dest='output_file', type=str,
+                                    help='Bare NAME -> a directory of per-timestep element '
+                                         'tables + summary.csv; or .csv / .vtu/.vtk / .pvd '
+                                         'for a single file; omit for totals on screen')
+        compute_parser.add_argument('--pressure', type=str,
+                                    help='Pressure variable name (default: Pressure)')
+        compute_parser.add_argument('--nen', type=int,
+                                    help='Force nodes-per-element on the volume zone')
+        compute_parser.add_argument('--no-progress', dest='no_progress', action='store_true',
+                                    help='Do not draw the progress bar')
 
         # field convert (PLT -> VTU)
         convert_parser = field_subparsers.add_parser('convert', add_help=False,
@@ -162,6 +206,9 @@ class FieldCommand(BaseCommand):
         elif args.field_subcommand == 'extract':
             from .extract_impl.command import execute_extract
             execute_extract(args)
+        elif args.field_subcommand == 'compute':
+            from .compute_impl.command import execute_compute
+            execute_compute(args)
         elif args.field_subcommand == 'convert':
             from .convert_impl.command import execute_convert
             execute_convert(args)
@@ -196,7 +243,8 @@ class FieldCommand(BaseCommand):
         table.add_column("Description", style="white")
 
         table.add_row("info", "Show PLT file info (variables, zones, element-type audit)")
-        table.add_row("extract", "Extract variables to CSV (optional x/y/z box)")
+        table.add_row("extract", "Extract variables to CSV/mesh (x/y/z box or point probes)")
+        table.add_row("compute", "Per-element pressure force on a surface zone (areas + normals)")
         table.add_row("convert", "Convert PLT volume zone to VTK .vtu (optional box crop)")
         table.add_row("iso", "Render isosurface PNGs (pyvista, YAML config)")
         table.add_row("check", "Validate a produced VTK file (.vtu/.vtk/.vtp)")
@@ -207,6 +255,8 @@ class FieldCommand(BaseCommand):
         console.print("[bold]EXAMPLES:[/bold]")
         console.print("    flexflow field info myCase --checks")
         console.print("    flexflow field extract myCase --variables U,V,Pressure --zone FIELD --timestep 100")
+        console.print("    flexflow field extract myCase --variables U,V --zone FIELD --t1 100 --t2 500 --probe 2.5,0,0")
+        console.print("    flexflow field compute force myCase --zone cyl --timestep 100")
         console.print("    flexflow field convert myCase --timestep 100")
         console.print("    flexflow field iso myCase --timestep 100 --iso 20 --color W")
         console.print("    flexflow field check results.vtk")

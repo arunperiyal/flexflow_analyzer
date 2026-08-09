@@ -44,6 +44,7 @@ class PltFile:
         self.vars = []
         self.zones = []          # list of dicts: name, ztype, npts, nelem
         self._data_start = None  # byte offset of the data section (after EOH)
+        self._layout_cache = None
         self._parse_header()
 
     # ---- header / zone records -------------------------------------------
@@ -120,7 +121,13 @@ class PltFile:
         return "\n".join(lines)
 
     def _read_data_preamble(self, f, nvar):
-        """Read one zone's data-section preamble; return (fmts, present_mask, shareconn)."""
+        """Read one zone's data-section preamble.
+
+        Returns (fmts, present_mask, shareconn, shared) where shared[v] is the zone
+        variable v is borrowed from (-1 = this zone stores it). Tecplot lets a zone
+        carry no data of its own and point every variable at another zone -- how a
+        surface zone rides along on the volume zone's node array.
+        """
         def i32():
             return struct.unpack("<i", f.read(4))[0]
 
@@ -142,10 +149,85 @@ class PltFile:
         for v in range(nvar):
             if present[v]:
                 f.read(16)
-        return fmts, present, shareconn
+        return fmts, present, shareconn, shared
+
+    # ---- data-section map -------------------------------------------------
+    def _layout(self):
+        """Byte offset of every zone's variable blocks and connectivity.
+
+        One cheap pass over the data section (preambles only, bulk data seeked
+        past), so a variable can afterwards be read straight from whichever zone
+        actually stores it.
+        """
+        if self._layout_cache is not None:
+            return self._layout_cache
+        nvar = len(self.vars)
+        f = open(self.path, "rb")
+        f.seek(self._data_start)
+        layout = []
+        for z in self.zones:
+            fmts, present, shareconn, shared = self._read_data_preamble(f, nvar)
+            entry = dict(fmts=fmts, present=present, shared=shared,
+                         shareconn=shareconn, var_offset={}, conn_offset=None)
+            for v in range(nvar):
+                if present[v]:
+                    entry["var_offset"][v] = f.tell()
+                    f.seek(z["npts"] * FMT_SIZE[fmts[v]], 1)
+            if shareconn == -1 and z["ztype"] in NPE:
+                entry["conn_offset"] = f.tell()
+                f.seek(z["nelem"] * NPE[z["ztype"]] * 4, 1)
+            layout.append(entry)
+        f.close()
+        self._layout_cache = layout
+        return layout
+
+    def load_connectivity(self, zi, nen=None):
+        """Read one zone's connectivity alone, in the shared (parent) node indexing.
+
+        Cheap next to load_zone -- no variable data is touched -- which is what a
+        surface zone needs when its nodal values are being read from the volume
+        zone anyway. Returns None if the zone borrows its connectivity too.
+        """
+        entry = self._layout()[zi]
+        if entry["conn_offset"] is None:
+            return None
+        z = self.zones[zi]
+        npe = nen if nen is not None else NPE.get(z["ztype"], 8)
+        f = open(self.path, "rb")
+        f.seek(entry["conn_offset"])
+        raw = np.fromfile(f, dtype="<i4", count=z["nelem"] * npe)
+        f.close()
+        nelem = raw.size // npe
+        conn = raw[:nelem * npe].reshape(nelem, npe)
+        good = ((conn >= 0) & (conn < z["npts"])).all(axis=1)
+        nvalid = int(np.argmin(good)) if not good.all() else nelem
+        return conn[:nvalid].astype(np.int64)
+
+    def variable_owner(self, zi, v, _depth=0):
+        """Zone that actually stores variable `v` for zone `zi`, or None if passive."""
+        entry = self._layout()[zi]
+        if entry["present"][v]:
+            return zi
+        src = entry["shared"][v]
+        if src is None or not (0 <= src < len(self.zones)) or _depth > len(self.zones):
+            return None
+        return self.variable_owner(src, v, _depth + 1)
+
+    def shared_from(self, zi):
+        """Zones this one borrows variables from (empty if it stores its own)."""
+        entry = self._layout()[zi]
+        return sorted({entry["shared"][v] for v in range(len(self.vars))
+                       if not entry["present"][v] and entry["shared"][v] is not None
+                       and entry["shared"][v] >= 0})
 
     def minmax(self, zi=0):
-        """Return {var: (min, max) or None} for a zone, read from the header (no bulk load)."""
+        """Return {var: (min, max) or None} for a zone, read from the header (no bulk load).
+
+        A shared variable reports None on purpose: the owning zone's range covers
+        the owner's whole node array, which is wider than the subset a surface zone
+        actually occupies. Do not "fix" this by following the share -- callers use
+        None to mean "compute it from the loaded points instead".
+        """
         nvar = len(self.vars)
         f = open(self.path, "rb")
         f.seek(self._data_start)
@@ -153,7 +235,7 @@ class PltFile:
         # skip the data of any zones before the target
         for j in range(zi):
             zt = self.zones[j]
-            fmts, present, shareconn = self._read_data_preamble(f, nvar)
+            fmts, present, shareconn, _ = self._read_data_preamble(f, nvar)
             for v in range(nvar):
                 if present[v]:
                     f.seek(zt["npts"] * FMT_SIZE[fmts[v]], 1)
@@ -197,43 +279,43 @@ class PltFile:
 
         Returns (points[N,3] f32, conn[M,npe] int64, point_data{name:array},
                  info{truncated, nhex_file, nhex_valid, ...}).
-        Skips any preceding zones' data correctly. Detects truncation and
-        clips connectivity to the leading all-valid prefix.
+        Variables the zone does not store itself are read from the zone that does,
+        so a surface zone sharing the volume zone's arrays loads normally; such a
+        zone is then compacted to the nodes its own elements actually use, and its
+        connectivity renumbered to match. Detects truncation and clips connectivity
+        to the leading all-valid prefix.
         """
         nvar = len(self.vars)
+        layout = self._layout()
+        entry = layout[zi]
         f = open(self.path, "rb")
-        f.seek(self._data_start)
-
-        # advance through zones before the target
-        for j in range(zi):
-            zt = self.zones[j]
-            fmts, present, shareconn = self._read_data_preamble(f, nvar)
-            for v in range(nvar):
-                if present[v]:
-                    f.seek(zt["npts"] * FMT_SIZE[fmts[v]], 1)
-            if shareconn == -1 and zt["ztype"] in NPE:
-                f.seek(zt["nelem"] * NPE[zt["ztype"]] * 4, 1)
 
         z = self.zones[zi]
         npts, nelem, ztype = z["npts"], z["nelem"], z["ztype"]
-        fmts, present, shareconn = self._read_data_preamble(f, nvar)
+        shareconn = entry["shareconn"]
 
         cols = {}
         for v in range(nvar):
-            if not present[v]:
+            owner = self.variable_owner(zi, v)
+            if owner is None:                       # passive: nothing stored anywhere
                 cols[self.vars[v]] = None
                 continue
-            arr = np.fromfile(f, dtype=FMT_NP[fmts[v]], count=npts)
-            if arr.size < npts:
+            count = self.zones[owner]["npts"]
+            f.seek(layout[owner]["var_offset"][v])
+            arr = np.fromfile(f, dtype=FMT_NP[layout[owner]["fmts"][v]], count=count)
+            if arr.size < count:
                 raise IOError("truncated inside variable '%s' (%d/%d values)"
-                              % (self.vars[v], arr.size, npts))
+                              % (self.vars[v], arr.size, count))
             cols[self.vars[v]] = arr.astype("<f4")
 
         npe = nen if nen is not None else NPE.get(ztype, 8)
+        borrowed = self.shared_from(zi)
         info = dict(zone=zi, npts=npts, nelem=nelem, ztype=ztype, npe=npe,
                     nen_declared=NPE.get(ztype), nen_override=nen,
-                    truncated=False, nhex_file=nelem, nhex_valid=nelem)
-        if shareconn == -1:
+                    truncated=False, nhex_file=nelem, nhex_valid=nelem,
+                    shared_from=borrowed)
+        if shareconn == -1 and entry["conn_offset"] is not None:
+            f.seek(entry["conn_offset"])
             raw = np.fromfile(f, dtype="<i4", count=nelem * npe)
             nhex_file = raw.size // npe
             conn = raw[:nhex_file * npe].reshape(nhex_file, npe)
@@ -252,6 +334,20 @@ class PltFile:
                              cols[self.vars[2]]]).astype("<f4"))
         pdata = {self.vars[v]: np.ascontiguousarray(cols[self.vars[v]])
                  for v in range(3, nvar) if cols[self.vars[v]] is not None}
+
+        # A zone riding on another zone's arrays covers only the nodes its own
+        # elements touch -- keep those, and renumber the connectivity to match.
+        if borrowed and conn is not None and len(conn):
+            used = np.unique(conn)
+            if len(used) < len(pts):
+                remap = np.full(len(pts), -1, dtype=np.int64)
+                remap[used] = np.arange(len(used))
+                pts = np.ascontiguousarray(pts[used])
+                conn = remap[conn]
+                pdata = {k: np.ascontiguousarray(v[used]) for k, v in pdata.items()}
+                info["npts_shared"] = npts
+                info["npts"] = len(used)
+                info["parent_nodes"] = used     # index back into the owning zone
         return pts, conn, pdata, info
 
 

@@ -9,6 +9,10 @@ or a range of timesteps. Output format is chosen by the output extension:
                     variables -- contourable in ParaView (single timestep)
   .pvd              a time series: one trimmed-mesh <stem>_<step>.vtu per step
                     plus the <stem>.pvd collection (range)
+
+With --probe X,Y,Z the box is replaced by point sampling: the variables are read
+at the mesh node nearest each probe (or interpolated inside the containing cell
+with --interpolate), giving a time signal in CSV (or on screen).
 """
 
 import os
@@ -18,41 +22,26 @@ from pathlib import Path
 import numpy as np
 
 from ....utils.logger import Logger
+from ....utils.progress import progress_enabled, spinner, step_bar
 from ....plt.fxplt import PltFile
 from ....plt.convert import cell_name, crop_mesh, has_domain
-from ..locate import problem_name, find_plt, zone_index, list_steps
-
-
-def _resolve_steps(args, binary_dir, problem):
-    """Decide which timesteps to extract. Returns (steps, mode) or (None, None)."""
-    if getattr(args, "timestep", None) is not None:
-        return [args.timestep], "single"
-    t1, t2 = getattr(args, "t1", None), getattr(args, "t2", None)
-    if t1 is not None and t2 is not None:
-        lo, hi = sorted((t1, t2))
-        freq = getattr(args, "freq", None)
-        sel = [s for s in list_steps(binary_dir, problem) if lo <= s <= hi]
-        if freq and freq > 0:
-            sel = [s for s in sel if s % freq == 0]
-        return sel, "range"
-    if t1 is not None:
-        return [int(t1)], "single"
-    if t2 is not None:
-        return [int(t2)], "single"
-    return None, None
+from ..locate import problem_name, find_plt, zone_index, resolve_steps as _resolve_steps
+from . import interp
+from . import probe as probe_util
 
 
 def _domain(args):
     return {k: getattr(args, k, None) for k in ("xmin", "xmax", "ymin", "ymax", "zmin", "zmax")}
 
 
-def _resolve_output(args, steps, mode, logger):
+def _resolve_output(args, steps, mode, logger, probing=False):
     """Resolve --output to (file_path, ext).
 
     Relative paths are placed under the case directory (cwd if no case). A name
     WITH a known extension (.csv/.vtu/.vtk/.pvd) is a single file; a name with NO
     extension becomes a directory holding the outputs, named after the directory
     (e.g. `--output wake` -> <case>/wake/wake.pvd + wake/wake_<step>.vtu).
+    Probe output is a table of point values, so only .csv is allowed there.
     """
     base = Path(args.case) if args.case else Path.cwd()
     raw = Path(args.output_file)
@@ -60,10 +49,17 @@ def _resolve_output(args, steps, mode, logger):
     ext = target.suffix.lower()
 
     if ext == "":
-        chosen = ".pvd" if (mode == "range" and len(steps) > 1) else ".vtu"
+        if probing:
+            chosen = ".csv"
+        else:
+            chosen = ".pvd" if (mode == "range" and len(steps) > 1) else ".vtu"
         target.mkdir(parents=True, exist_ok=True)
         logger.info(f"output directory: {target}")
         return target / (target.name + chosen), chosen
+    if probing and ext != ".csv":
+        logger.error(f"--probe writes point values, so '{ext}' is not supported. "
+                     "Use a .csv output (or drop --output to print a table).")
+        sys.exit(1)
     if ext in (".csv", ".vtu", ".vtk", ".pvd"):
         target.parent.mkdir(parents=True, exist_ok=True)
         return target, ext
@@ -72,34 +68,54 @@ def _resolve_output(args, steps, mode, logger):
     sys.exit(1)
 
 
-def _resolve_cols(plt, columns, requested, logger):
-    """Map requested variable names (case-insensitive) to file keys, or exit."""
+def _resolve_cols(plt, columns, requested, logger, zone=None):
+    """Map requested variable names (case-insensitive) to file keys, or exit.
+
+    `columns` holds only what this zone actually carries, so a variable that
+    exists in the file but is shared/passive here is reported as unavailable for
+    the zone rather than missing from the file.
+    """
     lower = {k.lower(): k for k in columns}
     cols = []
     for v in requested:
         key = v if v in columns else lower.get(v.lower())
         if key is None:
-            logger.error(f"Variable '{v}' not in file. Available: {', '.join(columns)}")
+            where = f"zone '{zone}'" if zone else "file"
+            logger.error(f"Variable '{v}' is not available in {where}. "
+                         f"Available: {', '.join(columns)}")
+            if v.lower() in {n.lower() for n in plt.vars}:
+                logger.error(f"  ('{v}' exists in the file but carries no data in this "
+                             "zone -- try the volume zone.)")
             sys.exit(1)
         cols.append(key)
     return cols
 
 
-def _load_step(plt_path, zone, logger, want_conn):
-    """Load a zone; return (plt, zi, pts, conn, pdata). Exits on bad zone/shared data."""
-    plt = PltFile(plt_path)
+def _zone_or_exit(plt, zone, plt_path, logger):
+    """Resolve a zone name to its index, or exit listing what the file holds."""
     zi = zone_index(plt, zone)
     if zi is None:
         logger.error(f"Zone '{zone}' not found in {Path(plt_path).name}. Available: "
                      f"{', '.join(z['name'] for z in plt.zones)}")
         sys.exit(1)
-    pts, conn, pdata, info = plt.load_zone(zi)
+    return zi
+
+
+def _load_step(plt_path, zone, logger, want_conn, nen=None):
+    """Load a zone; return (plt, zi, pts, conn, pdata). Exits on bad zone/shared data."""
+    plt = PltFile(plt_path)
+    zi = _zone_or_exit(plt, zone, plt_path, logger)
+    pts, conn, pdata, info = plt.load_zone(zi, nen=nen)
     if not pdata:
-        logger.error(f"Zone '{zone}' carries no own data (variables are shared). "
-                     f"Use the volume zone (e.g. {plt.zones[plt.first_volume_zone()]['name']}).")
+        logger.error(f"Zone '{zone}' has no variable data at all (every variable is passive).")
         sys.exit(1)
+    if info.get("shared_from"):
+        owners = ", ".join(plt.zones[j]["name"] for j in info["shared_from"])
+        logger.info(f"Zone '{zone}' shares its variables from {owners}; "
+                    f"extracting the {info['npts']:,} node(s) its own elements cover.")
     if want_conn and conn is None:
-        logger.error(f"Zone '{zone}' has no connectivity; mesh output needs a volume zone.")
+        logger.error(f"Zone '{zone}' has no connectivity; mesh output and --interpolate "
+                     "need a volume zone.")
         sys.exit(1)
     if info.get("truncated"):
         logger.warning(f"{Path(plt_path).name}: PLT connectivity incomplete; data still complete.")
@@ -116,13 +132,13 @@ def _node_mask(pts, domain):
     return mask
 
 
-def _write_mesh(plt_path, zone, requested, domain, out_vtu, logger):
+def _write_mesh(plt_path, zone, requested, domain, out_vtu, logger, nen=None):
     """Write one trimmed mesh (cells + selected non-coordinate vars) to out_vtu."""
     import meshio
-    plt, zi, pts, conn, pdata, info = _load_step(plt_path, zone, logger, want_conn=True)
+    plt, zi, pts, conn, pdata, info = _load_step(plt_path, zone, logger, want_conn=True, nen=nen)
     columns = {plt.vars[0]: pts[:, 0], plt.vars[1]: pts[:, 1], plt.vars[2]: pts[:, 2]}
     columns.update(pdata)
-    cols = _resolve_cols(plt, columns, requested, logger)
+    cols = _resolve_cols(plt, columns, requested, logger, zone)
     coord = set(plt.vars[:3])
     data = {c: columns[c] for c in cols if c not in coord}      # selected vars only
     if has_domain(domain):
@@ -143,28 +159,41 @@ def _write_pvd(path, entries):
     Path(path).write_text("\n".join(lines) + "\n")
 
 
+def _feedback(args, steps):
+    """(bar, spinner) switches -- rich allows only one live display at a time."""
+    on = progress_enabled(args, len(steps))
+    return on and len(steps) > 1, on and len(steps) == 1
+
+
 def _extract_csv(steps, mode, binary_dir, problem, args, requested, out_path, logger):
     domain = _domain(args)
     applied = {k: v for k, v in domain.items() if v is not None}
     cols = coord_names = None
     acc_pts, acc_ts = [], []
     acc_cols = None
-    for ts in steps:
-        plt_path = find_plt(binary_dir, problem, ts)
-        if not plt_path:
-            logger.warning(f"no PLT for timestep {ts}; skipping"); continue
-        plt, zi, pts, conn, pdata, info = _load_step(plt_path, args.zone, logger, want_conn=False)
-        columns = {plt.vars[0]: pts[:, 0], plt.vars[1]: pts[:, 1], plt.vars[2]: pts[:, 2]}
-        columns.update(pdata)
-        if cols is None:
-            coord_names = set(plt.vars[:3])
-            cols = _resolve_cols(plt, columns, requested, logger)
-            acc_cols = {c: [] for c in cols}
-        mask = _node_mask(pts, domain)
-        acc_pts.append(pts[mask])
-        acc_ts.append(np.full(int(mask.sum()), ts, dtype=np.int64))
-        for c in cols:
-            acc_cols[c].append(columns[c][mask])
+    bar_on, spin_on = _feedback(args, steps)
+    with step_bar(len(steps), "Extracting", enabled=bar_on) as bar:
+        for ts in steps:
+            bar.step(f"step {ts}")
+            plt_path = find_plt(binary_dir, problem, ts)
+            if not plt_path:
+                logger.warning(f"no PLT for timestep {ts}; skipping"); bar.advance(); continue
+            with spinner(f"Reading {Path(plt_path).name}", enabled=spin_on):
+                plt, zi, pts, conn, pdata, info = _load_step(plt_path, args.zone, logger,
+                                                             want_conn=False,
+                                                             nen=getattr(args, "nen", None))
+            columns = {plt.vars[0]: pts[:, 0], plt.vars[1]: pts[:, 1], plt.vars[2]: pts[:, 2]}
+            columns.update(pdata)
+            if cols is None:
+                coord_names = set(plt.vars[:3])
+                cols = _resolve_cols(plt, columns, requested, logger, args.zone)
+                acc_cols = {c: [] for c in cols}
+            mask = _node_mask(pts, domain)
+            acc_pts.append(pts[mask])
+            acc_ts.append(np.full(int(mask.sum()), ts, dtype=np.int64))
+            for c in cols:
+                acc_cols[c].append(columns[c][mask])
+            bar.advance()
     if not acc_pts:
         logger.error("Nothing extracted (no matching PLT files)."); sys.exit(1)
 
@@ -173,12 +202,193 @@ def _extract_csv(steps, mode, binary_dir, problem, args, requested, out_path, lo
     col_arrays = {c: np.concatenate(acc_cols[c]) for c in cols}
     if applied:
         logger.info(f"Subdomain filter {applied}: {len(ts_all):,} nodes kept")
+    # Many nodes per step and no coordinates means a row cannot be tied to a point.
+    if len(ts_all) > len(steps) and not (set(cols) & coord_names):
+        logger.warning(
+            f"These rows carry no coordinates, so a value cannot be tied to a point. "
+            f"Add {', '.join(sorted(coord_names))} to --variables, or write .vtu/.pvd "
+            "to keep the mesh with the data.")
     header = (["timestep"] if multi else []) + cols
     data_cols = ([ts_all] if multi else []) + [col_arrays[c] for c in cols]
     fmt = (["%d"] if multi else []) + ["%.8e"] * len(cols)
     np.savetxt(out_path, np.column_stack(data_cols), delimiter=",",
                header=",".join(header), comments="", fmt=fmt)
     logger.success(f"Wrote {len(ts_all):,} rows x {len(header)} cols -> {out_path}")
+
+
+def _probe_precheck(binary_dir, problem, steps, zone, points, axes, tol, logger):
+    """Reject probes outside the zone before reading any bulk data.
+
+    Uses the PLT header's per-variable min/max (no data load). Returns the bounds
+    when they were available, else None -- the caller then checks against the
+    first loaded step instead.
+    """
+    plt_path = next((p for p in (find_plt(binary_dir, problem, ts) for ts in steps) if p), None)
+    if not plt_path:
+        logger.error("Nothing to probe (no matching PLT files)."); sys.exit(1)
+    plt = PltFile(plt_path)
+    bounds = probe_util.header_bounds(plt, _zone_or_exit(plt, zone, plt_path, logger))
+    if bounds is None:
+        return None
+    probe_util.check_inside(points, axes, bounds[0], bounds[1], zone, logger, tol=tol)
+    logger.info(f"Domain bounds: {probe_util.format_bounds(*bounds)}")
+    return bounds
+
+
+def _probe_targets(pts, points, axes):
+    """Resolve every probe to a full 3D point and its nearest node.
+
+    Coordinates the user left out (a 2D `X,Y` probe) are filled in from the
+    nearest node, so an interpolation target is always a real point in space.
+    Returns (targets[P,3], nearest[(index, distance), ...]).
+    """
+    nearest = [probe_util.nearest_node(pts, point, ax) for point, ax in zip(points, axes)]
+    targets = np.array([[point[a] if a in ax else float(pts[idx][a]) for a in range(3)]
+                        for point, ax, (idx, _) in zip(points, axes, nearest)], dtype=float)
+    return targets, nearest
+
+
+def _check_connectivity(pts, conn, cell, data, targets, values, info, logger):
+    """Flag interpolation that violates its own element's value range (run once).
+
+    A linear interpolant cannot leave the range of the nodal values it is built
+    from, so a violation means the cells are not what the file claims -- almost
+    always a brick mesh labelled as tetrahedra.
+    """
+    try:
+        problems = interp.check_cells(pts, conn, cell, data, targets, values)
+    except Exception as exc:                    # a diagnostic must never break the run
+        logger.debug(f"connectivity check skipped: {exc}")
+        return
+    for problem in problems:
+        logger.warning(problem)
+    if problems:
+        logger.warning(f"Interpolation is reading {cell} cells with {info['npe']} nodes each; "
+                       "if that is wrong the values are too. Run `field info --checks`, and "
+                       "pass --nen 8 for an 8-node brick mesh written as tetrahedra.")
+
+
+def _probe_notes(points, axes, nearest, bounds, npts, steps, fell_back, nudged, logger):
+    """Warn about, and record for the file header, probes that moved or were not located."""
+    notes = []
+    spacing = probe_util.mean_spacing(bounds[0], bounds[1], npts)
+    for pi, count in sorted(fell_back.items()):
+        # The bounding-box check already passed, so a probe found in no element is
+        # inside the box yet outside the mesh: it sits in a hole -- typically inside
+        # a body the mesh is built around.
+        dist = nearest[pi - 1][1]
+        ratio = f" ({dist / spacing:.0f}x the mean node spacing)" if spacing else ""
+        note = (f"probe {pi} {probe_util.label(points[pi - 1], axes[pi - 1])}: inside the "
+                f"zone's bounds but in no element, at {count} of {len(steps)} step(s) -- the "
+                "point is in a hole of the mesh (inside the structure, or on a boundary the "
+                f"inward nudge could not resolve). Nearest node is {dist:g} away{ratio}; its "
+                "value was used instead.")
+        logger.warning(note)
+        notes.append(note)
+    for pi, moved in sorted(nudged.items()):
+        note = (f"probe {pi} {probe_util.label(points[pi - 1], axes[pi - 1])}: on the mesh "
+                f"boundary; moved up to {moved:g} inward to land inside an element "
+                "(those rows are marked 'nudged')")
+        logger.warning(note)
+        notes.append(note)
+    return notes
+
+
+def _extract_probe(steps, mode, binary_dir, problem, args, requested, out_path, logger):
+    """Sample the requested variables at fixed points, one row per probe per step."""
+    points, axes = probe_util.parse_probes(args.probe, logger)
+    if has_domain(_domain(args)):
+        logger.warning("--xmin/--xmax/... are ignored with --probe (probes sample points)")
+    interpolating = bool(getattr(args, "interpolate", False))
+    if interpolating and not interp.available():
+        logger.error("--interpolate needs pyvista (pip install pyvista). "
+                     "Drop the flag to sample the nearest node instead.")
+        sys.exit(1)
+
+    tol = getattr(args, "probe_tol", None) or 0.0
+    nen = getattr(args, "nen", None)
+    bounds = _probe_precheck(binary_dir, problem, steps, args.zone, points, axes, tol, logger)
+    multi = mode == "range"
+    cols, rows = None, []
+    warned, fell_back, nudged, checked = set(), {}, {}, False
+    bar_on, spin_on = _feedback(args, steps)
+    with step_bar(len(steps), "Probing", enabled=bar_on) as bar:
+        for ts in steps:
+            bar.step(f"step {ts}")
+            plt_path = find_plt(binary_dir, problem, ts)
+            if not plt_path:
+                logger.warning(f"no PLT for timestep {ts}; skipping"); bar.advance(); continue
+            with spinner(f"Reading {Path(plt_path).name}", enabled=spin_on):
+                plt, zi, pts, conn, pdata, info = _load_step(plt_path, args.zone, logger,
+                                                             want_conn=interpolating, nen=nen)
+            columns = {plt.vars[0]: pts[:, 0], plt.vars[1]: pts[:, 1], plt.vars[2]: pts[:, 2]}
+            columns.update(pdata)
+            if cols is None:
+                cols = _resolve_cols(plt, columns, requested, logger, args.zone)
+            if bounds is None:                      # header carried no coordinate range
+                bounds = probe_util.point_bounds(pts)
+                probe_util.check_inside(points, axes, bounds[0], bounds[1], args.zone,
+                                        logger, tol=tol)
+                logger.info(f"Domain bounds: {probe_util.format_bounds(*bounds)}")
+
+            targets, nearest = _probe_targets(pts, points, axes)
+            values, source = None, None
+            if interpolating:
+                data = {c: columns[c] for c in cols}
+                spacing = probe_util.mean_spacing(bounds[0], bounds[1], len(pts)) or 0.0
+                pad = max(4 * spacing, 4 * max(d for _, d in nearest), 1e-12)
+                cell = cell_name(info["npe"], info["ztype"])
+                try:
+                    values, source, moved = interp.sample(pts, conn, cell, data, targets, pad,
+                                                          [i for i, _ in nearest])
+                except ValueError as exc:
+                    logger.error(f"--interpolate: {exc} (npe={info['npe']}). "
+                                 "Drop the flag to sample the nearest node.")
+                    sys.exit(1)
+                for pi, (src, dx) in enumerate(zip(source, moved), start=1):
+                    if src == interp.NUDGED:
+                        nudged[pi] = max(nudged.get(pi, 0.0), float(dx))
+                if not checked and any(s == interp.FOUND for s in source):
+                    _check_connectivity(pts, conn, cell, data, targets, values, info, logger)
+                    checked = True
+
+            for pi, (point, ax) in enumerate(zip(points, axes), start=1):
+                idx, dist = nearest[pi - 1]
+                found = interpolating and source[pi - 1] != interp.MISSING
+                if found:
+                    sampled = [float(values[c][pi - 1]) for c in cols]
+                else:
+                    sampled = [float(columns[c][idx]) for c in cols]
+                if interpolating and not found:
+                    fell_back[pi] = fell_back.get(pi, 0) + 1
+                elif not interpolating:
+                    far = probe_util.far_probe_warning(dist, bounds[0], bounds[1], len(pts))
+                    if far and pi not in warned:
+                        logger.warning(f"Probe {pi} {probe_util.label(point, ax)}: {far}")
+                        warned.add(pi)
+                if interpolating:
+                    extra = [source[pi - 1] or "node"]
+                else:
+                    extra = [int(idx), float(pts[idx][0]), float(pts[idx][1]),
+                             float(pts[idx][2]), dist]
+                rows.append(([ts] if multi else []) + [pi] + extra + sampled)
+            bar.advance()
+    if not rows:
+        logger.error("Nothing probed (no matching PLT files)."); sys.exit(1)
+
+    notes = _probe_notes(points, axes, nearest, bounds, len(pts), steps,
+                         fell_back, nudged, logger)
+    method = ("linear interpolation inside the containing cell"
+              if interpolating else "nearest node")
+    comments = probe_util.info_block(points, axes, Path(args.case).name, args.zone,
+                                     cols, method, steps, notes)
+
+    header = probe_util.build_header(cols, multi, interpolating)
+    if out_path is None or len(rows) <= probe_util.TABLE_ROWS:
+        probe_util.print_table(header, rows, comments, truncate=out_path is None)
+    if out_path:
+        probe_util.write_csv(out_path, header, rows, comments)
+        print(f"Wrote {len(rows):,} probe row(s) x {len(header)} cols -> {out_path}")
 
 
 def execute_extract(args):
@@ -193,7 +403,14 @@ def execute_extract(args):
     for req in ("variables", "zone"):
         if not getattr(args, req, None):
             logger.error(f"--{req} flag is required"); print(); print_extract_help(); sys.exit(1)
-    if not getattr(args, "output_file", None):
+    probing = bool(getattr(args, "probe", None))
+    wants_file = bool(getattr(args, "output_file", None))
+    if getattr(args, "interpolate", False) and not probing:
+        logger.error("--interpolate applies to --probe sampling; "
+                     "give a probe point (e.g. --probe 0,0,3)")
+        sys.exit(1)
+    # Probes print a table when no file is asked for; every other mode needs a target.
+    if not wants_file and not probing:
         logger.error("--output is required (e.g. --output results.csv / .vtu / .pvd)")
         print(); print_extract_help(); sys.exit(1)
 
@@ -213,8 +430,13 @@ def execute_extract(args):
         sys.exit(1)
 
     requested = [v.strip() for v in args.variables.split(",")]
-    out_path, ext = _resolve_output(args, steps, mode, logger)
+    out_path, ext = (_resolve_output(args, steps, mode, logger, probing) if wants_file
+                     else (None, ".csv"))
     domain = _domain(args)
+
+    if probing:
+        _extract_probe(steps, mode, binary_dir, problem, args, requested, out_path, logger)
+        return
 
     if ext == ".csv":
         _extract_csv(steps, mode, binary_dir, problem, args, requested, out_path, logger)
@@ -228,21 +450,30 @@ def execute_extract(args):
         plt_path = find_plt(binary_dir, problem, steps[0])
         if not plt_path:
             logger.error(f"No PLT for timestep {steps[0]}"); sys.exit(1)
-        n, c, arrs = _write_mesh(plt_path, args.zone, requested, domain, str(out_path), logger)
+        _, spin_on = _feedback(args, steps)
+        with spinner(f"Extracting {Path(plt_path).name}", enabled=spin_on):
+            n, c, arrs = _write_mesh(plt_path, args.zone, requested, domain, str(out_path),
+                                     logger, getattr(args, "nen", None))
         logger.success(f"Wrote mesh {n:,} pts / {c:,} cells, vars {arrs} -> {out_path}")
         return
 
     if ext == ".pvd":
         stem = out_path.with_suffix("")
         entries = []
-        for ts in steps:
-            plt_path = find_plt(binary_dir, problem, ts)
-            if not plt_path:
-                logger.warning(f"no PLT for timestep {ts}; skipping"); continue
-            vtu = f"{stem}_{ts}.vtu"
-            n, c, arrs = _write_mesh(plt_path, args.zone, requested, domain, vtu, logger)
-            logger.info(f"  step {ts}: {n:,} pts / {c:,} cells -> {os.path.basename(vtu)}")
-            entries.append((ts, os.path.basename(vtu)))
+        bar_on, spin_on = _feedback(args, steps)
+        with step_bar(len(steps), "Writing meshes", enabled=bar_on) as bar:
+            for ts in steps:
+                bar.step(f"step {ts}")
+                plt_path = find_plt(binary_dir, problem, ts)
+                if not plt_path:
+                    logger.warning(f"no PLT for timestep {ts}; skipping"); bar.advance(); continue
+                vtu = f"{stem}_{ts}.vtu"
+                with spinner(f"Extracting {Path(plt_path).name}", enabled=spin_on):
+                    n, c, arrs = _write_mesh(plt_path, args.zone, requested, domain, vtu,
+                                             logger, getattr(args, "nen", None))
+                logger.info(f"  step {ts}: {n:,} pts / {c:,} cells -> {os.path.basename(vtu)}")
+                entries.append((ts, os.path.basename(vtu)))
+                bar.advance()
         if not entries:
             logger.error("Nothing written (no matching PLT files)."); sys.exit(1)
         _write_pvd(out_path, entries)

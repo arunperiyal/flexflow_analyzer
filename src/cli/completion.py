@@ -160,7 +160,7 @@ _flexflow_completions() {
             local subcommand=""
             for (( i=2; i < cword; i++ )); do
                 case "${words[i]}" in
-                    info|extract|convert|iso|check)
+                    info|extract|compute|convert|iso|check)
                         subcommand="${words[i]}"
                         break
                         ;;
@@ -170,7 +170,7 @@ _flexflow_completions() {
             if [[ -z "$subcommand" ]]; then
                 # No subcommand yet
                 local flags="-v --verbose -h --help --examples"
-                COMPREPLY=( $(compgen -W "info extract convert iso check $flags" -- "$cur") )
+                COMPREPLY=( $(compgen -W "info extract compute convert iso check $flags" -- "$cur") )
             else
                 case "$subcommand" in
                     info)
@@ -182,12 +182,23 @@ _flexflow_completions() {
                         fi
                         ;;
                     extract)
-                        local flags="--variables --zone --timestep --t1 --t2 --freq --output --output-file --xmin --xmax --ymin --ymax --zmin --zmax -v --verbose -h --help --examples"
+                        local flags="--variables --zone --timestep --t1 --t2 --freq --output --output-file --probe --probe-tol --interpolate --nen --no-progress --xmin --xmax --ymin --ymax --zmin --zmax -v --verbose -h --help --examples"
                         if [[ "$cur" == -* ]]; then
                             COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
                         else
                             case "$prev" in
                                 --output|--output-file) _filedir ;;
+                                *) _flexflow_complete_cases ;;
+                            esac
+                        fi
+                        ;;
+                    compute)
+                        local flags="force --zone --timestep --t1 --t2 --freq --output --pressure --nen --no-progress -v --verbose -h --help"
+                        if [[ "$cur" == -* ]]; then
+                            COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
+                        else
+                            case "$prev" in
+                                --output) _filedir ;;
                                 *) _flexflow_complete_cases ;;
                             esac
                         fi
@@ -688,6 +699,11 @@ _flexflow() {
                                         '--zone[Zone name]:zone:' \\
                                         '--timestep[Timestep to extract]:step:' \\
                                         '--output-file[Output file]:file:_files' \\
+                                        '*--probe[Sample at point X,Y,Z (nearest node)]:probe:' \\
+                                        '--probe-tol[Inside-domain slack for probes]:tol:' \\
+                                        '--interpolate[Interpolate in the containing cell]' \\
+                                        '--nen[Force nodes-per-element]:nen:' \\
+                                        '--no-progress[Do not draw the progress bar]' \\
                                         '--xmin[Minimum X coordinate]:xmin:' \\
                                         '--xmax[Maximum X coordinate]:xmax:' \\
                                         '--ymin[Minimum Y coordinate]:ymin:' \\

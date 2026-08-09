@@ -43,6 +43,29 @@ def zone_index(plt, zone_name):
     return None
 
 
+def resolve_steps(args, binary_dir, problem):
+    """Decide which timesteps a command should act on. Returns (steps, mode).
+
+    (None, None) means nothing was asked for; an empty list means the range held
+    no PLT files. Shared by `field extract` and `field compute`.
+    """
+    if getattr(args, "timestep", None) is not None:
+        return [args.timestep], "single"
+    t1, t2 = getattr(args, "t1", None), getattr(args, "t2", None)
+    if t1 is not None and t2 is not None:
+        lo, hi = sorted((t1, t2))
+        freq = getattr(args, "freq", None)
+        sel = [s for s in list_steps(binary_dir, problem) if lo <= s <= hi]
+        if freq and freq > 0:
+            sel = [s for s in sel if s % freq == 0]
+        return sel, "range"
+    if t1 is not None:
+        return [int(t1)], "single"
+    if t2 is not None:
+        return [int(t2)], "single"
+    return None, None
+
+
 def list_steps(binary_dir, problem=None):
     """Return the sorted list of timestep numbers of the PLT files present."""
     binary_dir = Path(binary_dir)

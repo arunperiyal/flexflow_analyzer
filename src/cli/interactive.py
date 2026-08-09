@@ -293,12 +293,29 @@ class FlexFlowCompleter(Completer):
             '--t2':          'End step of a range (consolidated output)',
             '--freq':        'With --t1/--t2: keep steps that are multiples of FREQ',
             '--output':      '(required) Output (.csv / .vtu / .vtk mesh / .pvd series)',
+            '--probe':       'Sample at a point X,Y,Z (nearest node); repeatable',
+            '--interpolate': 'With --probe: interpolate in the containing cell',
+            '--nen':         'Force nodes-per-element (e.g. 8 for bricks)',
+            '--probe-tol':   'Slack on the inside-domain check for probes',
+            '--no-progress': 'Do not draw the progress bar',
             '--xmin': 'X minimum bound',
             '--xmax': 'X maximum bound',
             '--ymin': 'Y minimum bound',
             '--ymax': 'Y maximum bound',
             '--zmin': 'Z minimum bound',
             '--zmax': 'Z maximum bound',
+        },
+        ('field', 'compute'): {
+            **_COMMON_FLAGS,
+            '--zone':      'Surface zone to integrate over (e.g. cyl)',
+            '--timestep':  'Single timestep',
+            '--t1':        'Start step (alone: that step; with --t2: range)',
+            '--t2':        'End step of a range',
+            '--freq':      'With --t1/--t2: keep steps that are multiples of FREQ',
+            '--output':    'Output .csv (per element) / .vtu / .pvd; omit for totals',
+            '--pressure':  'Pressure variable name (default: Pressure)',
+            '--nen':       'Force nodes-per-element on the volume zone',
+            '--no-progress': 'Do not draw the progress bar',
         },
         ('field', 'convert'): {
             **_COMMON_FLAGS,
@@ -4056,7 +4073,7 @@ class InteractiveShell:
         case_commands = {
             'case': {'show': 2, 'run': 2, 'organise': 2, 'check': 2, 'status': 2, 'upload': 2, 'download': 2},  # case show <case>
             'data': {'show': 2, 'stats': 2},  # data show <case>
-            'field': {'info': 2, 'extract': 2},  # field info <case>
+            'field': {'info': 2, 'extract': 2, 'compute': 3},  # field compute <quantity> <case>
             'run': {'check': 2, 'pre': 2, 'main': 2, 'post': 2},  # run check <case>
             'template': {'script': 3},  # template script <type> <case>
             'check': None,  # check <file> - doesn't use case
@@ -4103,12 +4120,12 @@ class InteractiveShell:
         context_added = []
 
         # field var/zone -> value flags (--variables / --zone).
-        # zone applies to extract/convert/iso; var to extract only.
+        # zone applies to extract/compute/convert/iso; var to extract only.
         # (field info's --variables/--zones are display toggles, so skip it.)
         if cmd == 'field' and len(args) >= 2:
             subcmd = args[1]
             if (self._current_zone is not None and '--zone' not in args
-                    and subcmd in ('extract', 'convert', 'iso')):
+                    and subcmd in ('extract', 'compute', 'convert', 'iso')):
                 args.append('--zone')
                 args.append(self._current_zone)
                 context_added.append(f"zone: {self._current_zone}")
@@ -4117,9 +4134,9 @@ class InteractiveShell:
                 args.append('--variables')
                 args.append(self._current_var)
                 context_added.append(f"var: {self._current_var}")
-            # t1/t2 select the timestep(s): extract takes --t1/--t2 (single or
-            # range); convert/iso take a single --timestep from t1.
-            if subcmd == 'extract':
+            # t1/t2 select the timestep(s): extract and compute take --t1/--t2
+            # (single or range); convert/iso take a single --timestep from t1.
+            if subcmd in ('extract', 'compute'):
                 if self._current_t1 is not None and '--t1' not in args:
                     args.append('--t1'); args.append(str(self._current_t1))
                     context_added.append(f"t1: {self._current_t1}")

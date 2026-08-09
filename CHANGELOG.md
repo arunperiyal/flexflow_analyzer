@@ -48,6 +48,112 @@
 
 ### ✨ New Features
 
+#### `field compute force` — per-element pressure force on a surface zone
+- New **`field compute <quantity> <case> --zone ZONE`** subcommand. `force` writes,
+  for every surface element and every selected timestep, its centroid, **area**,
+  **outward unit normal**, face pressure and the pressure force **−p n dA**:
+  `timestep, element, x, y, z, area, nx, ny, nz, <Pressure>, Fx, Fy, Fz`.
+  Without `--output` it prints the integrated totals per timestep instead.
+- Areas and normals come from the **mesh itself**, so a grooved or otherwise
+  non-circular section needs no special handling — no assumed cross-section, no
+  `πD·dx` per-node area, no equal-chunk station binning. On the bare-riser case
+  this removes a **2.1% bias**: allocating `πD·dx` across 49 stations covers 12.25
+  units of span instead of 12.0, so the ends are double-counted.
+- Normals are oriented **against the volume zone**: a body is a hole in the mesh,
+  so each surface element belongs to exactly one volume cell, and that cell is on
+  the fluid side. Verified unanimous over all 6,144 faces of the riser. Elements
+  with no adjacent cell fall back to orienting the zone by its enclosed volume,
+  and that is reported rather than assumed.
+- The surface-to-volume mapping is built **once** and reused, since the element
+  list does not change between timesteps (checked: byte-identical connectivity
+  across `riser.100`…`riser.500`). If it ever does change, the command says so and
+  rebuilds instead of silently trusting it.
+- A bare **`--output NAME`** writes a directory under the case holding one
+  `elements_<step>.csv` per timestep plus `summary.csv` (the per-timestep totals),
+  instead of one combined table — the per-step split that post-processing scripts
+  were doing by hand, and the part of that work which is general to any structure.
+  Each file is written as its step is computed, so a long run is never held in
+  memory. An extension still selects a single file: `.csv`, `.vtu`/`.vtk`, `.pvd`.
+- **No Cd/Cl, no sectional binning, no reference length** — those need a flow
+  direction and a reference area that belong to the user, and each is a sum over
+  these rows. `.vtu`/`.pvd` output carries the values as **cell data** for viewing
+  the force distribution on the deflecting surface in ParaView.
+- Deliberate limitation, stated in the help and the CSV header: this is the
+  **pressure (form) contribution only**. Viscous skin friction needs wall-normal
+  velocity gradients from the volume mesh and is not included.
+- New `src/plt/surface.py` (element geometry, face→cell matching, orientation) and
+  `PltFile.load_connectivity()`, which reads a zone's elements without touching
+  variable data.
+
+#### Shared-variable (surface) zones — no Tecplot needed for surface data
+- The PLT reader now **follows Tecplot variable sharing**. A zone that stores no
+  data of its own — every variable flagged as shared from another zone, which is
+  how FlexFlow writes a cylinder-surface zone riding on the volume zone's node
+  array — is read by pulling each variable from the zone that owns it. Nothing has
+  to be declared: the share is recorded per variable in the file's own data-section
+  header, so `PltFile.variable_owner()` / `shared_from()` just read it.
+- Such a zone is **compacted to the nodes its own elements cover** and its
+  connectivity renumbered, so `field extract --zone cyl` yields the surface nodes
+  (6,272 for the bare-riser case) rather than the whole 1.8M-node volume. This
+  works for CSV, probes, and `.vtu` (a quad surface mesh for ParaView).
+  `field extract --zone cyl` previously failed outright with *"carries no own data
+  (variables are shared)"*; that error is now reserved for a zone whose variables
+  are genuinely passive.
+- **`field info --zones`** marks a zone that stores nothing of its own and names
+  the zone it borrows from, so the arrangement is discoverable.
+- A CSV extraction with **many nodes per timestep and no coordinate variable** now
+  warns: without X/Y/Z a row cannot be tied to a point. Coordinates are still only
+  written when asked for (`--variables X,Y,Z,Pressure`), and `.pvd` remains the
+  option that keeps geometry and connectivity with the values.
+
+#### `field extract --probe` — point probes and progress feedback
+- New **`--probe X,Y,Z`** on `field extract`: instead of a box, sample the
+  selected variables at fixed points — the usual way to pull a time signal
+  (velocity in the wake, pressure at a gauge point) out of a run. Repeat the flag
+  (or separate points with `;`) for several probes; give `X,Y` only on a 2D mesh
+  and Z is ignored when matching.
+- Each probe is **validated before any bulk data is read**: the coordinates are
+  checked against the zone's bounds taken from the PLT header (the error names
+  the offending axis and prints the domain box), and the requested variables are
+  checked against the zone, which now says *"not available in zone 'X'"* and
+  points at the volume zone when the variable exists but carries no data there.
+  **`--probe-tol TOL`** allows slack for a probe sitting exactly on a boundary.
+- Values come from the **nearest mesh node** by default; the output carries that
+  node's index, coordinates and its distance from the probe, so what was sampled
+  is visible. A warning fires when the nearest node is much farther than the mean
+  node spacing (probe in a hole of the mesh). Points are located again every
+  timestep, so moving/deforming meshes are followed correctly.
+- **`--interpolate`** reports the value at the point itself instead, linearly
+  interpolated inside the element containing it (VTK's probe filter via pyvista —
+  the same as ParaView's *Probe Location*). Only a small box of mesh around the
+  probes is handed to VTK, which keeps a time series 5–9x quicker than probing the
+  whole zone. Needs connectivity, so a volume zone.
+- Interpolated rows carry **`source`** in place of the nearest-node columns,
+  saying where each value actually came from: `cell` (inside the containing
+  element), `nudged`, or `node`. A probe meant to sit on a wall lands a hair
+  *outside* the faceted boundary, where VTK finds no element at all and none of
+  its tolerance settings help; such a probe is now stepped a fraction of a cell
+  toward the interior until it lands inside one, and the displacement is
+  reported rather than silently applied. A probe in a genuine hole of the mesh
+  still falls back to its nearest node, and the warning now says so plainly —
+  inside the bounds but in no element means inside the structure — with the
+  nearest-node distance in units of mean node spacing.
+- `--interpolate` **checks itself once per run**: a linear interpolant cannot
+  leave the range of its own element's nodal values, so a violation means the
+  cells are not what the file claims. New **`--nen`** on `extract` (as on
+  `convert`) forces nodes-per-element for a brick mesh written as tetrahedra;
+  it applies to the mesh outputs too.
+- Probe output is a table of point values: `--output NAME.csv`, or **no
+  `--output` at all** to print it on screen (the only mode where `--output` is
+  optional). The probe coordinates are not repeated on every row — the case,
+  zone, variables, sampling method and probe list head the file as `#` comment
+  lines (`pandas.read_csv(path, comment='#')`), and the rows carry a plain probe
+  number.
+- **Progress bar** across timesteps for every `field extract` mode (csv, `.pvd`
+  series, probes), and a spinner for a single large step, so a long extraction
+  visibly makes headway. Skipped when output is redirected, with `--no-progress`,
+  and with `--verbose` (which prints per-step lines instead).
+
 #### `case download` — fetch case directories from a remote
 - New **`case download [case] --from REMOTE`** that pulls case directories
   (default `othd_files,oisd_files,binary`, override with `--dir`) from a
