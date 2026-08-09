@@ -19,6 +19,13 @@ Build small derived files from a case's own inputs.
                        .def that names a file its records are indexed by.
                        Give NAME to do just one, matched against the block
                        name or the node/point-set name.
+    {Colors.YELLOW}--probe-type TYPE{Colors.RESET}  Declare how the probe set should be read:
+                       {Colors.YELLOW}point{Colors.RESET} independent locations, nothing shared between them
+                       {Colors.YELLOW}line{Colors.RESET}  ordered samples along a curve -- parameterise by arc length
+                       {Colors.YELLOW}surface{Colors.RESET} a patch -- parameterise by two coordinates
+                       {Colors.YELLOW}cloud{Colors.RESET} scattered, no structure to exploit
+    {Colors.YELLOW}--closed{Colors.RESET}           With --probe-type line: the line joins up (a ring),
+                       which needs different arc-length handling from an open line
     {Colors.YELLOW}--verbose, -v{Colors.RESET}      Show which files were read
     {Colors.YELLOW}--help, -h{Colors.RESET}         Show this help message
 
@@ -82,6 +89,21 @@ Build small derived files from a case's own inputs.
     If an input file is {Colors.BOLD}newer{Colors.RESET} than the case's othd files, those were written
     without it and their ids are lower than the ones predicted here. That is
     reported and noted in the map. Read the ids from the othd and prefer them.
+
+{Colors.BOLD}PROBE GEOMETRY:{Colors.RESET}
+
+    --probe-type is {Colors.BOLD}declared, never derived{Colors.RESET}, and the map says so. It cannot
+    be worked out from the coordinates: a dense square grid snakes into a path
+    with perfectly uniform steps, indistinguishable from a curve, and rank alone
+    does not separate a ring from a grid. Nor is it in the .def or the .nbc,
+    which carry node ids and nothing about shape. Three collinear points are
+    either a coarse line or three independent probes, and only you know which.
+
+    It applies to whichever maps the run writes, so use {Colors.YELLOW}--othd-map NAME{Colors.RESET} to
+    give different sets different types:
+
+        case write BR0SG0U1P0 --othd-map cyl_nodes --probe-type line
+        case write BR0SG0U1P0 --othd-map probe_dat --probe-type point
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
 

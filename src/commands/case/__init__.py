@@ -160,6 +160,17 @@ class CaseCommand(BaseCommand):
                                   const=True, default=False, metavar='NAME',
                                   help='Write a node map per nodal outputTimeHistory block; '
                                        'NAME selects one by block or node-set name')
+        # Validated in the command, not with choices=: argparse's rejection surfaces
+        # here as "Unknown subcommand", which points at the wrong thing entirely.
+        write_parser.add_argument('--probe-type', dest='probe_type', type=str,
+                                  metavar='TYPE',
+                                  help='Declare how the probe set should be read: '
+                                       'point, line, surface or cloud. Recorded in the '
+                                       'map; it cannot be derived from the coordinates')
+        write_parser.add_argument('--closed', action='store_true',
+                                  help='With --probe-type line: the line joins up '
+                                       '(a ring), which needs different arc-length '
+                                       'handling from an open line')
         write_parser.add_argument('-v', '--verbose', action='store_true',
                                   help='Enable verbose output')
         write_parser.add_argument('-h', '--help', action='store_true',

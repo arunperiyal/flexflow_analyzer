@@ -84,7 +84,7 @@ _flexflow_completions() {
                         fi
                         ;;
                     write)
-                        local flags="--othd-map -v --verbose -h --help"
+                        local flags="--othd-map --probe-type --closed -v --verbose -h --help"
                         if [[ "$cur" == -* ]]; then
                             COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
                         else

@@ -216,7 +216,9 @@ class FlexFlowCompleter(Completer):
         },
         ('case', 'write'): {
             **_COMMON_FLAGS,
-            '--othd-map': 'Write node maps for nodal outputTimeHistory blocks',
+            '--othd-map':   'Write node maps for outputTimeHistory blocks',
+            '--probe-type': 'Declare the probe geometry: point|line|surface|cloud',
+            '--closed':     'With --probe-type line: the line joins up (a ring)',
         },
         ('case', 'report'): {
             **_COMMON_FLAGS,

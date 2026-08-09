@@ -28,6 +28,14 @@ from ...case_iteration import is_wildcard_case, load_cases_from_directory
 MAP_HEADER = ["row", "node", "x", "y", "z"]
 POINT_MAP_HEADER = ["row", "x", "y", "z"]
 
+# How a reader should parameterise a probe set: arc length along a line, two
+# coordinates on a surface, nothing shared between independent points. It cannot
+# be derived from the coordinates -- a dense square grid snakes into a path with
+# perfectly uniform steps, indistinguishable from a curve, and rank alone does not
+# separate a ring from a grid. Nor is it in the .def or the .nbc, which carry only
+# node ids and whether the block is nodal or coordinates. So it is declared.
+PROBE_TYPES = ("point", "line", "surface", "cloud")
+
 
 class WriteError(Exception):
     """A case could not be mapped. `skip` marks the harmless kind: nothing to do."""
@@ -221,7 +229,7 @@ def _read_coordinates(crd_path, wanted):
 
 
 def _map_header(block, source, source_count, case_name, problem, provenance, note,
-                oth_id=None, skipped_before=0, stale=()):
+                oth_id=None, skipped_before=0, stale=(), probe=None, closed=None):
     """The '#' block every map carries, saying where its rows came from.
 
     `othId` says which output within the othd this map describes. It is predicted
@@ -244,6 +252,12 @@ def _map_header(block, source, source_count, case_name, problem, provenance, not
             lines.append(
                 "# WARNING: " + ", ".join(stale) + " is newer than this case's othd "
                 "files, which were written without it -- ids there will be lower")
+    if probe:
+        lines.append(f"# probe: {probe}")
+        if closed is not None:
+            lines.append(f"# closed: {'yes' if closed else 'no'}")
+        lines.append("# probe geometry declared with --probe-type; it is not derived "
+                     "from the coordinates, which cannot distinguish these")
     lines += [
         f"# {provenance}: {source} ({source_count})",
         "# row = index of the record within each output block of the othd file",
@@ -253,13 +267,13 @@ def _map_header(block, source, source_count, case_name, problem, provenance, not
 
 
 def _write_node_map(path, block, node_file, crd_name, ids, coords, case_name, problem,
-                    oth_id=None, skipped_before=0, stale=()):
+                    oth_id=None, skipped_before=0, stale=(), probe=None, closed=None):
     """A nodal block's map: othd row -> node id -> undeformed coordinates."""
     lines = _map_header(
         block, node_file, len(ids), case_name, problem,
         "nodes", "coordinates are undeformed (from " + crd_name
         + "): add the othd displacement for the moved position",
-        oth_id, skipped_before, stale)
+        oth_id, skipped_before, stale, probe, closed)
     lines.append(",".join(MAP_HEADER))
     for row, node in enumerate(ids):
         x, y, z = coords[node]
@@ -268,7 +282,7 @@ def _write_node_map(path, block, node_file, crd_name, ids, coords, case_name, pr
 
 
 def _write_point_map(path, block, point_file, points, case_name, problem,
-                     oth_id=None, skipped_before=0, stale=()):
+                     oth_id=None, skipped_before=0, stale=(), probe=None, closed=None):
     """A coordinates block's map: othd row -> the point that was asked for.
 
     No mesh lookup: the points are in the probe file itself. There is no node
@@ -277,14 +291,15 @@ def _write_point_map(path, block, point_file, points, case_name, problem,
     lines = _map_header(
         block, point_file, len(points), case_name, problem, "coordinates",
         "coordinates are the points the block asked for, taken from " + point_file,
-        oth_id, skipped_before, stale)
+        oth_id, skipped_before, stale, probe, closed)
     lines.append(",".join(POINT_MAP_HEADER))
     for row, (x, y, z) in enumerate(points):
         lines.append(f"{row},{x},{y},{z}")
     Path(path).write_text("\n".join(lines) + "\n")
 
 
-def write_case_maps(case_dir, wanted, logger, show_progress=False):
+def write_case_maps(case_dir, wanted, logger, show_progress=False,
+                    probe=None, closed=None):
     """Build every requested othd map for one case.
 
     Returns {'written': [(path, rows), ...], 'crd': name, 'crd_mb': size}.
@@ -395,15 +410,16 @@ def write_case_maps(case_dir, wanted, logger, show_progress=False):
         out = case_dir / f"othd.{_set_name(source, problem)}.map"
         if key == "nodes":
             _write_node_map(out, block, source, crd_name, rows, coords,
-                            case_dir.name, problem, oth_id, skipped_before, stale)
+                            case_dir.name, problem, oth_id, skipped_before, stale,
+                            probe, closed)
         else:
             _write_point_map(out, block, source, rows, case_dir.name, problem,
-                             oth_id, skipped_before, stale)
+                             oth_id, skipped_before, stale, probe, closed)
         written.append((out, len(rows)))
     return {"written": written, "crd": crd_name, "crd_mb": crd_mb}
 
 
-def _write_all_cases(args, wanted, logger):
+def _write_all_cases(args, wanted, logger, probe=None, closed=None):
     """Run over every case in the .cases registry, stepping over the ones that fail."""
     from rich.console import Console
 
@@ -424,7 +440,8 @@ def _write_all_cases(args, wanted, logger):
             continue
         try:
             result = write_case_maps(path, wanted, logger,
-                                     show_progress=progress_enabled(args, 1))
+                                     show_progress=progress_enabled(args, 1),
+                                     probe=probe, closed=closed)
         except WriteError as exc:
             (skipped if exc.skip else failed).append((name, str(exc)))
             mark = "[dim]-[/dim]" if exc.skip else "[yellow]![/yellow]"
@@ -461,13 +478,26 @@ def execute_write(args):
         print_write_help(); sys.exit(1)
     wanted = selector if isinstance(selector, str) else None
 
+    probe = getattr(args, "probe_type", None)
+    if probe and probe not in PROBE_TYPES:
+        logger.error(f"Unknown --probe-type '{probe}'. Choose one of: "
+                     f"{', '.join(PROBE_TYPES)}")
+        sys.exit(1)
+    closed = getattr(args, "closed", False)
+    if closed and probe != "line":
+        logger.error("--closed describes whether a line joins up, so it needs "
+                     "--probe-type line.")
+        sys.exit(1)
+    closed = closed if probe == "line" else None
+
     if is_wildcard_case(args.case):
-        _write_all_cases(args, wanted, logger)
+        _write_all_cases(args, wanted, logger, probe, closed)
         return
 
     try:
         result = write_case_maps(args.case, wanted, logger,
-                                 show_progress=progress_enabled(args, 1))
+                                 show_progress=progress_enabled(args, 1),
+                                 probe=probe, closed=closed)
     except WriteError as exc:
         logger.error(str(exc))
         sys.exit(1)

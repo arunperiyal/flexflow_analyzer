@@ -85,7 +85,8 @@ def case(tmp_path):
 
 
 def make_args(case, **kw):
-    defaults = dict(case=str(case), othd_map=True, verbose=False, help=False)
+    defaults = dict(case=str(case), othd_map=True, verbose=False, help=False,
+                    probe_type=None, closed=False)
     defaults.update(kw)
     return argparse.Namespace(**defaults)
 
@@ -292,6 +293,55 @@ def registry(tmp_path, monkeypatch):
     (tmp_path / ".cases").write_text(json.dumps(entries))
     monkeypatch.chdir(tmp_path)                  # .cases is read from the cwd
     return tmp_path
+
+
+class TestProbeDeclaration:
+    """Probe geometry is declared, never derived -- the coordinates cannot give it."""
+
+    def test_absent_by_default(self, case):
+        execute_write(make_args(case))
+        assert "# probe:" not in (case / "othd.cyl_nodes.map").read_text()
+
+    def test_declared_type_is_recorded(self, case):
+        execute_write(make_args(case, probe_type="line"))
+        header = (case / "othd.cyl_nodes.map").read_text()
+        assert "# probe: line" in header
+        # a reader must never mistake a declaration for a measurement
+        assert "declared with --probe-type" in header
+        assert "not derived from the coordinates" in header
+
+    def test_closed_marks_a_ring(self, case):
+        execute_write(make_args(case, probe_type="line", closed=True))
+        assert "# closed: yes" in (case / "othd.cyl_nodes.map").read_text()
+
+    def test_an_open_line_says_so(self, case):
+        execute_write(make_args(case, probe_type="line"))
+        assert "# closed: no" in (case / "othd.cyl_nodes.map").read_text()
+
+    def test_closed_is_only_meaningful_for_a_line(self, case):
+        execute_write(make_args(case, probe_type="surface"))
+        assert "# closed:" not in (case / "othd.cyl_nodes.map").read_text()
+
+    def test_closed_without_a_line_exits(self, case):
+        with pytest.raises(SystemExit):
+            execute_write(make_args(case, probe_type="surface", closed=True))
+        with pytest.raises(SystemExit):
+            execute_write(make_args(case, closed=True))
+
+    def test_an_unknown_type_exits(self, case):
+        with pytest.raises(SystemExit):
+            execute_write(make_args(case, probe_type="helix"))
+
+    def test_it_applies_to_coordinates_blocks_too(self, case):
+        """Three collinear points are a line or three points; only a human knows."""
+        execute_write(make_args(case, othd_map="probe_dat", probe_type="point"))
+        assert "# probe: point" in (case / "othd.probe_dat.map").read_text()
+
+    def test_selecting_one_block_lets_sets_differ(self, case):
+        execute_write(make_args(case, othd_map="cyl_nodes", probe_type="line"))
+        execute_write(make_args(case, othd_map="probe_dat", probe_type="point"))
+        assert "# probe: line" in (case / "othd.cyl_nodes.map").read_text()
+        assert "# probe: point" in (case / "othd.probe_dat.map").read_text()
 
 
 class TestCoordinateFileLayout:
