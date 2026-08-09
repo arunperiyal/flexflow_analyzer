@@ -48,6 +48,28 @@
 
 ### ✨ New Features
 
+#### `case write --othd-map` — keep othd files readable without the mesh
+- New **`case write`** subcommand. `--othd-map` writes one `othd.<set>.map` per
+  **nodal** `outputTimeHistory` block in the case's `.def`, giving `row, node, x,
+  y, z`: the record's index within each `aleDisp` block, the mesh node it belongs
+  to, and that node's **undeformed** coordinates.
+- Why: a nodal history is written *positionally* — row k is the k-th node of the
+  block's node file, with no id and no coordinate in the othd itself. Reading one
+  back has therefore required the node file **and** the mesh coordinates, and the
+  coordinates file is usually the largest input in a case (137 MB for a 1.8M-node
+  riser) even when the output covers 49 nodes. With the map written, it can be
+  deleted.
+- Rows keep the node file's order, because that order is what indexes the othd —
+  they are deliberately not sorted by node id.
+- The coordinates file is read from the `.def`'s `nodeCoordinates` block rather
+  than assumed to be `<problem>.crd`, and every map in a case is built from a
+  single streamed pass over it. Blocks of another type (e.g. `type = coordinates`)
+  are reported and skipped: their records are not indexed by a node file.
+  `--othd-map NAME` restricts it to one block, by block name or node-set name.
+- `def_parser` gained `parse_output_time_history()` and `parse_node_coordinates()`,
+  both of which strip `#` comments first so a commented-out block is never read
+  as live.
+
 #### `field compute force` — per-element pressure force on a surface zone
 - New **`field compute <quantity> <case> --zone ZONE`** subcommand. `force` writes,
   for every surface element and every selected timestep, its centroid, **area**,

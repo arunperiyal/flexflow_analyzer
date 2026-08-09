@@ -85,6 +85,63 @@ def parse_time_stepping_control(def_file_path):
     return config
 
 
+def _strip_comments(content):
+    """Drop '#' comments, so a commented-out setting is never read as live."""
+    return re.sub(r'#[^\n]*', '', content)
+
+
+def parse_node_coordinates(def_file_path):
+    """File the mesh coordinates are read from, per nodeCoordinates{}, or None.
+
+    Taken from the .def rather than assumed to be <problem>.crd, since the block
+    names it explicitly.
+    """
+    try:
+        with open(def_file_path, 'r') as f:
+            content = _strip_comments(f.read())
+    except OSError:
+        return None
+    block = re.search(r'nodeCoordinates\s*\{([^}]*)\}', content, re.DOTALL)
+    if not block:
+        return None
+    named = re.search(r'coordinates\s*=\s*File\s*\(\s*"([^"]+)"\s*\)', block.group(1))
+    return named.group(1) if named else None
+
+
+def parse_output_time_history(def_file_path):
+    """Every outputTimeHistory block in a .def, in file order.
+
+    Returns a list of dicts with `name`, `type`, `nodes` / `coordinates` (whichever
+    the block names) and `outputFrequency`. The solver writes one othd record per
+    block; a `nodal` block's records are ordered by its node file, which is what
+    makes that file the key to reading the othd back.
+    """
+    try:
+        with open(def_file_path, 'r') as f:
+            content = _strip_comments(f.read())
+    except OSError:
+        return []
+
+    blocks = []
+    for match in re.finditer(r'outputTimeHistory\s*\(\s*"([^"]+)"\s*\)\s*\{([^}]*)\}',
+                             content, re.DOTALL):
+        name, body = match.group(1), match.group(2)
+        entry = {'name': name, 'type': None, 'nodes': None,
+                 'coordinates': None, 'outputFrequency': None}
+        kind = re.search(r'\btype\s*=\s*(\w+)', body)
+        if kind:
+            entry['type'] = kind.group(1)
+        for key in ('nodes', 'coordinates'):
+            named = re.search(rf'\b{key}\s*=\s*File\s*\(\s*"([^"]+)"\s*\)', body)
+            if named:
+                entry[key] = named.group(1)
+        freq = re.search(r'\boutputFrequency\s*=\s*(\d+)', body)
+        if freq:
+            entry['outputFrequency'] = int(freq.group(1))
+        blocks.append(entry)
+    return blocks
+
+
 def parse_def_file(case_directory, problem_name=None):
     """
     Parse FlexFlow .def file and extract all relevant configuration.

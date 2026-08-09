@@ -214,6 +214,10 @@ class FlexFlowCompleter(Completer):
             **_COMMON_FLAGS,
             '--dir':  'Directory to scan (default: current directory)',
         },
+        ('case', 'write'): {
+            **_COMMON_FLAGS,
+            '--othd-map': 'Write node maps for nodal outputTimeHistory blocks',
+        },
         ('case', 'report'): {
             **_COMMON_FLAGS,
             '--dir':  'Directory containing .cases file (default: current directory)',
@@ -4071,7 +4075,8 @@ class InteractiveShell:
 
         # Commands that take a case as their second or third argument
         case_commands = {
-            'case': {'show': 2, 'run': 2, 'organise': 2, 'check': 2, 'status': 2, 'upload': 2, 'download': 2},  # case show <case>
+            'case': {'show': 2, 'run': 2, 'organise': 2, 'check': 2, 'status': 2, 'upload': 2, 'download': 2,
+                     'write': 2},  # case show <case>
             'data': {'show': 2, 'stats': 2},  # data show <case>
             'field': {'info': 2, 'extract': 2, 'compute': 3},  # field compute <quantity> <case>
             'run': {'check': 2, 'pre': 2, 'main': 2, 'post': 2},  # run check <case>
