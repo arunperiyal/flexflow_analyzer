@@ -68,6 +68,19 @@
   deleted.
 - Rows keep the source file's order, because that order is what indexes the othd —
   they are deliberately not sorted.
+- Each map carries **`# othId: <n>`**, the output's index within the othd, so a
+  reader holding two maps can tell which belongs to which block. Declaration order
+  does not give it: an output whose input file is **missing or empty is not written
+  at all**, and every id after it shifts down — on `BR0SG0U1P0`, `probe_dat.txt` is
+  absent, so `"riser_probe"` is othId 0 rather than 1. The id is *predicted* from
+  the `.def` and the files present rather than read from an othd, and the header
+  states that basis: a reader that trusts a wrong id is worse off than one with
+  none.
+- A block whose input file is missing or empty is now **skipped rather than fatal**
+  when scanning every block, matching what the solver does — naming it explicitly
+  with `--othd-map NAME` still errors. This also fixes a regression from mapping
+  coordinates blocks: `case write --othd-map` had started failing outright on
+  `BR0SG0U1P0`, whose `.def` references an absent `probe_dat.txt`.
 - The coordinates file is read from the `.def`'s `nodeCoordinates` block rather
   than assumed to be `<problem>.crd`, and every map in a case is built from a
   single streamed pass over it. `--othd-map NAME` restricts it to one block, by

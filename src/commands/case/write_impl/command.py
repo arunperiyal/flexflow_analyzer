@@ -57,6 +57,32 @@ def _set_name(node_file, problem):
     return stem or "nodes"
 
 
+def _oth_ids(blocks, case_dir):
+    """Predict each block's othId -- its position among the outputs actually written.
+
+    Declaration order in the .def does not give it. An output whose input file is
+    missing or empty is not written at all, and every id after it shifts down: on
+    BR0SG0U1P0 `probe_dat.txt` is absent, so "riser_probe" lands on othId 0 rather
+    than 1. A reader holding two maps and no id cannot tell them apart except by
+    node count, which collides the moment two probes are the same size.
+
+    Returns {block name: othId or None}, None meaning the solver writes no record
+    for it. A block naming no input file is assumed to be written, since there is
+    nothing that could be missing.
+    """
+    ids, next_id = {}, 0
+    for block in blocks:
+        source = block.get("nodes") or block.get("coordinates")
+        if source:
+            path = Path(case_dir) / source
+            if not path.exists() or path.stat().st_size == 0:
+                ids[block["name"]] = None
+                continue
+        ids[block["name"]] = next_id
+        next_id += 1
+    return ids
+
+
 def _read_coordinate_list(path):
     """Points from a `type = coordinates` probe file, in file order.
 
@@ -132,26 +158,42 @@ def _read_coordinates(crd_path, wanted):
     return found
 
 
-def _map_header(block, source, source_count, case_name, problem, provenance, note):
-    """The '#' block every map carries, saying where its rows came from."""
-    return [
+def _map_header(block, source, source_count, case_name, problem, provenance, note,
+                oth_id=None, skipped_before=0):
+    """The '#' block every map carries, saying where its rows came from.
+
+    `othId` says which output within the othd this map describes. It is predicted
+    from the .def, not read from an othd, so its basis is stated alongside it: a
+    reader that trusts a wrong id is worse off than one that has none.
+    """
+    lines = [
         "# FlexFlow othd map",
         f"# case: {case_name}   problem: {problem or '?'}",
         f"# outputTimeHistory: \"{block['name']}\"   type: {block['type']}"
         + (f"   outputFrequency: {block['outputFrequency']}"
            if block['outputFrequency'] is not None else ""),
+    ]
+    if oth_id is not None:
+        basis = (f"{skipped_before} earlier output(s) not written (input file missing "
+                 "or empty)" if skipped_before else "no earlier output is skipped")
+        lines += [f"# othId: {oth_id}",
+                  f"# othId predicted from the .def, not read from an othd: {basis}"]
+    lines += [
         f"# {provenance}: {source} ({source_count})",
         "# row = index of the record within each output block of the othd file",
         f"# {note}",
     ]
+    return lines
 
 
-def _write_node_map(path, block, node_file, crd_name, ids, coords, case_name, problem):
+def _write_node_map(path, block, node_file, crd_name, ids, coords, case_name, problem,
+                    oth_id=None, skipped_before=0):
     """A nodal block's map: othd row -> node id -> undeformed coordinates."""
     lines = _map_header(
         block, node_file, len(ids), case_name, problem,
-        f"nodes", "coordinates are undeformed (from " + crd_name
-        + "): add the othd displacement for the moved position")
+        "nodes", "coordinates are undeformed (from " + crd_name
+        + "): add the othd displacement for the moved position",
+        oth_id, skipped_before)
     lines.append(",".join(MAP_HEADER))
     for row, node in enumerate(ids):
         x, y, z = coords[node]
@@ -159,7 +201,8 @@ def _write_node_map(path, block, node_file, crd_name, ids, coords, case_name, pr
     Path(path).write_text("\n".join(lines) + "\n")
 
 
-def _write_point_map(path, block, point_file, points, case_name, problem):
+def _write_point_map(path, block, point_file, points, case_name, problem,
+                     oth_id=None, skipped_before=0):
     """A coordinates block's map: othd row -> the point that was asked for.
 
     No mesh lookup: the points are in the probe file itself. There is no node
@@ -167,7 +210,8 @@ def _write_point_map(path, block, point_file, points, case_name, problem):
     """
     lines = _map_header(
         block, point_file, len(points), case_name, problem, "coordinates",
-        "coordinates are the points the block asked for, taken from " + point_file)
+        "coordinates are the points the block asked for, taken from " + point_file,
+        oth_id, skipped_before)
     lines.append(",".join(POINT_MAP_HEADER))
     for row, (x, y, z) in enumerate(points):
         lines.append(f"{row},{x},{y},{z}")
@@ -191,27 +235,45 @@ def write_case_maps(case_dir, wanted, logger, show_progress=False):
     logger.info(f"Reading {Path(def_file).name}")
 
     blocks = parse_output_time_history(def_file)
-    mappable, unsupported = [], []
+    oth_ids = _oth_ids(blocks, case_dir)
+    mappable = []
     for block in blocks:
         kind = (block.get("type") or "").lower()
+        source = None
         if kind == "nodal" and block.get("nodes"):
-            mappable.append((block, "nodes", block["nodes"]))
+            source = ("nodes", block["nodes"])
         elif kind == "coordinates" and block.get("coordinates"):
-            mappable.append((block, "coordinates", block["coordinates"]))
-        else:
-            unsupported.append(block)
-    for block in unsupported:
-        logger.info(f"skipping outputTimeHistory \"{block['name']}\": type "
-                    f"{block.get('type') or 'unset'} names no file to index its records by")
+            source = ("coordinates", block["coordinates"])
+        if source is None:
+            logger.info(f"skipping outputTimeHistory \"{block['name']}\": type "
+                        f"{block.get('type') or 'unset'} names no file to index its "
+                        "records by")
+            continue
+        if oth_ids[block["name"]] is None:
+            # The solver writes no record for it, so there is nothing to map onto.
+            logger.info(f"skipping outputTimeHistory \"{block['name']}\": "
+                        f"{source[1]} is missing or empty, so the solver writes no "
+                        "record for it")
+            continue
+        mappable.append((block, source[0], source[1]))
     if not mappable:
         raise WriteError(f"{Path(def_file).name} has no outputTimeHistory block whose "
                          "records can be mapped", skip=True)
 
     if wanted:
-        mappable = [entry for entry in mappable
-                    if wanted in (entry[0]["name"], _set_name(entry[2], problem))]
-        if not mappable:
+        named = [entry for entry in mappable
+                 if wanted in (entry[0]["name"], _set_name(entry[2], problem))]
+        if not named:
+            # Naming a block whose input file is absent is a mistake worth reporting,
+            # rather than the silent skip that scanning every block gets.
+            for block in blocks:
+                src = block.get("nodes") or block.get("coordinates")
+                if src and wanted in (block["name"], _set_name(src, problem)):
+                    raise WriteError(
+                        f"outputTimeHistory \"{block['name']}\" names {src}, which is "
+                        "missing or empty; the solver writes no record for it")
             raise WriteError(f"No outputTimeHistory matches '{wanted}'", skip=True)
+        mappable = named
 
     # The mesh is only needed if a nodal block is in play; a case of nothing but
     # coordinates blocks maps fine without it.
@@ -250,15 +312,21 @@ def write_case_maps(case_dir, wanted, logger, show_progress=False):
         with spinner(f"Reading {crd_name}", enabled=show_progress):
             coords = _read_coordinates(crd_path, every)
 
+    order = [b["name"] for b in blocks]
     written = []
     for block, key, source in mappable:
         rows = resolved[block["name"]]
+        oth_id = oth_ids[block["name"]]
+        # how many outputs declared before this one the solver does not write
+        skipped_before = sum(1 for name in order[:order.index(block["name"])]
+                             if oth_ids[name] is None)
         out = case_dir / f"othd.{_set_name(source, problem)}.map"
         if key == "nodes":
             _write_node_map(out, block, source, crd_name, rows, coords,
-                            case_dir.name, problem)
+                            case_dir.name, problem, oth_id, skipped_before)
         else:
-            _write_point_map(out, block, source, rows, case_dir.name, problem)
+            _write_point_map(out, block, source, rows, case_dir.name, problem,
+                             oth_id, skipped_before)
         written.append((out, len(rows)))
     return {"written": written, "crd": crd_name, "crd_mb": crd_mb}
 

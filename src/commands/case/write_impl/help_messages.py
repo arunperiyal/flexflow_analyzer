@@ -57,7 +57,21 @@ Build small derived files from a case's own inputs.
     othd. They are not sorted.
 
     A block whose type names no file to index its records by is reported and
-    skipped -- there is nothing to map it against.
+    skipped -- there is nothing to map it against. So is one whose input file is
+    missing or empty: the solver writes no record for it either. Naming such a
+    block with --othd-map NAME is an error rather than a silent skip.
+
+{Colors.BOLD}othId:{Colors.RESET}
+
+    Each map carries {Colors.YELLOW}# othId: <n>{Colors.RESET} -- which output within the othd it
+    describes. Declaration order in the .def does not give it: an output whose
+    input file is missing or empty is not written at all, and every id after it
+    shifts down. On BR0SG0U1P0, probe_dat.txt is absent, so "riser_probe" is
+    othId 0 rather than 1.
+
+    The id is {Colors.BOLD}predicted{Colors.RESET} from the .def and the files present, not read
+    from an othd, and the header says so alongside it -- a reader that trusts a
+    wrong id is worse off than one that has none.
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
 

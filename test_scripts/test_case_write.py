@@ -177,6 +177,47 @@ class TestOthdMap:
         assert "nodes: riser.cyl_nodes.nbc (4)" in blob
         assert "undeformed (from riser.crd)" in blob
 
+    def test_oth_id_follows_declaration_order_when_nothing_is_skipped(self, case):
+        execute_write(make_args(case))
+        # probe_dat.txt, cyl_nodes, tip_nodes -- all present, so 0, 1, 2
+        assert "# othId: 0" in (case / "othd.probe_dat.map").read_text()
+        assert "# othId: 1" in (case / "othd.cyl_nodes.map").read_text()
+        assert "# othId: 2" in (case / "othd.tip_nodes.map").read_text()
+
+    def test_a_missing_input_file_shifts_every_later_oth_id(self, case):
+        """The solver writes no record for an output whose file is absent."""
+        (case / "probe_dat.txt").unlink()
+        execute_write(make_args(case))
+        assert not (case / "othd.probe_dat.map").exists()
+        # riser_probe was declared second but is written first
+        assert "# othId: 0" in (case / "othd.cyl_nodes.map").read_text()
+        assert "# othId: 1" in (case / "othd.tip_nodes.map").read_text()
+
+    def test_an_empty_input_file_counts_as_missing(self, case):
+        (case / "probe_dat.txt").write_text("")
+        execute_write(make_args(case))
+        assert not (case / "othd.probe_dat.map").exists()
+        assert "# othId: 0" in (case / "othd.cyl_nodes.map").read_text()
+
+    def test_the_basis_of_the_id_is_stated(self, case):
+        (case / "probe_dat.txt").unlink()
+        execute_write(make_args(case))
+        header = (case / "othd.cyl_nodes.map").read_text()
+        # the id is a prediction, so a reader must be able to see what it rests on
+        assert "predicted from the .def" in header
+        assert "1 earlier output(s) not written" in header
+
+    def test_a_block_the_solver_skips_is_not_an_error(self, case):
+        """Scanning every block, a missing input file is a skip -- it used to abort."""
+        (case / "probe_dat.txt").unlink()
+        execute_write(make_args(case))          # must not raise
+        assert (case / "othd.cyl_nodes.map").exists()
+
+    def test_naming_a_skipped_block_explicitly_does_error(self, case):
+        (case / "probe_dat.txt").unlink()
+        with pytest.raises(SystemExit):
+            execute_write(make_args(case, othd_map="probe_dat"))
+
     def test_name_selects_a_single_block(self, case):
         execute_write(make_args(case, othd_map="tip_nodes"))
         assert (case / "othd.tip_nodes.map").exists()
@@ -201,10 +242,19 @@ class TestOthdMap:
         with pytest.raises(SystemExit):
             execute_write(make_args(case))
 
-    def test_missing_node_file_exits(self, case):
+    def test_a_missing_node_file_is_skipped_like_the_solver_does(self, case):
+        """The solver writes no record for it, so there is nothing to map onto."""
+        (case / "riser.tip_nodes.nbc").unlink()
+        execute_write(make_args(case))
+        assert not (case / "othd.tip_nodes.map").exists()
+        assert (case / "othd.cyl_nodes.map").exists()
+        # tip_nodes was declared last, so the ids before it are untouched
+        assert "# othId: 1" in (case / "othd.cyl_nodes.map").read_text()
+
+    def test_naming_a_missing_node_file_explicitly_does_exit(self, case):
         (case / "riser.tip_nodes.nbc").unlink()
         with pytest.raises(SystemExit):
-            execute_write(make_args(case))
+            execute_write(make_args(case, othd_map="tip_nodes"))
 
     def test_without_the_flag_it_writes_nothing(self, case):
         with pytest.raises(SystemExit):
