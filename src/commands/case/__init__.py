@@ -152,6 +152,19 @@ class CaseCommand(BaseCommand):
         add_parser.add_argument('-h', '--help', action='store_true',
                                help='Show help for add command')
 
+        # case write
+        write_parser = case_subparsers.add_parser('write', add_help=False,
+                                                  help='Write derived files from a case\'s inputs')
+        write_parser.add_argument('case', nargs='?', help='Case directory path')
+        write_parser.add_argument('--othd-map', dest='othd_map', nargs='?',
+                                  const=True, default=False, metavar='NAME',
+                                  help='Write a node map per nodal outputTimeHistory block; '
+                                       'NAME selects one by block or node-set name')
+        write_parser.add_argument('-v', '--verbose', action='store_true',
+                                  help='Enable verbose output')
+        write_parser.add_argument('-h', '--help', action='store_true',
+                                  help='Show help for write command')
+
         # case report
         report_parser = case_subparsers.add_parser('report', add_help=False,
                                                    help='Print a compact status table for all registered cases')
@@ -235,6 +248,9 @@ class CaseCommand(BaseCommand):
         elif hasattr(args, 'case_subcommand') and args.case_subcommand == 'add':
             from .add_impl import execute_add
             execute_add(args)
+        elif hasattr(args, 'case_subcommand') and args.case_subcommand == 'write':
+            from .write_impl.command import execute_write
+            execute_write(args)
         elif hasattr(args, 'case_subcommand') and args.case_subcommand == 'report':
             from .report_impl import execute_report
             execute_report(args)
