@@ -7,11 +7,13 @@ resolves coordinates against the file the .def actually names.
 
 import argparse
 import json
+import os
 
 import pytest
 
 from src.core.parsers.def_parser import parse_output_time_history, parse_node_coordinates
-from src.commands.case.write_impl.command import execute_write
+from src.commands.case.write_impl.command import (execute_write, WriteError,
+                                                  _read_coordinate_list)
 
 DEF_TEMPLATE = """
 nodeCoordinates {{
@@ -76,7 +78,7 @@ def case(tmp_path):
     # node ids deliberately out of order and non-contiguous
     (tmp_path / "riser.cyl_nodes.nbc").write_text("2\n18\n812\n813\n")
     (tmp_path / "riser.tip_nodes.nbc").write_text("18\n2\n")
-    (tmp_path / "probe_dat.txt").write_text("0 0 3.0\n0 0 5.0\n0 0 10.0\n")
+    (tmp_path / "probe_dat.txt").write_text("1 0 0 3.0\n2 0 0 5.0\n3 0 0 10.0\n")
     (tmp_path / "riser.crd").write_text("".join(
         f"{n} {n / 10:.16e} {n / 100:.16e} {-n / 100:.16e}\n" for n in range(1, 1000)))
     return tmp_path
@@ -164,7 +166,7 @@ class TestOthdMap:
         """The mesh is only read for nodal blocks."""
         (tmp_path / "simflow.config").write_text("problem = riser\n")
         (tmp_path / "riser.def").write_text(DEF_NO_NODAL.format(crd="riser.crd"))
-        (tmp_path / "probe_dat.txt").write_text("1 2 3\n")
+        (tmp_path / "probe_dat.txt").write_text("1 1.0 2.0 3.0\n")
         # riser.crd deliberately absent
         execute_write(make_args(tmp_path))
         assert (tmp_path / "othd.probe_dat.map").exists()
@@ -270,7 +272,7 @@ def registry(tmp_path, monkeypatch):
         d.mkdir()
         (d / "simflow.config").write_text("problem = riser\n")
         (d / "riser.def").write_text(template.format(crd="riser.crd"))
-        (d / "probe_dat.txt").write_text("0 0 3.0\n")
+        (d / "probe_dat.txt").write_text("1 0 0 3.0\n")
         if nbc:
             (d / "riser.cyl_nodes.nbc").write_text("2\n18\n812\n")
             (d / "riser.tip_nodes.nbc").write_text("18\n2\n")
@@ -290,6 +292,69 @@ def registry(tmp_path, monkeypatch):
     (tmp_path / ".cases").write_text(json.dumps(entries))
     monkeypatch.chdir(tmp_path)                  # .cases is read from the cwd
     return tmp_path
+
+
+class TestCoordinateFileLayout:
+    """The column layout is established, not assumed: guessing here is silent."""
+
+    @staticmethod
+    def parse(tmp_path, text):
+        path = tmp_path / "probe.txt"
+        path.write_text(text)
+        return _read_coordinate_list(str(path))
+
+    def test_four_columns_are_index_x_y_z(self, tmp_path):
+        """The real probe_dat.txt shape. Taking fields 0-2 would give (1, 0, 0)."""
+        points, _ = self.parse(tmp_path, "1 0.0 0.0 3.0\n2 0.0 0.0 6.0\n3 0.0 0.0 9.0\n")
+        assert [tuple(round(float(v), 1) for v in p) for p in points] == [
+            (0.0, 0.0, 3.0), (0.0, 0.0, 6.0), (0.0, 0.0, 9.0)]
+
+    def test_three_columns_are_x_y_z(self, tmp_path):
+        points, _ = self.parse(tmp_path, "0.0 0.0 3.0\n0.0 0.0 6.0\n")
+        assert [tuple(round(float(v), 1) for v in p) for p in points] == [
+            (0.0, 0.0, 3.0), (0.0, 0.0, 6.0)]
+
+    def test_a_leading_index_may_be_any_increasing_integers(self, tmp_path):
+        points, _ = self.parse(tmp_path, "812 1.0 2.0 3.0\n813 4.0 5.0 6.0\n")
+        assert [tuple(round(float(v), 1) for v in p) for p in points] == [
+            (1.0, 2.0, 3.0), (4.0, 5.0, 6.0)]
+
+    def test_four_columns_without_an_index_raises(self, tmp_path):
+        # which three of the four are the coordinates is genuinely unclear
+        with pytest.raises(WriteError, match="does not read as a row index"):
+            self.parse(tmp_path, "0.5 0.0 0.0 3.0\n0.5 0.0 0.0 6.0\n")
+
+    def test_mixed_column_counts_raise(self, tmp_path):
+        with pytest.raises(WriteError, match="mixes"):
+            self.parse(tmp_path, "1 0.0 0.0 3.0\n0.0 0.0 6.0\n")
+
+    def test_comments_and_blanks_are_ignored(self, tmp_path):
+        points, skipped = self.parse(tmp_path, "# probes\n\n1 0.0 0.0 3.0\n")
+        assert len(points) == 1 and skipped == 0
+
+
+class TestStalePrediction:
+    """A predicted id cannot describe othd files written before the input existed."""
+
+    def test_an_input_newer_than_the_othd_is_flagged(self, case):
+        othd = case / "othd_files"
+        othd.mkdir()
+        (othd / "riser.othd").write_text("data")
+        os.utime(othd / "riser.othd", (1_600_000_000, 1_600_000_000))   # long ago
+        execute_write(make_args(case))
+        header = (case / "othd.cyl_nodes.map").read_text()
+        assert "WARNING" in header and "newer than this case's othd files" in header
+
+    def test_no_othd_files_means_no_warning(self, case):
+        execute_write(make_args(case))
+        assert "WARNING" not in (case / "othd.cyl_nodes.map").read_text()
+
+    def test_an_othd_newer_than_the_inputs_is_not_flagged(self, case):
+        othd = case / "othd_files"
+        othd.mkdir()
+        (othd / "riser.othd").write_text("data")                        # written just now
+        execute_write(make_args(case))
+        assert "WARNING" not in (case / "othd.cyl_nodes.map").read_text()
 
 
 class TestWildcard:

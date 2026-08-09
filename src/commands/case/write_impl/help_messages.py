@@ -53,6 +53,12 @@ Build small derived files from a case's own inputs.
         row,x,y,z
         0,0.0000000000000000e+00,0.0000000000000000e+00,3.0000000000000000e+00
 
+    A point file is read as {Colors.YELLOW}index x y z{Colors.RESET} when it has four columns and the
+    first reads as a row index, or {Colors.YELLOW}x y z{Colors.RESET} when it has three. The layout is
+    checked rather than assumed -- taking the first three fields of a four-column
+    file turns the point (0, 0, 3) into (1, 0, 0), which nothing downstream can
+    detect. Anything else is an error rather than a guess.
+
     Rows keep the source file's order, because that order is what indexes the
     othd. They are not sorted.
 
@@ -72,6 +78,10 @@ Build small derived files from a case's own inputs.
     The id is {Colors.BOLD}predicted{Colors.RESET} from the .def and the files present, not read
     from an othd, and the header says so alongside it -- a reader that trusts a
     wrong id is worse off than one that has none.
+
+    If an input file is {Colors.BOLD}newer{Colors.RESET} than the case's othd files, those were written
+    without it and their ids are lower than the ones predicted here. That is
+    reported and noted in the map. Read the ids from the othd and prefer them.
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
 

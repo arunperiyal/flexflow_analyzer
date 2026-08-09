@@ -83,30 +83,92 @@ def _oth_ids(blocks, case_dir):
     return ids
 
 
+def _is_index_column(values):
+    """True if `values` read as a row index: whole numbers, strictly increasing."""
+    numbers = []
+    for value in values:
+        try:
+            number = float(value)
+        except ValueError:
+            return False
+        if number != int(number):
+            return False
+        numbers.append(int(number))
+    return all(b > a for a, b in zip(numbers, numbers[1:]))
+
+
+def _stale_prediction(case_dir, blocks):
+    """Input files added after the case's othd files were written, if any.
+
+    A predicted othId describes what the solver *would* write now. If an input
+    file appeared after the existing othd files, those files were written without
+    it and their ids are one short -- exactly the case on BR0SG0U1P0, where
+    probe_dat.txt arrived after the runs. Comparing timestamps cannot prove the
+    ids are wrong, but it catches the arrangement that makes them wrong, which is
+    otherwise silent.
+    """
+    case_dir = Path(case_dir)
+    othd = list(case_dir.glob("othd_files/*.othd")) + list(case_dir.glob("*.othd"))
+    if not othd:
+        return []
+    newest = max(f.stat().st_mtime for f in othd)
+    later = []
+    for block in blocks:
+        source = block.get("nodes") or block.get("coordinates")
+        path = case_dir / source if source else None
+        if path and path.exists() and path.stat().st_mtime > newest:
+            later.append(source)
+    return later
+
+
 def _read_coordinate_list(path):
     """Points from a `type = coordinates` probe file, in file order.
 
-    That order indexes the othd exactly as a node file's does. The format is one
-    point per line as x y z; anything that does not start with three numbers (a
-    count header, a comment, a blank) is passed over, and the count of skipped
-    lines is returned so the caller can say so rather than quietly losing rows.
+    That order indexes the othd exactly as a node file's does.
+
+    The column layout is *established, not assumed*. A four-column file is
+    `index x y z` -- but only once the leading column has been checked to read as
+    an index, because taking the first three fields of such a file yields
+    (1, 0, 0) where the point is (0, 0, 3): a wrong answer with nothing to show
+    for it. A three-column file is `x y z`. Anything else raises rather than
+    guesses, since being wrong here is silent and cheap to avoid.
     """
-    points, skipped = [], 0
+    rows, skipped = [], 0
     for raw in open(path):
         line = raw.split('#', 1)[0].strip()
         if not line:
             continue
-        parts = line.split()
-        try:
-            points.append(tuple(f"{float(v):.16e}" for v in parts[:3]))
-        except (ValueError, IndexError):
+        fields = line.split()
+        if len(fields) in (3, 4):
+            rows.append(fields)
+        else:
             skipped += 1
-            continue
-        if len(parts) < 3:
-            points.pop()
-            skipped += 1
-    if not points:
+
+    if not rows:
         raise WriteError(f"{Path(path).name} lists no coordinates")
+    widths = {len(fields) for fields in rows}
+    if len(widths) != 1:
+        raise WriteError(f"{Path(path).name} mixes {sorted(widths)}-column rows; "
+                         "expected every point on its own line as 'x y z' or "
+                         "'index x y z'")
+
+    if widths == {4}:
+        if not _is_index_column([fields[0] for fields in rows]):
+            raise WriteError(
+                f"{Path(path).name} has 4 columns but the first does not read as a "
+                "row index, so which three hold the coordinates is unclear. Expected "
+                "'index x y z'.")
+        columns = slice(1, 4)
+    else:
+        columns = slice(0, 3)
+
+    points = []
+    for fields in rows:
+        try:
+            points.append(tuple(f"{float(v):.16e}" for v in fields[columns]))
+        except ValueError:
+            raise WriteError(f"{Path(path).name}: '{' '.join(fields)}' does not hold "
+                             "three coordinates")
     return points, skipped
 
 
@@ -159,7 +221,7 @@ def _read_coordinates(crd_path, wanted):
 
 
 def _map_header(block, source, source_count, case_name, problem, provenance, note,
-                oth_id=None, skipped_before=0):
+                oth_id=None, skipped_before=0, stale=()):
     """The '#' block every map carries, saying where its rows came from.
 
     `othId` says which output within the othd this map describes. It is predicted
@@ -178,6 +240,10 @@ def _map_header(block, source, source_count, case_name, problem, provenance, not
                  "or empty)" if skipped_before else "no earlier output is skipped")
         lines += [f"# othId: {oth_id}",
                   f"# othId predicted from the .def, not read from an othd: {basis}"]
+        if stale:
+            lines.append(
+                "# WARNING: " + ", ".join(stale) + " is newer than this case's othd "
+                "files, which were written without it -- ids there will be lower")
     lines += [
         f"# {provenance}: {source} ({source_count})",
         "# row = index of the record within each output block of the othd file",
@@ -187,13 +253,13 @@ def _map_header(block, source, source_count, case_name, problem, provenance, not
 
 
 def _write_node_map(path, block, node_file, crd_name, ids, coords, case_name, problem,
-                    oth_id=None, skipped_before=0):
+                    oth_id=None, skipped_before=0, stale=()):
     """A nodal block's map: othd row -> node id -> undeformed coordinates."""
     lines = _map_header(
         block, node_file, len(ids), case_name, problem,
         "nodes", "coordinates are undeformed (from " + crd_name
         + "): add the othd displacement for the moved position",
-        oth_id, skipped_before)
+        oth_id, skipped_before, stale)
     lines.append(",".join(MAP_HEADER))
     for row, node in enumerate(ids):
         x, y, z = coords[node]
@@ -202,7 +268,7 @@ def _write_node_map(path, block, node_file, crd_name, ids, coords, case_name, pr
 
 
 def _write_point_map(path, block, point_file, points, case_name, problem,
-                     oth_id=None, skipped_before=0):
+                     oth_id=None, skipped_before=0, stale=()):
     """A coordinates block's map: othd row -> the point that was asked for.
 
     No mesh lookup: the points are in the probe file itself. There is no node
@@ -211,7 +277,7 @@ def _write_point_map(path, block, point_file, points, case_name, problem,
     lines = _map_header(
         block, point_file, len(points), case_name, problem, "coordinates",
         "coordinates are the points the block asked for, taken from " + point_file,
-        oth_id, skipped_before)
+        oth_id, skipped_before, stale)
     lines.append(",".join(POINT_MAP_HEADER))
     for row, (x, y, z) in enumerate(points):
         lines.append(f"{row},{x},{y},{z}")
@@ -312,6 +378,12 @@ def write_case_maps(case_dir, wanted, logger, show_progress=False):
         with spinner(f"Reading {crd_name}", enabled=show_progress):
             coords = _read_coordinates(crd_path, every)
 
+    stale = _stale_prediction(case_dir, [b for b, _, _ in mappable])
+    if stale:
+        logger.warning(
+            f"{', '.join(stale)} is newer than this case's othd files. Those were "
+            "written without it, so their ids are lower than the ones predicted "
+            "here -- read the ids from the othd and prefer them.")
     order = [b["name"] for b in blocks]
     written = []
     for block, key, source in mappable:
@@ -323,10 +395,10 @@ def write_case_maps(case_dir, wanted, logger, show_progress=False):
         out = case_dir / f"othd.{_set_name(source, problem)}.map"
         if key == "nodes":
             _write_node_map(out, block, source, crd_name, rows, coords,
-                            case_dir.name, problem, oth_id, skipped_before)
+                            case_dir.name, problem, oth_id, skipped_before, stale)
         else:
             _write_point_map(out, block, source, rows, case_dir.name, problem,
-                             oth_id, skipped_before)
+                             oth_id, skipped_before, stale)
         written.append((out, len(rows)))
     return {"written": written, "crd": crd_name, "crd_mb": crd_mb}
 

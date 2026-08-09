@@ -75,7 +75,14 @@
   absent, so `"riser_probe"` is othId 0 rather than 1. The id is *predicted* from
   the `.def` and the files present rather than read from an othd, and the header
   states that basis: a reader that trusts a wrong id is worse off than one with
-  none.
+  none. When an input file is **newer than the case's othd files** — those were
+  written without it, so their ids are lower — that is warned about and noted in
+  the map.
+- A `coordinates` point file is read as **`index x y z`** when it has four columns
+  and the first reads as a row index, or `x y z` when it has three; the layout is
+  checked rather than assumed, and anything else errors. Taking the first three
+  fields of a four-column file turns the point `(0, 0, 3)` into `(1, 0, 0)` with
+  nothing downstream able to detect it.
 - A block whose input file is missing or empty is now **skipped rather than fatal**
   when scanning every block, matching what the solver does — naming it explicitly
   with `--othd-map NAME` still errors. This also fixes a regression from mapping
