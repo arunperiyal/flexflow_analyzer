@@ -66,6 +66,11 @@
   single streamed pass over it. Blocks of another type (e.g. `type = coordinates`)
   are reported and skipped: their records are not indexed by a node file.
   `--othd-map NAME` restricts it to one block, by block name or node-set name.
+- Accepts the **`*` wildcard case** (including via `use case:*`), mapping every
+  case in the `.cases` registry in turn. A case with nothing to map is *skipped*
+  and one that genuinely fails is *reported*, and neither ends the batch — so a
+  registry holding cases at different stages still gets the ones it can. The run
+  exits non-zero only when no case could be mapped at all.
 - `def_parser` gained `parse_output_time_history()` and `parse_node_coordinates()`,
   both of which strip `#` comments first so a commented-out block is never read
   as live.

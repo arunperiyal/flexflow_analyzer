@@ -6,6 +6,7 @@ resolves coordinates against the file the .def actually names.
 """
 
 import argparse
+import json
 
 import pytest
 
@@ -163,3 +164,83 @@ class TestOthdMap:
         with pytest.raises(SystemExit):
             execute_write(make_args(case, othd_map=False))
         assert not list(case.glob("othd.*.map"))
+
+
+DEF_NO_NODAL = """
+nodeCoordinates {{
+    coordinates     = File( "{crd}" )
+}}
+outputTimeHistory( "field_probe" ) {{
+    type            = coordinates
+    coordinates     = File( "probe_dat.txt" )
+}}
+"""
+
+
+@pytest.fixture
+def registry(tmp_path, monkeypatch):
+    """A .cases registry mixing cases that work, cases to skip, and cases that fail."""
+    def build(name, template=DEF_TEMPLATE, crd=True, nbc=True):
+        d = tmp_path / name
+        d.mkdir()
+        (d / "simflow.config").write_text("problem = riser\n")
+        (d / "riser.def").write_text(template.format(crd="riser.crd"))
+        if nbc:
+            (d / "riser.cyl_nodes.nbc").write_text("2\n18\n812\n")
+            (d / "riser.tip_nodes.nbc").write_text("18\n2\n")
+        if crd:
+            (d / "riser.crd").write_text("".join(
+                f"{n} {n / 10:.16e} {n / 100:.16e} {-n / 100:.16e}\n"
+                for n in range(1, 1000)))
+        return d
+
+    build("Good1")
+    build("Good2")
+    build("NoNodal", template=DEF_NO_NODAL)      # nothing to map -> skip
+    build("NoCrd", crd=False)                    # mesh gone       -> fail
+    entries = [{"name": n, "path": str(tmp_path / n)}
+               for n in ("Good1", "Good2", "NoNodal", "NoCrd")]
+    entries.append({"name": "Gone", "path": str(tmp_path / "not_here")})
+    (tmp_path / ".cases").write_text(json.dumps(entries))
+    monkeypatch.chdir(tmp_path)                  # .cases is read from the cwd
+    return tmp_path
+
+
+class TestWildcard:
+    """`case write * --othd-map` over the .cases registry."""
+
+    def test_maps_every_case_it_can(self, registry):
+        execute_write(make_args("*"))
+        assert (registry / "Good1" / "othd.cyl_nodes.map").exists()
+        assert (registry / "Good2" / "othd.tip_nodes.map").exists()
+
+    def test_one_bad_case_does_not_end_the_batch(self, registry, capsys):
+        execute_write(make_args("*"))
+        out = capsys.readouterr().out
+        # NoNodal is skipped, NoCrd and Gone fail, yet both good cases are written
+        assert "2 case(s) mapped" in out
+        assert "1 skipped" in out and "2 failed" in out
+        assert (registry / "Good1" / "othd.cyl_nodes.map").exists()
+
+    def test_nothing_to_map_is_a_skip_not_a_failure(self, registry, capsys):
+        execute_write(make_args("*"))
+        out = capsys.readouterr().out
+        assert "NoNodal" in out and "no nodal outputTimeHistory" in out
+        assert not list((registry / "NoNodal").glob("othd.*.map"))
+
+    def test_the_selector_still_applies(self, registry):
+        execute_write(make_args("*", othd_map="tip_nodes"))
+        assert (registry / "Good1" / "othd.tip_nodes.map").exists()
+        assert not (registry / "Good1" / "othd.cyl_nodes.map").exists()
+
+    def test_exits_non_zero_when_no_case_could_be_mapped(self, tmp_path, monkeypatch):
+        (tmp_path / ".cases").write_text(json.dumps(
+            [{"name": "Gone", "path": str(tmp_path / "not_here")}]))
+        monkeypatch.chdir(tmp_path)
+        with pytest.raises(SystemExit):
+            execute_write(make_args("*"))
+
+    def test_missing_registry_is_reported(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        with pytest.raises(SystemExit):
+            execute_write(make_args("*"))

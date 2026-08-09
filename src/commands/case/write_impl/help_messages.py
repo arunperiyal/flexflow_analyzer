@@ -12,6 +12,7 @@ Build small derived files from a case's own inputs.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
     flexflow case write <case_dir> --othd-map [NAME]
+    flexflow case write * --othd-map            {Colors.DIM}# every case in .cases{Colors.RESET}
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
     {Colors.YELLOW}--othd-map [NAME]{Colors.RESET}  Write a node map for every nodal outputTimeHistory
@@ -56,6 +57,10 @@ Build small derived files from a case's own inputs.
     flexflow case write BR0SG0U1P0 --othd-map cyl_nodes
     flexflow case write BR0SG0U1P0 --othd-map riser_probe
 
+  {Colors.BOLD}Every registered case at once:{Colors.RESET}
+    flexflow case write * --othd-map
+    {Colors.DIM}(or set the context once: use case:*){Colors.RESET}
+
 {Colors.BOLD}NOTES:{Colors.RESET}
 
   - The coordinates file is read from the .def's nodeCoordinates block, not
@@ -63,5 +68,8 @@ Build small derived files from a case's own inputs.
   - Blocks with type other than nodal (e.g. type = coordinates) are reported
     and skipped: their records are not indexed by a node file.
   - Every map in a case is built from a single pass over the coordinates file.
+  - With the {Colors.YELLOW}*{Colors.RESET} wildcard, cases are read from the .cases registry in the
+    current directory. A case with nothing to map is skipped and one that fails
+    is reported, and neither ends the batch.
 
 """)

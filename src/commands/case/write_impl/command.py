@@ -10,6 +10,10 @@ only a few dozen nodes are wanted.
 
 This writes those few dozen out as `othd.<set>.map`, so the coordinates file can
 be deleted and the othd stays readable.
+
+Accepts the `*` wildcard case, in which case every case in the `.cases` registry
+is done in turn -- and a case that cannot be done is reported and stepped over
+rather than ending the batch.
 """
 
 import sys
@@ -19,8 +23,17 @@ from ....utils.logger import Logger
 from ....utils.progress import progress_enabled, spinner
 from ....core.parsers.def_parser import (find_def_file, parse_output_time_history,
                                          parse_node_coordinates)
+from ...case_iteration import is_wildcard_case, load_cases_from_directory
 
 MAP_HEADER = ["row", "node", "x", "y", "z"]
+
+
+class WriteError(Exception):
+    """A case could not be mapped. `skip` marks the harmless kind: nothing to do."""
+
+    def __init__(self, message, skip=False):
+        super().__init__(message)
+        self.skip = skip
 
 
 def _problem_name(case_dir):
@@ -31,7 +44,19 @@ def _problem_name(case_dir):
         return None
 
 
-def _read_node_list(path, logger):
+def _set_name(node_file, problem):
+    """'riser.cyl_nodes.nbc' -> 'cyl_nodes' (the part naming the node set)."""
+    stem = Path(node_file).name
+    for suffix in (".nbc", ".txt", ".dat"):
+        if stem.endswith(suffix):
+            stem = stem[: -len(suffix)]
+            break
+    if problem and stem.startswith(problem + "."):
+        stem = stem[len(problem) + 1:]
+    return stem or "nodes"
+
+
+def _read_node_list(path):
     """Node ids from a .nbc, in file order -- that order indexes the othd."""
     ids = []
     for lineno, raw in enumerate(open(path), start=1):
@@ -42,15 +67,13 @@ def _read_node_list(path, logger):
             try:
                 ids.append(int(token))
             except ValueError:
-                logger.error(f"{Path(path).name}:{lineno}: '{token}' is not a node id")
-                sys.exit(1)
+                raise WriteError(f"{Path(path).name}:{lineno}: '{token}' is not a node id")
     if not ids:
-        logger.error(f"{Path(path).name} lists no nodes")
-        sys.exit(1)
+        raise WriteError(f"{Path(path).name} lists no nodes")
     return ids
 
 
-def _read_coordinates(crd_path, wanted, logger):
+def _read_coordinates(crd_path, wanted):
     """Coordinates of `wanted` node ids, in one streamed pass over the .crd.
 
     The file is far too big to hold, and every map in a case is served from this
@@ -75,10 +98,9 @@ def _read_coordinates(crd_path, wanted, logger):
     if remaining:
         missing = sorted(remaining)
         shown = ", ".join(str(n) for n in missing[:8])
-        logger.error(f"{len(missing)} node(s) listed in the node file are not in "
-                     f"{Path(crd_path).name}: {shown}"
-                     f"{' ...' if len(missing) > 8 else ''}")
-        sys.exit(1)
+        raise WriteError(f"{len(missing)} node(s) listed in the node file are not in "
+                         f"{Path(crd_path).name}: {shown}"
+                         f"{' ...' if len(missing) > 8 else ''}")
     return found
 
 
@@ -101,6 +123,113 @@ def _write_map(path, block, node_file, crd_name, ids, coords, case_name, problem
     Path(path).write_text("\n".join(lines) + "\n")
 
 
+def write_case_maps(case_dir, wanted, logger, show_progress=False):
+    """Build every requested othd map for one case.
+
+    Returns {'written': [(path, rows), ...], 'crd': name, 'crd_mb': size}.
+    Raises WriteError -- with skip=True when the case simply has nothing to map.
+    """
+    case_dir = Path(case_dir)
+    if not case_dir.is_dir():
+        raise WriteError(f"Case directory not found: {case_dir}")
+    problem = _problem_name(case_dir)
+
+    def_file = find_def_file(str(case_dir), problem)
+    if not def_file:
+        raise WriteError(f"No .def file in {case_dir}", skip=True)
+    logger.info(f"Reading {Path(def_file).name}")
+
+    blocks = parse_output_time_history(def_file)
+    nodal = [b for b in blocks if (b.get("type") or "").lower() == "nodal" and b.get("nodes")]
+    for block in blocks:
+        if block not in nodal:
+            logger.info(f"skipping outputTimeHistory \"{block['name']}\" "
+                        f"(type {block.get('type')}) -- only nodal blocks are mapped")
+    if not nodal:
+        raise WriteError(f"{Path(def_file).name} has no nodal outputTimeHistory block "
+                         "with a node file", skip=True)
+
+    if wanted:
+        nodal = [b for b in nodal
+                 if wanted in (b["name"], _set_name(b["nodes"], problem))]
+        if not nodal:
+            raise WriteError(f"No nodal outputTimeHistory matches '{wanted}'", skip=True)
+
+    crd_name = parse_node_coordinates(def_file)
+    if not crd_name:
+        raise WriteError(f"{Path(def_file).name} has no "
+                         "nodeCoordinates{ coordinates = File(..) }")
+    crd_path = case_dir / crd_name
+    if not crd_path.exists():
+        raise WriteError(f"Coordinates file not found: {crd_path}. It is needed once "
+                         "to build the maps; after that it can be removed.")
+
+    per_block = {}
+    for block in nodal:
+        node_path = case_dir / block["nodes"]
+        if not node_path.exists():
+            raise WriteError(f"Node file not found: {node_path} "
+                             f"(from outputTimeHistory \"{block['name']}\")")
+        per_block[block["name"]] = _read_node_list(node_path)
+
+    # Every map in this case is served from one pass over the coordinates file.
+    every = sorted({n for ids in per_block.values() for n in ids})
+    crd_mb = crd_path.stat().st_size / 1e6
+    logger.info(f"Looking up {len(every):,} node(s) in {crd_name} ({crd_mb:,.0f} MB)")
+    with spinner(f"Reading {crd_name}", enabled=show_progress):
+        coords = _read_coordinates(crd_path, every)
+
+    written = []
+    for block in nodal:
+        ids = per_block[block["name"]]
+        out = case_dir / f"othd.{_set_name(block['nodes'], problem)}.map"
+        _write_map(out, block, block["nodes"], crd_name, ids, coords,
+                   case_dir.name, problem)
+        written.append((out, len(ids)))
+    return {"written": written, "crd": crd_name, "crd_mb": crd_mb}
+
+
+def _write_all_cases(args, wanted, logger):
+    """Run over every case in the .cases registry, stepping over the ones that fail."""
+    from rich.console import Console
+
+    console = Console()
+    cases = load_cases_from_directory(Path.cwd())
+    if not cases:
+        logger.error(f"No cases found. Is there a .cases file in {Path.cwd()}? "
+                     "Build one with `case add`.")
+        sys.exit(1)
+
+    console.print(f"\n[bold cyan]Writing othd maps for {len(cases)} case(s)[/bold cyan]\n")
+    done, skipped, failed, maps = [], [], [], 0
+    for entry in cases:
+        name = entry.get("name", "?")
+        path = entry.get("path")
+        if not path:
+            failed.append((name, "no path in .cases"))
+            continue
+        try:
+            result = write_case_maps(path, wanted, logger,
+                                     show_progress=progress_enabled(args, 1))
+        except WriteError as exc:
+            (skipped if exc.skip else failed).append((name, str(exc)))
+            mark = "[dim]-[/dim]" if exc.skip else "[yellow]![/yellow]"
+            console.print(f"  {mark} [bold]{name}[/bold]: {exc}")
+            continue
+        maps += len(result["written"])
+        done.append(name)
+        files = ", ".join(p.name for p, _ in result["written"])
+        rows = sum(n for _, n in result["written"])
+        console.print(f"  [green]+[/green] [bold]{name}[/bold]: {files} ({rows} row(s))")
+
+    console.print()
+    console.print(f"[bold]{len(done)} case(s) mapped[/bold], {maps} file(s) written"
+                  + (f"; {len(skipped)} skipped" if skipped else "")
+                  + (f"; [yellow]{len(failed)} failed[/yellow]" if failed else ""))
+    if failed and not done:
+        sys.exit(1)
+
+
 def execute_write(args):
     from .help_messages import print_write_help
 
@@ -116,83 +245,22 @@ def execute_write(args):
         print(); print_write_help(); sys.exit(1)
     if not args.case:
         print_write_help(); sys.exit(1)
-
-    case_dir = Path(args.case)
-    if not case_dir.is_dir():
-        logger.error(f"Case directory not found: {case_dir}"); sys.exit(1)
-    problem = _problem_name(case_dir)
-
-    def_file = find_def_file(str(case_dir), problem)
-    if not def_file:
-        logger.error(f"No .def file in {case_dir}"); sys.exit(1)
-    logger.info(f"Reading {Path(def_file).name}")
-
-    blocks = parse_output_time_history(def_file)
-    nodal = [b for b in blocks if (b.get("type") or "").lower() == "nodal" and b.get("nodes")]
-    skipped = [b for b in blocks if b not in nodal]
-    if not nodal:
-        logger.error(f"{Path(def_file).name} has no nodal outputTimeHistory block with a "
-                     "node file; nothing to map."
-                     + (f" ({len(skipped)} other block(s) present)" if skipped else ""))
-        sys.exit(1)
-    for block in skipped:
-        logger.info(f"skipping outputTimeHistory \"{block['name']}\" "
-                    f"(type {block.get('type')}) -- only nodal blocks are mapped")
-
     wanted = selector if isinstance(selector, str) else None
-    if wanted:
-        nodal = [b for b in nodal if wanted in (b["name"], _set_name(b["nodes"], problem))]
-        if not nodal:
-            logger.error(f"No nodal outputTimeHistory matches '{wanted}'.")
-            sys.exit(1)
 
-    crd_name = parse_node_coordinates(def_file)
-    if not crd_name:
-        logger.error(f"{Path(def_file).name} has no nodeCoordinates{{ coordinates = File(..) }}")
-        sys.exit(1)
-    crd_path = case_dir / crd_name
-    if not crd_path.exists():
-        logger.error(f"Coordinates file not found: {crd_path}. It is needed once to "
-                     "build the maps; after that it can be removed.")
+    if is_wildcard_case(args.case):
+        _write_all_cases(args, wanted, logger)
+        return
+
+    try:
+        result = write_case_maps(args.case, wanted, logger,
+                                 show_progress=progress_enabled(args, 1))
+    except WriteError as exc:
+        logger.error(str(exc))
         sys.exit(1)
 
-    # Every map is served from one pass over the coordinates file.
-    per_block = {}
-    for block in nodal:
-        node_path = case_dir / block["nodes"]
-        if not node_path.exists():
-            logger.error(f"Node file not found: {node_path} "
-                         f"(from outputTimeHistory \"{block['name']}\")")
-            sys.exit(1)
-        per_block[block["name"]] = _read_node_list(node_path, logger)
-
-    every = sorted({n for ids in per_block.values() for n in ids})
-    size_mb = crd_path.stat().st_size / 1e6
-    logger.info(f"Looking up {len(every):,} node(s) in {crd_name} ({size_mb:,.0f} MB)")
-    with spinner(f"Reading {crd_name}", enabled=progress_enabled(args, 1)):
-        coords = _read_coordinates(crd_path, every, logger)
-
-    written = []
-    for block in nodal:
-        ids = per_block[block["name"]]
-        out = case_dir / f"othd.{_set_name(block['nodes'], problem)}.map"
-        _write_map(out, block, block["nodes"], crd_name, ids, coords,
-                   case_dir.name, problem)
-        written.append((out, len(ids)))
-        print(f"Wrote {len(ids)} row(s) -> {out}")
-
-    total = sum(n for _, n in written)
-    print(f"{len(written)} map(s), {total} node(s). "
-          f"{crd_name} ({size_mb:,.0f} MB) is no longer needed to read these othd records.")
-
-
-def _set_name(node_file, problem):
-    """'riser.cyl_nodes.nbc' -> 'cyl_nodes' (the part naming the node set)."""
-    stem = Path(node_file).name
-    for suffix in (".nbc", ".txt", ".dat"):
-        if stem.endswith(suffix):
-            stem = stem[: -len(suffix)]
-            break
-    if problem and stem.startswith(problem + "."):
-        stem = stem[len(problem) + 1:]
-    return stem or "nodes"
+    for path, rows in result["written"]:
+        print(f"Wrote {rows} row(s) -> {path}")
+    total = sum(n for _, n in result["written"])
+    print(f"{len(result['written'])} map(s), {total} node(s). "
+          f"{result['crd']} ({result['crd_mb']:,.0f} MB) is no longer needed to read "
+          "these othd records.")
