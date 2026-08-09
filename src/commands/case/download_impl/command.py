@@ -13,6 +13,11 @@ from rich.progress import Progress, BarColumn, TextColumn, DownloadColumn, Trans
 from rich.table import Table
 from rich import box
 
+# Loose files worth carrying with a case: what defines the run, and the othd maps
+# that keep its history readable once the mesh file is gone. Globs, so they hold
+# whatever the case calls its problem.
+DEFAULT_UPLOAD_FILES = ["simflow.config", "*.def", "*.geo", "*.map"]
+
 
 def show_upload_help() -> None:
     """Print help for case upload command."""
@@ -31,6 +36,8 @@ Upload case directories from local machine to a remote server.
     {Colors.YELLOW}--to REMOTE{Colors.RESET}            Remote machine name (required)
     {Colors.YELLOW}--dir DIRS{Colors.RESET}             Comma-separated directories to upload
                            (default: othd_files,oisd_files,binary)
+    {Colors.YELLOW}--files [PATTERNS]{Colors.RESET}     Loose files from the case root, as comma-separated
+                           globs (default: simflow.config,*.def,*.geo,*.map)
     {Colors.YELLOW}--remote-path PATH{Colors.RESET}     Override remote base path (default: remote config path)
     {Colors.YELLOW}--force{Colors.RESET}                Create remote directories if they do not exist
     {Colors.YELLOW}--resume{Colors.RESET}               Resume the last interrupted upload
@@ -46,6 +53,24 @@ Upload case directories from local machine to a remote server.
 
     Wildcard mode ('case upload *') uploads all cases listed in the .cases
     file in the current directory.
+
+{Colors.BOLD}FILES:{Colors.RESET}
+    --files carries the small things that describe a case rather than its data:
+    what defines the run, its settings, and any othd maps. They are globs, so
+    the defaults hold whatever a case calls its problem.
+
+    Given {Colors.BOLD}without --dir{Colors.RESET} it uploads only those files -- the default
+    directories include binary/, which is the opposite of a quick definition
+    push. Give both to send data and files together.
+
+    Only files sitting directly in the case root are matched; a recursive
+    match would sweep up the very data --files exists to avoid.
+
+{Colors.BOLD}EXAMPLES:{Colors.RESET}
+    case upload CS4SG1U1 --to server --files
+    case upload CS4SG1U1 --to server --files "*.map"
+    case upload * --to server --files --force
+    case upload CS4SG1U1 --to server --dir binary --files
 
 {Colors.BOLD}CONTEXT:{Colors.RESET}
     Set remote context:    use remote:myserver
@@ -169,6 +194,7 @@ class CaseUploadCommand:
         directories: List[str],
         force: bool,
         wildcard: bool,
+        file_patterns: Optional[List[str]] = None,
     ) -> dict:
         """Construct a new resumable transfer state document."""
         return {
@@ -179,6 +205,7 @@ class CaseUploadCommand:
             'case_selection': case_selection,
             'case_mode': 'wildcard' if wildcard else 'single',
             'directories': directories,
+            'file_patterns': list(file_patterns or []),
             'force': force,
             'cases': case_entries,
             'completed_targets': [],
@@ -269,6 +296,7 @@ class CaseUploadCommand:
             remote_base = state['remote_base_path']
             force_enabled = bool(state.get('force', False))
             directories = list(state.get('directories', []))
+            file_patterns = list(state.get('file_patterns', []))
             case_entries = list(state.get('cases', []))
             case_selection = state.get('case_selection', '')
             wildcard = state.get('case_mode') == 'wildcard'
@@ -288,7 +316,12 @@ class CaseUploadCommand:
                 return 1
 
             force_enabled = bool(self._get_arg(args, 'force', False))
-            directories = self.parse_directories(self._get_arg(args, 'dir'))
+            file_patterns = self.parse_files(self._get_arg(args, 'files')) if is_upload else []
+            dir_arg = self._get_arg(args, 'dir')
+            # --files on its own means just the files: the default directories
+            # include binary/, which is the opposite of a quick definition push.
+            directories = [] if (file_patterns and not dir_arg) \
+                else self.parse_directories(dir_arg)
             remote = self.validate_remote(remote_name)
             if not remote:
                 return 1
@@ -330,6 +363,7 @@ class CaseUploadCommand:
                 directories,
                 force_enabled,
                 wildcard,
+                file_patterns,
             )
             self._save_transfer_state(state)
 
@@ -341,7 +375,8 @@ class CaseUploadCommand:
             self.console.print(f"[red]Error:[/red] No case entries available for {target_label}.")
             return 1
 
-        total_targets = len(case_entries) * len(directories)
+        targets_per_case = len(directories) + (1 if file_patterns else 0)
+        total_targets = len(case_entries) * targets_per_case
         remaining_targets = total_targets - len(completed_targets)
         resume_note = ' (resuming)' if resume_requested else ''
 
@@ -357,7 +392,9 @@ class CaseUploadCommand:
         table.add_row('Remote Machine', remote_name)
         table.add_row('Remote Host', f"{remote['user']}@{remote['ip']}:{remote['port']}")
         table.add_row('Remote Base Path', remote_base)
-        table.add_row('Directories', ', '.join(directories))
+        table.add_row('Directories', ', '.join(directories) or '(none)')
+        if file_patterns:
+            table.add_row('Files', ', '.join(file_patterns))
         table.add_row('Force Create Missing Dir', 'Yes' if force_enabled else 'No')
         if resume_requested:
             table.add_row('Completed Targets', str(len(completed_targets)))
@@ -391,7 +428,17 @@ class CaseUploadCommand:
                         'case_path': entry_path,
                         'remote_case_path': remote_case_path,
                         'directory': directory,
+                        'kind': 'dir',
                         'key': self._target_key(entry_path, directory),
+                    })
+                if file_patterns:
+                    all_targets.append({
+                        'case_name': entry.get('name') or Path(entry_path).name,
+                        'case_path': entry_path,
+                        'remote_case_path': remote_case_path,
+                        'directory': 'files',
+                        'kind': 'files',
+                        'key': self._target_key(entry_path, '__files__'),
                     })
 
             for idx, target in enumerate(all_targets, 1):
@@ -403,7 +450,15 @@ class CaseUploadCommand:
                         f"[bold]Case {target['case_name']}[/bold] [cyan]{idx}/{len(all_targets)}[/cyan]"
                     )
 
-                if is_upload:
+                if is_upload and target.get('kind') == 'files':
+                    ok = self.upload_files(
+                        ssh,
+                        target['remote_case_path'],
+                        target['case_path'],
+                        file_patterns,
+                        force=force_enabled,
+                    )
+                elif is_upload:
                     ok = self.upload_directory(
                         ssh,
                         target['remote_case_path'],
@@ -434,13 +489,13 @@ class CaseUploadCommand:
             all_completed = success_count == total_targets and total_targets > 0
             if all_completed:
                 self.console.print(
-                    f"[green]✓[/green] {action_label} complete: {success_count}/{total_targets} directories"
+                    f"[green]✓[/green] {action_label} complete: {success_count}/{total_targets} target(s)"
                 )
                 self._clear_transfer_state()
                 return 0
 
             self.console.print(
-                f"[yellow]Incomplete:[/yellow] {success_count}/{total_targets} directories finished. Use --resume to continue."
+                f"[yellow]Incomplete:[/yellow] {success_count}/{total_targets} target(s) finished. Use --resume to continue."
             )
             self._finalize_transfer_state(state, success=False)
             return 1
@@ -491,6 +546,35 @@ class CaseUploadCommand:
 
         case_path = os.path.expanduser(case_path)
         return case_path
+
+    def parse_files(self, files_arg) -> List[str]:
+        """Glob patterns for loose files to upload from the case root.
+
+        `--files` on its own takes the defaults: the case definition and its
+        settings, plus any othd maps. They are globs rather than <problem>.def and
+        friends so the same defaults work whatever a case calls its problem.
+        """
+        if files_arg in (None, False):
+            return []
+        if files_arg is True:
+            return list(DEFAULT_UPLOAD_FILES)
+        patterns = [p.strip() for p in str(files_arg).split(",") if p.strip()]
+        return patterns or list(DEFAULT_UPLOAD_FILES)
+
+    def resolve_files(self, case_path: str, patterns: List[str]) -> List[str]:
+        """Names in the case root matching `patterns`, de-duplicated and sorted.
+
+        Only files directly in the case root: these are the small definition and
+        map files that sit beside the data directories, and a recursive match
+        would sweep up the very data --files exists to avoid.
+        """
+        root = Path(case_path)
+        names = set()
+        for pattern in patterns:
+            for match in root.glob(pattern):
+                if match.is_file() and match.parent == root:
+                    names.add(match.name)
+        return sorted(names)
 
     def parse_directories(self, dirs_arg: Optional[str]) -> List[str]:
         """
@@ -547,6 +631,67 @@ class CaseUploadCommand:
         """
         case_name = os.path.basename(case_path.rstrip("/"))
         return f"{remote_base}/{case_name}"
+
+    def upload_files(
+        self,
+        ssh: SSHClientWrapper,
+        remote_case_path: str,
+        local_case_path: str,
+        patterns: List[str],
+        force: bool = False
+    ) -> bool:
+        """Upload loose files from the case root into the remote case root.
+
+        Returns False only when the case directory itself could not be used;
+        matching nothing is reported and treated as done, since a case that has
+        no maps yet is not a failure.
+        """
+        names = self.resolve_files(local_case_path, patterns)
+        if not names:
+            self.console.print(
+                f"[yellow]Warning:[/yellow] No files matching {', '.join(patterns)} "
+                f"in {local_case_path}"
+            )
+            return True
+
+        if not ssh.remote_path_exists(remote_case_path):
+            if not force:
+                self.console.print(
+                    f"[yellow]Warning:[/yellow] Remote directory not found: {remote_case_path}"
+                )
+                self.console.print("[dim]Use --force to create remote directories[/dim]")
+                return False
+            self.console.print(f"[cyan]Creating:[/cyan] Remote directory {remote_case_path}")
+            if not ssh.make_remote_dir(remote_case_path):
+                self.console.print(
+                    f"[red]Error:[/red] Failed to create remote directory: {remote_case_path}"
+                )
+                return False
+
+        self.console.print(f"[cyan]Uploading:[/cyan] {len(names)} file(s)")
+        total_bytes = sum(os.path.getsize(os.path.join(local_case_path, n)) for n in names)
+
+        with Progress(
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            DownloadColumn(),
+            TransferSpeedColumn(),
+            TimeRemainingColumn(),
+        ) as progress:
+            task = progress.add_task("Transferring files...", total=total_bytes or None)
+            done = 0
+            for name in names:
+                local_file = os.path.join(local_case_path, name)
+                ssh.upload_file(local_file, f"{remote_case_path}/{name}")
+                done += os.path.getsize(local_file)
+                progress.update(task, completed=done, description=f"Transferred {name}")
+
+        self.console.print(
+            f"[green]✓[/green] Uploaded {len(names)} file(s) to {remote_case_path}"
+        )
+        for name in names:
+            self.console.print(f"    [dim]{name}[/dim]")
+        return True
 
     def upload_directory(
         self,
