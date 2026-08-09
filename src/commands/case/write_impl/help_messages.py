@@ -15,38 +15,49 @@ Build small derived files from a case's own inputs.
     flexflow case write * --othd-map            {Colors.DIM}# every case in .cases{Colors.RESET}
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
-    {Colors.YELLOW}--othd-map [NAME]{Colors.RESET}  Write a node map for every nodal outputTimeHistory
-                       block in the .def. Give NAME to do just one, matched
-                       against the block name or the node-set name.
+    {Colors.YELLOW}--othd-map [NAME]{Colors.RESET}  Write a map for every outputTimeHistory block in the
+                       .def that names a file its records are indexed by.
+                       Give NAME to do just one, matched against the block
+                       name or the node/point-set name.
     {Colors.YELLOW}--verbose, -v{Colors.RESET}      Show which files were read
     {Colors.YELLOW}--help, -h{Colors.RESET}         Show this help message
 
 {Colors.BOLD}WHY:{Colors.RESET}
 
-    A nodal outputTimeHistory writes its records {Colors.BOLD}positionally{Colors.RESET}: row k of
-    every aleDisp block is the k-th node of the node file the block was given.
-    The othd carries no node id and no coordinate, so reading one back needs
-    both the node file and the mesh coordinates -- and the coordinates file is
-    usually the largest input in the case (137 MB for a 1.8M-node riser) even
-    when the output covers a few dozen nodes.
+    An outputTimeHistory writes its records {Colors.BOLD}positionally{Colors.RESET}: row k of every
+    output block is the k-th entry of the file the block was given. The othd
+    carries no id and no coordinate of its own, so reading one back needs that
+    file -- and for a nodal block, the mesh coordinates too, which are usually
+    the largest input in the case (137 MB for a 1.8M-node riser) even when the
+    output covers a few dozen nodes.
 
-    This writes those nodes out once, so the coordinates file can be deleted
-    and the othd stays readable.
+    This writes the few dozen out once, so the mesh can be deleted and the othd
+    stays readable.
 
 {Colors.BOLD}OUTPUT:{Colors.RESET}
 
-    One {Colors.YELLOW}othd.<set>.map{Colors.RESET} per nodal block, in the case directory:
+    One {Colors.YELLOW}othd.<set>.map{Colors.RESET} per mappable block, in the case directory. What a
+    row says depends on what the block is indexed by:
+
+    {Colors.BOLD}type = nodal{Colors.RESET} -- indexed by a node file, resolved against the mesh:
 
         row,node,x,y,z
         0,2,-2.1648901405887341e-17,3.5355339059327368e-01,-3.5355339059327379e-01
 
-    {Colors.YELLOW}row{Colors.RESET}      index of the record within each aleDisp block of the othd
-    {Colors.YELLOW}node{Colors.RESET}     mesh node id
-    {Colors.YELLOW}x, y, z{Colors.RESET}  {Colors.BOLD}undeformed{Colors.RESET} coordinates -- add the othd displacement
-             to get where the node moved to
+        {Colors.YELLOW}x, y, z{Colors.RESET} are {Colors.BOLD}undeformed{Colors.RESET} -- add the othd displacement to get
+        where the node moved to.
 
-    Rows keep the node file's order, because that order is what indexes the
-    othd. They are not sorted by node id.
+    {Colors.BOLD}type = coordinates{Colors.RESET} -- indexed by its own point file, so no mesh is
+    read and there is no node column: a requested point need not sit on a node.
+
+        row,x,y,z
+        0,0.0000000000000000e+00,0.0000000000000000e+00,3.0000000000000000e+00
+
+    Rows keep the source file's order, because that order is what indexes the
+    othd. They are not sorted.
+
+    A block whose type names no file to index its records by is reported and
+    skipped -- there is nothing to map it against.
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
 

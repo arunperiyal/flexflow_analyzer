@@ -26,6 +26,7 @@ from ....core.parsers.def_parser import (find_def_file, parse_output_time_histor
 from ...case_iteration import is_wildcard_case, load_cases_from_directory
 
 MAP_HEADER = ["row", "node", "x", "y", "z"]
+POINT_MAP_HEADER = ["row", "x", "y", "z"]
 
 
 class WriteError(Exception):
@@ -54,6 +55,33 @@ def _set_name(node_file, problem):
     if problem and stem.startswith(problem + "."):
         stem = stem[len(problem) + 1:]
     return stem or "nodes"
+
+
+def _read_coordinate_list(path):
+    """Points from a `type = coordinates` probe file, in file order.
+
+    That order indexes the othd exactly as a node file's does. The format is one
+    point per line as x y z; anything that does not start with three numbers (a
+    count header, a comment, a blank) is passed over, and the count of skipped
+    lines is returned so the caller can say so rather than quietly losing rows.
+    """
+    points, skipped = [], 0
+    for raw in open(path):
+        line = raw.split('#', 1)[0].strip()
+        if not line:
+            continue
+        parts = line.split()
+        try:
+            points.append(tuple(f"{float(v):.16e}" for v in parts[:3]))
+        except (ValueError, IndexError):
+            skipped += 1
+            continue
+        if len(parts) < 3:
+            points.pop()
+            skipped += 1
+    if not points:
+        raise WriteError(f"{Path(path).name} lists no coordinates")
+    return points, skipped
 
 
 def _read_node_list(path):
@@ -104,22 +132,45 @@ def _read_coordinates(crd_path, wanted):
     return found
 
 
-def _write_map(path, block, node_file, crd_name, ids, coords, case_name, problem):
-    """Write one map: othd row -> node id -> undeformed coordinates."""
-    lines = [
-        "# FlexFlow othd node map",
+def _map_header(block, source, source_count, case_name, problem, provenance, note):
+    """The '#' block every map carries, saying where its rows came from."""
+    return [
+        "# FlexFlow othd map",
         f"# case: {case_name}   problem: {problem or '?'}",
         f"# outputTimeHistory: \"{block['name']}\"   type: {block['type']}"
         + (f"   outputFrequency: {block['outputFrequency']}"
            if block['outputFrequency'] is not None else ""),
-        f"# nodes: {node_file} ({len(ids)})   coordinates: {crd_name}",
-        "# row = index of the record within each aleDisp block of the othd file",
-        "# coordinates are undeformed: add the othd displacement for the moved position",
-        ",".join(MAP_HEADER),
+        f"# {provenance}: {source} ({source_count})",
+        "# row = index of the record within each output block of the othd file",
+        f"# {note}",
     ]
+
+
+def _write_node_map(path, block, node_file, crd_name, ids, coords, case_name, problem):
+    """A nodal block's map: othd row -> node id -> undeformed coordinates."""
+    lines = _map_header(
+        block, node_file, len(ids), case_name, problem,
+        f"nodes", "coordinates are undeformed (from " + crd_name
+        + "): add the othd displacement for the moved position")
+    lines.append(",".join(MAP_HEADER))
     for row, node in enumerate(ids):
         x, y, z = coords[node]
         lines.append(f"{row},{node},{x},{y},{z}")
+    Path(path).write_text("\n".join(lines) + "\n")
+
+
+def _write_point_map(path, block, point_file, points, case_name, problem):
+    """A coordinates block's map: othd row -> the point that was asked for.
+
+    No mesh lookup: the points are in the probe file itself. There is no node
+    column because a requested point need not sit on one.
+    """
+    lines = _map_header(
+        block, point_file, len(points), case_name, problem, "coordinates",
+        "coordinates are the points the block asked for, taken from " + point_file)
+    lines.append(",".join(POINT_MAP_HEADER))
+    for row, (x, y, z) in enumerate(points):
+        lines.append(f"{row},{x},{y},{z}")
     Path(path).write_text("\n".join(lines) + "\n")
 
 
@@ -140,52 +191,75 @@ def write_case_maps(case_dir, wanted, logger, show_progress=False):
     logger.info(f"Reading {Path(def_file).name}")
 
     blocks = parse_output_time_history(def_file)
-    nodal = [b for b in blocks if (b.get("type") or "").lower() == "nodal" and b.get("nodes")]
+    mappable, unsupported = [], []
     for block in blocks:
-        if block not in nodal:
-            logger.info(f"skipping outputTimeHistory \"{block['name']}\" "
-                        f"(type {block.get('type')}) -- only nodal blocks are mapped")
-    if not nodal:
-        raise WriteError(f"{Path(def_file).name} has no nodal outputTimeHistory block "
-                         "with a node file", skip=True)
+        kind = (block.get("type") or "").lower()
+        if kind == "nodal" and block.get("nodes"):
+            mappable.append((block, "nodes", block["nodes"]))
+        elif kind == "coordinates" and block.get("coordinates"):
+            mappable.append((block, "coordinates", block["coordinates"]))
+        else:
+            unsupported.append(block)
+    for block in unsupported:
+        logger.info(f"skipping outputTimeHistory \"{block['name']}\": type "
+                    f"{block.get('type') or 'unset'} names no file to index its records by")
+    if not mappable:
+        raise WriteError(f"{Path(def_file).name} has no outputTimeHistory block whose "
+                         "records can be mapped", skip=True)
 
     if wanted:
-        nodal = [b for b in nodal
-                 if wanted in (b["name"], _set_name(b["nodes"], problem))]
-        if not nodal:
-            raise WriteError(f"No nodal outputTimeHistory matches '{wanted}'", skip=True)
+        mappable = [entry for entry in mappable
+                    if wanted in (entry[0]["name"], _set_name(entry[2], problem))]
+        if not mappable:
+            raise WriteError(f"No outputTimeHistory matches '{wanted}'", skip=True)
 
-    crd_name = parse_node_coordinates(def_file)
-    if not crd_name:
-        raise WriteError(f"{Path(def_file).name} has no "
-                         "nodeCoordinates{ coordinates = File(..) }")
-    crd_path = case_dir / crd_name
-    if not crd_path.exists():
-        raise WriteError(f"Coordinates file not found: {crd_path}. It is needed once "
-                         "to build the maps; after that it can be removed.")
+    # The mesh is only needed if a nodal block is in play; a case of nothing but
+    # coordinates blocks maps fine without it.
+    nodal = [(block, source) for block, key, source in mappable if key == "nodes"]
+    crd_name, crd_path, crd_mb = None, None, 0.0
+    if nodal:
+        crd_name = parse_node_coordinates(def_file)
+        if not crd_name:
+            raise WriteError(f"{Path(def_file).name} has no "
+                             "nodeCoordinates{ coordinates = File(..) }")
+        crd_path = case_dir / crd_name
+        if not crd_path.exists():
+            raise WriteError(f"Coordinates file not found: {crd_path}. It is needed "
+                             "once to build the maps; after that it can be removed.")
+        crd_mb = crd_path.stat().st_size / 1e6
 
-    per_block = {}
-    for block in nodal:
-        node_path = case_dir / block["nodes"]
-        if not node_path.exists():
-            raise WriteError(f"Node file not found: {node_path} "
+    resolved = {}
+    for block, key, source in mappable:
+        source_path = case_dir / source
+        if not source_path.exists():
+            raise WriteError(f"{key.capitalize()} file not found: {source_path} "
                              f"(from outputTimeHistory \"{block['name']}\")")
-        per_block[block["name"]] = _read_node_list(node_path)
+        if key == "nodes":
+            resolved[block["name"]] = _read_node_list(source_path)
+        else:
+            points, dropped = _read_coordinate_list(source_path)
+            if dropped:
+                logger.info(f"{source}: {dropped} line(s) held no x y z and were passed over")
+            resolved[block["name"]] = points
 
-    # Every map in this case is served from one pass over the coordinates file.
-    every = sorted({n for ids in per_block.values() for n in ids})
-    crd_mb = crd_path.stat().st_size / 1e6
-    logger.info(f"Looking up {len(every):,} node(s) in {crd_name} ({crd_mb:,.0f} MB)")
-    with spinner(f"Reading {crd_name}", enabled=show_progress):
-        coords = _read_coordinates(crd_path, every)
+    coords = {}
+    if nodal:
+        # Every nodal map in this case is served from one pass over the mesh.
+        every = sorted({n for block, _ in nodal for n in resolved[block["name"]]})
+        logger.info(f"Looking up {len(every):,} node(s) in {crd_name} ({crd_mb:,.0f} MB)")
+        with spinner(f"Reading {crd_name}", enabled=show_progress):
+            coords = _read_coordinates(crd_path, every)
 
     written = []
-    for block in nodal:
-        ids = per_block[block["name"]]
-        out = case_dir / f"othd.{_set_name(block['nodes'], problem)}.map"
-        _write_map(out, block, block["nodes"], crd_name, ids, coords,
-                   case_dir.name, problem)
-        written.append((out, len(ids)))
+    for block, key, source in mappable:
+        rows = resolved[block["name"]]
+        out = case_dir / f"othd.{_set_name(source, problem)}.map"
+        if key == "nodes":
+            _write_node_map(out, block, source, crd_name, rows, coords,
+                            case_dir.name, problem)
+        else:
+            _write_point_map(out, block, source, rows, case_dir.name, problem)
+        written.append((out, len(rows)))
     return {"written": written, "crd": crd_name, "crd_mb": crd_mb}
 
 
@@ -261,6 +335,8 @@ def execute_write(args):
     for path, rows in result["written"]:
         print(f"Wrote {rows} row(s) -> {path}")
     total = sum(n for _, n in result["written"])
-    print(f"{len(result['written'])} map(s), {total} node(s). "
-          f"{result['crd']} ({result['crd_mb']:,.0f} MB) is no longer needed to read "
-          "these othd records.")
+    summary = f"{len(result['written'])} map(s), {total} row(s)."
+    if result["crd"]:
+        summary += (f" {result['crd']} ({result['crd_mb']:,.0f} MB) is no longer needed "
+                    "to read these othd records.")
+    print(summary)

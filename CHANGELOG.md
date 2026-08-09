@@ -49,23 +49,29 @@
 ### ✨ New Features
 
 #### `case write --othd-map` — keep othd files readable without the mesh
-- New **`case write`** subcommand. `--othd-map` writes one `othd.<set>.map` per
-  **nodal** `outputTimeHistory` block in the case's `.def`, giving `row, node, x,
-  y, z`: the record's index within each `aleDisp` block, the mesh node it belongs
-  to, and that node's **undeformed** coordinates.
+- New **`case write`** subcommand (listed in `case --help`). `--othd-map` writes
+  one `othd.<set>.map` per `outputTimeHistory` block in the case's `.def` that
+  names a file its records are indexed by:
+  - **`type = nodal`** → `row, node, x, y, z` — the record's index, the mesh node
+    it belongs to, and that node's **undeformed** coordinates from the mesh.
+  - **`type = coordinates`** → `row, x, y, z` — the points the block asked for,
+    read straight from its own probe file. No mesh is touched, and there is no
+    node column: a requested point need not sit on one.
+  - Any other type names no file to index its records by, so it is reported and
+    skipped. The mesh file is only required when a nodal block is present, so a
+    case of nothing but coordinates blocks maps without it.
 - Why: a nodal history is written *positionally* — row k is the k-th node of the
   block's node file, with no id and no coordinate in the othd itself. Reading one
   back has therefore required the node file **and** the mesh coordinates, and the
   coordinates file is usually the largest input in a case (137 MB for a 1.8M-node
   riser) even when the output covers 49 nodes. With the map written, it can be
   deleted.
-- Rows keep the node file's order, because that order is what indexes the othd —
-  they are deliberately not sorted by node id.
+- Rows keep the source file's order, because that order is what indexes the othd —
+  they are deliberately not sorted.
 - The coordinates file is read from the `.def`'s `nodeCoordinates` block rather
   than assumed to be `<problem>.crd`, and every map in a case is built from a
-  single streamed pass over it. Blocks of another type (e.g. `type = coordinates`)
-  are reported and skipped: their records are not indexed by a node file.
-  `--othd-map NAME` restricts it to one block, by block name or node-set name.
+  single streamed pass over it. `--othd-map NAME` restricts it to one block, by
+  block name or node/point-set name.
 - Accepts the **`*` wildcard case** (including via `use case:*`), mapping every
   case in the `.cases` registry in turn. A case with nothing to map is *skipped*
   and one that genuinely fails is *reported*, and neither ends the batch — so a

@@ -291,6 +291,7 @@ class CaseCommand(BaseCommand):
         table.add_row("organise", "Organize and clean up case directory")
         table.add_row("check", "Inspect OTHD/OISD ranges and validate config")
         table.add_row("status", "Check case data file completeness")
+        table.add_row("write", "Write derived files from a case's inputs (othd node maps)")
         table.add_row("add", "Scan a directory and build the .cases registry")
         table.add_row("report", "Print a compact status table for all registered cases")
         table.add_row("upload", "Upload case directories from local to remote server")

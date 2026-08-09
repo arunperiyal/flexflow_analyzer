@@ -46,6 +46,28 @@ solve {{ }}
 """
 
 
+DEF_NO_NODAL = """
+nodeCoordinates {{
+    coordinates     = File( "{crd}" )
+}}
+outputTimeHistory( "field_probe" ) {{
+    type            = coordinates
+    coordinates     = File( "probe_dat.txt" )
+}}
+"""
+
+# a block whose type names no file to index its records by: nothing to map
+DEF_UNMAPPABLE = """
+nodeCoordinates {{
+    coordinates     = File( "{crd}" )
+}}
+outputTimeHistory( "surface_probe" ) {{
+    type            = surface
+    outputFrequency = 1
+}}
+"""
+
+
 @pytest.fixture
 def case(tmp_path):
     """A case with two nodal history blocks, one coordinates block, and a mesh."""
@@ -54,6 +76,7 @@ def case(tmp_path):
     # node ids deliberately out of order and non-contiguous
     (tmp_path / "riser.cyl_nodes.nbc").write_text("2\n18\n812\n813\n")
     (tmp_path / "riser.tip_nodes.nbc").write_text("18\n2\n")
+    (tmp_path / "probe_dat.txt").write_text("0 0 3.0\n0 0 5.0\n0 0 10.0\n")
     (tmp_path / "riser.crd").write_text("".join(
         f"{n} {n / 10:.16e} {n / 100:.16e} {-n / 100:.16e}\n" for n in range(1, 1000)))
     return tmp_path
@@ -63,6 +86,11 @@ def make_args(case, **kw):
     defaults = dict(case=str(case), othd_map=True, verbose=False, help=False)
     defaults.update(kw)
     return argparse.Namespace(**defaults)
+
+
+def flat(text):
+    """Collapse whitespace: rich wraps console output at the terminal width."""
+    return " ".join(text.split())
 
 
 def read_map(path):
@@ -95,12 +123,12 @@ class TestDefParsing:
 class TestOthdMap:
     """End-to-end `case write --othd-map`."""
 
-    def test_writes_one_map_per_nodal_block(self, case):
+    def test_writes_one_map_per_mappable_block(self, case):
         execute_write(make_args(case))
         assert (case / "othd.cyl_nodes.map").exists()
         assert (case / "othd.tip_nodes.map").exists()
-        # the coordinates-type block gets no map: it is not indexed by a node file
-        assert not list(case.glob("othd.probe_dat*"))
+        # a coordinates block is mapped too: its records are indexed by its own file
+        assert (case / "othd.probe_dat.map").exists()
 
     def test_rows_keep_the_node_file_order(self, case):
         execute_write(make_args(case))
@@ -122,14 +150,32 @@ class TestOthdMap:
             assert float(row[3]) == pytest.approx(node / 100)
             assert float(row[4]) == pytest.approx(-node / 100)
 
+    def test_a_coordinates_block_maps_its_own_points(self, case):
+        execute_write(make_args(case))
+        comments, header, rows = read_map(case / "othd.probe_dat.map")
+        assert header == ["row", "x", "y", "z"]        # no node: a point need not be one
+        assert [r[0] for r in rows] == ["0", "1", "2"]
+        assert [float(r[3]) for r in rows] == [3.0, 5.0, 10.0]
+        blob = "\n".join(comments)
+        assert 'outputTimeHistory: "riser_probe1_field"' in blob
+        assert "coordinates: probe_dat.txt (3)" in blob
+
+    def test_a_coordinates_only_case_needs_no_mesh(self, tmp_path):
+        """The mesh is only read for nodal blocks."""
+        (tmp_path / "simflow.config").write_text("problem = riser\n")
+        (tmp_path / "riser.def").write_text(DEF_NO_NODAL.format(crd="riser.crd"))
+        (tmp_path / "probe_dat.txt").write_text("1 2 3\n")
+        # riser.crd deliberately absent
+        execute_write(make_args(tmp_path))
+        assert (tmp_path / "othd.probe_dat.map").exists()
+
     def test_header_records_where_it_came_from(self, case):
         execute_write(make_args(case))
         comments, _, _ = read_map(case / "othd.cyl_nodes.map")
         blob = "\n".join(comments)
         assert 'outputTimeHistory: "riser_probe"' in blob
-        assert "riser.cyl_nodes.nbc (4)" in blob
-        assert "coordinates: riser.crd" in blob
-        assert "undeformed" in blob
+        assert "nodes: riser.cyl_nodes.nbc (4)" in blob
+        assert "undeformed (from riser.crd)" in blob
 
     def test_name_selects_a_single_block(self, case):
         execute_write(make_args(case, othd_map="tip_nodes"))
@@ -166,17 +212,6 @@ class TestOthdMap:
         assert not list(case.glob("othd.*.map"))
 
 
-DEF_NO_NODAL = """
-nodeCoordinates {{
-    coordinates     = File( "{crd}" )
-}}
-outputTimeHistory( "field_probe" ) {{
-    type            = coordinates
-    coordinates     = File( "probe_dat.txt" )
-}}
-"""
-
-
 @pytest.fixture
 def registry(tmp_path, monkeypatch):
     """A .cases registry mixing cases that work, cases to skip, and cases that fail."""
@@ -185,6 +220,7 @@ def registry(tmp_path, monkeypatch):
         d.mkdir()
         (d / "simflow.config").write_text("problem = riser\n")
         (d / "riser.def").write_text(template.format(crd="riser.crd"))
+        (d / "probe_dat.txt").write_text("0 0 3.0\n")
         if nbc:
             (d / "riser.cyl_nodes.nbc").write_text("2\n18\n812\n")
             (d / "riser.tip_nodes.nbc").write_text("18\n2\n")
@@ -196,10 +232,10 @@ def registry(tmp_path, monkeypatch):
 
     build("Good1")
     build("Good2")
-    build("NoNodal", template=DEF_NO_NODAL)      # nothing to map -> skip
+    build("Unmappable", template=DEF_UNMAPPABLE)  # no file to index by -> skip
     build("NoCrd", crd=False)                    # mesh gone       -> fail
     entries = [{"name": n, "path": str(tmp_path / n)}
-               for n in ("Good1", "Good2", "NoNodal", "NoCrd")]
+               for n in ("Good1", "Good2", "Unmappable", "NoCrd")]
     entries.append({"name": "Gone", "path": str(tmp_path / "not_here")})
     (tmp_path / ".cases").write_text(json.dumps(entries))
     monkeypatch.chdir(tmp_path)                  # .cases is read from the cwd
@@ -216,17 +252,22 @@ class TestWildcard:
 
     def test_one_bad_case_does_not_end_the_batch(self, registry, capsys):
         execute_write(make_args("*"))
-        out = capsys.readouterr().out
-        # NoNodal is skipped, NoCrd and Gone fail, yet both good cases are written
+        out = flat(capsys.readouterr().out)
+        # Unmappable is skipped, NoCrd and Gone fail, yet both good cases are written
         assert "2 case(s) mapped" in out
         assert "1 skipped" in out and "2 failed" in out
         assert (registry / "Good1" / "othd.cyl_nodes.map").exists()
 
     def test_nothing_to_map_is_a_skip_not_a_failure(self, registry, capsys):
         execute_write(make_args("*"))
-        out = capsys.readouterr().out
-        assert "NoNodal" in out and "no nodal outputTimeHistory" in out
-        assert not list((registry / "NoNodal").glob("othd.*.map"))
+        out = flat(capsys.readouterr().out)
+        assert "Unmappable" in out and "records can be mapped" in out
+        assert not list((registry / "Unmappable").glob("othd.*.map"))
+
+    def test_a_coordinates_block_counts_as_mappable(self, registry):
+        """A case with only a coordinates block is mapped, not skipped."""
+        execute_write(make_args("*"))
+        assert (registry / "Good1" / "othd.probe_dat.map").exists()
 
     def test_the_selector_still_applies(self, registry):
         execute_write(make_args("*", othd_map="tip_nodes"))
