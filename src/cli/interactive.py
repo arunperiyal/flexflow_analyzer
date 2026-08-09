@@ -226,6 +226,7 @@ class FlexFlowCompleter(Completer):
         ('case', 'upload'): {
             **_COMMON_FLAGS,
             '--dir':          'Directories to upload (comma-separated, default: othd_files,oisd_files,binary)',
+            '--files':        'Loose files from the case root (globs; alone = only those files)',
             '--to':           'Remote machine name (or use context: use remote:<name>)',
             '--remote-path':  'Override remote base path (default: use remote config)',
             '--force':        'Create missing remote directories before upload',
@@ -234,6 +235,7 @@ class FlexFlowCompleter(Completer):
         ('case', 'download'): {
             **_COMMON_FLAGS,
             '--dir':          'Directories to download (comma-separated, default: othd_files,oisd_files,binary)',
+            '--files':        'Loose files from the remote case root (globs; alone = only those files)',
             '--from':         'Remote machine name (or use context: use remote:<name>)',
             '--remote-path':  'Override remote base path (default: use remote config)',
             '--force':        'Create the local case directory if it does not exist',
