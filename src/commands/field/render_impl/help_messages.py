@@ -9,6 +9,14 @@ _COMMON_INPUT = f"""\
     {Colors.YELLOW}--vtu PATH{Colors.RESET}             Render an existing .vtu directly
     {Colors.YELLOW}--config FILE{Colors.RESET}          YAML config (input.vtu may be set there)"""
 
+_COMMON_COLOR = f"""\
+    {Colors.YELLOW}--color NAME{Colors.RESET}           Scalar to colour by          (default: U; use W for z-flow)
+    {Colors.YELLOW}--range MIN MAX{Colors.RESET}        Fix the colour scale to this span (two numbers,
+                           space-separated, so a negative MIN works)
+                           {Colors.DIM}Without it the scale is taken from each surface, so the
+                           same variable gets a different scale at every timestep
+                           and two frames cannot be compared -- or animated.{Colors.RESET}"""
+
 _COMMON_OUTPUT = f"""\
 {Colors.BOLD}OUTPUT:{Colors.RESET}  ({Colors.DIM}--output picks the format by extension{Colors.RESET})
     {Colors.YELLOW}--output NAME{Colors.RESET}          Prefix: NAME_<view>.png per view, plus NAME.vtp
@@ -78,7 +86,7 @@ by another variable.
 {Colors.BOLD}THE SURFACE:{Colors.RESET}
     {Colors.YELLOW}--contour NAME{Colors.RESET}         Scalar to contour            (default: QCriterion)
     {Colors.YELLOW}--values V [V ...]{Colors.RESET}     Isosurface value(s)          (default: 20)
-    {Colors.YELLOW}--color NAME{Colors.RESET}           Scalar to colour by          (default: U; use W for z-flow)
+{_COMMON_COLOR}
 
 {_COMMON_OUTPUT}
 
@@ -91,6 +99,10 @@ by another variable.
 
   {Colors.BOLD}An existing .vtu with several iso values:{Colors.RESET}
     flexflow field render iso --vtu field.vtu --contour QCriterion --values 5 50 --output wake
+
+  {Colors.BOLD}A fixed scale, so timesteps can be compared:{Colors.RESET}
+    flexflow field render iso myCase --timestep 100 --color W --range -0.5 0.5
+    flexflow field render iso myCase --timestep 200 --color W --range -0.5 0.5
 
   {Colors.BOLD}Write then use a config template:{Colors.RESET}
     flexflow field render iso --write-template iso.yml
@@ -127,7 +139,7 @@ want out of a run. Or cut a series of planes along one normal.
     {Colors.YELLOW}--origin X,Y,Z{Colors.RESET}         A point the plane passes through (default: mesh centre)
     {Colors.YELLOW}--slices N{Colors.RESET}             Cut N planes evenly spaced along the normal
                            instead of one, spanning the mesh
-    {Colors.YELLOW}--color NAME{Colors.RESET}           Scalar to colour by          (default: U)
+{_COMMON_COLOR}
 
 {_COMMON_OUTPUT}
 
@@ -141,8 +153,8 @@ want out of a run. Or cut a series of planes along one normal.
   {Colors.BOLD}At a chosen height:{Colors.RESET}
     flexflow field render slice myCase --normal z --origin 0,0,3
 
-  {Colors.BOLD}Ten stations down the riser:{Colors.RESET}
-    flexflow field render slice myCase --normal z --slices 10 --output stations
+  {Colors.BOLD}Ten stations down the riser, all on one scale:{Colors.RESET}
+    flexflow field render slice myCase --normal z --slices 10 --range -1 1 --output stations
 
   {Colors.BOLD}The cut itself, for ParaView or pandas:{Colors.RESET}
     flexflow field render slice myCase --normal x --output cut.vtp

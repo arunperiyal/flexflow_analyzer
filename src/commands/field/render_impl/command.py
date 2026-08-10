@@ -88,6 +88,17 @@ def _parse_vector(text, what, logger):
     return parts
 
 
+def _check_range(pair, logger):
+    """argparse has given us two floats; only the ordering is left to check."""
+    if pair is None:
+        return None
+    lo, hi = pair
+    if lo >= hi:
+        logger.error(f"--range needs MIN below MAX, got {lo} and {hi}")
+        sys.exit(1)
+    return [lo, hi]
+
+
 def _resolve_vtu(args, cfg, mode, logger):
     """Return a .vtu path: explicit --vtu / config, or convert the case's PLT."""
     vtu = args.vtu or cfg["input"].get("vtu")
@@ -147,6 +158,8 @@ def _apply_overrides(args, cfg, mode):
     """Map the CLI flags onto the config for the mode in play."""
     if getattr(args, "color", None):
         cfg["color"]["variable"] = args.color
+    if getattr(args, "range", None):
+        cfg["color"]["range"] = args.range
 
     if mode == "iso":
         if getattr(args, "contour", None):
@@ -214,6 +227,7 @@ def execute_render(args):
 
     args.normal = _parse_vector(getattr(args, "normal", None), "normal", logger)
     args.origin = _parse_vector(getattr(args, "origin", None), "origin", logger)
+    args.range = _check_range(getattr(args, "range", None), logger)
 
     user_cfg = {}
     cfg = render.default_config(mode)

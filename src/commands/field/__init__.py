@@ -170,6 +170,13 @@ class FieldCommand(BaseCommand):
         render_parser.add_argument('--nen', type=int,
                                    help='Force nodes-per-element when converting')
         render_parser.add_argument('--color', type=str, help='Scalar to colour by')
+        # Two separate numbers, not "MIN,MAX": argparse reads a lone -0.5 as a
+        # value but "-0.5,0.5" as an option, so the comma form would reject
+        # every range with a negative minimum -- which is most of them.
+        render_parser.add_argument('--range', type=float, nargs=2,
+                                   metavar=('MIN', 'MAX'),
+                                   help='Fix the colour scale (default: auto from '
+                                        'the surface, which differs per timestep)')
         render_parser.add_argument('--output', type=str,
                                    help='Bare NAME -> image prefix; NAME.png -> one image; '
                                         '.vtp/.vtu/.csv -> the cut surface, no image')

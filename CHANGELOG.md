@@ -49,6 +49,15 @@
   prefix, `NAME.png` is that one image, and `.vtp`/`.vtu`/`.csv` write the cut
   surface itself with **no image rendered** — that path never constructs a
   plotter, so it works on a headless box without OSMesa.
+- **`--range MIN MAX`** fixes the colour scale. Without it the scale is taken
+  from each surface as it is built, so the same variable gets a different scale
+  at every timestep — two frames cannot be compared, and a sequence of them
+  cannot be animated. It applies to `slice` as well as `iso`, since the
+  colouring is shared. Two space-separated numbers rather than `MIN,MAX`:
+  argparse reads a lone `-0.5` as a value but `-0.5,0.5` as an option name, so
+  the comma form would have rejected every range with a negative minimum.
+  *(The same trap still applies to `field extract --probe -2.5,0,0`, which
+  predates this and is not fixed here.)*
 - **A case context no longer lands in the mode slot.** With `use case:X` set, a
   bare `field render` had the case injected at position 3 — but position 2, the
   mode word, was still empty, so the case slid into it and the command answered

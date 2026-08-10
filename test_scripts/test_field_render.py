@@ -25,7 +25,7 @@ def args(**over):
     base = dict(mode="iso", case=None, verbose=False, help=False, vtu="m.vtu",
                 config=None, write_template=None, timestep=None, zone=None,
                 nen=None, color=None, output=None, contour=None, values=None,
-                normal=None, origin=None, slices=None)
+                normal=None, origin=None, slices=None, range=None)
     base.update(over)
     return argparse.Namespace(**base)
 
@@ -118,6 +118,36 @@ class TestOutputResolution:
             render_cmd._resolve_output(args(output="cut.stl"), "slice", _Logger())
         assert exc.value.code == 1
         assert "Unsupported --output extension" in capsys.readouterr().err
+
+
+class TestColourRange:
+    """--range fixes the colour scale so frames can be compared."""
+
+    def test_ordered_range_passes(self):
+        assert render_cmd._check_range([-0.5, 0.5], _Logger()) == [-0.5, 0.5]
+
+    def test_absent_is_none(self):
+        """None means auto, computed per surface inside render_surface."""
+        assert render_cmd._check_range(None, _Logger()) is None
+
+    @pytest.mark.parametrize("pair", [[1.0, 1.0], [5.0, 1.0]])
+    def test_min_must_be_below_max(self, capsys, pair):
+        with pytest.raises(SystemExit) as exc:
+            render_cmd._check_range(pair, _Logger())
+        assert exc.value.code == 1
+        assert "MIN below MAX" in capsys.readouterr().err
+
+    def test_it_reaches_the_config(self):
+        """The whole point: the value must land on color.range."""
+        cfg = render.default_config("iso")
+        render_cmd._apply_overrides(args(range=[-2.0, 3.0]), cfg, "iso")
+        assert cfg["color"]["range"] == [-2.0, 3.0]
+
+    def test_it_applies_to_slice_too(self):
+        """Colouring is shared, so --range is not an iso-only flag."""
+        cfg = render.default_config("slice")
+        render_cmd._apply_overrides(args(mode="slice", range=[0.0, 1.0]), cfg, "slice")
+        assert cfg["color"]["range"] == [0.0, 1.0]
 
 
 class TestVectorParsing:

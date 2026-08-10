@@ -346,6 +346,7 @@ class FlexFlowCompleter(Completer):
             '--zone':           'Zone to render',
             '--nen':            'Force nodes-per-element',
             '--color':          'Scalar to colour by',
+            '--range':          'Fix the colour scale (MIN MAX; default: auto per surface)',
             '--output':         'NAME -> image prefix; .png -> one image; '
                                 '.vtp/.vtu/.csv -> the cut surface, no image',
             '--contour':        'iso: scalar to contour (default QCriterion)',
