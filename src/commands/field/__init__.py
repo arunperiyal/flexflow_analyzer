@@ -1,6 +1,6 @@
 """
 Field command group - Work with binary PLT field data (Tecplot-free)
-Subcommands: info, extract, convert, iso, check
+Subcommands: info, extract, compute, convert, render, check
 """
 
 from ..base import BaseCommand
@@ -10,7 +10,7 @@ class FieldCommand(BaseCommand):
     """Field data operations from PLT files (info, extract)"""
 
     name = "field"
-    description = "Field data operations (info, extract, convert, iso, check)"
+    description = "Field data operations (info, extract, compute, convert, render, check)"
     category = "File Operations"
 
     def setup_parser(self, subparsers):
@@ -150,28 +150,41 @@ class FieldCommand(BaseCommand):
             convert_parser.add_argument(f'--{_ax}', type=float,
                                         help=f'{_ax[0].upper()}{_ax[1:]} for box crop')
 
-        # field iso (isosurface PNGs via pyvista)
-        iso_parser = field_subparsers.add_parser('iso', add_help=False,
-                                                 help='Render isosurface images')
-        iso_parser.add_argument('case', nargs='?', help='Case directory path')
-        iso_parser.add_argument('-v', '--verbose', action='store_true',
-                                help='Enable verbose output')
-        iso_parser.add_argument('-h', '--help', action='store_true',
-                                help='Show help for iso command')
-        iso_parser.add_argument('--vtu', type=str, help='Render an existing .vtu directly')
-        iso_parser.add_argument('--config', type=str, help='YAML config file')
-        iso_parser.add_argument('--write-template', type=str, metavar='PATH',
-                                help='Write a YAML config template and exit')
-        iso_parser.add_argument('--timestep', type=int,
-                                help='Timestep to convert+render (default: latest)')
-        iso_parser.add_argument('--zone', type=str, help='Zone to render')
-        iso_parser.add_argument('--nen', type=int,
-                                help='Force nodes-per-element when converting')
-        iso_parser.add_argument('--contour', type=str,
-                                help='Scalar to contour (default QCriterion)')
-        iso_parser.add_argument('--iso', type=float, nargs='+', help='Isosurface value(s)')
-        iso_parser.add_argument('--color', type=str, help='Scalar to colour by')
-        iso_parser.add_argument('--out', type=str, help='Output prefix for .vtp + PNGs')
+        # field render <mode> (images via pyvista: iso, slice)
+        render_parser = field_subparsers.add_parser('render', add_help=False,
+                                                    help='Render images (iso, slice)')
+        render_parser.add_argument('mode', nargs='?',
+                                   help='What to render (iso, slice)')
+        render_parser.add_argument('case', nargs='?', help='Case directory path')
+        render_parser.add_argument('-v', '--verbose', action='store_true',
+                                   help='Enable verbose output')
+        render_parser.add_argument('-h', '--help', action='store_true',
+                                   help='Show help for render command')
+        render_parser.add_argument('--vtu', type=str, help='Render an existing .vtu directly')
+        render_parser.add_argument('--config', type=str, help='YAML config file')
+        render_parser.add_argument('--write-template', type=str, metavar='PATH',
+                                   help="Write this mode's YAML config template and exit")
+        render_parser.add_argument('--timestep', type=int,
+                                   help='Timestep to convert+render (default: latest)')
+        render_parser.add_argument('--zone', type=str, help='Zone to render')
+        render_parser.add_argument('--nen', type=int,
+                                   help='Force nodes-per-element when converting')
+        render_parser.add_argument('--color', type=str, help='Scalar to colour by')
+        render_parser.add_argument('--output', type=str,
+                                   help='Bare NAME -> image prefix; NAME.png -> one image; '
+                                        '.vtp/.vtu/.csv -> the cut surface, no image')
+        # iso only
+        render_parser.add_argument('--contour', type=str,
+                                   help='iso: scalar to contour (default QCriterion)')
+        render_parser.add_argument('--values', type=float, nargs='+',
+                                   help='iso: isosurface value(s)')
+        # slice only
+        render_parser.add_argument('--normal', type=str, metavar='AXIS|NX,NY,NZ',
+                                   help='slice: plane normal (default z)')
+        render_parser.add_argument('--origin', type=str, metavar='X,Y,Z',
+                                   help='slice: a point on the plane (default: mesh centre)')
+        render_parser.add_argument('--slices', type=int, metavar='N',
+                                   help='slice: N planes evenly spaced along the normal')
 
         # field check (validate a produced VTK file)
         check_parser = field_subparsers.add_parser('check', add_help=False,
@@ -212,9 +225,9 @@ class FieldCommand(BaseCommand):
         elif args.field_subcommand == 'convert':
             from .convert_impl.command import execute_convert
             execute_convert(args)
-        elif args.field_subcommand == 'iso':
-            from .iso_impl.command import execute_iso
-            execute_iso(args)
+        elif args.field_subcommand == 'render':
+            from .render_impl.command import execute_render
+            execute_render(args)
         elif args.field_subcommand == 'check':
             from .check_impl.command import execute_check
             execute_check(args)
@@ -246,7 +259,7 @@ class FieldCommand(BaseCommand):
         table.add_row("extract", "Extract variables to CSV/mesh (x/y/z box or point probes)")
         table.add_row("compute", "Per-element pressure force on a surface zone (areas + normals)")
         table.add_row("convert", "Convert PLT volume zone to VTK .vtu (optional box crop)")
-        table.add_row("iso", "Render isosurface PNGs (pyvista, YAML config)")
+        table.add_row("render", "Render images: iso (isosurface) or slice (cut plane)")
         table.add_row("check", "Validate a produced VTK file (.vtu/.vtk/.vtp)")
 
         console.print("[bold]SUBCOMMANDS:[/bold]")
@@ -258,7 +271,8 @@ class FieldCommand(BaseCommand):
         console.print("    flexflow field extract myCase --variables U,V --zone FIELD --t1 100 --t2 500 --probe 2.5,0,0")
         console.print("    flexflow field compute force myCase --zone cyl --timestep 100")
         console.print("    flexflow field convert myCase --timestep 100")
-        console.print("    flexflow field iso myCase --timestep 100 --iso 20 --color W")
+        console.print("    flexflow field render iso myCase --timestep 100 --values 20 --color W")
+        console.print("    flexflow field render slice myCase --normal z --color Pressure")
         console.print("    flexflow field check results.vtk")
         console.print()
 

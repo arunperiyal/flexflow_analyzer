@@ -1,16 +1,23 @@
 """
-render.py  --  Isosurface PNGs from a .vtu, via pyvista (config-driven).
+render.py  --  PNGs from a .vtu, via pyvista (config-driven).
 
 Pure-pip replacement for the old ParaView/pvpython renderer: read a VTU, crop
-the domain, contour a scalar, colour it, and write offscreen PNGs from one or
-more camera views. pyvista (and vtk) are imported lazily so the rest of the
-`plt` package works without them.
+the domain, cut a surface out of it, colour that, and write offscreen PNGs from
+one or more camera views. pyvista (and vtk) are imported lazily so the rest of
+the `plt` package works without them.
+
+Two surfaces are offered, and they differ in one step only -- `contour` versus
+`slice`. Everything on either side of that (the crop, the threshold, the colour
+map, the cameras, the screenshots) is shared, so the pipeline is written once as
+_prepare -> <surface> -> render_surface and the two entry points below just pick
+the middle.
 
 Config schema (dict; missing keys fall back to DEFAULTS):
     input    : vtu
     output   : prefix, save_vtp
     image    : resolution [W,H], background (name or RGB 0-1), transparent
-    contour  : variable, isosurfaces [..]
+    contour  : variable, isosurfaces [..]         (iso mode)
+    slice    : normal, origin, count              (slice mode)
     color    : variable, preset (matplotlib cmap or ParaView preset name),
                range [min,max], log_scale, title, show_scalar_bar, text_color
     domain   : xmin/xmax/ymin/ymax/zmin/zmax   (box crop before contouring)
@@ -19,6 +26,9 @@ Config schema (dict; missing keys fall back to DEFAULTS):
     axes     : orientation_axes
     views    : list; each view picks ONE of camera_file / direction /
                position+focal+up / azimuth+elevation+roll ; optional zoom, parallel
+
+The section for the mode you are not in is simply unused -- `contour` means
+nothing to a slice and `slice` nothing to an isosurface, and neither is an error.
 """
 import copy
 import os
@@ -27,9 +37,15 @@ from .camera import load_camera
 
 DEFAULTS = {
     "input":   {"vtu": None},
-    "output":  {"prefix": "iso", "save_vtp": True},
+    # geometry: an explicit path for the cut surface (set by --output NAME.vtp);
+    # images: False writes only that, and never constructs a Plotter.
+    "output":  {"prefix": "iso", "save_vtp": True, "geometry": None,
+                "images": True, "image_path": None},
     "image":   {"resolution": [1600, 1000], "background": [1, 1, 1], "transparent": False},
     "contour": {"variable": "QCriterion", "isosurfaces": [0.25]},
+    # normal: an axis name or a vector; origin: null = the mesh centre;
+    # count > 1: that many planes evenly spaced along the normal instead of one.
+    "slice":   {"normal": "z", "origin": None, "count": 1},
     "color":   {"variable": "U", "preset": "coolwarm", "range": None,
                 "log_scale": False, "title": None, "show_scalar_bar": True,
                 "text_color": [0, 0, 0]},
@@ -63,8 +79,33 @@ DEFAULT_UP = {"+z": [0, 1, 0], "-z": [0, 1, 0], "+x": [0, 0, 1],
               "-x": [0, 0, 1], "+y": [0, 0, 1], "-y": [0, 0, 1]}
 
 
-def default_config():
-    return copy.deepcopy(DEFAULTS)
+# A plane is invisible edge-on, so the stock four views are wrong for a slice:
+# a cut with normal +z shows nothing from the xz and yz views. One view down the
+# normal, in parallel projection, is the picture a slice is actually for.
+SLICE_VIEWS = [{"name": "plane", "direction": "+z", "parallel": True}]
+
+
+def default_config(mode="iso"):
+    """The default config, with the views that suit the mode."""
+    cfg = copy.deepcopy(DEFAULTS)
+    if mode == "slice":
+        cfg["output"]["prefix"] = "slice"
+        cfg["views"] = copy.deepcopy(SLICE_VIEWS)
+    return cfg
+
+
+def view_direction_for(normal):
+    """The camera direction that looks a plane of this normal in the face.
+
+    Axis-aligned normals only; an oblique cut keeps whatever view is configured,
+    since there is no named direction for it.
+    """
+    vec = _normal_vector(normal)
+    nonzero = [i for i, c in enumerate(vec) if c]
+    if len(nonzero) != 1:
+        return None
+    i = nonzero[0]
+    return ("+" if vec[i] > 0 else "-") + "xyz"[i]
 
 
 def deep_merge(base, over):
@@ -157,36 +198,139 @@ def _setup_camera(p, view, center, span):
     p.reset_camera_clipping_range()
 
 
-def render_iso(cfg, log=print):
-    """Render isosurface PNGs from a .vtu. Returns the list of written files."""
+def _prepare(cfg, log=print):
+    """Read the .vtu and apply the crop and threshold both modes share."""
     import pyvista as pv
 
-    cfg = deep_merge(DEFAULTS, cfg or {})
     vtu = cfg["input"]["vtu"]
     if not vtu:
         raise ValueError("no input .vtu (set input.vtu)")
-    prefix = cfg["output"]["prefix"]
-    os.makedirs(os.path.dirname(prefix) or ".", exist_ok=True)
-
-    cvar = cfg["contour"]["variable"]
-    color = cfg["color"]["variable"]
     mesh = pv.read(vtu)
-    log("contour '%s' range: %s" % (cvar, mesh.get_data_range(cvar)))
+    color = cfg["color"]["variable"]
     log("colour  '%s' range: %s" % (color, mesh.get_data_range(color)))
-
     mesh = _apply_domain_clip(mesh, cfg["domain"])
-    mesh = _apply_threshold(mesh, cfg["threshold"])
+    return _apply_threshold(mesh, cfg["threshold"])
+
+
+def _iso_surface(mesh, cfg, log=print):
+    """The isosurface(s) of contour.variable at contour.isosurfaces."""
+    cvar = cfg["contour"]["variable"]
+    log("contour '%s' range: %s" % (cvar, mesh.get_data_range(cvar)))
     surf = mesh.contour(isosurfaces=list(cfg["contour"]["isosurfaces"]), scalars=cvar)
     log("isosurface: %d points, %d cells" % (surf.n_points, surf.n_cells))
-    if surf.n_points == 0:
-        log("EMPTY isosurface -- adjust contour.isosurfaces / domain / threshold.")
+    return surf
+
+
+def _normal_vector(normal):
+    """An axis name ('z', '-x') or an [x,y,z] vector -> a unit-ish vector."""
+    if isinstance(normal, str):
+        key = normal.strip().lower()
+        key = key if key.startswith(("+", "-")) else "+" + key
+        if key not in DIRS:
+            raise ValueError(f"unknown slice normal '{normal}' "
+                             f"(use x/y/z, -x/-y/-z, or a vector)")
+        return DIRS[key]
+    vec = list(normal)
+    if len(vec) != 3:
+        raise ValueError(f"slice normal needs 3 components, got {len(vec)}")
+    if not any(vec):
+        raise ValueError("slice normal cannot be the zero vector")
+    return vec
+
+
+def _slice_surface(mesh, cfg, log=print):
+    """One cut plane, or `count` planes evenly spaced along the normal.
+
+    One loop covers both, and covers an arbitrary normal: pyvista's
+    slice_along_axis takes an axis name, so it cannot honour --normal 1,1,0 and
+    would need a second code path for the oblique case anyway.
+    """
+    import numpy as np
+
+    sl = cfg["slice"]
+    n = np.array(_normal_vector(sl.get("normal", "z")), dtype=float)
+    n /= np.linalg.norm(n)
+    count = max(int(sl.get("count") or 1), 1)
+
+    if count == 1:
+        origin = sl.get("origin") or list(mesh.center)
+        surf = mesh.slice(normal=list(n), origin=list(origin))
+        log("slice: normal %s at %s" % (list(n), [round(float(c), 6) for c in origin]))
+    else:
+        surf = None
+        for origin in _plane_origins(mesh, n, count):
+            plane = mesh.slice(normal=list(n), origin=list(origin))
+            surf = plane if surf is None else surf.merge(plane)
+        log("slice: %d planes along %s" % (count, list(n)))
+
+    log("surface: %d points, %d cells" % (surf.n_points, surf.n_cells))
+    return surf
+
+
+def _plane_origins(mesh, n, count):
+    """`count` origins evenly spaced along n, spanning the mesh.
+
+    The mesh bounds are projected onto the normal and the planes are placed
+    strictly inside that span -- a plane sitting exactly on a bounding face cuts
+    nothing, so the ends are trimmed rather than used.
+    """
+    import numpy as np
+
+    b = mesh.bounds  # (xmin,xmax,ymin,ymax,zmin,zmax)
+    corners = np.array([[b[0 + i], b[2 + j], b[4 + k]]
+                        for i in (0, 1) for j in (0, 1) for k in (0, 1)])
+    proj = corners @ n
+    lo, hi = proj.min(), proj.max()
+    step = (hi - lo) / (count + 1)
+    return [n * (lo + i * step) for i in range(1, count + 1)]
+
+
+def save_geometry(surf, path, log=print):
+    """Write the cut surface itself: .vtp, .vtu, or a .csv point table."""
+    import numpy as np
+
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    ext = os.path.splitext(path)[1].lower()
+    if ext == ".csv":
+        names = list(surf.point_data.keys())
+        cols = [surf.points[:, 0], surf.points[:, 1], surf.points[:, 2]]
+        cols += [np.asarray(surf.point_data[n]).reshape(len(surf.points), -1)[:, 0]
+                 for n in names]
+        np.savetxt(path, np.column_stack(cols), delimiter=",",
+                   header=",".join(["x", "y", "z"] + names), comments="")
+    elif ext == ".vtu":
+        # A cut surface is PolyData, which cannot be written as .vtu directly.
+        surf.cast_to_unstructured_grid().save(path)
+    else:
+        surf.save(path)
+    log("saved %s" % path)
+    return path
+
+
+def render_surface(cfg, surf, log=print):
+    """Save the surface and write one PNG per view. Returns the written files."""
+    prefix = cfg["output"]["prefix"]
+    color = cfg["color"]["variable"]
+
+    if surf is None or surf.n_points == 0:
+        log("EMPTY surface -- adjust the contour/slice, domain or threshold.")
         return []
 
-    if cfg["output"].get("save_vtp", True):
-        vtp = prefix + ".vtp"
-        surf.save(vtp)
-        log("saved %s" % vtp)
+    geometry = cfg["output"].get("geometry")
+    if geometry:
+        save_geometry(surf, geometry, log)
+    elif cfg["output"].get("save_vtp", True):
+        os.makedirs(os.path.dirname(prefix) or ".", exist_ok=True)
+        save_geometry(surf, prefix + ".vtp", log)
 
+    # Geometry-only: never construct a Plotter, so this path needs no GL at all
+    # (it has to work on a headless box without OSMesa).
+    if not cfg["output"].get("images", True):
+        return [geometry] if geometry else []
+
+    import pyvista as pv
+
+    os.makedirs(os.path.dirname(prefix) or ".", exist_ok=True)
     crange = cfg["color"].get("range") or list(surf.get_data_range(color))
     b = surf.bounds  # (xmin,xmax,ymin,ymax,zmin,zmax)
     center = [(b[0] + b[1]) / 2, (b[2] + b[3]) / 2, (b[4] + b[5]) / 2]
@@ -194,9 +338,13 @@ def render_iso(cfg, log=print):
     res = list(cfg["image"].get("resolution", [1600, 1000]))
     transparent = bool(cfg["image"].get("transparent"))
     text_color = to_rgb(cfg["color"].get("text_color", [0, 0, 0]))
+    views = cfg.get("views", [])
+    # An exact --output NAME.png names the file itself, but only one view can
+    # own that name; several still fall back to the per-view suffix.
+    exact = cfg["output"].get("image_path") if len(views) == 1 else None
     outputs = []
 
-    for view in cfg.get("views", []):
+    for view in views:
         p = pv.Plotter(off_screen=True, window_size=res)
         p.set_background(to_rgb(cfg["image"].get("background", [1, 1, 1])))
         p.add_mesh(surf, scalars=color, cmap=to_cmap(cfg["color"].get("preset", "coolwarm")),
@@ -209,9 +357,29 @@ def render_iso(cfg, log=print):
         if cfg["axes"].get("orientation_axes", True):
             p.add_axes(color=text_color)
         _setup_camera(p, view, center, span)
-        fn = "%s_%s.png" % (prefix, view.get("name", "view"))
+        fn = exact or "%s_%s.png" % (prefix, view.get("name", "view"))
         p.screenshot(fn, transparent_background=transparent)
         p.close()
         log("saved %s" % fn)
         outputs.append(fn)
     return outputs
+
+
+def build_surface(cfg, mode, log=print):
+    """The cut surface for a mode, without rendering it. Returns (cfg, surf)."""
+    cfg = deep_merge(DEFAULTS, cfg or {})
+    mesh = _prepare(cfg, log)
+    maker = {"iso": _iso_surface, "slice": _slice_surface}[mode]
+    return cfg, maker(mesh, cfg, log)
+
+
+def render_iso(cfg, log=print):
+    """Render isosurface PNGs from a .vtu. Returns the list of written files."""
+    cfg, surf = build_surface(cfg, "iso", log)
+    return render_surface(cfg, surf, log)
+
+
+def render_slice(cfg, log=print):
+    """Render cut-plane PNGs from a .vtu. Returns the list of written files."""
+    cfg, surf = build_surface(cfg, "slice", log)
+    return render_surface(cfg, surf, log)

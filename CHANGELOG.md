@@ -30,13 +30,33 @@
   a `.pvd` time-series collection): reports points, cells, bounds, and per-array
   ranges; for `.pvd` it lists timesteps, verifies every member file exists, and
   summarises one member. Flags empty files / NaN/Inf and exits non-zero on problems.
-- **`field iso`** *(new)* — isosurface PNGs via **pyvista** (config-driven YAML:
-  background, resolution, domain crop, threshold, camera orientation, and
-  reusable camera frames from ParaView `.pvsm`/`.py` Save State or a saved
-  `.yml`). Auto-converts a case's PLT to a cached `.vtu`.
+- **`field render <mode>`** *(new)* — pictures via **pyvista**, in two modes that
+  differ only in the surface they cut out of the volume:
+  - **`iso`** — an isosurface of a scalar (`--contour`, `--values`), the usual
+    Q-criterion view of vortex tubes, coloured by another variable.
+  - **`slice`** — a cut plane (`--normal` as an axis or a vector, `--origin`), or
+    **`--slices N`** planes evenly spaced along that normal, placed strictly
+    inside the mesh since a plane on a bounding face cuts nothing. A plane is
+    invisible edge-on, so a slice defaults to a single view straight down its
+    normal in parallel projection rather than iso's four.
+  Both share the config-driven YAML (background, resolution, domain crop,
+  threshold, camera orientation, and reusable camera frames from ParaView
+  `.pvsm`/`.py` Save State or a saved `.yml`), and both auto-convert a case's PLT
+  to a cached `.vtu`. `--write-template` writes the template for the mode asked
+  for; a section belonging to the other mode is warned about rather than
+  silently ignored, and a flag belonging to the other mode is an error.
+  **`--output`** picks the format by extension: a bare `NAME` is the image
+  prefix, `NAME.png` is that one image, and `.vtp`/`.vtu`/`.csv` write the cut
+  surface itself with **no image rendered** — that path never constructs a
+  plotter, so it works on a headless box without OSMesa.
+- **`field render --zone` now does something.** It was accepted and dropped on
+  the floor: the conversion call never passed it on, so every render used the
+  first volume zone whatever was asked for. The cached `.vtu` sidecar is named
+  per zone (`<plt>.z<N>.vtu`), since a zone-specific conversion must not be
+  handed back for the default one.
 - **`use var:` / `use zone:` context** — set a default variable list / zone once
   and they're auto-injected into `field extract` (`--variables`, `--zone`) and
-  `--zone` into `field convert`/`iso`. A **`freq`** context injects `--freq`
+  `--zone` into `field convert`/`render`. A **`freq`** context injects `--freq`
   into `field extract` and `run post`. Shown in `pwd`, cleared via
   `unuse var`/`zone`/`freq`/`all`, with tab completion.
 - **Fixed context injection scope**: `node`/`t1`/`t2` are now injected only where
@@ -67,7 +87,9 @@
   four dotted octets, while the old help offered "IP address or hostname".
 - Interactive tab completion knew the flags of `case out` and `field compute`
   but not the subcommand names themselves, so neither completed after `case ` /
-  `field `.
+  `field `. `field compute <TAB>` now offers `force` and `field render <TAB>`
+  offers `iso`/`slice`, via the `_POSITIONAL_CHOICES` hook that already existed
+  for `template` and had no `field` rows.
 
 #### `case out` — a case's declared outputs, and maps that keep othd readable
 - New **`case out`** subcommand (listed in `case --help`). **`--map`** writes

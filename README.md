@@ -70,7 +70,8 @@ field extract <case> --probe 1,2,3    # Sample a point over time
 field compute force <case> --zone cyl # Per-element pressure force
 field convert <case> --output mesh.vtu
 field check <file>         # Validate a produced .vtu/.pvd
-field iso <case>           # Isosurface PNGs
+field render iso <case>    # Isosurface PNGs
+field render slice <case> --normal z   # Cut-plane PNGs (or .vtp/.csv)
 
 # Remotes
 remote add <name> --user U --ip IP --password P --path /base
