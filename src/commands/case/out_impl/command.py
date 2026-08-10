@@ -1,7 +1,7 @@
 """
-Case write command: generate small derived files from a case's inputs.
+Case out command: what a case declares as output, and small files derived from it.
 
-`--othd-map` is the first of them. A nodal outputTimeHistory writes its records
+`--map` writes a node map per output block. A nodal outputTimeHistory writes its records
 positionally -- row k of every aleDisp block is the k-th node of the node file it
 was given, with no id and no coordinate in the othd itself. Reading one back
 therefore needs the node file *and* the mesh coordinates, and the coordinates
@@ -423,6 +423,112 @@ def write_case_maps(case_dir, wanted, logger, show_progress=False,
     return {"written": written, "crd": crd_name, "crd_mb": crd_mb}
 
 
+def _read_map_declaration(path):
+    """(probe, closed) declared in an existing map, or (None, None).
+
+    The probe geometry lives in the map rather than the .def, because it is
+    declared by a person -- so listing it means reading back what was written.
+    """
+    probe = closed = None
+    try:
+        for line in open(path):
+            if not line.startswith("#"):
+                break
+            if line.startswith("# probe:"):
+                probe = line.split(":", 1)[1].strip()
+            elif line.startswith("# closed:"):
+                closed = line.split(":", 1)[1].strip()
+    except OSError:
+        return None, None
+    return probe, closed
+
+
+def survey_time_history(case_dir, logger):
+    """What the .def declares for time history, and what has been written for it.
+
+    Reads both sides: the blocks come from the .def, the probe geometry from any
+    map already written. Raises WriteError like the map path does, so a wildcard
+    run over the registry can step over a case it cannot read.
+    """
+    case_dir = Path(case_dir)
+    if not case_dir.is_dir():
+        raise WriteError(f"Case directory not found: {case_dir}")
+    problem = _problem_name(case_dir)
+    def_file = find_def_file(str(case_dir), problem)
+    if not def_file:
+        raise WriteError(f"No .def file in {case_dir}", skip=True)
+
+    blocks = parse_output_time_history(def_file)
+    if not blocks:
+        raise WriteError(f"{Path(def_file).name} declares no outputTimeHistory block",
+                         skip=True)
+    oth_ids = _oth_ids(blocks, case_dir)
+
+    rows = []
+    for block in blocks:
+        source = block.get("nodes") or block.get("coordinates")
+        source_path = case_dir / source if source else None
+        map_path = case_dir / f"othd.{_set_name(source, problem)}.map" if source else None
+        probe, closed = _read_map_declaration(map_path) if (
+            map_path and map_path.exists()) else (None, None)
+        rows.append({
+            "name": block["name"],
+            "type": block.get("type") or "?",
+            "file": source,
+            "file_exists": bool(source_path and source_path.exists()),
+            "oth_id": oth_ids[block["name"]],
+            "map": map_path.name if map_path else None,
+            "map_exists": bool(map_path and map_path.exists()),
+            "probe": probe,
+            "closed": closed,
+        })
+    return rows
+
+
+def _print_survey(case_dir, rows):
+    """The output-block table: what is declared, and what has been written for it."""
+    from rich.console import Console
+    from rich.table import Table
+    from rich import box
+
+    console = Console()
+    table = Table(box=box.SIMPLE, show_header=True, header_style="bold yellow",
+                  title=f"outputTimeHistory in {Path(case_dir).name}",
+                  title_justify="left", title_style="bold cyan")
+    for name in ("Name", "File", "OthId", "Type", "MapFile", "Probe"):
+        table.add_column(name)
+
+    for row in rows:
+        if row["file"] is None:
+            source = "[dim]none[/dim]"
+        elif row["file_exists"]:
+            source = row["file"]
+        else:
+            source = f"[yellow]{row['file']}[/yellow] [dim](missing)[/dim]"
+        # None means the solver writes no record for it, so it takes no id at all
+        oth_id = str(row["oth_id"]) if row["oth_id"] is not None else "[dim]--[/dim]"
+        mapped = (row["map"] if row["map_exists"]
+                  else f"[dim]{row['map'] or '--'}[/dim]")
+        probe = row["probe"] or "[dim]--[/dim]"
+        if row["probe"] and row["closed"]:
+            probe += f" [dim]({'closed' if row['closed'] == 'yes' else 'open'})[/dim]"
+        table.add_row(row["name"], source, oth_id, row["type"],
+                      mapped if row["map_exists"] else mapped, probe)
+
+    console.print()
+    console.print(table)
+    missing = [r for r in rows if r["oth_id"] is None]
+    console.print("[dim]OthId is predicted from the .def, not read from an othd. "
+                  "Read it from the othd to be certain.[/dim]")
+    if missing:
+        console.print("[dim]-- under OthId: the input file is missing or empty, so the "
+                      "solver writes no record and later ids shift down.[/dim]")
+    if any(not r["map_exists"] for r in rows):
+        console.print("[dim]A greyed MapFile has not been written yet; --map writes it. "
+                      "Probe is declared with --probe-type and read back from the map.[/dim]")
+    console.print()
+
+
 def _write_all_cases(args, wanted, logger, probe=None, closed=None):
     """Run over every case in the .cases registry, stepping over the ones that fail."""
     from rich.console import Console
@@ -465,21 +571,31 @@ def _write_all_cases(args, wanted, logger, probe=None, closed=None):
         sys.exit(1)
 
 
-def execute_write(args):
-    from .help_messages import print_write_help
+def execute_out(args):
+    from .help_messages import print_out_help
 
     if getattr(args, "help", False):
-        print_write_help(); return
+        print_out_help(); return
 
     logger = Logger(verbose=getattr(args, "verbose", False))
-    # --othd-map alone is True; --othd-map NAME carries the selector as its value.
-    selector = getattr(args, "othd_map", False)
-    if not selector:
-        logger.error("Nothing to write. Pass --othd-map to build node maps for the "
-                     "case's nodal outputTimeHistory blocks.")
-        print(); print_write_help(); sys.exit(1)
     if not args.case:
-        print_write_help(); sys.exit(1)
+        print_out_help(); sys.exit(1)
+
+    if getattr(args, "list", False):
+        try:
+            rows = survey_time_history(args.case, logger)
+        except WriteError as exc:
+            logger.error(str(exc))
+            sys.exit(1)
+        _print_survey(args.case, rows)
+        return
+
+    # --map alone is True; --map NAME carries the selector as its value.
+    selector = getattr(args, "map", False)
+    if not selector:
+        logger.error("Nothing to do. Pass --list to see the case's output blocks, or "
+                     "--map to write node maps for them.")
+        print(); print_out_help(); sys.exit(1)
     wanted = selector if isinstance(selector, str) else None
 
     probe = getattr(args, "probe_type", None)

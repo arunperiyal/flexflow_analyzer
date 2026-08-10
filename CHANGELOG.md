@@ -48,8 +48,8 @@
 
 ### ✨ New Features
 
-#### `case write --othd-map` — keep othd files readable without the mesh
-- New **`case write`** subcommand (listed in `case --help`). `--othd-map` writes
+#### `case out` — a case's declared outputs, and maps that keep othd readable
+- New **`case out`** subcommand (listed in `case --help`). **`--map`** writes
   one `othd.<set>.map` per `outputTimeHistory` block in the case's `.def` that
   names a file its records are indexed by:
   - **`type = nodal`** → `row, node, x, y, z` — the record's index, the mesh node
@@ -85,13 +85,21 @@
   nothing downstream able to detect it.
 - A block whose input file is missing or empty is now **skipped rather than fatal**
   when scanning every block, matching what the solver does — naming it explicitly
-  with `--othd-map NAME` still errors. This also fixes a regression from mapping
+  with `--map NAME` still errors. This also fixes a regression from mapping
   coordinates blocks: `case write --othd-map` had started failing outright on
   `BR0SG0U1P0`, whose `.def` references an absent `probe_dat.txt`.
 - The coordinates file is read from the `.def`'s `nodeCoordinates` block rather
   than assumed to be `<problem>.crd`, and every map in a case is built from a
   single streamed pass over it. `--othd-map NAME` restricts it to one block, by
   block name or node/point-set name.
+- **`--list`** prints a table of the case's `outputTimeHistory` blocks — *Name, File,
+  OthId, Type, MapFile, Probe* — answering which blocks have maps yet and what
+  each othId holds. It reads both sides: the blocks from the `.def`, the probe
+  geometry back out of any map already written, since that is declared rather
+  than derived. A missing input file is marked and its OthId shown as `--`,
+  because the solver writes no record for it and later ids shift down. The table
+  states that OthId is predicted, never presenting it as measured. `outputSurface`
+  (which feeds the `.oisd`) is not covered yet.
 - Accepts the **`*` wildcard case** (including via `use case:*`), mapping every
   case in the `.cases` registry in turn. A case with nothing to map is *skipped*
   and one that genuinely fails is *reported*, and neither ends the batch — so a

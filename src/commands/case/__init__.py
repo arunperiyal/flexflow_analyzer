@@ -152,14 +152,17 @@ class CaseCommand(BaseCommand):
         add_parser.add_argument('-h', '--help', action='store_true',
                                help='Show help for add command')
 
-        # case write
-        write_parser = case_subparsers.add_parser('write', add_help=False,
-                                                  help='Write derived files from a case\'s inputs')
+        # case out
+        write_parser = case_subparsers.add_parser('out', add_help=False,
+                                                  help='Inspect a case\'s declared outputs and map them')
         write_parser.add_argument('case', nargs='?', help='Case directory path')
-        write_parser.add_argument('--othd-map', dest='othd_map', nargs='?',
+        write_parser.add_argument('--list', action='store_true',
+                                  help='Table of the outputTimeHistory blocks: name, input '
+                                       'file, predicted othId, type, map file and probe')
+        write_parser.add_argument('--map', dest='map', nargs='?',
                                   const=True, default=False, metavar='NAME',
-                                  help='Write a node map per nodal outputTimeHistory block; '
-                                       'NAME selects one by block or node-set name')
+                                  help='Write a node map per outputTimeHistory block; '
+                                       'NAME selects one by block or node/point-set name')
         # Validated in the command, not with choices=: argparse's rejection surfaces
         # here as "Unknown subcommand", which points at the wrong thing entirely.
         write_parser.add_argument('--probe-type', dest='probe_type', type=str,
@@ -272,9 +275,9 @@ class CaseCommand(BaseCommand):
         elif hasattr(args, 'case_subcommand') and args.case_subcommand == 'add':
             from .add_impl import execute_add
             execute_add(args)
-        elif hasattr(args, 'case_subcommand') and args.case_subcommand == 'write':
-            from .write_impl.command import execute_write
-            execute_write(args)
+        elif hasattr(args, 'case_subcommand') and args.case_subcommand == 'out':
+            from .out_impl.command import execute_out
+            execute_out(args)
         elif hasattr(args, 'case_subcommand') and args.case_subcommand == 'report':
             from .report_impl import execute_report
             execute_report(args)
@@ -315,7 +318,7 @@ class CaseCommand(BaseCommand):
         table.add_row("organise", "Organize and clean up case directory")
         table.add_row("check", "Inspect OTHD/OISD ranges and validate config")
         table.add_row("status", "Check case data file completeness")
-        table.add_row("write", "Write derived files from a case's inputs (othd node maps)")
+        table.add_row("out", "Inspect a case's declared outputs and write othd node maps")
         table.add_row("add", "Scan a directory and build the .cases registry")
         table.add_row("report", "Print a compact status table for all registered cases")
         table.add_row("upload", "Upload case directories from local to remote server")

@@ -44,7 +44,7 @@ _flexflow_completions() {
             # Parse for subcommand (show, create, or run)
             local subcommand=""
             for (( i=2; i < cword; i++ )); do
-                if [[ "${words[i]}" == "show" ]] || [[ "${words[i]}" == "create" ]] || [[ "${words[i]}" == "run" ]] || [[ "${words[i]}" == "write" ]]; then
+                if [[ "${words[i]}" == "show" ]] || [[ "${words[i]}" == "create" ]] || [[ "${words[i]}" == "run" ]] || [[ "${words[i]}" == "out" ]]; then
                     subcommand="${words[i]}"
                     break
                 fi
@@ -53,7 +53,7 @@ _flexflow_completions() {
             if [[ -z "$subcommand" ]]; then
                 # No subcommand yet
                 local flags="-v --verbose -h --help --examples"
-                COMPREPLY=( $(compgen -W "show create run write $flags" -- "$cur") )
+                COMPREPLY=( $(compgen -W "show create run out $flags" -- "$cur") )
             else
                 # Have subcommand
                 case "$subcommand" in
@@ -83,8 +83,8 @@ _flexflow_completions() {
                             esac
                         fi
                         ;;
-                    write)
-                        local flags="--othd-map --probe-type --closed -v --verbose -h --help"
+                    out)
+                        local flags="--list --map --probe-type --closed -v --verbose -h --help"
                         if [[ "$cur" == -* ]]; then
                             COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
                         else

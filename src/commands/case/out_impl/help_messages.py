@@ -1,21 +1,24 @@
-"""Help messages for case write command."""
+"""Help messages for case out command."""
 
 from ....utils.colors import Colors
 
 
-def print_write_help():
-    """Print case write command help."""
+def print_out_help():
+    """Print case out command help."""
     print(f"""
-{Colors.BOLD}{Colors.CYAN}FlexFlow Case Write Command{Colors.RESET}
+{Colors.BOLD}{Colors.CYAN}FlexFlow Case Out Command{Colors.RESET}
 
 Build small derived files from a case's own inputs.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    flexflow case write <case_dir> --othd-map [NAME]
-    flexflow case write * --othd-map            {Colors.DIM}# every case in .cases{Colors.RESET}
+    flexflow case out <case_dir> --map [NAME]
+    flexflow case out * --map            {Colors.DIM}# every case in .cases{Colors.RESET}
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
-    {Colors.YELLOW}--othd-map [NAME]{Colors.RESET}  Write a map for every outputTimeHistory block in the
+    {Colors.YELLOW}--list{Colors.RESET}             Table of the case's outputTimeHistory blocks:
+                       name, input file, predicted othId, type, map file, probe.
+                       Says which blocks are mapped and what each othId holds.
+    {Colors.YELLOW}--map [NAME]{Colors.RESET}  Write a map for every outputTimeHistory block in the
                        .def that names a file its records are indexed by.
                        Give NAME to do just one, matched against the block
                        name or the node/point-set name.
@@ -74,7 +77,7 @@ Build small derived files from a case's own inputs.
     A block whose type names no file to index its records by is reported and
     skipped -- there is nothing to map it against. So is one whose input file is
     missing or empty: the solver writes no record for it either. Naming such a
-    block with --othd-map NAME is an error rather than a silent skip.
+    block with --map NAME is an error rather than a silent skip.
 
 {Colors.BOLD}othId:{Colors.RESET}
 
@@ -101,23 +104,23 @@ Build small derived files from a case's own inputs.
     which carry node ids and nothing about shape. Three collinear points are
     either a coarse line or three independent probes, and only you know which.
 
-    It applies to whichever maps the run writes, so use {Colors.YELLOW}--othd-map NAME{Colors.RESET} to
+    It applies to whichever maps the run writes, so use {Colors.YELLOW}--map NAME{Colors.RESET} to
     give different sets different types:
 
-        case write BR0SG0U1P0 --othd-map cyl_nodes --probe-type line
-        case write BR0SG0U1P0 --othd-map probe_dat --probe-type point
+        case out BR0SG0U1P0 --map cyl_nodes --probe-type line
+        case out BR0SG0U1P0 --map probe_dat --probe-type point
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
 
   {Colors.BOLD}Every nodal block in the case:{Colors.RESET}
-    flexflow case write BR0SG0U1P0 --othd-map
+    flexflow case out BR0SG0U1P0 --map
 
   {Colors.BOLD}Just one, by node-set or block name:{Colors.RESET}
-    flexflow case write BR0SG0U1P0 --othd-map cyl_nodes
-    flexflow case write BR0SG0U1P0 --othd-map riser_probe
+    flexflow case out BR0SG0U1P0 --map cyl_nodes
+    flexflow case out BR0SG0U1P0 --map riser_probe
 
   {Colors.BOLD}Every registered case at once:{Colors.RESET}
-    flexflow case write * --othd-map
+    flexflow case out * --map
     {Colors.DIM}(or set the context once: use case:*){Colors.RESET}
 
 {Colors.BOLD}NOTES:{Colors.RESET}
