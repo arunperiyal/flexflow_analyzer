@@ -48,6 +48,27 @@
 
 ### ✨ New Features
 
+#### `remote` — help per subcommand
+- Every `remote` subcommand now has **its own help**, in a new
+  `remote_impl/help_messages.py`: what the arguments mean, what is required,
+  examples, and the notes that matter (remotes live in
+  `~/.flexflow/remotes.json` with the **password in plain text**; nothing is
+  contacted when a remote is added, so a wrong password only shows up on the
+  first transfer; `remote modify` does not touch the base path).
+- **A bare `remote add` prints that help** instead of `Error: remote name is
+  required` — the error said what was missing but not what the command wants,
+  and there was nowhere to read the flags. Same for `modify`, `delete` and
+  `set-path`. An *incomplete* command (a name but no `--user`) still leads with
+  what is missing, now naming each flag, and prints the help after it.
+- **`remote add -h` showed the group help**, which listed all five subcommands
+  and every flag any of them takes; it now shows `add`'s own.
+- Both paths exit non-zero, so a command that did nothing does not report success.
+- `--ip` is documented as an **IPv4 address**: the validator has always required
+  four dotted octets, while the old help offered "IP address or hostname".
+- Interactive tab completion knew the flags of `case out` and `field compute`
+  but not the subcommand names themselves, so neither completed after `case ` /
+  `field `.
+
 #### `case out` — a case's declared outputs, and maps that keep othd readable
 - New **`case out`** subcommand (listed in `case --help`). **`--map`** writes
   one `othd.<block>.map` per `outputTimeHistory` block in the case's `.def` that

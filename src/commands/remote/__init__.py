@@ -85,18 +85,8 @@ class RemoteCommand(BaseCommand):
 
     def execute(self, args):
         """Execute remote command"""
-        if hasattr(args, 'help') and args.help and not hasattr(args, 'remote_subcommand'):
-            self.show_help()
-            return
-
-        # Get subcommand
-        subcommand = getattr(args, 'remote_subcommand', None)
-
-        if not subcommand:
-            self.show_help()
-            return
-
-        # Route to subcommand handler
+        # execute_remote() routes --help and a missing subcommand to the right
+        # help message, so there is nothing to intercept here.
         from .remote_impl import command as remote_cmd
         remote_cmd.execute_remote(args)
 

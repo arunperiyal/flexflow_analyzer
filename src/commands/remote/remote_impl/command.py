@@ -1,22 +1,41 @@
 """Manage remote machines for file transfers"""
 
+import sys
+
 from rich.console import Console
 from rich.table import Table
 from rich import box
 from src.utils.remote_config import get_remote_config
+from . import help_messages
+
+
+# The help to print for each subcommand, so a bare `remote add` says what add
+# needs rather than only that something is missing.
+_SUBCOMMAND_HELP = {
+    'add':      help_messages.print_add_help,
+    'modify':   help_messages.print_modify_help,
+    'delete':   help_messages.print_delete_help,
+    'list':     help_messages.print_list_help,
+    'set-path': help_messages.print_set_path_help,
+}
+
+
+def _show_help(subcommand=None):
+    """Print the help for a subcommand, or for the group when it has none."""
+    _SUBCOMMAND_HELP.get(subcommand, help_messages.print_remote_help)()
 
 
 def execute_remote(args):
     """Execute remote command."""
 
-    if hasattr(args, 'help') and args.help:
-        show_remote_help()
-        return
-
     subcommand = getattr(args, 'remote_subcommand', None)
 
+    if hasattr(args, 'help') and args.help:
+        _show_help(subcommand)
+        return
+
     if not subcommand:
-        show_remote_help()
+        _show_help()
         return
 
     if subcommand == 'add':
@@ -36,23 +55,35 @@ def execute_remote(args):
 def execute_add(args):
     """Add a new remote machine."""
     console = Console()
-    
-    # Validate required arguments
-    if not hasattr(args, 'name') or not args.name:
-        console.print("[red]Error: remote name is required[/red]")
-        return
-    
-    name = args.name
+
+    name = getattr(args, 'name', None)
     user = getattr(args, 'user', None)
     ip = getattr(args, 'ip', None)
     password = getattr(args, 'password', None)
     port = getattr(args, 'port', 22)
     path = getattr(args, 'path', '')
 
+    # A bare `remote add` is a request for help, not a mistake to report.
+    if not any([name, user, ip, password, path]):
+        help_messages.print_add_help()
+        sys.exit(1)
+
+    if not name:
+        console.print("[red]Error: remote name is required[/red]")
+        print()
+        help_messages.print_add_help()
+        sys.exit(1)
+
     # Validate all required fields
-    if not all([user, ip, password]):
-        console.print("[red]Error: --user, --ip, and --password are required[/red]")
-        return
+    missing = [flag for flag, value in
+               (('--user', user), ('--ip', ip), ('--password', password))
+               if not value]
+    if missing:
+        console.print(f"[red]Error: {', '.join(missing)} "
+                      f"{'is' if len(missing) == 1 else 'are'} required[/red]")
+        print()
+        help_messages.print_add_help()
+        sys.exit(1)
 
     # Validate IP format (basic check)
     if not _validate_ip(ip):
@@ -83,11 +114,18 @@ def execute_modify(args):
     """Modify an existing remote machine."""
     console = Console()
     
-    if not hasattr(args, 'name') or not args.name:
-        console.print("[red]Error: remote name is required[/red]")
-        return
+    name = getattr(args, 'name', None)
 
-    name = args.name
+    if not name:
+        if not any(getattr(args, field, None)
+                   for field in ('user', 'ip', 'password', 'port')):
+            help_messages.print_modify_help()
+            sys.exit(1)
+        console.print("[red]Error: remote name is required[/red]")
+        print()
+        help_messages.print_modify_help()
+        sys.exit(1)
+
     config = get_remote_config()
 
     # Check if remote exists
@@ -120,8 +158,10 @@ def execute_modify(args):
             return
 
     if not updates:
-        console.print("[yellow]Warning: No fields to update[/yellow]")
-        return
+        console.print("[red]Error: give at least one field to update[/red]")
+        print()
+        help_messages.print_modify_help()
+        sys.exit(1)
 
     # Apply updates
     if config.update_remote(name, **updates):
@@ -137,11 +177,12 @@ def execute_delete(args):
     """Delete a remote machine."""
     console = Console()
     
-    if not hasattr(args, 'name') or not args.name:
-        console.print("[red]Error: remote name is required[/red]")
-        return
+    name = getattr(args, 'name', None)
 
-    name = args.name
+    if not name:
+        help_messages.print_delete_help()
+        sys.exit(1)
+
     config = get_remote_config()
 
     # Confirmation prompt
@@ -203,16 +244,25 @@ def execute_set_path(args):
     """Set base path for a remote machine."""
     console = Console()
     
-    if not hasattr(args, 'name') or not args.name:
+    name = getattr(args, 'name', None)
+    path = getattr(args, 'path', None)
+
+    if not name and not path:
+        help_messages.print_set_path_help()
+        sys.exit(1)
+
+    if not name:
         console.print("[red]Error: remote name is required[/red]")
-        return
+        print()
+        help_messages.print_set_path_help()
+        sys.exit(1)
 
-    if not hasattr(args, 'path') or not args.path:
+    if not path:
         console.print("[red]Error: --path is required[/red]")
-        return
+        print()
+        help_messages.print_set_path_help()
+        sys.exit(1)
 
-    name = args.name
-    path = args.path
     config = get_remote_config()
 
     # Check if remote exists
@@ -262,36 +312,4 @@ def _display_remote(name: str, user: str, ip: str, port: int, path: str):
 
 def show_remote_help():
     """Display help for remote command."""
-    from src.utils.colors import Colors
-    print(f"""
-{Colors.BOLD}{Colors.CYAN}remote — Manage remote machines{Colors.RESET}
-
-{Colors.BOLD}USAGE:{Colors.RESET}
-    remote add <name> --user <user> --ip <ip> --password <pass> [--port <port>] [--path <path>]
-    remote modify <name> [--user <user>] [--ip <ip>] [--password <pass>] [--port <port>]
-    remote delete <name>
-    remote list
-    remote set-path <name> --path <path>
-
-{Colors.BOLD}SUBCOMMANDS:{Colors.RESET}
-    {Colors.YELLOW}add{Colors.RESET}           Add a new remote machine
-    {Colors.YELLOW}modify{Colors.RESET}        Update remote configuration
-    {Colors.YELLOW}delete{Colors.RESET}        Delete a remote machine
-    {Colors.YELLOW}list{Colors.RESET}          Show all configured remotes
-    {Colors.YELLOW}set-path{Colors.RESET}      Update base path for a remote
-
-{Colors.BOLD}OPTIONS:{Colors.RESET}
-    {Colors.YELLOW}--user <user>{Colors.RESET}       SSH username
-    {Colors.YELLOW}--ip <ip>{Colors.RESET}           IP address or hostname
-    {Colors.YELLOW}--password <pass>{Colors.RESET}   SSH password (stored in plain text)
-    {Colors.YELLOW}--port <port>{Colors.RESET}       SSH port (default: 22)
-    {Colors.YELLOW}--path <path>{Colors.RESET}       Base directory on remote for case uploads
-    {Colors.YELLOW}-h, --help{Colors.RESET}         Show this help message
-
-{Colors.BOLD}EXAMPLES:{Colors.RESET}
-    remote add hpc1 --user john --ip 192.168.1.100 --password secret --path /home/john/cases
-    remote modify hpc1 --port 2222
-    remote list
-    remote set-path hpc1 --path /scratch/john/new_location
-    remote delete hpc1
-""")
+    help_messages.print_remote_help()
