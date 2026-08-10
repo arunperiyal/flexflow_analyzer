@@ -130,25 +130,25 @@ class TestOthdMap:
 
     def test_writes_one_map_per_mappable_block(self, case):
         execute_out(make_args(case))
-        assert (case / "othd.cyl_nodes.map").exists()
-        assert (case / "othd.tip_nodes.map").exists()
+        assert (case / "othd.riser_probe.map").exists()
+        assert (case / "othd.riser_tip.map").exists()
         # a coordinates block is mapped too: its records are indexed by its own file
-        assert (case / "othd.probe_dat.map").exists()
+        assert (case / "othd.riser_probe1_field.map").exists()
 
     def test_rows_keep_the_node_file_order(self, case):
         execute_out(make_args(case))
-        _, header, rows = read_map(case / "othd.cyl_nodes.map")
+        _, header, rows = read_map(case / "othd.riser_probe.map")
         assert header == ["row", "node", "x", "y", "z"]
         assert [r[0] for r in rows] == ["0", "1", "2", "3"]
         assert [r[1] for r in rows] == ["2", "18", "812", "813"]   # not sorted
 
         # the second block lists the same two nodes in the opposite order
-        _, _, tip = read_map(case / "othd.tip_nodes.map")
+        _, _, tip = read_map(case / "othd.riser_tip.map")
         assert [r[1] for r in tip] == ["18", "2"]
 
     def test_coordinates_come_from_the_mesh_file(self, case):
         execute_out(make_args(case))
-        _, _, rows = read_map(case / "othd.cyl_nodes.map")
+        _, _, rows = read_map(case / "othd.riser_probe.map")
         for row in rows:
             node = int(row[1])
             assert float(row[2]) == pytest.approx(node / 10)
@@ -157,7 +157,7 @@ class TestOthdMap:
 
     def test_a_coordinates_block_maps_its_own_points(self, case):
         execute_out(make_args(case))
-        comments, header, rows = read_map(case / "othd.probe_dat.map")
+        comments, header, rows = read_map(case / "othd.riser_probe1_field.map")
         assert header == ["row", "x", "y", "z"]        # no node: a point need not be one
         assert [r[0] for r in rows] == ["0", "1", "2"]
         assert [float(r[3]) for r in rows] == [3.0, 5.0, 10.0]
@@ -172,11 +172,11 @@ class TestOthdMap:
         (tmp_path / "probe_dat.txt").write_text("1 1.0 2.0 3.0\n")
         # riser.crd deliberately absent
         execute_out(make_args(tmp_path))
-        assert (tmp_path / "othd.probe_dat.map").exists()
+        assert (tmp_path / "othd.field_probe.map").exists()
 
     def test_header_records_where_it_came_from(self, case):
         execute_out(make_args(case))
-        comments, _, _ = read_map(case / "othd.cyl_nodes.map")
+        comments, _, _ = read_map(case / "othd.riser_probe.map")
         blob = "\n".join(comments)
         assert 'outputTimeHistory: "riser_probe"' in blob
         assert "nodes: riser.cyl_nodes.nbc (4)" in blob
@@ -185,29 +185,29 @@ class TestOthdMap:
     def test_oth_id_follows_declaration_order_when_nothing_is_skipped(self, case):
         execute_out(make_args(case))
         # probe_dat.txt, cyl_nodes, tip_nodes -- all present, so 0, 1, 2
-        assert "# othId: 0" in (case / "othd.probe_dat.map").read_text()
-        assert "# othId: 1" in (case / "othd.cyl_nodes.map").read_text()
-        assert "# othId: 2" in (case / "othd.tip_nodes.map").read_text()
+        assert "# othId: 0" in (case / "othd.riser_probe1_field.map").read_text()
+        assert "# othId: 1" in (case / "othd.riser_probe.map").read_text()
+        assert "# othId: 2" in (case / "othd.riser_tip.map").read_text()
 
     def test_a_missing_input_file_shifts_every_later_oth_id(self, case):
         """The solver writes no record for an output whose file is absent."""
         (case / "probe_dat.txt").unlink()
         execute_out(make_args(case))
-        assert not (case / "othd.probe_dat.map").exists()
+        assert not (case / "othd.riser_probe1_field.map").exists()
         # riser_probe was declared second but is written first
-        assert "# othId: 0" in (case / "othd.cyl_nodes.map").read_text()
-        assert "# othId: 1" in (case / "othd.tip_nodes.map").read_text()
+        assert "# othId: 0" in (case / "othd.riser_probe.map").read_text()
+        assert "# othId: 1" in (case / "othd.riser_tip.map").read_text()
 
     def test_an_empty_input_file_counts_as_missing(self, case):
         (case / "probe_dat.txt").write_text("")
         execute_out(make_args(case))
-        assert not (case / "othd.probe_dat.map").exists()
-        assert "# othId: 0" in (case / "othd.cyl_nodes.map").read_text()
+        assert not (case / "othd.riser_probe1_field.map").exists()
+        assert "# othId: 0" in (case / "othd.riser_probe.map").read_text()
 
     def test_the_basis_of_the_id_is_stated(self, case):
         (case / "probe_dat.txt").unlink()
         execute_out(make_args(case))
-        header = (case / "othd.cyl_nodes.map").read_text()
+        header = (case / "othd.riser_probe.map").read_text()
         # the id is a prediction, so a reader must be able to see what it rests on
         assert "predicted from the .def" in header
         assert "1 earlier output(s) not written" in header
@@ -216,7 +216,7 @@ class TestOthdMap:
         """Scanning every block, a missing input file is a skip -- it used to abort."""
         (case / "probe_dat.txt").unlink()
         execute_out(make_args(case))          # must not raise
-        assert (case / "othd.cyl_nodes.map").exists()
+        assert (case / "othd.riser_probe.map").exists()
 
     def test_naming_a_skipped_block_explicitly_does_error(self, case):
         (case / "probe_dat.txt").unlink()
@@ -225,13 +225,13 @@ class TestOthdMap:
 
     def test_name_selects_a_single_block(self, case):
         execute_out(make_args(case, map="tip_nodes"))
-        assert (case / "othd.tip_nodes.map").exists()
-        assert not (case / "othd.cyl_nodes.map").exists()
+        assert (case / "othd.riser_tip.map").exists()
+        assert not (case / "othd.riser_probe.map").exists()
 
     def test_name_also_matches_the_block_name(self, case):
         execute_out(make_args(case, map="riser_probe"))
-        assert (case / "othd.cyl_nodes.map").exists()
-        assert not (case / "othd.tip_nodes.map").exists()
+        assert (case / "othd.riser_probe.map").exists()
+        assert not (case / "othd.riser_tip.map").exists()
 
     def test_unknown_name_exits(self, case):
         with pytest.raises(SystemExit):
@@ -251,10 +251,10 @@ class TestOthdMap:
         """The solver writes no record for it, so there is nothing to map onto."""
         (case / "riser.tip_nodes.nbc").unlink()
         execute_out(make_args(case))
-        assert not (case / "othd.tip_nodes.map").exists()
-        assert (case / "othd.cyl_nodes.map").exists()
+        assert not (case / "othd.riser_tip.map").exists()
+        assert (case / "othd.riser_probe.map").exists()
         # tip_nodes was declared last, so the ids before it are untouched
-        assert "# othId: 1" in (case / "othd.cyl_nodes.map").read_text()
+        assert "# othId: 1" in (case / "othd.riser_probe.map").read_text()
 
     def test_naming_a_missing_node_file_explicitly_does_exit(self, case):
         (case / "riser.tip_nodes.nbc").unlink()
@@ -297,6 +297,67 @@ def registry(tmp_path, monkeypatch):
     return tmp_path
 
 
+DEF_SHARED_NODE_FILE = """
+nodeCoordinates {{
+    coordinates     = File( "{crd}" )
+}}
+outputTimeHistory( "probe_fast" ) {{
+    type            = nodal
+    nodes           = File( "riser.cyl_nodes.nbc" )
+    outputFrequency = 1
+}}
+outputTimeHistory( "probe_slow" ) {{
+    type            = nodal
+    nodes           = File( "riser.cyl_nodes.nbc" )
+    outputFrequency = 50
+}}
+"""
+
+
+class TestMapNaming:
+    """Maps are named after the block, which is what makes them distinct."""
+
+    def test_named_after_the_block_not_its_input_file(self, case):
+        execute_out(make_args(case))
+        assert (case / "othd.riser_probe.map").exists()          # not othd.cyl_nodes.map
+        assert (case / "othd.riser_probe1_field.map").exists()   # not othd.probe_dat.map
+
+    def test_two_blocks_sharing_a_node_file_get_their_own_maps(self, tmp_path):
+        """Naming after the file would put both on one path, the second winning."""
+        (tmp_path / "simflow.config").write_text("problem = riser\n")
+        (tmp_path / "riser.def").write_text(DEF_SHARED_NODE_FILE.format(crd="riser.crd"))
+        (tmp_path / "riser.cyl_nodes.nbc").write_text("2\n18\n")
+        (tmp_path / "riser.crd").write_text("".join(
+            f"{n} {n / 10:.16e} {n / 100:.16e} {-n / 100:.16e}\n" for n in range(1, 100)))
+
+        execute_out(make_args(tmp_path))
+        fast, slow = tmp_path / "othd.probe_fast.map", tmp_path / "othd.probe_slow.map"
+        assert fast.exists() and slow.exists()
+        # each carries its own block and othId, so neither has been overwritten
+        assert 'outputTimeHistory: "probe_fast"' in fast.read_text()
+        assert "# othId: 0" in fast.read_text()
+        assert 'outputTimeHistory: "probe_slow"' in slow.read_text()
+        assert "# othId: 1" in slow.read_text()
+
+    def test_a_name_needing_escaping_still_yields_one_file(self, tmp_path):
+        (tmp_path / "simflow.config").write_text("problem = riser\n")
+        (tmp_path / "riser.def").write_text(
+            DEF_SHARED_NODE_FILE.format(crd="riser.crd").replace(
+                '"probe_fast"', '"probe fast/slow"'))
+        (tmp_path / "riser.cyl_nodes.nbc").write_text("2\n18\n")
+        (tmp_path / "riser.crd").write_text("".join(
+            f"{n} {n / 10:.16e} {n / 100:.16e} {-n / 100:.16e}\n" for n in range(1, 100)))
+        execute_out(make_args(tmp_path))
+        assert (tmp_path / "othd.probe_fast_slow.map").exists()   # no stray directory
+        assert not (tmp_path / "probe fast").exists()
+
+    def test_the_selector_still_accepts_the_node_set_name(self, case):
+        """--map cyl_nodes reads naturally even though the file is block-named."""
+        execute_out(make_args(case, map="cyl_nodes"))
+        assert (case / "othd.riser_probe.map").exists()
+        assert not (case / "othd.riser_tip.map").exists()
+
+
 class TestList:
     """`case out --list` answers: is it mapped, and what does each othId hold."""
 
@@ -315,7 +376,7 @@ class TestList:
     def test_says_whether_a_map_exists(self, case):
         before = self.by_name(survey_time_history(case, None))
         assert not any(r["map_exists"] for r in before.values())
-        assert before["riser_probe"]["map"] == "othd.cyl_nodes.map"
+        assert before["riser_probe"]["map"] == "othd.riser_probe.map"
 
         execute_out(make_args(case))
         after = self.by_name(survey_time_history(case, None))
@@ -360,11 +421,11 @@ class TestProbeDeclaration:
 
     def test_absent_by_default(self, case):
         execute_out(make_args(case))
-        assert "# probe:" not in (case / "othd.cyl_nodes.map").read_text()
+        assert "# probe:" not in (case / "othd.riser_probe.map").read_text()
 
     def test_declared_type_is_recorded(self, case):
         execute_out(make_args(case, probe_type="line"))
-        header = (case / "othd.cyl_nodes.map").read_text()
+        header = (case / "othd.riser_probe.map").read_text()
         assert "# probe: line" in header
         # a reader must never mistake a declaration for a measurement
         assert "declared with --probe-type" in header
@@ -372,21 +433,21 @@ class TestProbeDeclaration:
 
     def test_closed_marks_a_ring(self, case):
         execute_out(make_args(case, probe_type="line", closed=True))
-        assert "# closed: yes" in (case / "othd.cyl_nodes.map").read_text()
+        assert "# closed: yes" in (case / "othd.riser_probe.map").read_text()
 
     def test_an_open_line_says_so(self, case):
         execute_out(make_args(case, probe_type="line"))
-        assert "# closed: no" in (case / "othd.cyl_nodes.map").read_text()
+        assert "# closed: no" in (case / "othd.riser_probe.map").read_text()
 
     def test_a_helix_is_its_own_type(self, case):
         """A helix wraps a body: axial position and angle, not arc length alone."""
         execute_out(make_args(case, probe_type="helix", closed=True))
-        header = (case / "othd.cyl_nodes.map").read_text()
+        header = (case / "othd.riser_probe.map").read_text()
         assert "# probe: helix" in header and "# closed: yes" in header
 
     def test_closed_is_only_meaningful_for_a_curve(self, case):
         execute_out(make_args(case, probe_type="surface"))
-        assert "# closed:" not in (case / "othd.cyl_nodes.map").read_text()
+        assert "# closed:" not in (case / "othd.riser_probe.map").read_text()
 
     def test_closed_without_a_line_exits(self, case):
         with pytest.raises(SystemExit):
@@ -401,13 +462,13 @@ class TestProbeDeclaration:
     def test_it_applies_to_coordinates_blocks_too(self, case):
         """Three collinear points are a line or three points; only a human knows."""
         execute_out(make_args(case, map="probe_dat", probe_type="point"))
-        assert "# probe: point" in (case / "othd.probe_dat.map").read_text()
+        assert "# probe: point" in (case / "othd.riser_probe1_field.map").read_text()
 
     def test_selecting_one_block_lets_sets_differ(self, case):
         execute_out(make_args(case, map="cyl_nodes", probe_type="line"))
         execute_out(make_args(case, map="probe_dat", probe_type="point"))
-        assert "# probe: line" in (case / "othd.cyl_nodes.map").read_text()
-        assert "# probe: point" in (case / "othd.probe_dat.map").read_text()
+        assert "# probe: line" in (case / "othd.riser_probe.map").read_text()
+        assert "# probe: point" in (case / "othd.riser_probe1_field.map").read_text()
 
 
 class TestCoordinateFileLayout:
@@ -458,19 +519,19 @@ class TestStalePrediction:
         (othd / "riser.othd").write_text("data")
         os.utime(othd / "riser.othd", (1_600_000_000, 1_600_000_000))   # long ago
         execute_out(make_args(case))
-        header = (case / "othd.cyl_nodes.map").read_text()
+        header = (case / "othd.riser_probe.map").read_text()
         assert "WARNING" in header and "newer than this case's othd files" in header
 
     def test_no_othd_files_means_no_warning(self, case):
         execute_out(make_args(case))
-        assert "WARNING" not in (case / "othd.cyl_nodes.map").read_text()
+        assert "WARNING" not in (case / "othd.riser_probe.map").read_text()
 
     def test_an_othd_newer_than_the_inputs_is_not_flagged(self, case):
         othd = case / "othd_files"
         othd.mkdir()
         (othd / "riser.othd").write_text("data")                        # written just now
         execute_out(make_args(case))
-        assert "WARNING" not in (case / "othd.cyl_nodes.map").read_text()
+        assert "WARNING" not in (case / "othd.riser_probe.map").read_text()
 
 
 class TestWildcard:
@@ -478,8 +539,8 @@ class TestWildcard:
 
     def test_maps_every_case_it_can(self, registry):
         execute_out(make_args("*"))
-        assert (registry / "Good1" / "othd.cyl_nodes.map").exists()
-        assert (registry / "Good2" / "othd.tip_nodes.map").exists()
+        assert (registry / "Good1" / "othd.riser_probe.map").exists()
+        assert (registry / "Good2" / "othd.riser_tip.map").exists()
 
     def test_one_bad_case_does_not_end_the_batch(self, registry, capsys):
         execute_out(make_args("*"))
@@ -487,7 +548,7 @@ class TestWildcard:
         # Unmappable is skipped, NoCrd and Gone fail, yet both good cases are written
         assert "2 case(s) mapped" in out
         assert "1 skipped" in out and "2 failed" in out
-        assert (registry / "Good1" / "othd.cyl_nodes.map").exists()
+        assert (registry / "Good1" / "othd.riser_probe.map").exists()
 
     def test_nothing_to_map_is_a_skip_not_a_failure(self, registry, capsys):
         execute_out(make_args("*"))
@@ -498,12 +559,12 @@ class TestWildcard:
     def test_a_coordinates_block_counts_as_mappable(self, registry):
         """A case with only a coordinates block is mapped, not skipped."""
         execute_out(make_args("*"))
-        assert (registry / "Good1" / "othd.probe_dat.map").exists()
+        assert (registry / "Good1" / "othd.riser_probe1_field.map").exists()
 
     def test_the_selector_still_applies(self, registry):
         execute_out(make_args("*", map="tip_nodes"))
-        assert (registry / "Good1" / "othd.tip_nodes.map").exists()
-        assert not (registry / "Good1" / "othd.cyl_nodes.map").exists()
+        assert (registry / "Good1" / "othd.riser_tip.map").exists()
+        assert not (registry / "Good1" / "othd.riser_probe.map").exists()
 
     def test_exits_non_zero_when_no_case_could_be_mapped(self, tmp_path, monkeypatch):
         (tmp_path / ".cases").write_text(json.dumps(

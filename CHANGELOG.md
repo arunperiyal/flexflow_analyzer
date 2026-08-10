@@ -50,7 +50,7 @@
 
 #### `case out` — a case's declared outputs, and maps that keep othd readable
 - New **`case out`** subcommand (listed in `case --help`). **`--map`** writes
-  one `othd.<set>.map` per `outputTimeHistory` block in the case's `.def` that
+  one `othd.<block>.map` per `outputTimeHistory` block in the case's `.def` that
   names a file its records are indexed by:
   - **`type = nodal`** → `row, node, x, y, z` — the record's index, the mesh node
     it belongs to, and that node's **undeformed** coordinates from the mesh.
@@ -66,6 +66,10 @@
   coordinates file is usually the largest input in a case (137 MB for a 1.8M-node
   riser) even when the output covers 49 nodes. With the map written, it can be
   deleted.
+- Maps are named after the **block**, not its input file: two blocks may read the
+  same node file at different frequencies, and naming by file put both on one
+  path with the second silently overwriting the first. The name is also what the
+  `.def` and the map header call the output, so the file agrees with its contents.
 - Rows keep the source file's order, because that order is what indexes the othd —
   they are deliberately not sorted.
 - Each map carries **`# othId: <n>`**, the output's index within the othd, so a

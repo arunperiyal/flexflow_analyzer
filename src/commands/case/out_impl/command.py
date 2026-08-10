@@ -57,8 +57,24 @@ def _problem_name(case_dir):
         return None
 
 
+def _map_stem(block_name):
+    """'riser_probe' -> 'riser_probe', the name a map file is built on.
+
+    The block name, not its input file: two blocks may read the same node file at
+    different frequencies, and naming maps after the file would put both on one
+    path with the second overwriting the first. The name is also what the map
+    header and the .def call the output, so the file agrees with its contents.
+    """
+    safe = "".join(c if (c.isalnum() or c in "-_.") else "_" for c in block_name)
+    return safe.strip("._") or "output"
+
+
 def _set_name(node_file, problem):
-    """'riser.cyl_nodes.nbc' -> 'cyl_nodes' (the part naming the node set)."""
+    """'riser.cyl_nodes.nbc' -> 'cyl_nodes' (the part naming the node set).
+
+    Only used to let --map NAME be given as the node set, which reads naturally
+    even though maps are named after the block.
+    """
     stem = Path(node_file).name
     for suffix in (".nbc", ".txt", ".dat"):
         if stem.endswith(suffix):
@@ -411,7 +427,7 @@ def write_case_maps(case_dir, wanted, logger, show_progress=False,
         # how many outputs declared before this one the solver does not write
         skipped_before = sum(1 for name in order[:order.index(block["name"])]
                              if oth_ids[name] is None)
-        out = case_dir / f"othd.{_set_name(source, problem)}.map"
+        out = case_dir / f"othd.{_map_stem(block['name'])}.map"
         if key == "nodes":
             _write_node_map(out, block, source, crd_name, rows, coords,
                             case_dir.name, problem, oth_id, skipped_before, stale,
@@ -468,7 +484,7 @@ def survey_time_history(case_dir, logger):
     for block in blocks:
         source = block.get("nodes") or block.get("coordinates")
         source_path = case_dir / source if source else None
-        map_path = case_dir / f"othd.{_set_name(source, problem)}.map" if source else None
+        map_path = case_dir / f"othd.{_map_stem(block['name'])}.map" if source else None
         probe, closed = _read_map_declaration(map_path) if (
             map_path and map_path.exists()) else (None, None)
         rows.append({

@@ -48,7 +48,9 @@ Build small derived files from a case's own inputs.
 
 {Colors.BOLD}OUTPUT:{Colors.RESET}
 
-    One {Colors.YELLOW}othd.<set>.map{Colors.RESET} per mappable block, in the case directory. What a
+    One {Colors.YELLOW}othd.<block>.map{Colors.RESET} per mappable block, in the case directory, named
+    after the outputTimeHistory block rather than its input file -- two blocks may
+    read the same node file, and naming by file would put both on one path. What a
     row says depends on what the block is indexed by:
 
     {Colors.BOLD}type = nodal{Colors.RESET} -- indexed by a node file, resolved against the mesh:
