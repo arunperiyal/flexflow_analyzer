@@ -6,25 +6,33 @@ from ....utils.colors import Colors
 _COMMON_INPUT = f"""\
 {Colors.BOLD}INPUT (one of):{Colors.RESET}
     {Colors.YELLOW}<case> [--timestep N]{Colors.RESET}   Convert the case's PLT (latest, or step N) and render
+    {Colors.YELLOW}<case> --t1 A --t2 B{Colors.RESET}   {Colors.BOLD}One figure per timestep{Colors.RESET} in the range
+                           {Colors.YELLOW}--freq N{Colors.RESET} keeps only steps that are multiples of N
+                           {Colors.DIM}(the t1/t2/freq context supplies these: use t1:100 t2:500){Colors.RESET}
     {Colors.YELLOW}--vtu PATH{Colors.RESET}             Render an existing .vtu directly
     {Colors.YELLOW}--config FILE{Colors.RESET}          YAML config (input.vtu may be set there)"""
 
 _COMMON_COLOR = f"""\
     {Colors.YELLOW}--color NAME{Colors.RESET}           Scalar to colour by          (default: U; use W for z-flow)
-    {Colors.YELLOW}--range MIN MAX{Colors.RESET}        Fix the colour scale to this span (two numbers,
+    {Colors.YELLOW}--color-range MIN MAX{Colors.RESET}  Fix the colour scale to this span (two numbers,
                            space-separated, so a negative MIN works)
                            {Colors.DIM}Without it the scale is taken from each surface, so the
                            same variable gets a different scale at every timestep
-                           and two frames cannot be compared -- or animated.{Colors.RESET}"""
+                           and two frames cannot be compared -- or animated.
+                           Rendering a range without it is warned about.{Colors.RESET}"""
 
 _COMMON_OUTPUT = f"""\
-{Colors.BOLD}OUTPUT:{Colors.RESET}  ({Colors.DIM}--output picks the format by extension{Colors.RESET})
-    {Colors.YELLOW}--output NAME{Colors.RESET}          Prefix: NAME_<view>.png per view, plus NAME.vtp
-    {Colors.YELLOW}--output NAME.png{Colors.RESET}      That one image (single view only)
-    {Colors.YELLOW}--output NAME.vtp{Colors.RESET}      The cut surface itself -- {Colors.BOLD}no image is rendered{Colors.RESET}
+{Colors.BOLD}OUTPUT:{Colors.RESET}
+    Everything goes in a {Colors.BOLD}directory under the case{Colors.RESET}: one run writes a file per
+    camera view, and a timestep range multiplies that by the number of steps.
+
+    {Colors.YELLOW}--output NAME{Colors.RESET}          The directory <case>/NAME/  (default: render_<mode>/)
+    {Colors.YELLOW}--output NAME.png{Colors.RESET}      ... holding PNGs only, no .vtp (single view)
+    {Colors.YELLOW}--output NAME.vtp{Colors.RESET}      ... holding the cut surface -- {Colors.BOLD}no image is rendered{Colors.RESET}
     {Colors.YELLOW}          NAME.vtu{Colors.RESET}      the same, as an unstructured grid
     {Colors.YELLOW}          NAME.csv{Colors.RESET}      the same, as an x,y,z + variables point table
-    {Colors.DIM}Omitted: the prefix is taken from the .vtu name.{Colors.RESET}"""
+
+    {Colors.DIM}Files inside are named <NAME>_<step>_<view>.png, so a range sorts by step.{Colors.RESET}"""
 
 _COMMON_MISC = f"""\
 {Colors.BOLD}MISC:{Colors.RESET}
@@ -60,14 +68,21 @@ Given a case, the PLT is auto-converted to a cached .vtu first.
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
     flexflow field render iso myCase --timestep 100 --values 20 --color W
     flexflow field render slice myCase --normal z --color Pressure
-    flexflow field render slice myCase --normal z --slices 10
+    flexflow field render iso myCase --t1 100 --t2 500 --color-range -1 1
     flexflow field render slice myCase --normal x --output cut.vtp
+
+{Colors.BOLD}OUTPUT:{Colors.RESET}
+    {Colors.DIM}Always a directory under the case -- <case>/render_<mode>/ by default, or
+    <case>/NAME/ with --output NAME. One run writes a file per camera view, and
+    a --t1/--t2 range writes that many per timestep.{Colors.RESET}
 
 {Colors.BOLD}NOTES:{Colors.RESET}
     {Colors.DIM}- A flag belonging to the other mode is an error, not a no-op: --values
       only works on iso, --normal only on slice.
     - Give the case before a list-valued flag: `--values 20 myCase` reads
-      myCase as another isosurface value.{Colors.RESET}
+      myCase as another isosurface value.
+    - A range without --color-range scales every frame to its own data, so the
+      frames are not comparable. It is warned about.{Colors.RESET}
 """)
 
 
@@ -100,9 +115,9 @@ by another variable.
   {Colors.BOLD}An existing .vtu with several iso values:{Colors.RESET}
     flexflow field render iso --vtu field.vtu --contour QCriterion --values 5 50 --output wake
 
-  {Colors.BOLD}A fixed scale, so timesteps can be compared:{Colors.RESET}
-    flexflow field render iso myCase --timestep 100 --color W --range -0.5 0.5
-    flexflow field render iso myCase --timestep 200 --color W --range -0.5 0.5
+  {Colors.BOLD}A whole range on one fixed scale, so the frames can be compared:{Colors.RESET}
+    flexflow field render iso myCase --t1 100 --t2 500 --color W --color-range -0.5 0.5
+    {Colors.DIM}(one figure per step in 100..500, all on the same scale, in myCase/render_iso/){Colors.RESET}
 
   {Colors.BOLD}Write then use a config template:{Colors.RESET}
     flexflow field render iso --write-template iso.yml
@@ -154,7 +169,7 @@ want out of a run. Or cut a series of planes along one normal.
     flexflow field render slice myCase --normal z --origin 0,0,3
 
   {Colors.BOLD}Ten stations down the riser, all on one scale:{Colors.RESET}
-    flexflow field render slice myCase --normal z --slices 10 --range -1 1 --output stations
+    flexflow field render slice myCase --normal z --slices 10 --color-range -1 1 --output stations
 
   {Colors.BOLD}The cut itself, for ParaView or pandas:{Colors.RESET}
     flexflow field render slice myCase --normal x --output cut.vtp

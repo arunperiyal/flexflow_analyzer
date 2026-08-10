@@ -49,15 +49,26 @@
   prefix, `NAME.png` is that one image, and `.vtp`/`.vtu`/`.csv` write the cut
   surface itself with **no image rendered** — that path never constructs a
   plotter, so it works on a headless box without OSMesa.
-- **`--range MIN MAX`** fixes the colour scale. Without it the scale is taken
-  from each surface as it is built, so the same variable gets a different scale
-  at every timestep — two frames cannot be compared, and a sequence of them
-  cannot be animated. It applies to `slice` as well as `iso`, since the
-  colouring is shared. Two space-separated numbers rather than `MIN,MAX`:
-  argparse reads a lone `-0.5` as a value but `-0.5,0.5` as an option name, so
-  the comma form would have rejected every range with a negative minimum.
-  *(The same trap still applies to `field extract --probe -2.5,0,0`, which
-  predates this and is not fixed here.)*
+- **`--t1`/`--t2`/`--freq` render a whole range** — one figure per timestep in
+  it, rather than a single step. The `t1`/`t2`/`freq` context feeds them, so
+  `use t1:100 t2:500` then `field render iso` draws the sweep. (`--timestep`
+  still takes one step; `field convert` keeps taking `--timestep` from `t1`.)
+- **Output always goes in a directory under the case.** One run writes a file
+  per camera view and a range multiplies that by the number of steps, so loose
+  files named after the `.vtu` landed in the case's `binary/` among the PLTs.
+  `--output NAME` now names the directory (`<case>/NAME/`, default
+  `render_<mode>/`) and its extension picks what goes inside — `.png` for images
+  only, `.vtp`/`.vtu`/`.csv` for the cut surface. Files inside are
+  `<NAME>_<step>_<view>.png`, so a range sorts by step.
+- **`--color-range MIN MAX`** fixes the colour scale. Without it the scale is
+  taken from each surface as it is built, so the same variable gets a different
+  scale at every timestep — two frames cannot be compared, and a sequence of
+  them cannot be animated. Rendering a range without it is **warned about**.
+  It applies to `slice` as well as `iso`, since the colouring is shared. Two
+  space-separated numbers rather than `MIN,MAX`: argparse reads a lone `-0.5` as
+  a value but `-0.5,0.5` as an option name, so the comma form would have
+  rejected every range with a negative minimum. *(The same trap still applies to
+  `field extract --probe -2.5,0,0`, which predates this and is not fixed here.)*
 - **A case context no longer lands in the mode slot.** With `use case:X` set, a
   bare `field render` had the case injected at position 3 — but position 2, the
   mode word, was still empty, so the case slid into it and the command answered

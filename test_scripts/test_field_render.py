@@ -25,7 +25,8 @@ def args(**over):
     base = dict(mode="iso", case=None, verbose=False, help=False, vtu="m.vtu",
                 config=None, write_template=None, timestep=None, zone=None,
                 nen=None, color=None, output=None, contour=None, values=None,
-                normal=None, origin=None, slices=None, range=None)
+                normal=None, origin=None, slices=None, color_range=None,
+                t1=None, t2=None, freq=None)
     base.update(over)
     return argparse.Namespace(**base)
 
@@ -101,17 +102,25 @@ class TestModeOnlyFlags:
 
 
 class TestOutputResolution:
-    """--output picks the format by extension; a bare NAME stays a prefix."""
+    """--output names a directory; its extension picks what goes inside."""
 
-    @pytest.mark.parametrize("value, kind", [
-        (None, "prefix"), ("wake", "prefix"), ("out/wake", "prefix"),
-        ("wake.png", "image"),
-        ("cut.vtp", "geometry"), ("cut.vtu", "geometry"),
-        ("cut.vtk", "geometry"), ("cut.csv", "geometry"),
+    @pytest.mark.parametrize("value, name, ext", [
+        (None, "render_slice", None),          # the default directory
+        ("wake", "wake", None),
+        ("out/wake", "out/wake", None),
+        ("wake.png", "wake", ".png"),
+        ("cut.vtp", "cut", ".vtp"),
+        ("cut.vtu", "cut", ".vtu"),
+        ("cut.vtk", "cut", ".vtk"),
+        ("cut.csv", "cut", ".csv"),
     ])
-    def test_kind(self, value, kind):
-        got, _ = render_cmd._resolve_output(args(output=value), "slice", _Logger())
-        assert got == kind
+    def test_directory_and_format(self, value, name, ext):
+        got_name, got_ext = render_cmd._resolve_output(
+            args(output=value), "slice", _Logger())
+        assert (got_name, got_ext) == (name, ext)
+
+    def test_default_names_the_mode(self):
+        assert render_cmd._resolve_output(args(), "iso", _Logger())[0] == "render_iso"
 
     def test_unknown_extension_errors(self, capsys):
         with pytest.raises(SystemExit) as exc:
@@ -119,9 +128,23 @@ class TestOutputResolution:
         assert exc.value.code == 1
         assert "Unsupported --output extension" in capsys.readouterr().err
 
+    def test_directory_goes_under_the_case(self, tmp_path):
+        """Figures belong with the case, not loose beside the PLTs in binary/."""
+        case = tmp_path / "C"
+        case.mkdir()
+        got = render_cmd._output_dir(args(case=str(case)), "render_iso")
+        assert got == case / "render_iso"
+        assert got.is_dir()
+
+    def test_a_vtu_input_keeps_the_directory_beside_it(self, tmp_path):
+        vtu = tmp_path / "field.vtu"
+        vtu.write_text("")
+        got = render_cmd._output_dir(args(case=None, vtu=str(vtu)), "render_iso")
+        assert got == tmp_path / "render_iso"
+
 
 class TestColourRange:
-    """--range fixes the colour scale so frames can be compared."""
+    """--color-range fixes the colour scale so frames can be compared."""
 
     def test_ordered_range_passes(self):
         assert render_cmd._check_range([-0.5, 0.5], _Logger()) == [-0.5, 0.5]
@@ -140,13 +163,13 @@ class TestColourRange:
     def test_it_reaches_the_config(self):
         """The whole point: the value must land on color.range."""
         cfg = render.default_config("iso")
-        render_cmd._apply_overrides(args(range=[-2.0, 3.0]), cfg, "iso")
+        render_cmd._apply_overrides(args(color_range=[-2.0, 3.0]), cfg, "iso")
         assert cfg["color"]["range"] == [-2.0, 3.0]
 
     def test_it_applies_to_slice_too(self):
-        """Colouring is shared, so --range is not an iso-only flag."""
+        """Colouring is shared, so --color-range is not an iso-only flag."""
         cfg = render.default_config("slice")
-        render_cmd._apply_overrides(args(mode="slice", range=[0.0, 1.0]), cfg, "slice")
+        render_cmd._apply_overrides(args(mode="slice", color_range=[0.0, 1.0]), cfg, "slice")
         assert cfg["color"]["range"] == [0.0, 1.0]
 
 

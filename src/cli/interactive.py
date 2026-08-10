@@ -346,7 +346,10 @@ class FlexFlowCompleter(Completer):
             '--zone':           'Zone to render',
             '--nen':            'Force nodes-per-element',
             '--color':          'Scalar to colour by',
-            '--range':          'Fix the colour scale (MIN MAX; default: auto per surface)',
+            '--color-range':    'Fix the colour scale (MIN MAX; default: auto per surface)',
+            '--t1':             'Start step (with --t2: one figure per step in the range)',
+            '--t2':             'End step of a range',
+            '--freq':           'With --t1/--t2: keep steps that are multiples of FREQ',
             '--output':         'NAME -> image prefix; .png -> one image; '
                                 '.vtp/.vtu/.csv -> the cut surface, no image',
             '--contour':        'iso: scalar to contour (default QCriterion)',
@@ -4161,9 +4164,10 @@ class InteractiveShell:
                 args.append('--variables')
                 args.append(self._current_var)
                 context_added.append(f"var: {self._current_var}")
-            # t1/t2 select the timestep(s): extract and compute take --t1/--t2
-            # (single or range); convert/render take a single --timestep from t1.
-            if subcmd in ('extract', 'compute'):
+            # t1/t2 select the timestep(s): extract, compute and render take
+            # --t1/--t2 (a single step or a range -- render draws one figure per
+            # step in it); convert takes a single --timestep from t1.
+            if subcmd in ('extract', 'compute', 'render'):
                 if self._current_t1 is not None and '--t1' not in args:
                     args.append('--t1'); args.append(str(self._current_t1))
                     context_added.append(f"t1: {self._current_t1}")
@@ -4173,7 +4177,7 @@ class InteractiveShell:
                 if self._current_freq is not None and '--freq' not in args:
                     args.append('--freq'); args.append(str(self._current_freq))
                     context_added.append(f"freq: {self._current_freq}")
-            elif subcmd in ('convert', 'render'):
+            elif subcmd == 'convert':
                 if self._current_t1 is not None and '--timestep' not in args:
                     args.append('--timestep'); args.append(str(int(self._current_t1)))
                     context_added.append(f"timestep: {int(self._current_t1)}")

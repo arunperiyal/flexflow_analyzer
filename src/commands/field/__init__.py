@@ -165,7 +165,13 @@ class FieldCommand(BaseCommand):
         render_parser.add_argument('--write-template', type=str, metavar='PATH',
                                    help="Write this mode's YAML config template and exit")
         render_parser.add_argument('--timestep', type=int,
-                                   help='Timestep to convert+render (default: latest)')
+                                   help='A single timestep (default: latest)')
+        render_parser.add_argument('--t1', type=float,
+                                   help='Start step (alone: that step; with --t2: range start)')
+        render_parser.add_argument('--t2', type=float,
+                                   help='End step of a range: one figure per step in it')
+        render_parser.add_argument('--freq', type=int,
+                                   help='With --t1/--t2: keep only steps that are multiples of FREQ')
         render_parser.add_argument('--zone', type=str, help='Zone to render')
         render_parser.add_argument('--nen', type=int,
                                    help='Force nodes-per-element when converting')
@@ -173,8 +179,8 @@ class FieldCommand(BaseCommand):
         # Two separate numbers, not "MIN,MAX": argparse reads a lone -0.5 as a
         # value but "-0.5,0.5" as an option, so the comma form would reject
         # every range with a negative minimum -- which is most of them.
-        render_parser.add_argument('--range', type=float, nargs=2,
-                                   metavar=('MIN', 'MAX'),
+        render_parser.add_argument('--color-range', dest='color_range',
+                                   type=float, nargs=2, metavar=('MIN', 'MAX'),
                                    help='Fix the colour scale (default: auto from '
                                         'the surface, which differs per timestep)')
         render_parser.add_argument('--output', type=str,
