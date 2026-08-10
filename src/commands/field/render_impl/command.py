@@ -88,13 +88,20 @@ def _parse_vector(text, what, logger):
     return parts
 
 
-def _resolve_vtu(args, cfg, logger):
+def _resolve_vtu(args, cfg, mode, logger):
     """Return a .vtu path: explicit --vtu / config, or convert the case's PLT."""
     vtu = args.vtu or cfg["input"].get("vtu")
     if vtu:
         return vtu
     if not args.case:
-        logger.error("need a .vtu (set input.vtu / --vtu) or a <case> [+ --timestep]")
+        # Nothing to render and nothing said about what to render: this is
+        # someone finding their way, so show the mode's help rather than a
+        # one-line complaint. (The same call `field extract` makes.)
+        from .help_messages import print_iso_help, print_slice_help
+        logger.error("nothing to render: give a <case> [--timestep N], "
+                     "or --vtu PATH, or set input.vtu in a --config file")
+        print()
+        {"iso": print_iso_help, "slice": print_slice_help}[mode]()
         sys.exit(1)
     case_dir = Path(args.case)
     binary_dir = case_dir / "binary"
@@ -234,7 +241,7 @@ def execute_render(args):
         cfg["output"]["geometry"] = value
         cfg["output"]["images"] = False
 
-    cfg["input"]["vtu"] = _resolve_vtu(args, cfg, logger)
+    cfg["input"]["vtu"] = _resolve_vtu(args, cfg, mode, logger)
     if kind == "prefix" and not value and cfg["output"]["prefix"] == mode:
         cfg["output"]["prefix"] = os.path.splitext(cfg["input"]["vtu"])[0] + f"_{mode}"
 

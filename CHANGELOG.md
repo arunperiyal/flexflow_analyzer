@@ -49,6 +49,21 @@
   prefix, `NAME.png` is that one image, and `.vtp`/`.vtu`/`.csv` write the cut
   surface itself with **no image rendered** — that path never constructs a
   plotter, so it works on a headless box without OSMesa.
+- **A case context no longer lands in the mode slot.** With `use case:X` set, a
+  bare `field render` had the case injected at position 3 — but position 2, the
+  mode word, was still empty, so the case slid into it and the command answered
+  *"Unknown render mode /path/to/case"* instead of showing help. `field compute`
+  had the same bug for its `quantity`, and `template script` for its type.
+  Injection now requires every slot *before* the case to be filled.
+- **A headless box gets a virtual framebuffer** when one is available: off-screen
+  rendering still needs a GL context, and VTK prints *"bad X server connection"*
+  without one. `xvfb` is started automatically if installed. The warning is
+  cosmetic on a VTK that can fall back — images still come out — and when it
+  genuinely cannot render, the error now names the ways out rather than leaving
+  a raw VTK warning, including `--output NAME.vtp`, which needs no GL at all.
+- **Nothing to render shows the mode's help**, not just a one-line complaint:
+  `field render iso` with no case, no `--vtu` and no `input.vtu` is someone
+  finding their way.
 - **`field render --zone` now does something.** It was accepted and dropped on
   the floor: the conversion call never passed it on, so every render used the
   first volume zone whatever was asked for. The cached `.vtu` sidecar is named

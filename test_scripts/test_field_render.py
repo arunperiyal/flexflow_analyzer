@@ -63,6 +63,18 @@ class TestModeValidation:
         render_cmd.execute_render(args(mode=mode, help=True))
         assert heading in capsys.readouterr().out
 
+    @pytest.mark.parametrize("mode, heading", [
+        ("iso", "Field Render Iso"), ("slice", "Field Render Slice"),
+    ])
+    def test_no_input_shows_the_mode_help(self, capsys, mode, heading):
+        """Nothing to render is someone finding their way, not a typo."""
+        with pytest.raises(SystemExit) as exc:
+            render_cmd.execute_render(args(mode=mode, vtu=None))
+        assert exc.value.code == 1
+        captured = capsys.readouterr()
+        assert "nothing to render" in captured.err
+        assert heading in captured.out
+
 
 class TestModeOnlyFlags:
     """A flag belonging to the other mode is an error, never a silent no-op."""

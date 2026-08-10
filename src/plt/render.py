@@ -32,8 +32,20 @@ nothing to a slice and `slice` nothing to an isosurface, and neither is an error
 """
 import copy
 import os
+import sys
 
 from .camera import load_camera
+
+HEADLESS_HELP = """\
+no display, and no working off-screen GL to fall back on.
+    Off-screen rendering still needs a GL context: VTK draws into a real one.
+    Three ways out, cheapest first:
+      - write the surface instead of a picture: --output NAME.vtp (or .vtu/.csv).
+        That path never opens a plotter, so it needs no GL at all, and the file
+        opens in ParaView locally.
+      - install xvfb on this machine (apt install xvfb); it is picked up
+        automatically on the next run.
+      - run over ssh -X, or on a machine with a display."""
 
 DEFAULTS = {
     "input":   {"vtu": None},
@@ -307,6 +319,31 @@ def save_geometry(surf, path, log=print):
     return path
 
 
+def _prepare_display(log=print):
+    """Give VTK something to draw into when there is no display.
+
+    A VTK built against OSMesa carries its own context and needs nothing; one
+    built against X needs a server even off-screen, and on a headless box prints
+    "bad X server connection" and renders nothing useful. Start a virtual
+    framebuffer when we can, and stay quiet when we cannot -- an OSMesa build
+    would still succeed, and the screenshot itself reports the failure if not.
+    """
+    if sys.platform != "linux" or os.environ.get("DISPLAY"):
+        return
+    try:
+        import pyvista as pv
+        pv.start_xvfb()
+        log("no DISPLAY -- started a virtual framebuffer (xvfb)")
+    except Exception:
+        pass
+
+
+def _headless(exc):
+    """Is this failure the no-display one, rather than a real rendering bug?"""
+    return (sys.platform == "linux" and not os.environ.get("DISPLAY")
+            and isinstance(exc, Exception))
+
+
 def render_surface(cfg, surf, log=print):
     """Save the surface and write one PNG per view. Returns the written files."""
     prefix = cfg["output"]["prefix"]
@@ -330,6 +367,7 @@ def render_surface(cfg, surf, log=print):
 
     import pyvista as pv
 
+    _prepare_display(log)
     os.makedirs(os.path.dirname(prefix) or ".", exist_ok=True)
     crange = cfg["color"].get("range") or list(surf.get_data_range(color))
     b = surf.bounds  # (xmin,xmax,ymin,ymax,zmin,zmax)
@@ -345,21 +383,26 @@ def render_surface(cfg, surf, log=print):
     outputs = []
 
     for view in views:
-        p = pv.Plotter(off_screen=True, window_size=res)
-        p.set_background(to_rgb(cfg["image"].get("background", [1, 1, 1])))
-        p.add_mesh(surf, scalars=color, cmap=to_cmap(cfg["color"].get("preset", "coolwarm")),
-                   clim=crange, opacity=float(cfg["surface"].get("opacity", 1.0)),
-                   show_edges=bool(cfg["surface"].get("show_edges")),
-                   log_scale=bool(cfg["color"].get("log_scale")),
-                   show_scalar_bar=bool(cfg["color"].get("show_scalar_bar", True)),
-                   scalar_bar_args={"title": cfg["color"].get("title") or color,
-                                    "color": text_color})
-        if cfg["axes"].get("orientation_axes", True):
-            p.add_axes(color=text_color)
-        _setup_camera(p, view, center, span)
-        fn = exact or "%s_%s.png" % (prefix, view.get("name", "view"))
-        p.screenshot(fn, transparent_background=transparent)
-        p.close()
+        try:
+            p = pv.Plotter(off_screen=True, window_size=res)
+            p.set_background(to_rgb(cfg["image"].get("background", [1, 1, 1])))
+            p.add_mesh(surf, scalars=color, cmap=to_cmap(cfg["color"].get("preset", "coolwarm")),
+                       clim=crange, opacity=float(cfg["surface"].get("opacity", 1.0)),
+                       show_edges=bool(cfg["surface"].get("show_edges")),
+                       log_scale=bool(cfg["color"].get("log_scale")),
+                       show_scalar_bar=bool(cfg["color"].get("show_scalar_bar", True)),
+                       scalar_bar_args={"title": cfg["color"].get("title") or color,
+                                        "color": text_color})
+            if cfg["axes"].get("orientation_axes", True):
+                p.add_axes(color=text_color)
+            _setup_camera(p, view, center, span)
+            fn = exact or "%s_%s.png" % (prefix, view.get("name", "view"))
+            p.screenshot(fn, transparent_background=transparent)
+            p.close()
+        except Exception as e:
+            if _headless(e):
+                raise RuntimeError(HEADLESS_HELP) from e
+            raise
         log("saved %s" % fn)
         outputs.append(fn)
     return outputs

@@ -4109,8 +4109,15 @@ class InteractiveShell:
                     subcmd = args[1]
                     if subcmd in case_commands[cmd]:
                         pos = case_commands[cmd][subcmd]
-                        # Check if case position is empty or is a flag
-                        if len(args) <= pos or args[pos].startswith('-'):
+                        # Everything before the case slot must already be filled.
+                        # `field render <mode> <case>` puts the case at 3, so a
+                        # bare `field render` would otherwise take the case into
+                        # the *mode* slot and report it as an unknown mode
+                        # instead of showing help. Same for `field compute`.
+                        prior_filled = (len(args) >= pos
+                                        and not args[pos - 1].startswith('-'))
+                        slot_empty = len(args) <= pos or args[pos].startswith('-')
+                        if prior_filled and slot_empty:
                             # Insert current case at the right position
                             args.insert(pos, self._current_case)
                             self.console.print(f"[dim]Using case: {self._current_case}[/dim]")
