@@ -143,9 +143,9 @@ class FlexFlowCompleter(Completer):
     # ---------------------------------------------------------------------------
 
     _SUBCOMMANDS: Dict[str, List[str]] = {
-        'case':     ['show', 'create', 'run', 'organise', 'check', 'status', 'add', 'report', 'upload', 'download'],
+        'case':     ['show', 'create', 'run', 'organise', 'check', 'status', 'add', 'out', 'report', 'upload', 'download'],
         'data':     ['show', 'stats'],
-        'field':    ['info', 'extract', 'convert', 'iso', 'check'],
+        'field':    ['info', 'extract', 'compute', 'convert', 'iso', 'check'],
         'def':      ['var'],
         'run':      ['check', 'pre', 'main', 'post', 'sq', 'sb', 'sc'],
         'template': ['plot', 'case', 'script'],
