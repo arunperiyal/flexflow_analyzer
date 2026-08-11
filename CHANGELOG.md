@@ -49,6 +49,26 @@
   prefix, `NAME.png` is that one image, and `.vtp`/`.vtu`/`.csv` write the cut
   surface itself with **no image rendered** — that path never constructs a
   plotter, so it works on a headless box without OSMesa.
+- **A render error no longer gets blamed on the display.** The headless handler
+  replaced *any* exception with "no display, and no working off-screen GL"
+  whenever `DISPLAY` was unset — so a malformed config, a missing variable and a
+  dead X server all read as the same problem, and the real cause was thrown
+  away. The actual error is now always reported, with the headless note added
+  underneath only as a possible contributing factor.
+- **`--camera` given a render config is an error**, not a silent wrong picture.
+  `load_camera` returned the whole config dict, whose `position`/`focal`/`up`
+  are all absent, so the camera was left at VTK's default and a plausible-looking
+  image came out of the wrong viewpoint with no warning. A frame without a
+  `position:` is now rejected, and a file carrying config sections is named as
+  such and pointed at `--config`. It is checked when the flag is read, so a bad
+  camera stops the run before it converts a hundred PLT files.
+- **`color.range` from a config is validated.** `range: [-0.5 0.5]` is valid
+  YAML for a one-element list holding the *string* `"-0.5 0.5"`, which reached
+  pyvista and failed there as `IndexError` with nothing pointing back at the
+  file. The missing comma is now named.
+- **A multi-step render says where it is** (`[7/100] timestep 350`). A hundred
+  steps each converting a PLT and rendering can run for many minutes, and
+  silence looks like a hang.
 - **`--pick-camera FILE` / `--camera FILE`** — set the view once by eye and pin
   it across every timestep, which is what a Tecplot `.sty` is for.
   `--pick-camera` opens a window on one step; orbit to the view you want, close

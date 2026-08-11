@@ -209,6 +209,70 @@ class TestCamera:
                               "parallel_scale", "view_angle"}
 
 
+class TestConfigValidation:
+    """Config values that would otherwise fail deep inside pyvista."""
+
+    def test_a_good_range_passes(self):
+        cfg = render.default_config("iso")
+        cfg["color"]["range"] = [-0.5, 0.5]
+        render_cmd._check_config(cfg, _Logger())          # no exit
+
+    def test_none_is_auto(self):
+        render_cmd._check_config(render.default_config("iso"), _Logger())
+
+    def test_a_missing_comma_is_named(self, capsys):
+        """`range: [-0.5 0.5]` is valid YAML for ONE string, not two numbers."""
+        import yaml
+        parsed = yaml.safe_load("range: [-0.5 0.5]")["range"]
+        assert parsed == ["-0.5 0.5"]                     # the trap itself
+        cfg = render.default_config("iso")
+        cfg["color"]["range"] = parsed
+        with pytest.raises(SystemExit) as exc:
+            render_cmd._check_config(cfg, _Logger())
+        assert exc.value.code == 1
+        err = capsys.readouterr().err
+        assert "two numbers" in err and "missing comma" in err
+
+    @pytest.mark.parametrize("bad", [[1.0], [1.0, 2.0, 3.0], "auto", [2.0, 1.0]])
+    def test_other_bad_ranges_rejected(self, bad):
+        cfg = render.default_config("iso")
+        cfg["color"]["range"] = bad
+        with pytest.raises(SystemExit):
+            render_cmd._check_config(cfg, _Logger())
+
+
+class TestCameraFrameValidation:
+    """A frame with no position sets no camera -- silently, unless we look."""
+
+    def test_a_render_config_is_rejected_by_name(self, tmp_path):
+        """The mistake worth catching: --camera given a --config file."""
+        from src.plt.camera import load_camera
+        cfg = tmp_path / "template.yaml"
+        cfg.write_text("output:\n  prefix: iso\nviews:\n  - {name: iso}\n")
+        with pytest.raises(ValueError) as exc:
+            load_camera(str(cfg))
+        assert "render config" in str(exc.value)
+        assert "--config" in str(exc.value)
+
+    def test_a_frame_without_position_is_rejected(self, tmp_path):
+        from src.plt.camera import load_camera
+        f = tmp_path / "cam.yml"
+        f.write_text("up: [0, 0, 1]\n")
+        with pytest.raises(ValueError) as exc:
+            load_camera(str(f))
+        assert "not a camera frame" in str(exc.value)
+
+    def test_a_bad_camera_stops_before_any_rendering(self, capsys, tmp_path):
+        """Catch it at the flag, not at the first screenshot of a 100-step sweep."""
+        cfg = tmp_path / "template.yaml"
+        cfg.write_text("views:\n  - {name: iso}\n")
+        with pytest.raises(SystemExit) as exc:
+            render_cmd._apply_camera(args(camera=str(cfg)),
+                                     render.default_config("iso"), _Logger())
+        assert exc.value.code == 1
+        assert "render config" in capsys.readouterr().err
+
+
 class TestVectorParsing:
     """--normal/--origin take an axis name or three comma-separated numbers."""
 

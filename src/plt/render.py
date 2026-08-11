@@ -45,15 +45,13 @@ picking a camera needs a window to orbit in, and there is no display here.
       - render the sweep headless with --camera <that file>"""
 
 HEADLESS_HELP = """\
-no display, and no working off-screen GL to fall back on.
-    Off-screen rendering still needs a GL context: VTK draws into a real one.
-    Three ways out, cheapest first:
-      - write the surface instead of a picture: --output NAME.vtp (or .vtu/.csv).
-        That path never opens a plotter, so it needs no GL at all, and the file
-        opens in ParaView locally.
-      - install xvfb on this machine (apt install xvfb); it is picked up
-        automatically on the next run.
-      - run over ssh -X, or on a machine with a display."""
+    There is also no display on this machine, which *may* be the cause if the
+    error above does not explain itself. Off-screen rendering still needs a GL
+    context. Ways out:
+      - write the surface instead of a picture: --output NAME.vtp (or .vtu/.csv),
+        which opens no plotter and needs no GL at all
+      - install xvfb (apt install xvfb); it is picked up automatically
+      - run over `ssh -X`, or on a machine with a display"""
 
 DEFAULTS = {
     "input":   {"vtu": None},
@@ -346,10 +344,9 @@ def _prepare_display(log=print):
         pass
 
 
-def _headless(exc):
-    """Is this failure the no-display one, rather than a real rendering bug?"""
-    return (sys.platform == "linux" and not os.environ.get("DISPLAY")
-            and isinstance(exc, Exception))
+def _no_display():
+    """True when a GL context is unlikely to exist -- a hint, not a diagnosis."""
+    return sys.platform == "linux" and not os.environ.get("DISPLAY")
 
 
 def render_surface(cfg, surf, log=print):
@@ -408,8 +405,12 @@ def render_surface(cfg, surf, log=print):
             p.screenshot(fn, transparent_background=transparent)
             p.close()
         except Exception as e:
-            if _headless(e):
-                raise RuntimeError(HEADLESS_HELP) from e
+            # Never replace the real error with a guess: a bad clim, a missing
+            # variable and a dead X server all surface here, and only one of
+            # them is about the display. Report what actually happened, and add
+            # the headless note underneath when it might also be a factor.
+            if _no_display():
+                raise RuntimeError(f"{type(e).__name__}: {e}\n{HEADLESS_HELP}") from e
             raise
         log("saved %s" % fn)
         outputs.append(fn)

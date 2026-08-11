@@ -61,15 +61,36 @@ def _from_pystate(path):
             "view_angle": scal("CameraViewAngle")}
 
 
+# Sections that only ever appear in a render config, never in a camera frame.
+_CONFIG_SECTIONS = {"contour", "slice", "image", "domain", "threshold",
+                    "surface", "axes", "views", "output", "input"}
+
+
 def load_camera(path):
-    """Load a camera frame from a .yml/.yaml, ParaView .pvsm, or ParaView .py state."""
+    """Load a camera frame from a .yml/.yaml, ParaView .pvsm, or ParaView .py state.
+
+    A frame without a position is not a frame. Saying so here matters: the
+    caller sets whatever keys are present and silently leaves the camera at
+    VTK's default otherwise, which renders a picture of the wrong thing with no
+    indication that anything went wrong.
+    """
     ext = os.path.splitext(path)[1].lower()
     if ext == ".pvsm":
         return _from_pvsm(path)
     if ext == ".py":
         return _from_pystate(path)
     import yaml
-    return yaml.safe_load(open(path)) or {}
+    frame = yaml.safe_load(open(path)) or {}
+    if not isinstance(frame, dict) or frame.get("position") is None:
+        found = _CONFIG_SECTIONS.intersection(frame if isinstance(frame, dict) else ())
+        if found:
+            raise ValueError(
+                "%s is a render config (it has %s:), not a camera frame.\n"
+                "    Pass it with --config. A camera frame holds position/focal/up "
+                "and is written by --pick-camera." % (path, "/".join(sorted(found))))
+        raise ValueError("%s has no 'position:' -- it is not a camera frame. "
+                         "Write one with --pick-camera." % path)
+    return frame
 
 
 def camera_frame(camera):

@@ -235,6 +235,31 @@ def _aim_camera_at_the_plane(args, cfg, user_cfg):
             view["direction"] = direction
 
 
+def _check_config(cfg, logger):
+    """Catch config values that would only fail deep inside the renderer.
+
+    A malformed colour range is the one that bites: `range: [-0.5 0.5]` is
+    valid YAML for a *one-element list holding the string* "-0.5 0.5", not two
+    numbers, and it surfaces much later as an IndexError out of pyvista with
+    nothing pointing back at the file.
+    """
+    rng = cfg["color"].get("range")
+    if rng is None:
+        return
+    ok = (isinstance(rng, (list, tuple)) and len(rng) == 2
+          and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in rng))
+    if not ok:
+        logger.error(f"color.range must be two numbers, e.g. [-0.5, 0.5] -- got "
+                     f"{rng!r}.")
+        if isinstance(rng, (list, tuple)) and len(rng) == 1:
+            logger.error("        That is what a missing comma looks like: YAML "
+                         "reads [-0.5 0.5] as one string, not two numbers.")
+        sys.exit(1)
+    if rng[0] >= rng[1]:
+        logger.error(f"color.range needs MIN below MAX, got {rng[0]} and {rng[1]}")
+        sys.exit(1)
+
+
 def _apply_camera(args, cfg, logger):
     """--camera FILE: render from a saved view instead of the mode's defaults."""
     camera = getattr(args, "camera", None)
@@ -242,6 +267,14 @@ def _apply_camera(args, cfg, logger):
         return
     if not Path(camera).exists():
         logger.error(f"camera file not found: {camera}")
+        sys.exit(1)
+    # Read it now, not at the first screenshot: a frame that turns out to be
+    # unusable should stop the run before it converts a hundred PLT files.
+    try:
+        from ....plt.camera import load_camera
+        load_camera(camera)
+    except Exception as e:
+        logger.error(f"--camera {camera}: {e}")
         sys.exit(1)
     # One view from the saved frame, replacing the mode's defaults: a chosen
     # camera is the answer to "which view", so the others would be noise --
@@ -341,6 +374,7 @@ def execute_render(args):
                      "give one or the other")
         sys.exit(1)
     _apply_camera(args, cfg, logger)
+    _check_config(cfg, logger)
 
     name, ext = _resolve_output(args, mode, logger)
     steps, binary_dir, problem = _resolve_steps(args, mode, logger)
@@ -353,7 +387,12 @@ def execute_render(args):
 
     renderer = render.render_iso if mode == "iso" else render.render_slice
     written = []
-    for step in steps:
+    total = len(steps)
+    for i, step in enumerate(steps, 1):
+        if total > 1:
+            # A sweep converts and renders one PLT per step and can run for many
+            # minutes. Say where it is, or it looks hung and gets interrupted.
+            print(f"  [{i}/{total}] timestep {step}", flush=True)
         step_cfg = copy.deepcopy(cfg)
         step_cfg["input"]["vtu"] = _vtu_for_step(args, cfg, step, binary_dir,
                                                  problem, logger)
