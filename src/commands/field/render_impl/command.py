@@ -116,7 +116,7 @@ def _check_range(pair, logger):
     return [lo, hi]
 
 
-def _resolve_steps(args, mode, logger):
+def _resolve_steps(args, cfg, mode, logger):
     """Which timesteps to render. Returns (steps, binary_dir, problem).
 
     steps is [None] when the input is a .vtu rather than a case -- there is one
@@ -149,12 +149,16 @@ def _resolve_steps(args, mode, logger):
         logger.error(f"No PLT files in the range given "
                      f"({args.t1} .. {args.t2}) under {binary_dir}")
         sys.exit(1)
-    if how == "range" and len(steps) > 1 and not getattr(args, "color_range", None):
+    # The *effective* range, not the flag: a config file's color.range fixes the
+    # scale just as well as --color-range, and warning about a range that is
+    # already set trains people to ignore the warning.
+    if how == "range" and len(steps) > 1 and cfg["color"].get("range") is None:
         # Auto-scaling is per surface, so every frame of a sweep would be
         # coloured on its own scale and none of them could be compared.
         logger.warning(f"{len(steps)} timesteps on an automatic colour scale: "
                        f"each is scaled to its own data, so the frames are not "
-                       f"comparable. Give --color-range MIN MAX to fix it.")
+                       f"comparable. Give --color-range MIN MAX (or color.range "
+                       f"in a --config file) to fix it.")
     return steps, binary_dir, problem
 
 
@@ -377,7 +381,7 @@ def execute_render(args):
     _check_config(cfg, logger)
 
     name, ext = _resolve_output(args, mode, logger)
-    steps, binary_dir, problem = _resolve_steps(args, mode, logger)
+    steps, binary_dir, problem = _resolve_steps(args, cfg, mode, logger)
 
     if pick:
         _pick_camera(args, cfg, mode, steps, binary_dir, problem, pick, logger)
