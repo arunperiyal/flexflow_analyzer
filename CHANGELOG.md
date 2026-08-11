@@ -49,6 +49,12 @@
   prefix, `NAME.png` is that one image, and `.vtp`/`.vtu`/`.csv` write the cut
   surface itself with **no image rendered** — that path never constructs a
   plotter, so it works on a headless box without OSMesa.
+- **`--no-vtp`** — images only. A `.vtp` of the cut surface is written beside
+  each image by default (`output.save_vtp`), which is one more file per timestep
+  and adds up over a sweep. The flag only turns it *off*, so it overrides a
+  config that left it on without needing a config edit. The template now says
+  what the setting costs, and notes that `output.prefix` is ignored — paths come
+  from `--output` and the case directory.
 - **An interrupted conversion no longer poisons the .vtu cache.** A render
   converts each PLT to a `.vtu` sidecar and reuses it when it is newer than the
   PLT — but a run killed mid-conversion left a *half-written* sidecar that was

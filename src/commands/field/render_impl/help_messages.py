@@ -28,6 +28,7 @@ _COMMON_OUTPUT = f"""\
 
     {Colors.YELLOW}--output NAME{Colors.RESET}          The directory <case>/NAME/  (default: render_<mode>/)
     {Colors.YELLOW}--output NAME.png{Colors.RESET}      ... holding PNGs only, no .vtp (single view)
+    {Colors.YELLOW}--no-vtp{Colors.RESET}               Images only: skip the .vtp written beside each one
     {Colors.YELLOW}--output NAME.vtp{Colors.RESET}      ... holding the cut surface -- {Colors.BOLD}no image is rendered{Colors.RESET}
     {Colors.YELLOW}          NAME.vtu{Colors.RESET}      the same, as an unstructured grid
     {Colors.YELLOW}          NAME.csv{Colors.RESET}      the same, as an x,y,z + variables point table

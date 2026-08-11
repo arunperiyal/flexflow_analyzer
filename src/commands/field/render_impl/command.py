@@ -246,6 +246,10 @@ def _apply_overrides(args, cfg, mode):
         cfg["color"]["variable"] = args.color
     if getattr(args, "color_range", None):
         cfg["color"]["range"] = args.color_range
+    if getattr(args, "no_vtp", False):
+        # The flag only turns it off, so it overrides a config that left it on
+        # without needing a config edit to get images alone.
+        cfg["output"]["save_vtp"] = False
 
     if mode == "iso":
         if getattr(args, "contour", None):

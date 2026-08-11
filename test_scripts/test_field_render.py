@@ -27,7 +27,8 @@ def args(**over):
                 config=None, write_template=None, timestep=None, zone=None,
                 nen=None, color=None, output=None, contour=None, values=None,
                 normal=None, origin=None, slices=None, color_range=None,
-                t1=None, t2=None, freq=None, camera=None, pick_camera=None)
+                t1=None, t2=None, freq=None, camera=None, pick_camera=None,
+                no_vtp=False)
     base.update(over)
     return argparse.Namespace(**base)
 
@@ -272,6 +273,29 @@ class TestCameraFrameValidation:
                                      render.default_config("iso"), _Logger())
         assert exc.value.code == 1
         assert "render config" in capsys.readouterr().err
+
+
+class TestNoVtp:
+    """A .vtp of the cut surface is written beside each image unless told not to."""
+
+    def test_flag_turns_it_off(self):
+        cfg = render.default_config("iso")
+        assert cfg["output"]["save_vtp"] is True
+        render_cmd._apply_overrides(args(no_vtp=True), cfg, "iso")
+        assert cfg["output"]["save_vtp"] is False
+
+    def test_absent_leaves_the_config_alone(self):
+        """The flag only turns it off; it must not switch a config's False back on."""
+        cfg = render.default_config("iso")
+        cfg["output"]["save_vtp"] = False
+        render_cmd._apply_overrides(args(no_vtp=False), cfg, "iso")
+        assert cfg["output"]["save_vtp"] is False
+
+    def test_flag_overrides_a_config_that_left_it_on(self):
+        cfg = render.default_config("iso")
+        cfg["output"]["save_vtp"] = True
+        render_cmd._apply_overrides(args(no_vtp=True), cfg, "iso")
+        assert cfg["output"]["save_vtp"] is False
 
 
 class TestVtuCache:

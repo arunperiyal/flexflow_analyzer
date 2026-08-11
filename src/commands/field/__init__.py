@@ -191,6 +191,9 @@ class FieldCommand(BaseCommand):
                                    type=float, nargs=2, metavar=('MIN', 'MAX'),
                                    help='Fix the colour scale (default: auto from '
                                         'the surface, which differs per timestep)')
+        render_parser.add_argument('--no-vtp', dest='no_vtp', action='store_true',
+                                   help='Images only: skip the .vtp of the cut surface '
+                                        'that is otherwise written beside each one')
         render_parser.add_argument('--output', type=str,
                                    help='Bare NAME -> image prefix; NAME.png -> one image; '
                                         '.vtp/.vtu/.csv -> the cut surface, no image')

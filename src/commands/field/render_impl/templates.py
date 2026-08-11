@@ -16,8 +16,11 @@ input:
   vtu: null                      # set, or let `<case> --timestep N` make one
 
 output:
-  prefix: {prefix}                 # writes <prefix>.vtp and <prefix>_<view>.png
-  save_vtp: true
+  # prefix is ignored: paths come from --output and the case directory.
+  save_vtp: true                 # also write the cut surface as .vtp beside each
+                                 # image -- one per timestep, so a long sweep
+                                 # leaves a lot of them. false, or --no-vtp,
+                                 # gives images alone.
 
 image:
   resolution: [1600, 1000]

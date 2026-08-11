@@ -352,6 +352,7 @@ class FlexFlowCompleter(Completer):
             '--t1':             'Start step (with --t2: one figure per step in the range)',
             '--t2':             'End step of a range',
             '--freq':           'With --t1/--t2: keep steps that are multiples of FREQ',
+            '--no-vtp':         'Images only: skip the .vtp beside each image',
             '--output':         'NAME -> image prefix; .png -> one image; '
                                 '.vtp/.vtu/.csv -> the cut surface, no image',
             '--contour':        'iso: scalar to contour (default QCriterion)',
