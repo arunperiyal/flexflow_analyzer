@@ -64,6 +64,11 @@ DEFAULTS = {
     # normal: an axis name or a vector; origin: null = the mesh centre;
     # count > 1: that many planes evenly spaced along the normal instead of one.
     "slice":   {"normal": "z", "origin": None, "count": 1},
+    # A surface zone drawn alongside for context -- the body the vortices are
+    # shedding from. `vtu` is filled in per timestep by the command layer,
+    # because a deforming body moves and cannot be converted once and reused.
+    "body":    {"zone": None, "vtu": None, "color": "lightgray", "variable": None,
+                "opacity": 1.0, "show_edges": False},
     "color":   {"variable": "U", "preset": "coolwarm", "range": None,
                 "log_scale": False, "title": None, "show_scalar_bar": True,
                 "text_color": [0.0, 0.0, 0.0]},
@@ -314,6 +319,44 @@ def _plane_origins(mesh, n, count):
     return [n * (lo + i * step) for i in range(1, count + 1)]
 
 
+def _load_body(cfg, log=print):
+    """The context surface, if one was asked for and converted."""
+    import pyvista as pv
+
+    vtu = cfg.get("body", {}).get("vtu")
+    if not vtu:
+        return None
+    body = pv.read(vtu)
+    log("body: %d points, %d cells" % (body.n_points, body.n_cells))
+    return body
+
+
+def _union_bounds(*meshes):
+    """The box holding every mesh given, ignoring the ones that are absent."""
+    boxes = [m.bounds for m in meshes if m is not None and m.n_points]
+    if not boxes:
+        return (0.0, 1.0, 0.0, 1.0, 0.0, 1.0)
+    return tuple(
+        min(bx[i] for bx in boxes) if i % 2 == 0 else max(bx[i] for bx in boxes)
+        for i in range(6))
+
+
+def _add_body(p, body, cfg, text_color):
+    """Draw the context surface: a solid colour, or coloured by a variable."""
+    spec = cfg.get("body", {})
+    variable = spec.get("variable")
+    common = dict(opacity=float(spec.get("opacity", 1.0)),
+                  show_edges=bool(spec.get("show_edges")))
+    if variable and variable in body.point_data:
+        p.add_mesh(body, scalars=variable, cmap=to_cmap(spec.get("preset", "viridis")),
+                   scalar_bar_args={"title": variable, "color": text_color}, **common)
+    else:
+        # A solid colour is the usual want: the body is context, and a second
+        # scalar bar competing with the isosurface's is rarely what you meant.
+        p.add_mesh(body, color=to_rgb(spec.get("color", "lightgray")),
+                   show_scalar_bar=False, **common)
+
+
 def save_geometry(surf, path, log=print):
     """Write the cut surface itself: .vtp, .vtu, or a .csv point table."""
     import numpy as np
@@ -365,12 +408,20 @@ def render_surface(cfg, surf, log=print):
     prefix = cfg["output"]["prefix"]
     color = cfg["color"]["variable"]
 
-    if surf is None or surf.n_points == 0:
+    empty = surf is None or surf.n_points == 0
+    if empty:
         log("EMPTY surface -- adjust the contour/slice, domain or threshold.")
-        return []
+        # With a body configured the frame is still worth drawing: over a sweep,
+        # the steps whose isosurface is below threshold would otherwise be holes
+        # in the sequence, and a hole is worse than a picture of just the body.
+        if not (cfg.get("body", {}).get("vtu") and cfg["output"].get("images", True)):
+            return []
+        log("drawing the body alone for this step")
 
     geometry = cfg["output"].get("geometry")
-    if geometry:
+    if empty:
+        pass                                  # nothing to save; body is context
+    elif geometry:
         save_geometry(surf, geometry, log)
     elif cfg["output"].get("save_vtp", True):
         os.makedirs(os.path.dirname(prefix) or ".", exist_ok=True)
@@ -385,8 +436,13 @@ def render_surface(cfg, surf, log=print):
 
     _prepare_display(log)
     os.makedirs(os.path.dirname(prefix) or ".", exist_ok=True)
-    crange = cfg["color"].get("range") or list(surf.get_data_range(color))
-    b = surf.bounds  # (xmin,xmax,ymin,ymax,zmin,zmax)
+    crange = (cfg["color"].get("range")
+              or (list(surf.get_data_range(color)) if not empty else [0.0, 1.0]))
+
+    body = _load_body(cfg, log)
+    # Frame both, or a body sticking out past the isosurface gets cut off -- and
+    # the body is usually the longer of the two, being the whole span of it.
+    b = _union_bounds(surf, body)
     center = [(b[0] + b[1]) / 2, (b[2] + b[3]) / 2, (b[4] + b[5]) / 2]
     span = max(b[1] - b[0], b[3] - b[2], b[5] - b[4]) or 1.0
     res = list(cfg["image"].get("resolution", [1600, 1000]))
@@ -402,13 +458,16 @@ def render_surface(cfg, surf, log=print):
         try:
             p = pv.Plotter(off_screen=True, window_size=res)
             p.set_background(to_rgb(cfg["image"].get("background", [1.0, 1.0, 1.0])))
-            p.add_mesh(surf, scalars=color, cmap=to_cmap(cfg["color"].get("preset", "coolwarm")),
-                       clim=crange, opacity=float(cfg["surface"].get("opacity", 1.0)),
-                       show_edges=bool(cfg["surface"].get("show_edges")),
-                       log_scale=bool(cfg["color"].get("log_scale")),
-                       show_scalar_bar=bool(cfg["color"].get("show_scalar_bar", True)),
-                       scalar_bar_args={"title": cfg["color"].get("title") or color,
-                                        "color": text_color})
+            if not empty:
+                p.add_mesh(surf, scalars=color, cmap=to_cmap(cfg["color"].get("preset", "coolwarm")),
+                           clim=crange, opacity=float(cfg["surface"].get("opacity", 1.0)),
+                           show_edges=bool(cfg["surface"].get("show_edges")),
+                           log_scale=bool(cfg["color"].get("log_scale")),
+                           show_scalar_bar=bool(cfg["color"].get("show_scalar_bar", True)),
+                           scalar_bar_args={"title": cfg["color"].get("title") or color,
+                                            "color": text_color})
+            if body is not None:
+                _add_body(p, body, cfg, text_color)
             if cfg["axes"].get("orientation_axes", True):
                 p.add_axes(color=text_color)
             _setup_camera(p, view, center, span)

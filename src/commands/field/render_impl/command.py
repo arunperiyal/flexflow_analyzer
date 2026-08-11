@@ -162,6 +162,25 @@ def _resolve_steps(args, cfg, mode, logger):
     return steps, binary_dir, problem
 
 
+def _body_vtu_for_step(cfg, step, binary_dir, problem, args, logger):
+    """Convert the body zone for this timestep, or None if none was asked for.
+
+    Per timestep, not once: the body deforms, so a surface cached from step 100
+    would be drawn in the wrong place at step 500.
+    """
+    zone_name = cfg.get("body", {}).get("zone")
+    if not zone_name:
+        return None
+    if not binary_dir:
+        logger.warning(f"body.zone '{zone_name}' needs a case to read the zone "
+                       f"from; ignoring it with --vtu input")
+        return None
+    plt_path = find_plt(binary_dir, problem, step)
+    if not plt_path:
+        return None
+    return _convert_zone(plt_path, zone_name, args, logger)
+
+
 def _vtu_for_step(args, cfg, step, binary_dir, problem, logger):
     """The .vtu for one timestep: explicit --vtu / config, or a converted PLT."""
     vtu = args.vtu or cfg["input"].get("vtu")
@@ -171,8 +190,12 @@ def _vtu_for_step(args, cfg, step, binary_dir, problem, logger):
     if not plt_path:
         where = f"timestep {step}" if step is not None else "any timestep"
         logger.error(f"No PLT file for {where} in {binary_dir}"); sys.exit(1)
+    return _convert_zone(plt_path, getattr(args, "zone", None), args, logger)
 
-    zone = _resolve_zone(plt_path, getattr(args, "zone", None), logger)
+
+def _convert_zone(plt_path, zone_name, args, logger):
+    """A PLT zone -> a cached .vtu sidecar beside it, converting if needed."""
+    zone = _resolve_zone(plt_path, zone_name, logger)
     # The sidecar name carries the zone, because a zone-specific conversion is
     # not interchangeable with the default one and must not poison its cache.
     suffix = ".vtu" if zone is None else f".z{zone}.vtu"
@@ -246,6 +269,8 @@ def _apply_overrides(args, cfg, mode):
         cfg["color"]["variable"] = args.color
     if getattr(args, "color_range", None):
         cfg["color"]["range"] = args.color_range
+    if getattr(args, "body", None):
+        cfg["body"]["zone"] = args.body
     if getattr(args, "no_vtp", False):
         # The flag only turns it off, so it overrides a config that left it on
         # without needing a config edit to get images alone.
@@ -440,6 +465,8 @@ def execute_render(args):
         step_cfg = copy.deepcopy(cfg)
         step_cfg["input"]["vtu"] = _vtu_for_step(args, cfg, step, binary_dir,
                                                  problem, logger)
+        step_cfg["body"]["vtu"] = _body_vtu_for_step(cfg, step, binary_dir,
+                                                     problem, args, logger)
         base = str(out_dir / (stem if step is None else f"{stem}_{step}"))
         if ext in GEOMETRY_EXT:
             step_cfg["output"]["geometry"] = base + ext

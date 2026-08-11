@@ -38,6 +38,10 @@ _COMMON_OUTPUT = f"""\
 _COMMON_MISC = f"""\
 {Colors.BOLD}MISC:{Colors.RESET}
     {Colors.YELLOW}--zone NAME{Colors.RESET}            Zone to render (default: first volume zone)
+    {Colors.YELLOW}--body ZONE{Colors.RESET}            Draw a surface zone alongside for context -- the
+                           body the wake comes off, e.g. {Colors.YELLOW}--body cyl{Colors.RESET}. Re-read at
+                           every timestep, so a deforming body follows the flow.
+                           Colour and opacity via the {Colors.YELLOW}body:{Colors.RESET} block in a --config
     {Colors.YELLOW}--nen N{Colors.RESET}                Force nodes-per-element when converting (e.g. 8 for bricks)
     {Colors.YELLOW}--camera FILE{Colors.RESET}          Render from a saved view: {Colors.BOLD}one{Colors.RESET} image per step, the
                            camera pinned across every one of them. Takes a .yml

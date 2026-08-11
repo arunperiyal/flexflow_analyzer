@@ -28,7 +28,7 @@ def args(**over):
                 nen=None, color=None, output=None, contour=None, values=None,
                 normal=None, origin=None, slices=None, color_range=None,
                 t1=None, t2=None, freq=None, camera=None, pick_camera=None,
-                no_vtp=False)
+                no_vtp=False, body=None)
     base.update(over)
     return argparse.Namespace(**base)
 
@@ -275,6 +275,39 @@ class TestCameraFrameValidation:
         assert "render config" in capsys.readouterr().err
 
 
+class TestBody:
+    """A surface zone drawn alongside the isosurface, for context."""
+
+    def test_absent_by_default(self):
+        assert render.default_config("iso")["body"]["zone"] is None
+
+    def test_flag_sets_the_zone(self):
+        cfg = render.default_config("iso")
+        render_cmd._apply_overrides(args(body="cyl"), cfg, "iso")
+        assert cfg["body"]["zone"] == "cyl"
+
+    def test_bounds_include_the_body(self):
+        """A riser spanning the domain must not be framed out of the picture."""
+        surf = _Bounds((0.0, 1.0, 0.0, 1.0, 0.0, 1.0))
+        surf.n_points = 10
+        body = _Bounds((-5.0, 12.0, -0.5, 0.5, -0.5, 0.5))
+        body.n_points = 10
+        got = render._union_bounds(surf, body)
+        assert got == (-5.0, 12.0, -0.5, 1.0, -0.5, 1.0)
+
+    def test_bounds_ignore_an_absent_body(self):
+        surf = _Bounds((0.0, 1.0, 0.0, 2.0, 0.0, 3.0))
+        surf.n_points = 10
+        assert render._union_bounds(surf, None) == (0.0, 1.0, 0.0, 2.0, 0.0, 3.0)
+
+    def test_bounds_ignore_an_empty_mesh(self):
+        surf = _Bounds((0.0, 1.0, 0.0, 2.0, 0.0, 3.0))
+        surf.n_points = 10
+        empty = _Bounds((99.0, 99.0, 99.0, 99.0, 99.0, 99.0))
+        empty.n_points = 0
+        assert render._union_bounds(surf, empty) == (0.0, 1.0, 0.0, 2.0, 0.0, 3.0)
+
+
 class TestColours:
     """0-1 fractions, always floats: pyvista reads an int triple as 0-255."""
 
@@ -425,6 +458,8 @@ class _Camera:
 
 
 class _Bounds:
+    n_points = 1
+
     def __init__(self, bounds):
         self.bounds = bounds
 

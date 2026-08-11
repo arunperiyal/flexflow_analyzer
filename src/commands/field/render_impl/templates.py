@@ -29,6 +29,13 @@ image:
 """
 
 _COMMON_TAIL = """\
+body:                            # a surface zone drawn alongside, for context
+  zone: null                     # e.g. cyl -- the body the wake comes off; null = none
+  color: lightgray               # solid colour, used when `variable` is null
+  variable: null                 # or colour the body by a scalar (e.g. Pressure)
+  opacity: 1.0
+  show_edges: false
+
 color:
   variable: U                    # flow in z -> W ; flow in x -> U
   preset: coolwarm               # matplotlib cmap, or a ParaView preset name

@@ -49,6 +49,17 @@
   prefix, `NAME.png` is that one image, and `.vtp`/`.vtu`/`.csv` write the cut
   surface itself with **no image rendered** — that path never constructs a
   plotter, so it works on a headless box without OSMesa.
+- **`body:` / `--body ZONE`** — draw a surface zone alongside the isosurface, so
+  the vortex tubes are seen against the body they shed from
+  (`field render iso CASE --body cyl`). Colour, opacity and edges via the
+  `body:` block in a config; a solid colour by default, since a second scalar
+  bar competing with the isosurface's is rarely what was meant, or
+  `body.variable` to colour it by a scalar. The zone is re-read **at every
+  timestep** — a deforming riser moves, so a surface cached from one step would
+  be drawn in the wrong place at the next. The camera frames the union of both,
+  or a body spanning the domain would be cut off. When the isosurface comes out
+  empty but a body is set, the body alone is still drawn: over a sweep those
+  steps would otherwise be holes in the sequence.
 - **`background: white` produced a black background.** `NAMED_COLORS["white"]`
   was `[1, 1, 1]` — *integers* — and pyvista reads an integer triple as 0-255,
   so white came out as RGB(1,1,1). `black` worked only because 0 is 0 either
