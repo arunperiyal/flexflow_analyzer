@@ -49,6 +49,15 @@
   prefix, `NAME.png` is that one image, and `.vtp`/`.vtu`/`.csv` write the cut
   surface itself with **no image rendered** — that path never constructs a
   plotter, so it works on a headless box without OSMesa.
+- **An interrupted conversion no longer poisons the .vtu cache.** A render
+  converts each PLT to a `.vtu` sidecar and reuses it when it is newer than the
+  PLT — but a run killed mid-conversion left a *half-written* sidecar that was
+  also newer, so every later run trusted it and failed inside VTK with
+  `Error parsing XML ... no element found` followed by a misleading
+  `Data array (U) not present`. Conversions now write to a temporary name and
+  rename into place, so an interrupted one leaves nothing; an existing
+  half-written sidecar is detected (a complete `.vtu` closes its `</VTKFile>`)
+  and rebuilt rather than trusted.
 - **A render error no longer gets blamed on the display.** The headless handler
   replaced *any* exception with "no display, and no working off-screen GL"
   whenever `DISPLAY` was unset — so a malformed config, a missing variable and a

@@ -11,6 +11,7 @@ The geometry maths (plane placement, normal parsing) is tested against
 """
 
 import argparse
+import pathlib
 import sys
 
 import numpy as np
@@ -271,6 +272,37 @@ class TestCameraFrameValidation:
                                      render.default_config("iso"), _Logger())
         assert exc.value.code == 1
         assert "render config" in capsys.readouterr().err
+
+
+class TestVtuCache:
+    """A converted .vtu is cached beside its .plt, and the cache must be trusted."""
+
+    def test_a_complete_vtu_is_accepted(self, tmp_path):
+        v = tmp_path / "riser.100.vtu"
+        v.write_bytes(b'<?xml version="1.0"?>\n<VTKFile>...</VTKFile>\n')
+        assert render_cmd._vtu_complete(v)
+
+    def test_a_truncated_vtu_is_rejected(self, tmp_path):
+        """What an interrupted conversion leaves: valid XML that just stops."""
+        v = tmp_path / "riser.100.vtu"
+        v.write_bytes(b'<?xml version="1.0"?>\n<VTKFile type="UnstructuredGrid">\n<Piece')
+        assert not render_cmd._vtu_complete(v)
+
+    def test_a_missing_file_is_rejected(self, tmp_path):
+        assert not render_cmd._vtu_complete(tmp_path / "nope.vtu")
+
+    def test_an_empty_file_is_rejected(self, tmp_path):
+        v = tmp_path / "riser.100.vtu"
+        v.write_bytes(b"")
+        assert not render_cmd._vtu_complete(v)
+
+    def test_the_temp_name_keeps_the_vtu_extension(self):
+        """meshio picks its writer from the extension, so .partial alone breaks it."""
+        sidecar = pathlib.Path("/case/binary/riser.100.vtu")
+        tmp = sidecar.with_name(sidecar.stem + ".partial.vtu")
+        assert tmp.suffix == ".vtu"
+        assert tmp.name == "riser.100.partial.vtu"
+        assert tmp != sidecar
 
 
 class TestVectorParsing:

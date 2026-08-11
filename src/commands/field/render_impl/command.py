@@ -177,15 +177,51 @@ def _vtu_for_step(args, cfg, step, binary_dir, problem, logger):
     # not interchangeable with the default one and must not poison its cache.
     suffix = ".vtu" if zone is None else f".z{zone}.vtu"
     sidecar = Path(str(plt_path)[:-4] + suffix)
+
     if sidecar.exists() and sidecar.stat().st_mtime >= plt_path.stat().st_mtime:
-        logger.info(f"using cached {sidecar.name}")
-        return str(sidecar)
+        if _vtu_complete(sidecar):
+            logger.info(f"using cached {sidecar.name}")
+            return str(sidecar)
+        logger.warning(f"{sidecar.name} is truncated -- an interrupted "
+                       f"conversion. Rebuilding it.")
+
     logger.info(f"converting {plt_path.name} -> {sidecar.name}")
-    out, info = to_vtu(str(plt_path), str(sidecar), zone=zone,
-                       nen=getattr(args, "nen", None))
+    # Convert to a temporary name and rename into place, so a run killed
+    # mid-conversion leaves no sidecar rather than half of one. A half-written
+    # .vtu is newer than its .plt, so the cache check above would have trusted
+    # it on every later run -- which is exactly how one got here.
+    # The temp name must still end in .vtu: meshio picks its writer from the
+    # extension, so a ".partial" suffix makes the conversion itself fail.
+    tmp = sidecar.with_name(sidecar.stem + ".partial.vtu")
+    # A run killed outright (SIGKILL, not Ctrl-C) cannot clean up after itself,
+    # and these are as big as the .vtu they were becoming -- so sweep the last
+    # one away rather than leaving it to fill the disk.
+    tmp.unlink(missing_ok=True)
+    try:
+        out, info = to_vtu(str(plt_path), str(tmp), zone=zone,
+                           nen=getattr(args, "nen", None))
+        os.replace(tmp, sidecar)
+    except BaseException:
+        tmp.unlink(missing_ok=True)      # BaseException: KeyboardInterrupt too
+        raise
     if info.get("truncated"):
         logger.warning(f"connectivity incomplete: {info['nhex_valid']:,}/{info['nelem']:,} cells")
-    return out
+    return str(sidecar)
+
+
+def _vtu_complete(path):
+    """Is this .vtu whole? A complete one closes its root </VTKFile> element.
+
+    Checking the tail is cheap and catches the failure that actually happens --
+    a conversion cut short, leaving a file that parses as XML right up until it
+    stops. Reading it properly would cost as much as rebuilding it.
+    """
+    try:
+        with open(path, "rb") as f:
+            f.seek(max(0, os.path.getsize(path) - 200))
+            return f.read().rstrip().endswith(b"</VTKFile>")
+    except OSError:
+        return False
 
 
 def _resolve_zone(plt_path, zone_name, logger):
