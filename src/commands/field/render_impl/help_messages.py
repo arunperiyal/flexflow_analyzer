@@ -110,6 +110,11 @@ by another variable.
 
 {Colors.BOLD}THE SURFACE:{Colors.RESET}
     {Colors.YELLOW}--contour NAME{Colors.RESET}         Scalar to contour            (default: QCriterion)
+                           {Colors.DIM}Also accepts a variable the solver did not write:
+                           {Colors.YELLOW}lambda2{Colors.RESET}{Colors.DIM} is computed from U,V,W and cached into the
+                           .vtu. It is NEGATIVE in a vortex core, so contour it
+                           at a small negative value: --values -1
+                           `field list --variables` lists what can be computed.{Colors.RESET}
     {Colors.YELLOW}--values V [V ...]{Colors.RESET}     Isosurface value(s)          (default: 20)
 {_COMMON_COLOR}
 

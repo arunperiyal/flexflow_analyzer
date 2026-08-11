@@ -24,7 +24,10 @@ from ....plt.fxplt import PltFile, VOLUME_ZTYPES
 from ....plt import surface
 from ..locate import problem_name, find_plt, zone_index, resolve_steps
 
-QUANTITIES = ("force",)
+QUANTITIES = ("force", "lambda2")
+# force integrates over a surface zone's elements; lambda2 is a nodal field
+# over the volume, so it takes a different path and does not want --zone.
+SURFACE_QUANTITIES = ("force",)
 SURFACE_ZTYPES = (2, 3)          # FETRIANGLE, FEQUADRILATERAL
 COLUMNS = ["element", "x", "y", "z", "area", "nx", "ny", "nz"]
 SUMMARY_COLUMNS = ["timestep", "elements", "area", "Fx", "Fy", "Fz"]
@@ -158,6 +161,58 @@ def _print_totals(totals, multi):
         console.print(f"[dim]... {len(totals) - len(shown)} more timestep(s)[/dim]")
 
 
+def _compute_lambda2(args, steps, binary_dir, problem, logger):
+    """Write a mesh carrying lambda2, one file per timestep.
+
+    A nodal field over the volume, unlike `force`, which integrates over a
+    surface zone's elements -- so this converts the volume zone and adds an
+    array to it rather than producing a table of rows.
+    """
+    from ....plt import derive
+    from ....plt.convert import to_vtu
+    import pyvista as pv
+
+    raw = getattr(args, "output_file", None)
+    if not raw:
+        logger.error("--output is required for lambda2: it writes a mesh "
+                     "(NAME.vtu), or a directory NAME/ for a range of steps")
+        sys.exit(1)
+    base = Path(args.case)
+    target = Path(raw) if Path(raw).is_absolute() else base / raw
+    many = len(steps) > 1
+    if many and target.suffix:
+        target = target.with_suffix("")
+    if many:
+        target.mkdir(parents=True, exist_ok=True)
+    else:
+        target.parent.mkdir(parents=True, exist_ok=True)
+
+    written = []
+    for i, step in enumerate(steps, 1):
+        plt_path = find_plt(binary_dir, problem, step)
+        if not plt_path:
+            logger.warning(f"no PLT for timestep {step}; skipping"); continue
+        if many:
+            print(f"  [{i}/{len(steps)}] timestep {step}", flush=True)
+        sidecar = Path(str(plt_path)[:-4] + ".vtu")
+        if not sidecar.exists():
+            logger.info(f"converting {plt_path.name} -> {sidecar.name}")
+            to_vtu(str(plt_path), str(sidecar), nen=getattr(args, "nen", None))
+        mesh = pv.read(str(sidecar))
+        derive.ensure(mesh, "lambda2", logger.info)
+        out = (target / f"lambda2_{step}.vtu") if many else target
+        if not many and not out.suffix:
+            out = out.with_suffix(".vtu")
+        mesh.save(str(out))
+        written.append(out)
+        logger.info(f"wrote {out}")
+
+    if not written:
+        logger.error("nothing written"); sys.exit(1)
+    where = written[0] if len(written) == 1 else target
+    print(f"lambda2 over {len(written)} timestep{'' if len(written) == 1 else 's'} -> {where}")
+
+
 def execute_compute(args):
     from .help_messages import print_compute_help
 
@@ -172,7 +227,7 @@ def execute_compute(args):
     if quantity not in QUANTITIES:
         logger.error(f"Unknown quantity '{quantity}'. Available: {', '.join(QUANTITIES)}")
         sys.exit(1)
-    if not getattr(args, "zone", None):
+    if quantity in SURFACE_QUANTITIES and not getattr(args, "zone", None):
         logger.error("--zone is required (the surface zone to integrate over)")
         print(); print_compute_help(); sys.exit(1)
 
@@ -190,6 +245,10 @@ def execute_compute(args):
     if not steps:
         logger.error(f"No PLT files in step range [{args.t1}, {args.t2}] in {binary_dir}")
         sys.exit(1)
+
+    if quantity == "lambda2":
+        _compute_lambda2(args, steps, binary_dir, problem, logger)
+        return
 
     out_path, ext = _resolve_output(args, logger)
     pressure_var = getattr(args, "pressure", None) or "Pressure"

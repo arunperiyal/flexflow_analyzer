@@ -145,7 +145,7 @@ class FlexFlowCompleter(Completer):
     _SUBCOMMANDS: Dict[str, List[str]] = {
         'case':     ['show', 'create', 'run', 'organise', 'check', 'status', 'add', 'out', 'report', 'upload', 'download'],
         'data':     ['show', 'stats'],
-        'field':    ['info', 'extract', 'compute', 'convert', 'render', 'check'],
+        'field':    ['info', 'extract', 'compute', 'convert', 'render', 'list', 'check'],
         'def':      ['var'],
         'run':      ['check', 'pre', 'main', 'post', 'sq', 'sb', 'sc'],
         'template': ['plot', 'case', 'script'],
@@ -362,6 +362,11 @@ class FlexFlowCompleter(Completer):
             '--origin':         'slice: a point on the plane',
             '--slices':         'slice: N planes evenly spaced along the normal',
         },
+        ('field', 'list'): {
+            **_COMMON_FLAGS,
+            '--color':    'Colormaps for color.preset, grouped by kind',
+            '--variables': 'Variables FlexFlow can compute (lambda2)',
+        },
         ('field', 'check'): {**_COMMON_FLAGS},
 
         # ── def ─────────────────────────────────────────────────────────────
@@ -489,7 +494,8 @@ class FlexFlowCompleter(Completer):
             ('iso',   'Isosurface of a scalar'),
             ('slice', 'A cut plane, or a series of them'),
         ],
-        ('field', 'compute', 0): [('force', 'Per-element pressure force')],
+        ('field', 'compute', 0): [('force', 'Per-element pressure force'),
+                                  ('lambda2', 'Vortex criterion, as a nodal field')],
         ('template', 'plot',   0): [('simple', 'Simple time-series'), ('multi', 'Multi-node plot')],
         ('template', 'case',   0): [('basic', 'Basic case config'), ('full', 'Full case config')],
         ('template', 'script', 0): [

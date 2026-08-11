@@ -213,6 +213,19 @@ class FieldCommand(BaseCommand):
         render_parser.add_argument('--slices', type=int, metavar='N',
                                    help='slice: N planes evenly spaced along the normal')
 
+        # field list (names you must know: colormaps, derived variables)
+        list_parser = field_subparsers.add_parser('list', add_help=False,
+                                                  help='List colormaps / computable variables')
+        list_parser.add_argument('--color', '--colors', dest='color',
+                                 action='store_true',
+                                 help='Colormaps for color.preset, grouped by kind')
+        list_parser.add_argument('--variables', action='store_true',
+                                 help='Variables FlexFlow can compute (lambda2)')
+        list_parser.add_argument('-v', '--verbose', action='store_true',
+                                 help='More detail where there is more to show')
+        list_parser.add_argument('-h', '--help', action='store_true',
+                                 help='Show help for list command')
+
         # field check (validate a produced VTK file)
         check_parser = field_subparsers.add_parser('check', add_help=False,
                                                    help='Validate a VTK (.vtu/.vtk/.vtp) file')
@@ -255,6 +268,9 @@ class FieldCommand(BaseCommand):
         elif args.field_subcommand == 'render':
             from .render_impl.command import execute_render
             execute_render(args)
+        elif args.field_subcommand == 'list':
+            from .list_impl.command import execute_list
+            execute_list(args)
         elif args.field_subcommand == 'check':
             from .check_impl.command import execute_check
             execute_check(args)
@@ -287,6 +303,7 @@ class FieldCommand(BaseCommand):
         table.add_row("compute", "Per-element pressure force on a surface zone (areas + normals)")
         table.add_row("convert", "Convert PLT volume zone to VTK .vtu (optional box crop)")
         table.add_row("render", "Render images: iso (isosurface) or slice (cut plane)")
+        table.add_row("list", "List colormaps and computable variables (--color)")
         table.add_row("check", "Validate a produced VTK file (.vtu/.vtk/.vtp)")
 
         console.print("[bold]SUBCOMMANDS:[/bold]")

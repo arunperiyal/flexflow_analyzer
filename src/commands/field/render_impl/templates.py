@@ -70,7 +70,10 @@ ISO_TEMPLATE = """\
 # flexflow field render iso -- configuration
 """ + _COMMON_HEAD.format(prefix="iso") + """
 contour:
-  variable: QCriterion
+  variable: QCriterion          # or lambda2 -- computed from U,V,W if
+                               # the solver did not write it. lambda2 is
+                               # NEGATIVE in a vortex core, so contour it at
+                               # a small negative value, e.g. [-1]
   isosurfaces: [20]
 
 """ + _COMMON_TAIL + """

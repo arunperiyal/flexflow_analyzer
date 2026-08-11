@@ -49,6 +49,25 @@
   prefix, `NAME.png` is that one image, and `.vtp`/`.vtu`/`.csv` write the cut
   surface itself with **no image rendered** — that path never constructs a
   plotter, so it works on a headless box without OSMesa.
+- **`lambda2` as a contour variable, computed when the solver did not write it.**
+  A vortex criterion is a function of the velocity gradient, so `lambda2` is
+  derivable from U/V/W: the middle eigenvalue of S²+Ω² (Jeong & Hussain).
+  `field render iso --contour lambda2 --values -1` computes it on demand — note
+  it is **negative** in a vortex core, the opposite convention from
+  `QCriterion`. Validated against the case's own QCriterion: correlation with
+  −Q is 0.994, and 9.7% of nodes fall inside cores. It costs ~15s per timestep
+  on 1.8M nodes, so it is **written back into the cached `.vtu`** (+5 MB) and a
+  re-render is free; `input.cache_derived: false` turns that off.
+- **`field compute lambda2 CASE --output NAME.vtu`** materialises it instead, for
+  ParaView or anything outside FlexFlow. A nodal volume field, so unlike
+  `compute force` it takes no `--zone`; a step range writes one file per step.
+- **`field list`** *(new)* — the names you must know before you can use them, and
+  which are not discoverable from your data. **`--color`** lists colormaps
+  grouped by the kind of field they suit (diverging for signed quantities like
+  velocity or lambda2, sequential for magnitudes, cyclic for phase), names the
+  qualitative ones to avoid because a continuous field reads as banding, and
+  gives the ParaView preset names that are accepted and translated. **`-v`**
+  adds every installed colormap. **`--variables`** lists what can be computed.
 - **`body:` / `--body ZONE`** — draw a surface zone alongside the isosurface, so
   the vortex tubes are seen against the body they shed from
   (`field render iso CASE --body cyl`). Colour, opacity and edges via the

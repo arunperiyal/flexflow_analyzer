@@ -54,7 +54,9 @@ HEADLESS_HELP = """\
       - run over `ssh -X`, or on a machine with a display"""
 
 DEFAULTS = {
-    "input":   {"vtu": None},
+    # cache_derived: write a computed variable (lambda2) back into the .vtu,
+    # so a re-render costs nothing instead of the ~15s it takes to work out.
+    "input":   {"vtu": None, "cache_derived": True},
     # geometry: an explicit path for the cut surface (set by --output NAME.vtp);
     # images: False writes only that, and never constructs a Plotter.
     "output":  {"prefix": "iso", "save_vtp": True, "geometry": None,
@@ -232,18 +234,61 @@ def _setup_camera(p, view, center, span):
     p.reset_camera_clipping_range()
 
 
-def _prepare(cfg, log=print):
-    """Read the .vtu and apply the crop and threshold both modes share."""
+def _prepare(cfg, mode, log=print):
+    """Read the .vtu, add any derived variables asked for, crop and threshold."""
     import pyvista as pv
 
     vtu = cfg["input"]["vtu"]
     if not vtu:
         raise ValueError("no input .vtu (set input.vtu)")
     mesh = pv.read(vtu)
+
+    # Anything the picture needs that the file does not carry -- lambda2, say --
+    # is computed here, before the crop, so the gradient sees whole cells at
+    # what would otherwise be a cut face.
+    wanted = [cfg["color"]["variable"], cfg["threshold"].get("variable")]
+    if mode == "iso":
+        wanted.append(cfg["contour"]["variable"])
+    if _add_derived(mesh, wanted, log) and cfg["input"].get("cache_derived"):
+        _write_back(mesh, vtu, log)
+
     color = cfg["color"]["variable"]
     log("colour  '%s' range: %s" % (color, mesh.get_data_range(color)))
     mesh = _apply_domain_clip(mesh, cfg["domain"])
     return _apply_threshold(mesh, cfg["threshold"])
+
+
+def _add_derived(mesh, wanted, log=print):
+    """Compute any requested variable the mesh lacks. True if anything was."""
+    from . import derive
+
+    added = False
+    for name in dict.fromkeys(n for n in wanted if n):
+        if name in mesh.point_data:
+            continue
+        if not derive.is_derived(name):
+            continue          # not ours to make; the renderer reports it plainly
+        derive.ensure(mesh, name, log)
+        added = True
+    return added
+
+
+def _write_back(mesh, vtu, log=print):
+    """Save a computed variable into the .vtu, so it is computed once.
+
+    Written beside the original and renamed over it, for the same reason the
+    conversion is: a run killed here would otherwise leave a truncated .vtu that
+    is newer than its .plt and would be trusted afterwards.
+    """
+    tmp = os.path.splitext(vtu)[0] + ".deriving.vtu"
+    try:
+        mesh.save(tmp)
+        os.replace(tmp, vtu)
+        log("cached the computed variable(s) into %s" % os.path.basename(vtu))
+    except BaseException:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+        raise
 
 
 def _iso_surface(mesh, cfg, log=print):
@@ -522,7 +567,7 @@ def pick_camera(cfg, surf, path, log=print):
 def build_surface(cfg, mode, log=print):
     """The cut surface for a mode, without rendering it. Returns (cfg, surf)."""
     cfg = deep_merge(DEFAULTS, cfg or {})
-    mesh = _prepare(cfg, log)
+    mesh = _prepare(cfg, mode, log)
     maker = {"iso": _iso_surface, "slice": _slice_surface}[mode]
     return cfg, maker(mesh, cfg, log)
 
