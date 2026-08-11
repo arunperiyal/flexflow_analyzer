@@ -275,6 +275,41 @@ class TestCameraFrameValidation:
         assert "render config" in capsys.readouterr().err
 
 
+class TestColours:
+    """0-1 fractions, always floats: pyvista reads an int triple as 0-255."""
+
+    @pytest.mark.parametrize("given, expected", [
+        ("white", [1.0, 1.0, 1.0]),
+        ("black", [0.0, 0.0, 0.0]),
+        ("gray", [0.5, 0.5, 0.5]),
+        ("WHITE", [1.0, 1.0, 1.0]),
+        ("no such colour", [1.0, 1.0, 1.0]),      # falls back to white
+    ])
+    def test_names(self, given, expected):
+        assert render.to_rgb(given) == expected
+
+    def test_white_is_not_black(self):
+        """The bug: [1, 1, 1] as ints is RGB(1,1,1) downstream, i.e. black."""
+        assert render.to_rgb("white") == [1.0, 1.0, 1.0]
+        assert all(isinstance(v, float) for v in render.to_rgb("white"))
+
+    @pytest.mark.parametrize("given, expected", [
+        ([1.0, 1.0, 1.0], [1.0, 1.0, 1.0]),       # 0-1 as written
+        ([1, 1, 1], [1.0, 1.0, 1.0]),             # ints meaning 0-1
+        ([255, 255, 255], [1.0, 1.0, 1.0]),       # 0-255 bytes
+        ([0, 0, 0], [0.0, 0.0, 0.0]),
+        ([51, 102, 153], [0.2, 0.4, 0.6]),
+        ([0.2, 0.4, 0.6], [0.2, 0.4, 0.6]),
+    ])
+    def test_both_conventions(self, given, expected):
+        assert render.to_rgb(given) == pytest.approx(expected)
+
+    def test_the_defaults_are_floats(self):
+        """A default background of [1, 1, 1] rendered black for every run."""
+        assert render.to_rgb(render.DEFAULTS["image"]["background"]) == [1.0, 1.0, 1.0]
+        assert render.to_rgb(render.DEFAULTS["color"]["text_color"]) == [0.0, 0.0, 0.0]
+
+
 class TestNoVtp:
     """A .vtp of the cut surface is written beside each image unless told not to."""
 

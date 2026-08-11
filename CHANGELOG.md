@@ -49,6 +49,14 @@
   prefix, `NAME.png` is that one image, and `.vtp`/`.vtu`/`.csv` write the cut
   surface itself with **no image rendered** — that path never constructs a
   plotter, so it works on a headless box without OSMesa.
+- **`background: white` produced a black background.** `NAMED_COLORS["white"]`
+  was `[1, 1, 1]` — *integers* — and pyvista reads an integer triple as 0-255,
+  so white came out as RGB(1,1,1). `black` worked only because 0 is 0 either
+  way, and `gray` only because it happened to be written as floats. The default
+  background was the same literal, so **every render ever made had a black
+  background**. Colours are floats throughout now, and `to_rgb` accepts either
+  convention: anything above 1 is treated as 0-255, so `[255, 255, 255]` and
+  `[1.0, 1.0, 1.0]` both give white.
 - **`--no-vtp`** — images only. A `.vtp` of the cut surface is written beside
   each image by default (`output.save_vtp`), which is one more file per timestep
   and adds up over a sweep. The flag only turns it *off*, so it overrides a

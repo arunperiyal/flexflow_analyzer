@@ -59,14 +59,14 @@ DEFAULTS = {
     # images: False writes only that, and never constructs a Plotter.
     "output":  {"prefix": "iso", "save_vtp": True, "geometry": None,
                 "images": True, "image_path": None},
-    "image":   {"resolution": [1600, 1000], "background": [1, 1, 1], "transparent": False},
+    "image":   {"resolution": [1600, 1000], "background": [1.0, 1.0, 1.0], "transparent": False},
     "contour": {"variable": "QCriterion", "isosurfaces": [0.25]},
     # normal: an axis name or a vector; origin: null = the mesh centre;
     # count > 1: that many planes evenly spaced along the normal instead of one.
     "slice":   {"normal": "z", "origin": None, "count": 1},
     "color":   {"variable": "U", "preset": "coolwarm", "range": None,
                 "log_scale": False, "title": None, "show_scalar_bar": True,
-                "text_color": [0, 0, 0]},
+                "text_color": [0.0, 0.0, 0.0]},
     "domain":  {"xmin": None, "xmax": None, "ymin": None, "ymax": None,
                 "zmin": None, "zmax": None},
     "threshold": {"variable": None, "min": None, "max": None},
@@ -80,8 +80,11 @@ DEFAULTS = {
     ],
 }
 
+# Floats throughout, deliberately: these are 0-1 fractions, and pyvista reads an
+# *integer* triple as 0-255 instead. [1, 1, 1] therefore renders as near-black
+# rather than white -- which is exactly what "background: white" used to do.
 NAMED_COLORS = {
-    "white": [1, 1, 1], "black": [0, 0, 0], "gray": [0.5, 0.5, 0.5],
+    "white": [1.0, 1.0, 1.0], "black": [0.0, 0.0, 0.0], "gray": [0.5, 0.5, 0.5],
     "grey": [0.5, 0.5, 0.5], "lightgray": [0.82, 0.82, 0.82],
     "lightgrey": [0.82, 0.82, 0.82],
 }
@@ -134,9 +137,17 @@ def deep_merge(base, over):
 
 
 def to_rgb(c):
+    """A colour name or triple -> [r, g, b] as 0-1 floats.
+
+    Both conventions are accepted, because both get written in config files:
+    0-1 fractions and 0-255 bytes. Anything above 1 must be the latter. The
+    result is always floats, since an int triple means 0-255 downstream and
+    would turn a white background black.
+    """
     if isinstance(c, str):
-        return NAMED_COLORS.get(c.lower().replace(" ", ""), [1, 1, 1])
-    return list(c)
+        c = NAMED_COLORS.get(c.lower().replace(" ", ""), [1.0, 1.0, 1.0])
+    vals = [float(v) for v in c][:3]
+    return [v / 255.0 for v in vals] if any(v > 1.0 for v in vals) else vals
 
 
 def to_cmap(name):
@@ -380,7 +391,7 @@ def render_surface(cfg, surf, log=print):
     span = max(b[1] - b[0], b[3] - b[2], b[5] - b[4]) or 1.0
     res = list(cfg["image"].get("resolution", [1600, 1000]))
     transparent = bool(cfg["image"].get("transparent"))
-    text_color = to_rgb(cfg["color"].get("text_color", [0, 0, 0]))
+    text_color = to_rgb(cfg["color"].get("text_color", [0.0, 0.0, 0.0]))
     views = cfg.get("views", [])
     # An exact --output NAME.png names the file itself, but only one view can
     # own that name; several still fall back to the per-view suffix.
@@ -390,7 +401,7 @@ def render_surface(cfg, surf, log=print):
     for view in views:
         try:
             p = pv.Plotter(off_screen=True, window_size=res)
-            p.set_background(to_rgb(cfg["image"].get("background", [1, 1, 1])))
+            p.set_background(to_rgb(cfg["image"].get("background", [1.0, 1.0, 1.0])))
             p.add_mesh(surf, scalars=color, cmap=to_cmap(cfg["color"].get("preset", "coolwarm")),
                        clim=crange, opacity=float(cfg["surface"].get("opacity", 1.0)),
                        show_edges=bool(cfg["surface"].get("show_edges")),
@@ -432,7 +443,7 @@ def pick_camera(cfg, surf, path, log=print):
 
     color = cfg["color"]["variable"]
     p = pv.Plotter(window_size=list(cfg["image"].get("resolution", [1600, 1000])))
-    p.set_background(to_rgb(cfg["image"].get("background", [1, 1, 1])))
+    p.set_background(to_rgb(cfg["image"].get("background", [1.0, 1.0, 1.0])))
     p.add_mesh(surf, scalars=color, cmap=to_cmap(cfg["color"].get("preset", "coolwarm")),
                clim=cfg["color"].get("range") or list(surf.get_data_range(color)),
                opacity=float(cfg["surface"].get("opacity", 1.0)),
