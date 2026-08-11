@@ -26,7 +26,7 @@ def args(**over):
                 config=None, write_template=None, timestep=None, zone=None,
                 nen=None, color=None, output=None, contour=None, values=None,
                 normal=None, origin=None, slices=None, color_range=None,
-                t1=None, t2=None, freq=None)
+                t1=None, t2=None, freq=None, camera=None, pick_camera=None)
     base.update(over)
     return argparse.Namespace(**base)
 
@@ -173,6 +173,42 @@ class TestColourRange:
         assert cfg["color"]["range"] == [0.0, 1.0]
 
 
+class TestCamera:
+    """A saved view is this repo's answer to a Tecplot .sty: set it once, reuse it."""
+
+    def test_camera_replaces_the_default_views(self, tmp_path):
+        """A chosen camera answers "which view", so the mode's defaults go."""
+        cam = tmp_path / "cam.yml"
+        cam.write_text("position: [1, 2, 3]\nfocal: [0, 0, 0]\nup: [0, 0, 1]\n")
+        cfg = render.default_config("iso")
+        assert len(cfg["views"]) == 4
+        render_cmd._apply_camera(args(camera=str(cam)), cfg, _Logger())
+        assert cfg["views"] == [{"name": "view", "camera_file": str(cam)}]
+
+    def test_missing_camera_file_errors(self, capsys):
+        with pytest.raises(SystemExit) as exc:
+            render_cmd._apply_camera(args(camera="/nope/cam.yml"),
+                                     render.default_config("iso"), _Logger())
+        assert exc.value.code == 1
+        assert "camera file not found" in capsys.readouterr().err
+
+    def test_reading_and_writing_a_frame_round_trips(self, tmp_path):
+        """save_camera writes exactly what load_camera reads -- one format."""
+        from src.plt.camera import save_camera, load_camera
+        path = tmp_path / "cam.yml"
+        saved = save_camera(str(path), _Camera())
+        assert load_camera(str(path)) == saved
+        assert saved["position"] == [3.0, -2.0, 1.5]
+        assert saved["parallel"] is True
+
+    def test_the_frame_is_what_setup_camera_consumes(self, tmp_path):
+        """The written keys must be the ones _setup_camera looks for."""
+        from src.plt.camera import save_camera
+        saved = save_camera(str(tmp_path / "cam.yml"), _Camera())
+        assert set(saved) == {"position", "focal", "up", "parallel",
+                              "parallel_scale", "view_angle"}
+
+
 class TestVectorParsing:
     """--normal/--origin take an axis name or three comma-separated numbers."""
 
@@ -220,6 +256,17 @@ class TestRenderConfig:
                render._plane_origins(mesh, np.array([0.0, 0.0, 1.0]), 3)]
         assert got == pytest.approx([0.75, 1.5, 2.25])
         assert all(0 < z < 3 for z in got)
+
+
+class _Camera:
+    """The attributes save_camera reads off a vtk/pyvista camera."""
+
+    position = (3.0, -2.0, 1.5)
+    focal_point = (0.0, 0.0, 0.5)
+    up = (0.0, 0.0, 1.0)
+    parallel_projection = True
+    parallel_scale = 2.5
+    view_angle = 30.0
 
 
 class _Bounds:

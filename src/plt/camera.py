@@ -2,12 +2,14 @@
 camera.py  --  Load a camera "frame" so a view set up on one file can be reused.
 
 Supported sources (auto-detected by extension):
-  .yml / .yaml   a flat frame written by the GUI helper (save_camera)
+  .yml / .yaml   a flat frame, as written by save_camera() below
   .pvsm          a ParaView "Save State" XML file (first RenderView's camera)
   .py            a ParaView Python state file (camera assignments, by regex)
 
 A frame is a dict: position, focal, up, parallel, parallel_scale, view_angle.
-Pure-Python -- no ParaView/pyvista needed to read these.
+Pure-Python -- no ParaView/pyvista needed to read or write these. save_camera
+only reads attributes off whatever camera object it is handed, so this module
+stays importable without a rendering stack.
 """
 import os
 import re
@@ -68,3 +70,30 @@ def load_camera(path):
         return _from_pystate(path)
     import yaml
     return yaml.safe_load(open(path)) or {}
+
+
+def camera_frame(camera):
+    """The six numbers that define a view, off any vtk/pyvista camera object."""
+    return {"position": [float(v) for v in camera.position],
+            "focal": [float(v) for v in camera.focal_point],
+            "up": [float(v) for v in camera.up],
+            "parallel": bool(camera.parallel_projection),
+            "parallel_scale": float(camera.parallel_scale),
+            "view_angle": float(camera.view_angle)}
+
+
+def save_camera(path, camera):
+    """Write a camera frame as .yml, in the shape load_camera reads back.
+
+    The point of the round trip: a view set up by eye on one timestep becomes a
+    file, and that file pins the camera for every other timestep -- the job a
+    Tecplot .sty does, without Tecplot.
+    """
+    import yaml
+
+    frame = camera_frame(camera)
+    with open(path, "w") as f:
+        f.write("# flexflow camera frame -- reuse with: "
+                "field render <mode> <case> --camera %s\n" % os.path.basename(path))
+        yaml.safe_dump(frame, f, sort_keys=False)
+    return frame

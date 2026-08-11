@@ -34,7 +34,15 @@ import copy
 import os
 import sys
 
-from .camera import load_camera
+from .camera import load_camera, save_camera
+
+NO_DISPLAY_HELP = """\
+picking a camera needs a window to orbit in, and there is no display here.
+    A virtual framebuffer does not help -- you have to see it.
+    Do it where there is a screen, then carry the file:
+      - on your own machine, or over `ssh -X`, run the --pick-camera above
+      - copy the .yml next to the case on this machine
+      - render the sweep headless with --camera <that file>"""
 
 HEADLESS_HELP = """\
 no display, and no working off-screen GL to fall back on.
@@ -406,6 +414,38 @@ def render_surface(cfg, surf, log=print):
         log("saved %s" % fn)
         outputs.append(fn)
     return outputs
+
+
+def pick_camera(cfg, surf, path, log=print):
+    """Show the surface, let the user orbit, and save the camera they settle on.
+
+    The window is the whole point, so this is the one path that refuses to run
+    headless rather than falling back to something invisible.
+    """
+    import pyvista as pv
+
+    if sys.platform == "linux" and not os.environ.get("DISPLAY"):
+        raise RuntimeError(NO_DISPLAY_HELP)
+    if surf is None or surf.n_points == 0:
+        raise ValueError("nothing to look at: the surface came out empty")
+
+    color = cfg["color"]["variable"]
+    p = pv.Plotter(window_size=list(cfg["image"].get("resolution", [1600, 1000])))
+    p.set_background(to_rgb(cfg["image"].get("background", [1, 1, 1])))
+    p.add_mesh(surf, scalars=color, cmap=to_cmap(cfg["color"].get("preset", "coolwarm")),
+               clim=cfg["color"].get("range") or list(surf.get_data_range(color)),
+               opacity=float(cfg["surface"].get("opacity", 1.0)),
+               show_edges=bool(cfg["surface"].get("show_edges")),
+               scalar_bar_args={"title": cfg["color"].get("title") or color})
+    if cfg["axes"].get("orientation_axes", True):
+        p.add_axes()
+    log("orbit to the view you want, then close the window to save it")
+    # auto_close=False keeps the render window alive after show() returns, which
+    # is the only way to read the camera the user actually left it on.
+    p.show(auto_close=False)
+    frame = save_camera(path, p.camera)
+    p.close()
+    return frame
 
 
 def build_surface(cfg, mode, log=print):

@@ -162,6 +162,14 @@ class FieldCommand(BaseCommand):
                                    help='Show help for render command')
         render_parser.add_argument('--vtu', type=str, help='Render an existing .vtu directly')
         render_parser.add_argument('--config', type=str, help='YAML config file')
+        render_parser.add_argument('--camera', type=str, metavar='FILE',
+                                   help='Render from a saved camera frame (.yml, or a '
+                                        'ParaView .pvsm/.py state): one view, pinned '
+                                        'across every timestep')
+        render_parser.add_argument('--pick-camera', dest='pick_camera', type=str,
+                                   metavar='FILE',
+                                   help='Open a window, orbit to the view you want, and '
+                                        'save it to FILE for --camera. Needs a display')
         render_parser.add_argument('--write-template', type=str, metavar='PATH',
                                    help="Write this mode's YAML config template and exit")
         render_parser.add_argument('--timestep', type=int,

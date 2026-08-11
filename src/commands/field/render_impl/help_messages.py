@@ -38,6 +38,11 @@ _COMMON_MISC = f"""\
 {Colors.BOLD}MISC:{Colors.RESET}
     {Colors.YELLOW}--zone NAME{Colors.RESET}            Zone to render (default: first volume zone)
     {Colors.YELLOW}--nen N{Colors.RESET}                Force nodes-per-element when converting (e.g. 8 for bricks)
+    {Colors.YELLOW}--camera FILE{Colors.RESET}          Render from a saved view: {Colors.BOLD}one{Colors.RESET} image per step, the
+                           camera pinned across every one of them. Takes a .yml
+                           written by --pick-camera, or a ParaView .pvsm/.py state
+    {Colors.YELLOW}--pick-camera FILE{Colors.RESET}     Open a window, orbit to the view you want, close it,
+                           and that view is saved to FILE. Needs a display
     {Colors.YELLOW}--config FILE{Colors.RESET}          YAML config for full control: background, resolution,
                            domain crop, threshold, camera views, saved-camera reuse
     {Colors.YELLOW}--write-template PATH{Colors.RESET}  Write this mode's YAML config template and exit
@@ -123,9 +128,18 @@ by another variable.
     flexflow field render iso --write-template iso.yml
     flexflow field render iso myCase --config iso.yml
 
-{Colors.BOLD}CAMERA REUSE:{Colors.RESET}
-    {Colors.DIM}A view's `camera_file:` accepts a ParaView "Save State" .pvsm/.py or a
-    saved-frame .yml, so a view set up on one file applies to any other.{Colors.RESET}
+{Colors.BOLD}CAMERA REUSE:{Colors.RESET}  ({Colors.DIM}what a Tecplot .sty is for, without Tecplot{Colors.RESET})
+
+    Set the view once by eye, then pin it for every timestep:
+
+        flexflow field render iso myCase --timestep 100 --pick-camera cam.yml
+        flexflow field render iso myCase --t1 100 --t2 500 --camera cam.yml \\
+                --color-range -1 1
+
+    {Colors.DIM}--pick-camera needs a screen; --camera does not. So pick it on your own
+    machine or over `ssh -X`, copy the .yml to the cluster, and render there.
+    A view's `camera_file:` in a --config file takes the same .yml, and also a
+    ParaView "Save State" .pvsm or .py -- so a view set up in ParaView works too.{Colors.RESET}
 
 {Colors.BOLD}NOTES:{Colors.RESET}
     {Colors.DIM}- QCriterion is unnormalised; pick --values a couple orders below its max
@@ -179,7 +193,12 @@ want out of a run. Or cut a series of planes along one normal.
     {Colors.DIM}A plane is invisible edge-on, so the default is a single view looking
     straight down the normal, in parallel projection -- not the four views iso
     uses. Set a `views:` block in a --config file to override, and it wins over
-    whatever --normal would have chosen.{Colors.RESET}
+    whatever --normal would have chosen.
+
+    To set the view by eye and pin it across a sweep (what a Tecplot .sty does):
+        flexflow field render slice myCase --timestep 100 --pick-camera cam.yml
+        flexflow field render slice myCase --t1 100 --t2 500 --camera cam.yml
+    --pick-camera needs a screen; --camera does not.{Colors.RESET}
 
 {Colors.BOLD}NOTES:{Colors.RESET}
     {Colors.DIM}- --slices puts the planes strictly inside the mesh: one sitting exactly on

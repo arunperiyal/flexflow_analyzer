@@ -341,6 +341,8 @@ class FlexFlowCompleter(Completer):
             **_COMMON_FLAGS,
             '--vtu':            'Render an existing .vtu',
             '--config':         'YAML config file',
+            '--camera':         'Render from a saved view (.yml / ParaView .pvsm/.py)',
+            '--pick-camera':    'Open a window, orbit, and save that view to FILE',
             '--write-template': "Write this mode's config template and exit",
             '--timestep':       'Timestep to convert+render',
             '--zone':           'Zone to render',

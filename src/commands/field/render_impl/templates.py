@@ -68,7 +68,8 @@ contour:
 views:
   - {name: iso, azimuth: 30, elevation: 20, zoom: 1.0}
   - {name: top, direction: "+z", up: [0, 1, 0]}
-  # - {name: saved, camera_file: mystate.pvsm}   # reuse a ParaView Save State frame
+  # - {name: saved, camera_file: cam.yml}       # a view saved by --pick-camera
+  # - {name: saved, camera_file: mystate.pvsm}  # or a ParaView Save State frame
 """
 
 SLICE_TEMPLATE = """\
@@ -85,7 +86,8 @@ slice:
 # block always wins over what --normal would have chosen.
 views:
   - {name: plane, direction: "+z", parallel: true}
-  # - {name: saved, camera_file: mystate.pvsm}   # reuse a ParaView Save State frame
+  # - {name: saved, camera_file: cam.yml}       # a view saved by --pick-camera
+  # - {name: saved, camera_file: mystate.pvsm}  # or a ParaView Save State frame
 """
 
 TEMPLATES = {"iso": ISO_TEMPLATE, "slice": SLICE_TEMPLATE}

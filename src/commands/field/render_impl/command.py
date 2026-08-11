@@ -235,6 +235,51 @@ def _aim_camera_at_the_plane(args, cfg, user_cfg):
             view["direction"] = direction
 
 
+def _apply_camera(args, cfg, logger):
+    """--camera FILE: render from a saved view instead of the mode's defaults."""
+    camera = getattr(args, "camera", None)
+    if not camera:
+        return
+    if not Path(camera).exists():
+        logger.error(f"camera file not found: {camera}")
+        sys.exit(1)
+    # One view from the saved frame, replacing the mode's defaults: a chosen
+    # camera is the answer to "which view", so the others would be noise --
+    # multiplied by every timestep of a sweep.
+    cfg["views"] = [{"name": "view", "camera_file": camera}]
+
+
+def _pick_camera(args, cfg, mode, steps, binary_dir, problem, path, logger):
+    """Show one timestep, save the view the user settles on, and stop.
+
+    Choosing a camera is a setup step, not a render: it runs on a single step
+    (the first selected) and writes a file, rather than producing pictures.
+    """
+    step = steps[0]
+    cfg = copy.deepcopy(cfg)
+    cfg["input"]["vtu"] = _vtu_for_step(args, cfg, step, binary_dir, problem, logger)
+    if step is not None:
+        logger.info(f"picking a camera on timestep {step}")
+
+    try:
+        cfg, surf = render.build_surface(cfg, mode, log=logger.info)
+        frame = render.pick_camera(cfg, surf, path, log=logger.info)
+    except ImportError:
+        logger.error(f"pyvista is required for `field render {mode}`. "
+                     f"Install with: pip install pyvista")
+        sys.exit(1)
+    except Exception as e:
+        logger.error(f"could not pick a camera: {e}")
+        sys.exit(1)
+
+    where = f" from timestep {step}" if step is not None else ""
+    print(f"saved the view{where} -> {path}")
+    print(f"  reuse it: field render {mode} "
+          f"{args.case or '<case>'} --camera {path}")
+    print(f"  position {[round(v, 4) for v in frame['position']]}  "
+          f"focal {[round(v, 4) for v in frame['focal']]}")
+
+
 def execute_render(args):
     from .help_messages import (print_render_help, print_iso_help,
                                 print_slice_help)
@@ -290,8 +335,19 @@ def execute_render(args):
     if mode == "slice":
         _aim_camera_at_the_plane(args, cfg, user_cfg)
 
+    pick = getattr(args, "pick_camera", None)
+    if getattr(args, "camera", None) and pick:
+        logger.error("--camera reads a saved view and --pick-camera writes one; "
+                     "give one or the other")
+        sys.exit(1)
+    _apply_camera(args, cfg, logger)
+
     name, ext = _resolve_output(args, mode, logger)
     steps, binary_dir, problem = _resolve_steps(args, mode, logger)
+
+    if pick:
+        _pick_camera(args, cfg, mode, steps, binary_dir, problem, pick, logger)
+        return
     out_dir = _output_dir(args, name)
     stem = Path(name).name
 

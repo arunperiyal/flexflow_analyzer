@@ -49,6 +49,20 @@
   prefix, `NAME.png` is that one image, and `.vtp`/`.vtu`/`.csv` write the cut
   surface itself with **no image rendered** — that path never constructs a
   plotter, so it works on a headless box without OSMesa.
+- **`--pick-camera FILE` / `--camera FILE`** — set the view once by eye and pin
+  it across every timestep, which is what a Tecplot `.sty` is for.
+  `--pick-camera` opens a window on one step; orbit to the view you want, close
+  it, and that camera is written as a `.yml`. `--camera` renders from a saved
+  frame: **one** image per step instead of the mode's default views, the camera
+  identical in all of them. Picking needs a display and says so plainly when
+  there is none (a virtual framebuffer does not help — you have to see it), so
+  pick locally or over `ssh -X` and carry the file to the cluster.
+  `--camera` also takes a ParaView **`.pvsm`**/`.py` Save State, and a view's
+  `camera_file:` in a `--config` file takes any of the three.
+- **`save_camera()` now exists.** `src/plt/camera.py` could read a `.yml` frame
+  and its docstring advertised one "written by the GUI helper (save_camera)" —
+  which was never written, so the format had no producer and the round trip was
+  half a feature.
 - **`--t1`/`--t2`/`--freq` render a whole range** — one figure per timestep in
   it, rather than a single step. The `t1`/`t2`/`freq` context feeds them, so
   `use t1:100 t2:500` then `field render iso` draws the sweep. (`--timestep`

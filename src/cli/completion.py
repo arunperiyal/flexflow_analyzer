@@ -223,7 +223,7 @@ _flexflow_completions() {
                         fi
                         ;;
                     render)
-                        local flags="iso slice --vtu --config --write-template --timestep --zone --nen --color --color-range --t1 --t2 --freq --output --contour --values --normal --origin --slices -v --verbose -h --help"
+                        local flags="iso slice --vtu --config --camera --pick-camera --write-template --timestep --zone --nen --color --color-range --t1 --t2 --freq --output --contour --values --normal --origin --slices -v --verbose -h --help"
                         if [[ "$cur" == -* ]]; then
                             COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
                         else
