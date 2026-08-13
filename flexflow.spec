@@ -12,7 +12,7 @@ block_cipher = None
 # Get absolute paths
 project_root = os.path.dirname(os.path.abspath(SPEC))
 
-# pyvista/vtk (field iso) and meshio (field convert) ship data + many submodules;
+# pyvista/vtk (field render) and meshio (field convert) ship data + many submodules;
 # let PyInstaller collect them. vtk is large -- the frozen build will grow.
 _extra_datas, _extra_binaries, _extra_hidden = [], [], []
 for _pkg in ('pyvista', 'vtkmodules', 'meshio'):
@@ -22,7 +22,7 @@ for _pkg in ('pyvista', 'vtkmodules', 'meshio'):
         _extra_binaries += _b
         _extra_hidden += _h
     except Exception:
-        pass  # not installed in this build env -- field iso/convert will be unavailable
+        pass  # not installed in this build env -- field render/convert will be unavailable
 
 a = Analysis(
     ['main.py'],

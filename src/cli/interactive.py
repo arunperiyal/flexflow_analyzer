@@ -145,7 +145,7 @@ class FlexFlowCompleter(Completer):
     _SUBCOMMANDS: Dict[str, List[str]] = {
         'case':     ['show', 'create', 'run', 'organise', 'check', 'status', 'add', 'out', 'report', 'upload', 'download'],
         'data':     ['show', 'stats'],
-        'field':    ['info', 'extract', 'compute', 'convert', 'iso', 'check'],
+        'field':    ['info', 'extract', 'compute', 'convert', 'render', 'list', 'check'],
         'def':      ['var'],
         'run':      ['check', 'pre', 'main', 'post', 'sq', 'sb', 'sc'],
         'template': ['plot', 'case', 'script'],
@@ -337,18 +337,35 @@ class FlexFlowCompleter(Completer):
             '--ymin': 'Y minimum bound', '--ymax': 'Y maximum bound',
             '--zmin': 'Z minimum bound', '--zmax': 'Z maximum bound',
         },
-        ('field', 'iso'): {
+        ('field', 'render'): {
             **_COMMON_FLAGS,
             '--vtu':            'Render an existing .vtu',
             '--config':         'YAML config file',
-            '--write-template': 'Write a config template and exit',
+            '--camera':         'Render from a saved view (.yml / ParaView .pvsm/.py)',
+            '--pick-camera':    'Open a window, orbit, and save that view to FILE',
+            '--write-template': "Write this mode's config template and exit",
             '--timestep':       'Timestep to convert+render',
             '--zone':           'Zone to render',
             '--nen':            'Force nodes-per-element',
-            '--contour':        'Scalar to contour (default QCriterion)',
-            '--iso':            'Isosurface value(s)',
             '--color':          'Scalar to colour by',
-            '--out':            'Output prefix for .vtp + PNGs',
+            '--color-range':    'Fix the colour scale (MIN MAX; default: auto per surface)',
+            '--t1':             'Start step (with --t2: one figure per step in the range)',
+            '--t2':             'End step of a range',
+            '--freq':           'With --t1/--t2: keep steps that are multiples of FREQ',
+            '--body':           'Draw a surface zone alongside for context (e.g. cyl)',
+            '--no-vtp':         'Images only: skip the .vtp beside each image',
+            '--output':         'NAME -> image prefix; .png -> one image; '
+                                '.vtp/.vtu/.csv -> the cut surface, no image',
+            '--contour':        'iso: scalar to contour (default QCriterion)',
+            '--values':         'iso: isosurface value(s)',
+            '--normal':         'slice: plane normal (axis or NX,NY,NZ)',
+            '--origin':         'slice: a point on the plane',
+            '--slices':         'slice: N planes evenly spaced along the normal',
+        },
+        ('field', 'list'): {
+            **_COMMON_FLAGS,
+            '--color':    'Colormaps for color.preset, grouped by kind',
+            '--variables': 'Variables FlexFlow can compute (lambda2)',
         },
         ('field', 'check'): {**_COMMON_FLAGS},
 
@@ -473,6 +490,12 @@ class FlexFlowCompleter(Completer):
     # key: (command, subcommand, position_after_subcommand)
     # position 0 = first token after the subcommand
     _POSITIONAL_CHOICES: Dict[tuple, List[tuple]] = {
+        ('field', 'render',  0): [
+            ('iso',   'Isosurface of a scalar'),
+            ('slice', 'A cut plane, or a series of them'),
+        ],
+        ('field', 'compute', 0): [('force', 'Per-element pressure force'),
+                                  ('lambda2', 'Vortex criterion, as a nodal field')],
         ('template', 'plot',   0): [('simple', 'Simple time-series'), ('multi', 'Multi-node plot')],
         ('template', 'case',   0): [('basic', 'Basic case config'), ('full', 'Full case config')],
         ('template', 'script', 0): [
@@ -819,7 +842,7 @@ class FlexFlowCompleter(Completer):
             't2':      'Set end time',
             'remote':  'Set remote machine for uploads',
             'var':     'Default variable(s) for field extract',
-            'zone':    'Default zone for field extract/convert/iso',
+            'zone':    'Default zone for field extract/convert/render',
             'freq':    'Output frequency for field extract / run post',
         }
 
@@ -988,7 +1011,7 @@ class InteractiveShell:
         self._current_t2: Optional[float] = None  # End time for data/field/plot commands
         self._current_remote: Optional[str] = None  # Remote machine for uploads
         self._current_var: Optional[str] = None  # Default variable(s) for field extract
-        self._current_zone: Optional[str] = None  # Default zone for field extract/convert/iso
+        self._current_zone: Optional[str] = None  # Default zone for field extract/convert/render
         self._current_freq: Optional[int] = None  # Output frequency for field extract / run post
         self._current_dir: Path = Path.cwd()  # Track current working directory
 
@@ -2838,7 +2861,7 @@ class InteractiveShell:
 
     def use_zone(self, zone_input: str) -> bool:
         """
-        Set default zone context, injected as --zone for field extract/convert/iso.
+        Set default zone context, injected as --zone for field extract/convert/render.
 
         Args:
             zone_input: Zone name (e.g. FIELD, cyl)
@@ -4083,7 +4106,7 @@ class InteractiveShell:
             'case': {'show': 2, 'run': 2, 'organise': 2, 'check': 2, 'status': 2, 'upload': 2, 'download': 2,
                      'out': 2},  # case show <case>
             'data': {'show': 2, 'stats': 2},  # data show <case>
-            'field': {'info': 2, 'extract': 2, 'compute': 3},  # field compute <quantity> <case>
+            'field': {'info': 2, 'extract': 2, 'compute': 3, 'render': 3},  # field compute <quantity> <case>
             'run': {'check': 2, 'pre': 2, 'main': 2, 'post': 2},  # run check <case>
             'template': {'script': 3},  # template script <type> <case>
             'check': None,  # check <file> - doesn't use case
@@ -4100,8 +4123,15 @@ class InteractiveShell:
                     subcmd = args[1]
                     if subcmd in case_commands[cmd]:
                         pos = case_commands[cmd][subcmd]
-                        # Check if case position is empty or is a flag
-                        if len(args) <= pos or args[pos].startswith('-'):
+                        # Everything before the case slot must already be filled.
+                        # `field render <mode> <case>` puts the case at 3, so a
+                        # bare `field render` would otherwise take the case into
+                        # the *mode* slot and report it as an unknown mode
+                        # instead of showing help. Same for `field compute`.
+                        prior_filled = (len(args) >= pos
+                                        and not args[pos - 1].startswith('-'))
+                        slot_empty = len(args) <= pos or args[pos].startswith('-')
+                        if prior_filled and slot_empty:
                             # Insert current case at the right position
                             args.insert(pos, self._current_case)
                             self.console.print(f"[dim]Using case: {self._current_case}[/dim]")
@@ -4130,12 +4160,12 @@ class InteractiveShell:
         context_added = []
 
         # field var/zone -> value flags (--variables / --zone).
-        # zone applies to extract/compute/convert/iso; var to extract only.
+        # zone applies to extract/compute/convert/render; var to extract only.
         # (field info's --variables/--zones are display toggles, so skip it.)
         if cmd == 'field' and len(args) >= 2:
             subcmd = args[1]
             if (self._current_zone is not None and '--zone' not in args
-                    and subcmd in ('extract', 'compute', 'convert', 'iso')):
+                    and subcmd in ('extract', 'compute', 'convert', 'render')):
                 args.append('--zone')
                 args.append(self._current_zone)
                 context_added.append(f"zone: {self._current_zone}")
@@ -4144,9 +4174,10 @@ class InteractiveShell:
                 args.append('--variables')
                 args.append(self._current_var)
                 context_added.append(f"var: {self._current_var}")
-            # t1/t2 select the timestep(s): extract and compute take --t1/--t2
-            # (single or range); convert/iso take a single --timestep from t1.
-            if subcmd in ('extract', 'compute'):
+            # t1/t2 select the timestep(s): extract, compute and render take
+            # --t1/--t2 (a single step or a range -- render draws one figure per
+            # step in it); convert takes a single --timestep from t1.
+            if subcmd in ('extract', 'compute', 'render'):
                 if self._current_t1 is not None and '--t1' not in args:
                     args.append('--t1'); args.append(str(self._current_t1))
                     context_added.append(f"t1: {self._current_t1}")
@@ -4156,7 +4187,7 @@ class InteractiveShell:
                 if self._current_freq is not None and '--freq' not in args:
                     args.append('--freq'); args.append(str(self._current_freq))
                     context_added.append(f"freq: {self._current_freq}")
-            elif subcmd in ('convert', 'iso'):
+            elif subcmd == 'convert':
                 if self._current_t1 is not None and '--timestep' not in args:
                     args.append('--timestep'); args.append(str(int(self._current_t1)))
                     context_added.append(f"timestep: {int(self._current_t1)}")

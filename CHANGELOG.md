@@ -30,13 +30,155 @@
   a `.pvd` time-series collection): reports points, cells, bounds, and per-array
   ranges; for `.pvd` it lists timesteps, verifies every member file exists, and
   summarises one member. Flags empty files / NaN/Inf and exits non-zero on problems.
-- **`field iso`** *(new)* — isosurface PNGs via **pyvista** (config-driven YAML:
-  background, resolution, domain crop, threshold, camera orientation, and
-  reusable camera frames from ParaView `.pvsm`/`.py` Save State or a saved
-  `.yml`). Auto-converts a case's PLT to a cached `.vtu`.
+- **`field render <mode>`** *(new)* — pictures via **pyvista**, in two modes that
+  differ only in the surface they cut out of the volume:
+  - **`iso`** — an isosurface of a scalar (`--contour`, `--values`), the usual
+    Q-criterion view of vortex tubes, coloured by another variable.
+  - **`slice`** — a cut plane (`--normal` as an axis or a vector, `--origin`), or
+    **`--slices N`** planes evenly spaced along that normal, placed strictly
+    inside the mesh since a plane on a bounding face cuts nothing. A plane is
+    invisible edge-on, so a slice defaults to a single view straight down its
+    normal in parallel projection rather than iso's four.
+  Both share the config-driven YAML (background, resolution, domain crop,
+  threshold, camera orientation, and reusable camera frames from ParaView
+  `.pvsm`/`.py` Save State or a saved `.yml`), and both auto-convert a case's PLT
+  to a cached `.vtu`. `--write-template` writes the template for the mode asked
+  for; a section belonging to the other mode is warned about rather than
+  silently ignored, and a flag belonging to the other mode is an error.
+  **`--output`** picks the format by extension: a bare `NAME` is the image
+  prefix, `NAME.png` is that one image, and `.vtp`/`.vtu`/`.csv` write the cut
+  surface itself with **no image rendered** — that path never constructs a
+  plotter, so it works on a headless box without OSMesa.
+- **`lambda2` as a contour variable, computed when the solver did not write it.**
+  A vortex criterion is a function of the velocity gradient, so `lambda2` is
+  derivable from U/V/W: the middle eigenvalue of S²+Ω² (Jeong & Hussain).
+  `field render iso --contour lambda2 --values -1` computes it on demand — note
+  it is **negative** in a vortex core, the opposite convention from
+  `QCriterion`. Validated against the case's own QCriterion: correlation with
+  −Q is 0.994, and 9.7% of nodes fall inside cores. It costs ~15s per timestep
+  on 1.8M nodes, so it is **written back into the cached `.vtu`** (+5 MB) and a
+  re-render is free; `input.cache_derived: false` turns that off.
+- **`field compute lambda2 CASE --output NAME.vtu`** materialises it instead, for
+  ParaView or anything outside FlexFlow. A nodal volume field, so unlike
+  `compute force` it takes no `--zone`; a step range writes one file per step.
+- **`field list`** *(new)* — the names you must know before you can use them, and
+  which are not discoverable from your data. **`--color`** lists colormaps
+  grouped by the kind of field they suit (diverging for signed quantities like
+  velocity or lambda2, sequential for magnitudes, cyclic for phase), names the
+  qualitative ones to avoid because a continuous field reads as banding, and
+  gives the ParaView preset names that are accepted and translated. **`-v`**
+  adds every installed colormap. **`--variables`** lists what can be computed.
+- **`body:` / `--body ZONE`** — draw a surface zone alongside the isosurface, so
+  the vortex tubes are seen against the body they shed from
+  (`field render iso CASE --body cyl`). Colour, opacity and edges via the
+  `body:` block in a config; a solid colour by default, since a second scalar
+  bar competing with the isosurface's is rarely what was meant, or
+  `body.variable` to colour it by a scalar. The zone is re-read **at every
+  timestep** — a deforming riser moves, so a surface cached from one step would
+  be drawn in the wrong place at the next. The camera frames the union of both,
+  or a body spanning the domain would be cut off. When the isosurface comes out
+  empty but a body is set, the body alone is still drawn: over a sweep those
+  steps would otherwise be holes in the sequence.
+- **`background: white` produced a black background.** `NAMED_COLORS["white"]`
+  was `[1, 1, 1]` — *integers* — and pyvista reads an integer triple as 0-255,
+  so white came out as RGB(1,1,1). `black` worked only because 0 is 0 either
+  way, and `gray` only because it happened to be written as floats. The default
+  background was the same literal, so **every render ever made had a black
+  background**. Colours are floats throughout now, and `to_rgb` accepts either
+  convention: anything above 1 is treated as 0-255, so `[255, 255, 255]` and
+  `[1.0, 1.0, 1.0]` both give white.
+- **`--no-vtp`** — images only. A `.vtp` of the cut surface is written beside
+  each image by default (`output.save_vtp`), which is one more file per timestep
+  and adds up over a sweep. The flag only turns it *off*, so it overrides a
+  config that left it on without needing a config edit. The template now says
+  what the setting costs, and notes that `output.prefix` is ignored — paths come
+  from `--output` and the case directory.
+- **An interrupted conversion no longer poisons the .vtu cache.** A render
+  converts each PLT to a `.vtu` sidecar and reuses it when it is newer than the
+  PLT — but a run killed mid-conversion left a *half-written* sidecar that was
+  also newer, so every later run trusted it and failed inside VTK with
+  `Error parsing XML ... no element found` followed by a misleading
+  `Data array (U) not present`. Conversions now write to a temporary name and
+  rename into place, so an interrupted one leaves nothing; an existing
+  half-written sidecar is detected (a complete `.vtu` closes its `</VTKFile>`)
+  and rebuilt rather than trusted.
+- **A render error no longer gets blamed on the display.** The headless handler
+  replaced *any* exception with "no display, and no working off-screen GL"
+  whenever `DISPLAY` was unset — so a malformed config, a missing variable and a
+  dead X server all read as the same problem, and the real cause was thrown
+  away. The actual error is now always reported, with the headless note added
+  underneath only as a possible contributing factor.
+- **`--camera` given a render config is an error**, not a silent wrong picture.
+  `load_camera` returned the whole config dict, whose `position`/`focal`/`up`
+  are all absent, so the camera was left at VTK's default and a plausible-looking
+  image came out of the wrong viewpoint with no warning. A frame without a
+  `position:` is now rejected, and a file carrying config sections is named as
+  such and pointed at `--config`. It is checked when the flag is read, so a bad
+  camera stops the run before it converts a hundred PLT files.
+- **`color.range` from a config is validated.** `range: [-0.5 0.5]` is valid
+  YAML for a one-element list holding the *string* `"-0.5 0.5"`, which reached
+  pyvista and failed there as `IndexError` with nothing pointing back at the
+  file. The missing comma is now named.
+- **A multi-step render says where it is** (`[7/100] timestep 350`). A hundred
+  steps each converting a PLT and rendering can run for many minutes, and
+  silence looks like a hang.
+- **`--pick-camera FILE` / `--camera FILE`** — set the view once by eye and pin
+  it across every timestep, which is what a Tecplot `.sty` is for.
+  `--pick-camera` opens a window on one step; orbit to the view you want, close
+  it, and that camera is written as a `.yml`. `--camera` renders from a saved
+  frame: **one** image per step instead of the mode's default views, the camera
+  identical in all of them. Picking needs a display and says so plainly when
+  there is none (a virtual framebuffer does not help — you have to see it), so
+  pick locally or over `ssh -X` and carry the file to the cluster.
+  `--camera` also takes a ParaView **`.pvsm`**/`.py` Save State, and a view's
+  `camera_file:` in a `--config` file takes any of the three.
+- **`save_camera()` now exists.** `src/plt/camera.py` could read a `.yml` frame
+  and its docstring advertised one "written by the GUI helper (save_camera)" —
+  which was never written, so the format had no producer and the round trip was
+  half a feature.
+- **`--t1`/`--t2`/`--freq` render a whole range** — one figure per timestep in
+  it, rather than a single step. The `t1`/`t2`/`freq` context feeds them, so
+  `use t1:100 t2:500` then `field render iso` draws the sweep. (`--timestep`
+  still takes one step; `field convert` keeps taking `--timestep` from `t1`.)
+- **Output always goes in a directory under the case.** One run writes a file
+  per camera view and a range multiplies that by the number of steps, so loose
+  files named after the `.vtu` landed in the case's `binary/` among the PLTs.
+  `--output NAME` now names the directory (`<case>/NAME/`, default
+  `render_<mode>/`) and its extension picks what goes inside — `.png` for images
+  only, `.vtp`/`.vtu`/`.csv` for the cut surface. Files inside are
+  `<NAME>_<step>_<view>.png`, so a range sorts by step.
+- **`--color-range MIN MAX`** fixes the colour scale. Without it the scale is
+  taken from each surface as it is built, so the same variable gets a different
+  scale at every timestep — two frames cannot be compared, and a sequence of
+  them cannot be animated. Rendering a range without it is **warned about**.
+  It applies to `slice` as well as `iso`, since the colouring is shared. Two
+  space-separated numbers rather than `MIN,MAX`: argparse reads a lone `-0.5` as
+  a value but `-0.5,0.5` as an option name, so the comma form would have
+  rejected every range with a negative minimum. *(The same trap still applies to
+  `field extract --probe -2.5,0,0`, which predates this and is not fixed here.)*
+- **A case context no longer lands in the mode slot.** With `use case:X` set, a
+  bare `field render` had the case injected at position 3 — but position 2, the
+  mode word, was still empty, so the case slid into it and the command answered
+  *"Unknown render mode /path/to/case"* instead of showing help. `field compute`
+  had the same bug for its `quantity`, and `template script` for its type.
+  Injection now requires every slot *before* the case to be filled.
+- **A headless box gets a virtual framebuffer** when one is available: off-screen
+  rendering still needs a GL context, and VTK prints *"bad X server connection"*
+  without one. `xvfb` is started automatically if installed. The warning is
+  cosmetic on a VTK that can fall back — images still come out — and when it
+  genuinely cannot render, the error now names the ways out rather than leaving
+  a raw VTK warning, including `--output NAME.vtp`, which needs no GL at all.
+- **Nothing to render shows the mode's help**, not just a one-line complaint:
+  `field render iso` with no case, no `--vtu` and no `input.vtu` is someone
+  finding their way.
+- **`field render --zone` now does something.** It was accepted and dropped on
+  the floor: the conversion call never passed it on, so every render used the
+  first volume zone whatever was asked for. The cached `.vtu` sidecar is named
+  per zone (`<plt>.z<N>.vtu`), since a zone-specific conversion must not be
+  handed back for the default one.
 - **`use var:` / `use zone:` context** — set a default variable list / zone once
   and they're auto-injected into `field extract` (`--variables`, `--zone`) and
-  `--zone` into `field convert`/`iso`. A **`freq`** context injects `--freq`
+  `--zone` into `field convert`/`render`. A **`freq`** context injects `--freq`
   into `field extract` and `run post`. Shown in `pwd`, cleared via
   `unuse var`/`zone`/`freq`/`all`, with tab completion.
 - **Fixed context injection scope**: `node`/`t1`/`t2` are now injected only where
@@ -67,7 +209,9 @@
   four dotted octets, while the old help offered "IP address or hostname".
 - Interactive tab completion knew the flags of `case out` and `field compute`
   but not the subcommand names themselves, so neither completed after `case ` /
-  `field `.
+  `field `. `field compute <TAB>` now offers `force` and `field render <TAB>`
+  offers `iso`/`slice`, via the `_POSITIONAL_CHOICES` hook that already existed
+  for `template` and had no `field` rows.
 
 #### `case out` — a case's declared outputs, and maps that keep othd readable
 - New **`case out`** subcommand (listed in `case --help`). **`--map`** writes

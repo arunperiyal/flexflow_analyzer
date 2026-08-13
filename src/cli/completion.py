@@ -168,7 +168,7 @@ _flexflow_completions() {
             local subcommand=""
             for (( i=2; i < cword; i++ )); do
                 case "${words[i]}" in
-                    info|extract|compute|convert|iso|check)
+                    info|extract|compute|convert|render|list|check)
                         subcommand="${words[i]}"
                         break
                         ;;
@@ -178,7 +178,7 @@ _flexflow_completions() {
             if [[ -z "$subcommand" ]]; then
                 # No subcommand yet
                 local flags="-v --verbose -h --help --examples"
-                COMPREPLY=( $(compgen -W "info extract compute convert iso check $flags" -- "$cur") )
+                COMPREPLY=( $(compgen -W "info extract compute convert render list check $flags" -- "$cur") )
             else
                 case "$subcommand" in
                     info)
@@ -201,7 +201,7 @@ _flexflow_completions() {
                         fi
                         ;;
                     compute)
-                        local flags="force --zone --timestep --t1 --t2 --freq --output --pressure --nen --no-progress -v --verbose -h --help"
+                        local flags="force lambda2 --zone --timestep --t1 --t2 --freq --output --pressure --nen --no-progress -v --verbose -h --help"
                         if [[ "$cur" == -* ]]; then
                             COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
                         else
@@ -222,8 +222,8 @@ _flexflow_completions() {
                             esac
                         fi
                         ;;
-                    iso)
-                        local flags="--vtu --config --write-template --timestep --zone --nen --contour --iso --color --out -v --verbose -h --help"
+                    render)
+                        local flags="iso slice --vtu --config --camera --pick-camera --write-template --timestep --zone --nen --color --color-range --t1 --t2 --freq --body --no-vtp --output --contour --values --normal --origin --slices -v --verbose -h --help"
                         if [[ "$cur" == -* ]]; then
                             COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
                         else

@@ -6,7 +6,7 @@ Replaces the old pytecplot / Tecplot-360 backend with pure-Python tools:
   fxplt    parse the #!TDV112 binary directly (numpy only)
   convert  .plt -> .vtu (meshio) + a size / element-type audit
   camera   load a saved camera frame (.yml / ParaView .pvsm / .py)
-  render   isosurface PNGs via pyvista (optional dependency, imported lazily)
+  render   isosurface and cut-plane PNGs via pyvista (optional, imported lazily)
 
 Only `render` needs pyvista/vtk; info / extract / convert need just numpy + meshio.
 """

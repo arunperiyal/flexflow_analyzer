@@ -2,12 +2,14 @@
 camera.py  --  Load a camera "frame" so a view set up on one file can be reused.
 
 Supported sources (auto-detected by extension):
-  .yml / .yaml   a flat frame written by the GUI helper (save_camera)
+  .yml / .yaml   a flat frame, as written by save_camera() below
   .pvsm          a ParaView "Save State" XML file (first RenderView's camera)
   .py            a ParaView Python state file (camera assignments, by regex)
 
 A frame is a dict: position, focal, up, parallel, parallel_scale, view_angle.
-Pure-Python -- no ParaView/pyvista needed to read these.
+Pure-Python -- no ParaView/pyvista needed to read or write these. save_camera
+only reads attributes off whatever camera object it is handed, so this module
+stays importable without a rendering stack.
 """
 import os
 import re
@@ -59,12 +61,60 @@ def _from_pystate(path):
             "view_angle": scal("CameraViewAngle")}
 
 
+# Sections that only ever appear in a render config, never in a camera frame.
+_CONFIG_SECTIONS = {"contour", "slice", "image", "domain", "threshold",
+                    "surface", "axes", "views", "output", "input"}
+
+
 def load_camera(path):
-    """Load a camera frame from a .yml/.yaml, ParaView .pvsm, or ParaView .py state."""
+    """Load a camera frame from a .yml/.yaml, ParaView .pvsm, or ParaView .py state.
+
+    A frame without a position is not a frame. Saying so here matters: the
+    caller sets whatever keys are present and silently leaves the camera at
+    VTK's default otherwise, which renders a picture of the wrong thing with no
+    indication that anything went wrong.
+    """
     ext = os.path.splitext(path)[1].lower()
     if ext == ".pvsm":
         return _from_pvsm(path)
     if ext == ".py":
         return _from_pystate(path)
     import yaml
-    return yaml.safe_load(open(path)) or {}
+    frame = yaml.safe_load(open(path)) or {}
+    if not isinstance(frame, dict) or frame.get("position") is None:
+        found = _CONFIG_SECTIONS.intersection(frame if isinstance(frame, dict) else ())
+        if found:
+            raise ValueError(
+                "%s is a render config (it has %s:), not a camera frame.\n"
+                "    Pass it with --config. A camera frame holds position/focal/up "
+                "and is written by --pick-camera." % (path, "/".join(sorted(found))))
+        raise ValueError("%s has no 'position:' -- it is not a camera frame. "
+                         "Write one with --pick-camera." % path)
+    return frame
+
+
+def camera_frame(camera):
+    """The six numbers that define a view, off any vtk/pyvista camera object."""
+    return {"position": [float(v) for v in camera.position],
+            "focal": [float(v) for v in camera.focal_point],
+            "up": [float(v) for v in camera.up],
+            "parallel": bool(camera.parallel_projection),
+            "parallel_scale": float(camera.parallel_scale),
+            "view_angle": float(camera.view_angle)}
+
+
+def save_camera(path, camera):
+    """Write a camera frame as .yml, in the shape load_camera reads back.
+
+    The point of the round trip: a view set up by eye on one timestep becomes a
+    file, and that file pins the camera for every other timestep -- the job a
+    Tecplot .sty does, without Tecplot.
+    """
+    import yaml
+
+    frame = camera_frame(camera)
+    with open(path, "w") as f:
+        f.write("# flexflow camera frame -- reuse with: "
+                "field render <mode> <case> --camera %s\n" % os.path.basename(path))
+        yaml.safe_dump(frame, f, sort_keys=False)
+    return frame
