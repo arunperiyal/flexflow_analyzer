@@ -269,6 +269,12 @@
   because the solver writes no record for it and later ids shift down. The table
   states that OthId is predicted, never presenting it as measured. `outputSurface`
   (which feeds the `.oisd`) is not covered yet.
+  With the **`*` wildcard** (or `use case:*`) it surveys every case in the
+  `.cases` registry as **one table with a Case column**, rather than one table
+  per case: the question `*` asks is which cases still need mapping, and that
+  is answered by scanning a column. A case it cannot read is reported under
+  the table and does not end the run, and the title says how many of the
+  registry actually made it in.
 - Accepts the **`*` wildcard case** (including via `use case:*`), mapping every
   case in the `.cases` registry in turn. A case with nothing to map is *skipped*
   and one that genuinely fails is *reported*, and neither ends the batch — so a

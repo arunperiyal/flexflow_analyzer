@@ -534,6 +534,56 @@ class TestStalePrediction:
         assert "WARNING" not in (case / "othd.riser_probe.map").read_text()
 
 
+class TestWildcardList:
+    """`case out * --list` surveys the whole registry in one table."""
+
+    def test_lists_every_case_it_can_read(self, registry, capsys):
+        execute_out(make_args("*", map=False, list=True))
+        out = flat(capsys.readouterr().out)
+        assert "Good1" in out and "Good2" in out
+        assert "4 of 5 case(s)" in out          # only the missing directory fails
+
+    def test_a_case_that_cannot_be_mapped_can_still_be_listed(self, registry, capsys):
+        """Listing reads the .def only; mapping also needs the mesh and the
+        node files, so the two sets are different and the table is the wider."""
+        execute_out(make_args("*", map=False, list=True))
+        out = flat(capsys.readouterr().out)
+        assert "NoCrd" in out          # no mesh: unmappable, but declared blocks
+        assert "Unmappable" in out     # nothing to index by, but still declared
+
+    def test_a_case_it_cannot_read_is_reported_not_fatal(self, registry, capsys):
+        execute_out(make_args("*", map=False, list=True))
+        out = flat(capsys.readouterr().out)
+        assert "Gone" in out                    # named under the table
+        assert "Good1" in out                   # and the good ones still listed
+
+    def test_it_reads_the_registry_not_a_directory_called_star(self, registry, capsys):
+        """The bug: --list ran before the wildcard check and took '*' as a path."""
+        execute_out(make_args("*", map=False, list=True))
+        out = flat(capsys.readouterr().out)
+        assert "Case directory not found: *" not in out
+
+    def test_blocks_are_counted_across_cases(self, registry, capsys):
+        execute_out(make_args("*", map=False, list=True))
+        out = flat(capsys.readouterr().out)
+        assert "output block(s)" in out
+
+    def test_exits_non_zero_when_nothing_could_be_listed(self, tmp_path, monkeypatch):
+        (tmp_path / ".cases").write_text(json.dumps(
+            [{"name": "Gone", "path": str(tmp_path / "not_here")}]))
+        monkeypatch.chdir(tmp_path)
+        with pytest.raises(SystemExit) as exc:
+            execute_out(make_args("*", map=False, list=True))
+        assert exc.value.code == 1
+
+    def test_a_single_case_still_gets_its_own_table(self, registry, capsys):
+        """The wildcard path must not have changed the ordinary one."""
+        execute_out(make_args(registry / "Good1", map=False, list=True))
+        out = flat(capsys.readouterr().out)
+        assert "outputTimeHistory in Good1" in out
+        assert "Case" not in out.split("Name")[0]   # no Case column for one case
+
+
 class TestWildcard:
     """`case write * --othd-map` over the .cases registry."""
 

@@ -13,11 +13,15 @@ Build small derived files from a case's own inputs.
 {Colors.BOLD}USAGE:{Colors.RESET}
     flexflow case out <case_dir> --map [NAME]
     flexflow case out * --map            {Colors.DIM}# every case in .cases{Colors.RESET}
+    flexflow case out * --list           {Colors.DIM}# survey them all in one table{Colors.RESET}
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
     {Colors.YELLOW}--list{Colors.RESET}             Table of the case's outputTimeHistory blocks:
                        name, input file, predicted othId, type, map file, probe.
                        Says which blocks are mapped and what each othId holds.
+                       With the {Colors.YELLOW}*{Colors.RESET} case it surveys every case in the .cases
+                       registry as one table with a Case column -- which is how
+                       you see which cases still need mapping.
     {Colors.YELLOW}--map [NAME]{Colors.RESET}  Write a map for every outputTimeHistory block in the
                        .def that names a file its records are indexed by.
                        Give NAME to do just one, matched against the block

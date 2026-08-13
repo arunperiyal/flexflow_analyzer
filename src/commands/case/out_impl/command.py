@@ -501,6 +501,23 @@ def survey_time_history(case_dir, logger):
     return rows
 
 
+def _survey_cells(row):
+    """One survey row as table cells: Name, File, OthId, Type, MapFile, Probe."""
+    if row["file"] is None:
+        source = "[dim]none[/dim]"
+    elif row["file_exists"]:
+        source = row["file"]
+    else:
+        source = f"[yellow]{row['file']}[/yellow] [dim](missing)[/dim]"
+    # None means the solver writes no record for it, so it takes no id at all
+    oth_id = str(row["oth_id"]) if row["oth_id"] is not None else "[dim]--[/dim]"
+    mapped = row["map"] if row["map_exists"] else f"[dim]{row['map'] or '--'}[/dim]"
+    probe = row["probe"] or "[dim]--[/dim]"
+    if row["probe"] and row["closed"]:
+        probe += f" [dim]({'closed' if row['closed'] == 'yes' else 'open'})[/dim]"
+    return row["name"], source, oth_id, row["type"], mapped, probe
+
+
 def _print_survey(case_dir, rows):
     """The output-block table: what is declared, and what has been written for it."""
     from rich.console import Console
@@ -515,21 +532,7 @@ def _print_survey(case_dir, rows):
         table.add_column(name)
 
     for row in rows:
-        if row["file"] is None:
-            source = "[dim]none[/dim]"
-        elif row["file_exists"]:
-            source = row["file"]
-        else:
-            source = f"[yellow]{row['file']}[/yellow] [dim](missing)[/dim]"
-        # None means the solver writes no record for it, so it takes no id at all
-        oth_id = str(row["oth_id"]) if row["oth_id"] is not None else "[dim]--[/dim]"
-        mapped = (row["map"] if row["map_exists"]
-                  else f"[dim]{row['map'] or '--'}[/dim]")
-        probe = row["probe"] or "[dim]--[/dim]"
-        if row["probe"] and row["closed"]:
-            probe += f" [dim]({'closed' if row['closed'] == 'yes' else 'open'})[/dim]"
-        table.add_row(row["name"], source, oth_id, row["type"],
-                      mapped if row["map_exists"] else mapped, probe)
+        table.add_row(*_survey_cells(row))
 
     console.print()
     console.print(table)
@@ -543,6 +546,70 @@ def _print_survey(case_dir, rows):
         console.print("[dim]A greyed MapFile has not been written yet; --map writes it. "
                       "Probe is declared with --probe-type and read back from the map.[/dim]")
     console.print()
+
+
+def _list_all_cases(logger):
+    """Survey every case in the .cases registry as one table.
+
+    One table rather than one per case: the question `*` asks is which cases
+    have maps yet, and that is answered by scanning a column, not by comparing
+    twenty separate tables with the same headers.
+    """
+    from rich.console import Console
+    from rich.table import Table
+    from rich import box
+
+    console = Console()
+    cases = load_cases_from_directory(Path.cwd())
+    if not cases:
+        logger.error(f"No cases found. Is there a .cases file in {Path.cwd()}? "
+                     "Build one with `case add`.")
+        sys.exit(1)
+
+    table = Table(box=box.SIMPLE, show_header=True, header_style="bold yellow",
+                  title_justify="left", title_style="bold cyan")
+    for name in ("Case", "Name", "File", "OthId", "Type", "MapFile", "Probe"):
+        table.add_column(name)
+
+    listed, skipped, failed, blocks = [], [], [], 0
+    for entry in cases:
+        name = entry.get("name", "?")
+        path = entry.get("path")
+        if not path:
+            failed.append((name, "no path in .cases"))
+            continue
+        try:
+            rows = survey_time_history(path, logger)
+        except WriteError as exc:
+            (skipped if exc.skip else failed).append((name, str(exc)))
+            continue
+        listed.append(name)
+        blocks += len(rows)
+        for i, row in enumerate(rows):
+            # The case name only on its first row: repeating it down a group
+            # makes the column hard to scan, which is the one thing it is for.
+            table.add_row(f"[bold]{name}[/bold]" if i == 0 else "",
+                          *_survey_cells(row))
+
+    console.print()
+    if listed:
+        # Titled after the loop: the registry may hold cases this cannot read,
+        # and a table of two headed "across 5 cases" invites the wrong reading.
+        table.title = (f"outputTimeHistory in {len(listed)} of {len(cases)} case(s)"
+                       if len(listed) != len(cases)
+                       else f"outputTimeHistory across {len(cases)} case(s)")
+        console.print(table)
+    console.print(f"[bold]{len(listed)} case(s)[/bold], {blocks} output block(s)"
+                  + (f"; {len(skipped)} skipped" if skipped else "")
+                  + (f"; [yellow]{len(failed)} failed[/yellow]" if failed else ""))
+    for who, why in skipped + failed:
+        console.print(f"  [dim]{who}: {why}[/dim]")
+    if listed:
+        console.print("[dim]OthId is predicted from the .def, not read from an othd. "
+                      "A greyed MapFile has not been written yet; --map writes it.[/dim]")
+    console.print()
+    if not listed:
+        sys.exit(1)
 
 
 def _write_all_cases(args, wanted, logger, probe=None, closed=None):
@@ -598,6 +665,9 @@ def execute_out(args):
         print_out_help(); sys.exit(1)
 
     if getattr(args, "list", False):
+        if is_wildcard_case(args.case):
+            _list_all_cases(logger)
+            return
         try:
             rows = survey_time_history(args.case, logger)
         except WriteError as exc:
