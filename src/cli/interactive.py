@@ -355,6 +355,7 @@ class FlexFlowCompleter(Completer):
             '--body':           'Draw a surface zone alongside for context (e.g. cyl)',
             '--no-vtp':         'Images only: skip the .vtp beside each image',
             '--output':         'NAME -> image prefix; .png -> one image; '
+                                '.html -> a page to orbit in a browser; '
                                 '.vtp/.vtu/.csv -> the cut surface, no image',
             '--contour':        'iso: scalar to contour (default QCriterion)',
             '--values':         'iso: isosurface value(s)',
