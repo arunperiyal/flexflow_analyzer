@@ -426,7 +426,25 @@ def execute_render(args):
     cfg = render.default_config(mode)
     if getattr(args, "config", None):
         import yaml
-        user_cfg = yaml.safe_load(open(args.config)) or {}
+        path = args.config
+        # Same contract as --camera: a bad config should stop the run with a
+        # sentence, not a traceback -- and the way to get one is --write-template.
+        if not Path(path).exists():
+            logger.error(f"config file not found: {path}\n"
+                         f"        write a starting point with "
+                         f"`field render {mode} --write-template {path}`")
+            sys.exit(1)
+        try:
+            with open(path) as f:
+                user_cfg = yaml.safe_load(f) or {}
+        except yaml.YAMLError as e:
+            logger.error(f"--config {path}: {e}")
+            sys.exit(1)
+        if not isinstance(user_cfg, dict):
+            logger.error(f"--config {path}: expected a mapping of sections "
+                         f"(input:, iso:, views: ...), got "
+                         f"{type(user_cfg).__name__}")
+            sys.exit(1)
         cfg = render.deep_merge(cfg, user_cfg)
     other = "slice" if mode == "iso" else "contour"
     if other in user_cfg:
