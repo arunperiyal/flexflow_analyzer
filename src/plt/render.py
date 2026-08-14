@@ -14,7 +14,7 @@ the middle.
 
 Config schema (dict; missing keys fall back to DEFAULTS):
     input    : vtu
-    output   : prefix, save_vtp
+    output   : prefix, save_vtp, html
     image    : resolution [W,H], background (name or RGB 0-1), transparent
     contour  : variable, isosurfaces [..]         (iso mode)
     slice    : normal, origin, count              (slice mode)
@@ -59,8 +59,9 @@ DEFAULTS = {
     "input":   {"vtu": None, "cache_derived": True},
     # geometry: an explicit path for the cut surface (set by --output NAME.vtp);
     # images: False writes only that, and never constructs a Plotter.
+    # html: an orbitable page instead of PNGs (set by --output NAME.html).
     "output":  {"prefix": "iso", "save_vtp": True, "geometry": None,
-                "images": True, "image_path": None},
+                "images": True, "image_path": None, "html": None},
     "image":   {"resolution": [1600, 1000], "background": [1.0, 1.0, 1.0], "transparent": False},
     "contour": {"variable": "QCriterion", "isosurfaces": [0.25]},
     # normal: an axis name or a vector; origin: null = the mesh centre;
@@ -497,39 +498,75 @@ def render_surface(cfg, surf, log=print):
     # An exact --output NAME.png names the file itself, but only one view can
     # own that name; several still fall back to the per-view suffix.
     exact = cfg["output"].get("image_path") if len(views) == 1 else None
+    html = cfg["output"].get("html")
     outputs = []
 
-    for view in views:
-        try:
-            p = pv.Plotter(off_screen=True, window_size=res)
-            p.set_background(to_rgb(cfg["image"].get("background", [1.0, 1.0, 1.0])))
-            if not empty:
-                p.add_mesh(surf, scalars=color, cmap=to_cmap(cfg["color"].get("preset", "coolwarm")),
-                           clim=crange, opacity=float(cfg["surface"].get("opacity", 1.0)),
-                           show_edges=bool(cfg["surface"].get("show_edges")),
-                           log_scale=bool(cfg["color"].get("log_scale")),
-                           show_scalar_bar=bool(cfg["color"].get("show_scalar_bar", True)),
-                           scalar_bar_args={"title": cfg["color"].get("title") or color,
-                                            "color": text_color})
-            if body is not None:
-                _add_body(p, body, cfg, text_color)
-            if cfg["axes"].get("orientation_axes", True):
-                p.add_axes(color=text_color)
-            _setup_camera(p, view, center, span)
-            fn = exact or "%s_%s.png" % (prefix, view.get("name", "view"))
-            p.screenshot(fn, transparent_background=transparent)
+    def scene(view):
+        """The whole scene in a plotter, aimed at one view."""
+        p = pv.Plotter(off_screen=True, window_size=res)
+        p.set_background(to_rgb(cfg["image"].get("background", [1.0, 1.0, 1.0])))
+        if not empty:
+            p.add_mesh(surf, scalars=color, cmap=to_cmap(cfg["color"].get("preset", "coolwarm")),
+                       clim=crange, opacity=float(cfg["surface"].get("opacity", 1.0)),
+                       show_edges=bool(cfg["surface"].get("show_edges")),
+                       log_scale=bool(cfg["color"].get("log_scale")),
+                       show_scalar_bar=bool(cfg["color"].get("show_scalar_bar", True)),
+                       scalar_bar_args={"title": cfg["color"].get("title") or color,
+                                        "color": text_color})
+        if body is not None:
+            _add_body(p, body, cfg, text_color)
+        if cfg["axes"].get("orientation_axes", True):
+            p.add_axes(color=text_color)
+        _setup_camera(p, view, center, span)
+        return p
+
+    try:
+        if html:
+            # One page for the scene, not one per view: the reader orbits it
+            # themselves, so a second page would differ only in where it starts
+            # -- and each carries a copy of the whole surface. The first view
+            # sets that starting angle.
+            p = scene(views[0] if views else {})
+            _export_html(p, html, log)
             p.close()
-        except Exception as e:
-            # Never replace the real error with a guess: a bad clim, a missing
-            # variable and a dead X server all surface here, and only one of
-            # them is about the display. Report what actually happened, and add
-            # the headless note underneath when it might also be a factor.
-            if _no_display():
-                raise RuntimeError(f"{type(e).__name__}: {e}\n{HEADLESS_HELP}") from e
-            raise
-        log("saved %s" % fn)
-        outputs.append(fn)
+            outputs.append(html)
+        else:
+            for view in views:
+                p = scene(view)
+                fn = exact or "%s_%s.png" % (prefix, view.get("name", "view"))
+                p.screenshot(fn, transparent_background=transparent)
+                p.close()
+                log("saved %s" % fn)
+                outputs.append(fn)
+    except Exception as e:
+        # Never replace the real error with a guess: a bad clim, a missing
+        # variable and a dead X server all surface here, and only one of
+        # them is about the display. Report what actually happened, and add
+        # the headless note underneath when it might also be a factor.
+        if _no_display():
+            raise RuntimeError(f"{type(e).__name__}: {e}\n{HEADLESS_HELP}") from e
+        raise
     return outputs
+
+
+def _export_html(p, path, log):
+    """Write the scene as a page that can be orbited in a browser.
+
+    Self-contained: the surface travels inside the file, so it opens on a
+    machine with nothing installed. That also makes it as big as the surface is
+    -- a dense isosurface runs to tens of MB, and the .vtp of that same surface
+    is the smaller thing to send to someone who has ParaView.
+    """
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    try:
+        p.export_html(path)
+    except ImportError as e:
+        # pyvista is installed -- it is the HTML exporter that wants trame. Say
+        # so, or the caller's ImportError handler blames the wrong package.
+        raise RuntimeError(f"writing {path} needs trame alongside pyvista: "
+                           f"pip install trame trame-vtk trame-vuetify  ({e})") from e
+    log("saved %s" % path)
+    return path
 
 
 def pick_camera(cfg, surf, path, log=print):

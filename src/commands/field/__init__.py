@@ -199,6 +199,7 @@ class FieldCommand(BaseCommand):
                                         'that is otherwise written beside each one')
         render_parser.add_argument('--output', type=str,
                                    help='Bare NAME -> image prefix; NAME.png -> one image; '
+                                        'NAME.html -> a page you can orbit in a browser; '
                                         '.vtp/.vtu/.csv -> the cut surface, no image')
         # iso only
         render_parser.add_argument('--contour', type=str,

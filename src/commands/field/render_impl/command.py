@@ -53,10 +53,10 @@ def _resolve_output(args, mode, logger):
     ext = os.path.splitext(raw)[1].lower()
     if ext == "":
         return raw, None
-    if ext == ".png" or ext in GEOMETRY_EXT:
+    if ext in (".png", ".html") or ext in GEOMETRY_EXT:
         return os.path.splitext(raw)[0], ext
     logger.error(f"Unsupported --output extension '{ext}'. Use a bare NAME for a "
-                 f"directory of images, or NAME with .png / "
+                 f"directory of images, or NAME with .png / .html / "
                  f"{' / '.join(GEOMETRY_EXT)} to pick what goes in it.")
     sys.exit(1)
 
@@ -494,6 +494,11 @@ def execute_render(args):
             if ext == ".png":
                 step_cfg["output"]["image_path"] = base + ".png"
                 step_cfg["output"]["save_vtp"] = False
+            elif ext == ".html":
+                # The page carries the surface inside it, so a .vtp beside it
+                # would be the same geometry twice.
+                step_cfg["output"]["html"] = base + ".html"
+                step_cfg["output"]["save_vtp"] = False
 
         try:
             outs = renderer(step_cfg, log=logger.info)
@@ -515,7 +520,7 @@ def execute_render(args):
     if not written:
         logger.warning(f"nothing written (empty {mode}?)")
         sys.exit(1)
-    noun = "file" if ext in GEOMETRY_EXT else "image"
+    noun = {".html": "page"}.get(ext, "file" if ext in GEOMETRY_EXT else "image")
     print(f"{len(written)} {noun}{'' if len(written) == 1 else 's'} "
           f"over {len(steps)} timestep{'' if len(steps) == 1 else 's'} "
           f"-> {out_dir}{os.sep}")
