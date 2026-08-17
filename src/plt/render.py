@@ -84,7 +84,13 @@ DEFAULTS = {
     "domain":  {"xmin": None, "xmax": None, "ymin": None, "ymax": None,
                 "zmin": None, "zmax": None},
     "threshold": {"variable": None, "min": None, "max": None},
-    "surface": {"opacity": 1.0, "show_edges": False},
+    # Shading. Everything below opacity/show_edges is left to pyvista unless
+    # set, so a config that says nothing renders exactly as it always did.
+    # lighting: false gives the colormap's colours flat, matching the legend
+    # swatch exactly; ambient lifts the shadowed side while keeping the form.
+    "surface": {"opacity": 1.0, "show_edges": False, "lighting": None,
+                "ambient": None, "diffuse": None, "specular": None,
+                "specular_power": None, "smooth_shading": None},
     # bounds_grid: a labelled box around the data, to read coordinates off when
     # you do not yet know where to put a ruler.
     "axes":    {"orientation_axes": True, "bounds_grid": False},
@@ -561,6 +567,27 @@ def _view_path(prefix, name):
     return os.path.join(directory, os.path.basename(prefix) + ".png")
 
 
+SHADING_KEYS = ("lighting", "ambient", "diffuse", "specular", "specular_power",
+                "smooth_shading")
+
+
+def shading_kwargs(cfg):
+    """The surface's shading settings, passed on only where one was given.
+
+    A lit, curved tube reads darker than the same colour in a flat legend
+    swatch: the shading multiplies it by the angle between the surface and the
+    light, so only the parts facing the camera show the colormap's colour. That
+    is usually what "the greens are darker than the legend" means.
+
+    `lighting: false` removes the shading and gives the legend's colours
+    exactly, at the cost of every depth cue -- tubes come out as flat
+    silhouettes. Raising `ambient` instead lifts the shadowed side towards the
+    true colour while keeping the form, which is generally the better trade.
+    """
+    surface = cfg.get("surface", {}) or {}
+    return {k: surface[k] for k in SHADING_KEYS if surface.get(k) is not None}
+
+
 def _as_point(value):
     """A sequence of three numbers -> [x, y, z] floats, or None."""
     if not isinstance(value, (list, tuple)) or len(value) != 3:
@@ -723,6 +750,7 @@ def render_surface(cfg, surf, log=print, warn=None, state=None):
     bar_args = {"title": cfg["color"].get("title") or color, "color": text_color}
     if levels:
         bar_args["n_labels"] = int(levels) + 1
+    shading = shading_kwargs(cfg)
 
     def scene(view):
         """The whole scene in a plotter, aimed at one view."""
@@ -735,7 +763,7 @@ def render_surface(cfg, surf, log=print, warn=None, state=None):
                        log_scale=bool(cfg["color"].get("log_scale")),
                        n_colors=int(levels) if levels else 256,
                        show_scalar_bar=bool(cfg["color"].get("show_scalar_bar", True)),
-                       scalar_bar_args=bar_args)
+                       scalar_bar_args=bar_args, **shading)
         if body is not None:
             _add_body(p, body, cfg, text_color)
         if cfg["axes"].get("orientation_axes", True):
@@ -815,7 +843,8 @@ def pick_camera(cfg, surf, path, log=print):
                clim=cfg["color"].get("range") or list(surf.get_data_range(color)),
                opacity=float(cfg["surface"].get("opacity", 1.0)),
                show_edges=bool(cfg["surface"].get("show_edges")),
-               scalar_bar_args={"title": cfg["color"].get("title") or color})
+               scalar_bar_args={"title": cfg["color"].get("title") or color},
+               **shading_kwargs(cfg))
     if cfg["axes"].get("orientation_axes", True):
         p.add_axes()
     # Draw the annotations here too: this is the one window where a ruler's
