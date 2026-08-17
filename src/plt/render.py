@@ -112,7 +112,21 @@ PRESET_CMAP = {
     "Cool to Warm": "coolwarm", "Cool to Warm (Extended)": "coolwarm",
     "Viridis (matplotlib)": "viridis", "Jet": "jet",
     "Rainbow Desaturated": "turbo", "Black-Body Radiation": "inferno",
+    # Tecplot's name for it, and ParaView's for the same sweep.
+    "Small Rainbow": "small_rainbow", "Blue to Red Rainbow": "small_rainbow",
 }
+
+# Tecplot's "Small Rainbow", which is what its figures are drawn in and so what
+# a plot has to use to sit beside one. Read off a Tecplot legend: every band is
+# fully saturated (S = V = 1) and the hue steps evenly from 240 degrees at the
+# low end to 0 at the high end -- blue, cyan, green, yellow, red. Nothing more
+# to it than that arc of the colour wheel.
+#
+# matplotlib has no equivalent: hsv walks the *whole* wheel and wraps back to
+# red, so its two ends are the same colour, and jet's ends are dark rather than
+# pure. Generating the arc directly is both exact and free of a dependency --
+# the alternative was borrowing an approximation from vispy.
+SMALL_RAINBOW = "small_rainbow"
 # Vortex criteria that are NEGATIVE inside a core. QCriterion and its relatives
 # are positive there, and lambda2 is the odd one out: contouring it at a
 # positive value picks out the fluid *outside* every vortex in the domain.
@@ -174,7 +188,39 @@ def to_rgb(c):
     return [v / 255.0 for v in vals] if any(v > 1.0 for v in vals) else vals
 
 
+def _small_rainbow(n=256):
+    """The 240..0 degree hue arc at full saturation, as a matplotlib colormap."""
+    import colorsys
+    from matplotlib.colors import LinearSegmentedColormap
+
+    colors = [colorsys.hsv_to_rgb((2.0 / 3.0) * (1.0 - i / (n - 1.0)), 1.0, 1.0)
+              for i in range(n)]
+    return LinearSegmentedColormap.from_list(SMALL_RAINBOW, colors, N=n)
+
+
+def register_colormaps():
+    """Add FlexFlow's own colormaps to matplotlib. Idempotent; returns names.
+
+    Registered rather than passed as an object, so the name works everywhere a
+    matplotlib name does -- a config file, `field list --color`, and the _r
+    suffix that reverses any other map.
+    """
+    names = (SMALL_RAINBOW, SMALL_RAINBOW + "_r")
+    try:
+        import matplotlib
+    except ImportError:
+        return ()
+    if all(n in matplotlib.colormaps for n in names):
+        return names
+    cmap = _small_rainbow()
+    for c in (cmap, cmap.reversed(name=SMALL_RAINBOW + "_r")):
+        if c.name not in matplotlib.colormaps:
+            matplotlib.colormaps.register(c)
+    return names
+
+
 def to_cmap(name):
+    register_colormaps()          # ours must exist before the name is resolved
     return PRESET_CMAP.get(name, name)
 
 

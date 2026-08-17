@@ -40,6 +40,9 @@ color:
   variable: U                    # flow in z -> W ; flow in x -> U
   preset: coolwarm               # matplotlib cmap, or a ParaView preset name
                                  # bwr gives pure blue/red ends, coolwarm muted
+                                 # small_rainbow is Tecplot's Small Rainbow, for
+                                 # a figure that sits beside an existing one
+                                 # `field list --color` lists them all
   levels: null                   # N discrete colour bands, as Tecplot bands a
                                  # legend; null = a continuous ramp
   range: null                    # [min, max], or null to take it from the data

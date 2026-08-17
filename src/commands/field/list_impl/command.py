@@ -24,17 +24,23 @@ GROUPS = [
       "Blues", "Reds", "Greys", "YlGnBu", "YlOrRd", "hot", "jet"]),
     ("CYCLIC", "a phase or angle, where the ends must meet.",
      ["twilight", "twilight_shifted", "hsv"]),
+    ("RAINBOW", "to sit beside an existing Tecplot or ParaView figure. "
+                "small_rainbow is\n     Tecplot's Small Rainbow exactly -- the "
+                "240..0 hue arc, fully saturated.\n     Hue carries no ordering, "
+                "so prefer the groups above for new work.",
+     ["small_rainbow", "rainbow", "jet"]),
 ]
 
 AVOID = ("tab10", "tab20", "Set1", "Set2", "Set3", "Accent", "Paired", "Dark2")
 
 
 def _print_colors(logger, verbose=False):
-    from ....plt.render import PRESET_CMAP
+    from ....plt.render import PRESET_CMAP, register_colormaps
     from ....utils.colors import Colors
 
     try:
         import matplotlib.pyplot as plt
+        register_colormaps()      # or FlexFlow's own are filtered out as unknown
         known = set(plt.colormaps())
     except ImportError:
         known = None
