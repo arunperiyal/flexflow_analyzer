@@ -9,6 +9,12 @@ _COMMON_INPUT = f"""\
     {Colors.YELLOW}<case> --t1 A --t2 B{Colors.RESET}   {Colors.BOLD}One figure per timestep{Colors.RESET} in the range
                            {Colors.YELLOW}--freq N{Colors.RESET} keeps only steps that are multiples of N
                            {Colors.DIM}(the t1/t2/freq context supplies these: use t1:100 t2:500){Colors.RESET}
+    {Colors.YELLOW}*{Colors.RESET}                      {Colors.BOLD}Every case{Colors.RESET} in the .cases registry of the working
+                           directory, as `case out` and `run` take it. Each
+                           writes into its own <case>/NAME/, and one failing
+                           case does not stop the others. Without a colour
+                           range set, the scale from the first case is held
+                           across the rest so they can be compared
     {Colors.YELLOW}--vtu PATH{Colors.RESET}             Render an existing .vtu directly
     {Colors.YELLOW}--config FILE{Colors.RESET}          YAML config (input.vtu may be set there)"""
 

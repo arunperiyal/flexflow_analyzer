@@ -18,6 +18,7 @@ from pathlib import Path
 from ....utils.logger import Logger
 from ....plt import render
 from ....plt.convert import to_vtu
+from ...case_iteration import is_wildcard_case, load_cases_from_directory
 from ..locate import problem_name, find_plt, zone_index, resolve_steps
 from .templates import TEMPLATES
 
@@ -421,6 +422,79 @@ def execute_render(args):
         logger.success(f"wrote {mode} config template -> {args.write_template}")
         return
 
+    # `*` means every case in the .cases registry, as it does for `case out`,
+    # `case check` and `run`. Rendering is the same job per case, so it is the
+    # loop that differs, not the work.
+    if is_wildcard_case(getattr(args, "case", None)):
+        _render_all_cases(args, mode, logger)
+        return
+    _render_one_case(args, mode, logger)
+
+
+def _render_all_cases(args, mode, logger):
+    """Render every case in the .cases registry of the working directory.
+
+    One bad case does not stop the rest: a registry usually outlives some of
+    the runs in it, and a missing binary/ in the third of twenty is a reason to
+    skip that one, not to throw away the other nineteen. What each case did is
+    said at the end.
+    """
+    if getattr(args, "pick_camera", None):
+        logger.error("--pick-camera opens a window to orbit, so it takes one "
+                     "case, not `*`. Pick the view on a single case and reuse "
+                     "it across the rest with --camera.")
+        sys.exit(1)
+    if getattr(args, "vtu", None):
+        logger.error("--vtu names one file and `*` means every case; the two "
+                     "cannot both say what to render. Drop one.")
+        sys.exit(1)
+
+    cases = load_cases_from_directory(Path.cwd())
+    if not cases:
+        logger.error(f"`*` renders every case in the .cases registry, and there "
+                     f"is none in {Path.cwd()}.\n"
+                     f"        Build one with `case add`, or name a case "
+                     f"directly: `field render {mode} <case>`.")
+        sys.exit(1)
+
+    # One colour scale for the whole run when none was configured, taken from
+    # the first case that yields a surface. Cases coloured on their own scales
+    # cannot be compared, which is the entire point of rendering them together.
+    shared = {}
+    done, skipped = [], []
+    for i, entry in enumerate(cases, 1):
+        name = entry.get("name", "?")
+        path = Path(entry.get("path", ""))
+        print(f"\n{'=' * 70}\n  [{i}/{len(cases)}] {name}\n{'=' * 70}", flush=True)
+        if not path.exists():
+            logger.warning(f"case directory not found: {path} -- skipping")
+            skipped.append((name, "no such directory"))
+            continue
+        case_args = copy.copy(args)
+        case_args.case = str(path)
+        try:
+            _render_one_case(case_args, mode, logger, shared)
+            done.append(name)
+        except SystemExit:
+            # _render_one_case says what went wrong before it exits; here the
+            # only decision left is to carry on to the next case.
+            skipped.append((name, "see the error above"))
+
+    # print, not logger.success: the tally of a twenty-case run is the one line
+    # that must not need --verbose to appear.
+    print(f"\n{'=' * 70}")
+    scale = (f" on one colour scale {shared['color_range']}"
+             if shared.get("color_range") else "")
+    print(f"rendered {len(done)}/{len(cases)} case"
+          f"{'' if len(cases) == 1 else 's'}{scale}")
+    for name, why in skipped:
+        logger.warning(f"  skipped {name}: {why}")
+    if not done:
+        sys.exit(1)
+
+
+def _render_one_case(args, mode, logger, shared=None):
+    """Render the one case named by args.case (or --vtu)."""
     args.normal = _parse_vector(getattr(args, "normal", None), "normal", logger)
     args.origin = _parse_vector(getattr(args, "origin", None), "origin", logger)
     args.color_range = _check_range(getattr(args, "color_range", None), logger)
@@ -455,6 +529,10 @@ def execute_render(args):
                        f"{mode}` does not read -- it is ignored")
 
     _apply_overrides(args, cfg, mode)
+    # Across `*`, the scale the first case settled on carries to the rest, for
+    # the same reason it carries across a sweep's timesteps.
+    if shared and shared.get("color_range") and cfg["color"].get("range") is None:
+        cfg["color"]["range"] = list(shared["color_range"])
     if mode == "slice":
         _aim_camera_at_the_plane(args, cfg, user_cfg)
 
@@ -527,6 +605,8 @@ def execute_render(args):
             if total > 1:
                 logger.info(f"holding the colour scale from timestep {step}: "
                             f"{cfg['color']['range']}")
+            if shared is not None:
+                shared.setdefault("color_range", list(state["color_range"]))
 
         if not outs:
             logger.warning(f"nothing written for "

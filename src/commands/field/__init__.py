@@ -155,7 +155,9 @@ class FieldCommand(BaseCommand):
                                                     help='Render images (iso, slice)')
         render_parser.add_argument('mode', nargs='?',
                                    help='What to render (iso, slice)')
-        render_parser.add_argument('case', nargs='?', help='Case directory path')
+        render_parser.add_argument('case', nargs='?',
+                                   help='Case directory path, or * for every '
+                                        'case in the .cases registry')
         render_parser.add_argument('-v', '--verbose', action='store_true',
                                    help='Enable verbose output')
         render_parser.add_argument('-h', '--help', action='store_true',
