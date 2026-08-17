@@ -72,6 +72,18 @@ surface:
 
 axes:
   orientation_axes: true
+  bounds_grid: false             # a labelled box around the data -- use it to
+                                 # read off the coordinates for a ruler below
+
+annotations:
+  rulers: []                     # dimension lines, in the mesh's coordinates:
+                                 # - {from: [0, -0.5, 2], to: [0, 0.5, 2],
+                                 #    title: sheet spacing}
+                                 # The distance is labelled at each end. Fixed
+                                 # points, so a sweep carries the same
+                                 # annotation on every frame.
+                                 # Optional per ruler: number_labels,
+                                 # label_format (e.g. "%.2f"), font_size_factor
 """
 
 ISO_TEMPLATE = """\

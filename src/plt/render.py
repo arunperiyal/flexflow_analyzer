@@ -19,11 +19,13 @@ Config schema (dict; missing keys fall back to DEFAULTS):
     contour  : variable, isosurfaces [..] (null: taken from the data)  (iso mode)
     slice    : normal, origin, count              (slice mode)
     color    : variable, preset (matplotlib cmap or ParaView preset name),
-               range [min,max], log_scale, title, show_scalar_bar, text_color
+               range [min,max], levels, log_scale, title, show_scalar_bar,
+               text_color
     domain   : xmin/xmax/ymin/ymax/zmin/zmax   (box crop before contouring)
     threshold: variable, min, max
     surface  : opacity, show_edges
-    axes     : orientation_axes
+    axes     : orientation_axes, bounds_grid
+    annotations: rulers [{from: [x,y,z], to: [x,y,z], title}]
     views    : list; each view picks ONE of camera_file / direction /
                position+focal+up / azimuth+elevation+roll ; optional zoom, parallel
 
@@ -83,7 +85,12 @@ DEFAULTS = {
                 "zmin": None, "zmax": None},
     "threshold": {"variable": None, "min": None, "max": None},
     "surface": {"opacity": 1.0, "show_edges": False},
-    "axes":    {"orientation_axes": True},
+    # bounds_grid: a labelled box around the data, to read coordinates off when
+    # you do not yet know where to put a ruler.
+    "axes":    {"orientation_axes": True, "bounds_grid": False},
+    # Dimension lines: each {from: [x,y,z], to: [x,y,z]} draws a ruler between
+    # two points of the mesh's own coordinates, with the distance labelled.
+    "annotations": {"rulers": []},
     "views": [
         {"name": "iso", "azimuth": 30, "elevation": 20, "roll": 0, "zoom": 1.0},
         {"name": "xy",  "direction": "+z", "up": [0, 1, 0]},
@@ -490,6 +497,72 @@ def _no_display():
     return sys.platform == "linux" and not os.environ.get("DISPLAY")
 
 
+def _as_point(value):
+    """A sequence of three numbers -> [x, y, z] floats, or None."""
+    if not isinstance(value, (list, tuple)) or len(value) != 3:
+        return None
+    try:
+        return [float(v) for v in value]
+    except (TypeError, ValueError):
+        return None
+
+
+def _kwargs_for(func, wanted):
+    """The subset of `wanted` this build of pyvista actually accepts.
+
+    add_ruler and show_bounds have both gained and lost keywords across
+    releases. Filtering against the real signature keeps a config working on
+    whichever version is installed on the cluster, instead of raising a
+    TypeError in the middle of a sweep over a keyword nobody asked about.
+    """
+    import inspect
+
+    try:
+        allowed = set(inspect.signature(func).parameters)
+    except (TypeError, ValueError):
+        return dict(wanted)
+    return {k: v for k, v in wanted.items() if k in allowed}
+
+
+def _add_annotations(p, cfg, text_color, warn):
+    """Dimension lines and a graduated box -- what makes a picture measurable.
+
+    A ruler is given in the mesh's own coordinates, so it sits in the scene and
+    holds its place as the view turns. Fixed endpoints are what a sweep wants:
+    the same annotation on every frame, so the distance it marks can be read
+    across the whole animation rather than re-derived per picture.
+    """
+    for i, spec in enumerate(cfg.get("annotations", {}).get("rulers") or [], 1):
+        if not isinstance(spec, dict):
+            warn("annotations.rulers[%d] should be a mapping with `from:` and "
+                 "`to:`; skipping it" % i)
+            continue
+        a, b = _as_point(spec.get("from")), _as_point(spec.get("to"))
+        if a is None or b is None:
+            warn("annotations.rulers[%d] needs `from:` and `to:`, three numbers "
+                 "each; skipping it" % i)
+            continue
+        actor = p.add_ruler(**_kwargs_for(p.add_ruler, {
+            "pointa": a, "pointb": b,
+            "title": spec.get("title", ""),
+            # Two labels puts one at each end, which is what reads as a
+            # dimension line; more turns it into a tick scale.
+            "number_labels": spec.get("number_labels", 2),
+            "label_format": spec.get("label_format", "%.3f"),
+            "font_size_factor": spec.get("font_size_factor", 0.6),
+        }))
+        try:
+            actor.GetProperty().SetColor(*text_color)
+        except Exception:
+            pass            # colour is cosmetic; never lose the ruler over it
+
+    if cfg.get("axes", {}).get("bounds_grid"):
+        p.show_bounds(**_kwargs_for(p.show_bounds, {
+            "color": text_color, "grid": "back",
+            "location": "outer", "ticks": "both",
+        }))
+
+
 def _check_color_range(surf, color, crange, warn):
     """Warn when the fixed colour range leaves the data outside it.
 
@@ -603,6 +676,7 @@ def render_surface(cfg, surf, log=print, warn=None, state=None):
             _add_body(p, body, cfg, text_color)
         if cfg["axes"].get("orientation_axes", True):
             p.add_axes(color=text_color)
+        _add_annotations(p, cfg, text_color, warn)
         _setup_camera(p, view, center, span)
         return p
 
@@ -678,6 +752,9 @@ def pick_camera(cfg, surf, path, log=print):
                scalar_bar_args={"title": cfg["color"].get("title") or color})
     if cfg["axes"].get("orientation_axes", True):
         p.add_axes()
+    # Draw the annotations here too: this is the one window where a ruler's
+    # placement can be checked by eye, rather than inferred from a PNG.
+    _add_annotations(p, cfg, to_rgb(cfg["color"].get("text_color", [0.0, 0.0, 0.0])), log)
     log("orbit to the view you want, then close the window to save it")
     # auto_close=False keeps the render window alive after show() returns, which
     # is the only way to read the camera the user actually left it on.

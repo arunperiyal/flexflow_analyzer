@@ -60,7 +60,11 @@ _COMMON_MISC = f"""\
     {Colors.YELLOW}--pick-camera FILE{Colors.RESET}     Open a window, orbit to the view you want, close it,
                            and that view is saved to FILE. Needs a display
     {Colors.YELLOW}--config FILE{Colors.RESET}          YAML config for full control: background, resolution,
-                           domain crop, threshold, camera views, saved-camera reuse
+                           domain crop, threshold, camera views, saved-camera reuse,
+                           banded colours, and dimension lines ({Colors.YELLOW}annotations.rulers{Colors.RESET}:
+                           a labelled line between two points, for quoting a
+                           distance off the picture; {Colors.YELLOW}axes.bounds_grid{Colors.RESET} puts a
+                           labelled box round the data to read those points off)
     {Colors.YELLOW}--write-template PATH{Colors.RESET}  Write this mode's YAML config template and exit
     {Colors.YELLOW}--verbose, -v{Colors.RESET}          Verbose output
     {Colors.YELLOW}--help, -h{Colors.RESET}             Show this help message"""
