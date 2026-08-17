@@ -153,12 +153,14 @@ def _resolve_steps(args, cfg, mode, logger):
     # scale just as well as --color-range, and warning about a range that is
     # already set trains people to ignore the warning.
     if how == "range" and len(steps) > 1 and cfg["color"].get("range") is None:
-        # Auto-scaling is per surface, so every frame of a sweep would be
-        # coloured on its own scale and none of them could be compared.
+        # The scale is taken from the first step and held for the rest, so the
+        # frames are comparable -- but the first step is not necessarily the
+        # strongest, and anything past its range clips.
         logger.warning(f"{len(steps)} timesteps on an automatic colour scale: "
-                       f"each is scaled to its own data, so the frames are not "
-                       f"comparable. Give --color-range MIN MAX (or color.range "
-                       f"in a --config file) to fix it.")
+                       f"it is taken from the first step and held for the rest, "
+                       f"so later steps with stronger structures clip at the "
+                       f"ends. Give --color-range MIN MAX (or color.range in a "
+                       f"--config file) to set it yourself.")
     return steps, binary_dir, problem
 
 
@@ -500,8 +502,10 @@ def execute_render(args):
                 step_cfg["output"]["html"] = base + ".html"
                 step_cfg["output"]["save_vtp"] = False
 
+        state = {}
         try:
-            outs = renderer(step_cfg, log=logger.info)
+            outs = renderer(step_cfg, log=logger.info, warn=logger.warning,
+                            state=state)
         except ImportError:
             logger.error(f"pyvista is required for `field render {mode}`. "
                          f"Install with: pip install pyvista")
@@ -510,6 +514,16 @@ def execute_render(args):
             where = f" (timestep {step})" if step is not None else ""
             logger.error(f"rendering failed{where}: {e}")
             sys.exit(1)
+
+        # An automatic colour scale is worked out from the first step's surface
+        # and then held: rescaling every frame to its own data is what makes a
+        # sweep's frames incomparable, and holding one scale is the whole point
+        # of asking for a range at all.
+        if cfg["color"].get("range") is None and state.get("color_range"):
+            cfg["color"]["range"] = list(state["color_range"])
+            if total > 1:
+                logger.info(f"holding the colour scale from timestep {step}: "
+                            f"{cfg['color']['range']}")
 
         if not outs:
             logger.warning(f"nothing written for "

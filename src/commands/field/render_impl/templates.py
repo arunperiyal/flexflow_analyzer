@@ -39,7 +39,12 @@ body:                            # a surface zone drawn alongside, for context
 color:
   variable: U                    # flow in z -> W ; flow in x -> U
   preset: coolwarm               # matplotlib cmap, or a ParaView preset name
-  range: null                    # [min, max] or null = auto
+  range: null                    # [min, max], or null to take it from the data
+                                 # (over a sweep: from the first step, then held
+                                 # for the rest so the frames can be compared).
+                                 # A range narrower than the data is warned
+                                 # about -- outside it everything clamps to the
+                                 # two end colours.
   log_scale: false
   title: null
   show_scalar_bar: true
@@ -74,7 +79,10 @@ contour:
                                # the solver did not write it. lambda2 is
                                # NEGATIVE in a vortex core, so contour it at
                                # a small negative value, e.g. [-1]
-  isosurfaces: [20]
+  isosurfaces: null             # null: taken from the data (the 99% percentile,
+                               # or the 1% for a criterion negative in a core).
+                               # Reported when it is used -- replace it with a
+                               # value picked by eye, e.g. [20] or [-1]
 
 """ + _COMMON_TAIL + """
 # One PNG per view. Pick ONE camera style: camera_file / direction / position / azimuth.
