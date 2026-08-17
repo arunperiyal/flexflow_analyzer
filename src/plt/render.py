@@ -16,7 +16,7 @@ Config schema (dict; missing keys fall back to DEFAULTS):
     input    : vtu
     output   : prefix, save_vtp, html
     image    : resolution [W,H], background (name or RGB 0-1), transparent
-    contour  : variable, isosurfaces [..]         (iso mode)
+    contour  : variable, isosurfaces [..] (null: taken from the data)  (iso mode)
     slice    : normal, origin, count              (slice mode)
     color    : variable, preset (matplotlib cmap or ParaView preset name),
                range [min,max], log_scale, title, show_scalar_bar, text_color
@@ -63,7 +63,9 @@ DEFAULTS = {
     "output":  {"prefix": "iso", "save_vtp": True, "geometry": None,
                 "images": True, "image_path": None, "html": None},
     "image":   {"resolution": [1600, 1000], "background": [1.0, 1.0, 1.0], "transparent": False},
-    "contour": {"variable": "QCriterion", "isosurfaces": [0.25]},
+    # isosurfaces: null lets the value be taken from the data. No constant can
+    # serve as a default here -- see _default_isovalue.
+    "contour": {"variable": "QCriterion", "isosurfaces": None},
     # normal: an axis name or a vector; origin: null = the mesh centre;
     # count > 1: that many planes evenly spaced along the normal instead of one.
     "slice":   {"normal": "z", "origin": None, "count": 1},
@@ -72,9 +74,11 @@ DEFAULTS = {
     # because a deforming body moves and cannot be converted once and reused.
     "body":    {"zone": None, "vtu": None, "color": "lightgray", "variable": None,
                 "opacity": 1.0, "show_edges": False},
+    # levels: N discrete colour bands instead of a continuous ramp, the way
+    # Tecplot and ParaView band a contour legend. null = continuous.
     "color":   {"variable": "U", "preset": "coolwarm", "range": None,
-                "log_scale": False, "title": None, "show_scalar_bar": True,
-                "text_color": [0.0, 0.0, 0.0]},
+                "levels": None, "log_scale": False, "title": None,
+                "show_scalar_bar": True, "text_color": [0.0, 0.0, 0.0]},
     "domain":  {"xmin": None, "xmax": None, "ymin": None, "ymax": None,
                 "zmin": None, "zmax": None},
     "threshold": {"variable": None, "min": None, "max": None},
@@ -102,6 +106,11 @@ PRESET_CMAP = {
     "Viridis (matplotlib)": "viridis", "Jet": "jet",
     "Rainbow Desaturated": "turbo", "Black-Body Radiation": "inferno",
 }
+# Vortex criteria that are NEGATIVE inside a core. QCriterion and its relatives
+# are positive there, and lambda2 is the odd one out: contouring it at a
+# positive value picks out the fluid *outside* every vortex in the domain.
+NEGATIVE_IN_CORE = ("lambda2",)
+
 DIRS = {"+x": [1, 0, 0], "-x": [-1, 0, 0], "+y": [0, 1, 0],
         "-y": [0, -1, 0], "+z": [0, 0, 1], "-z": [0, 0, -1]}
 DEFAULT_UP = {"+z": [0, 1, 0], "-z": [0, 1, 0], "+x": [0, 0, 1],
@@ -292,11 +301,43 @@ def _write_back(mesh, vtu, log=print):
         raise
 
 
-def _iso_surface(mesh, cfg, log=print):
+def _default_isovalue(mesh, cvar, log=print, warn=None):
+    """An isosurface value taken from the data, for when none was given.
+
+    No constant can serve as the default. A vortex criterion is quadratic in the
+    velocity gradient, so its scale follows the flow's: a value that draws clean
+    tubes in one case wraps half the domain in another. A far-tail percentile
+    follows the data instead -- and which tail depends on the criterion, since
+    lambda2 is negative in a core where QCriterion is positive.
+
+    It is a starting point, not a choice: the value is reported so it can be
+    replaced with one picked by eye.
+    """
+    import numpy as np
+
+    warn = warn or log
+    negative = cvar in NEGATIVE_IN_CORE
+    pct = 1.0 if negative else 99.0
+    value = float(np.percentile(np.asarray(mesh.point_data[cvar]), pct))
+    warn("no isosurface value given: contouring '%s' at its %g%% percentile, "
+         "%.4g. Give contour.isosurfaces (or --values) to choose one."
+         % (cvar, pct, value))
+    return value
+
+
+def _iso_surface(mesh, cfg, log=print, warn=None):
     """The isosurface(s) of contour.variable at contour.isosurfaces."""
     cvar = cfg["contour"]["variable"]
     log("contour '%s' range: %s" % (cvar, mesh.get_data_range(cvar)))
-    surf = mesh.contour(isosurfaces=list(cfg["contour"]["isosurfaces"]), scalars=cvar)
+    values = cfg["contour"].get("isosurfaces")
+    if values is None or (hasattr(values, "__len__") and len(values) == 0):
+        values = [_default_isovalue(mesh, cvar, log, warn)]
+    elif not hasattr(values, "__len__"):
+        # `isosurfaces: 20` in a config is a number, not a list. pyvista reads a
+        # bare number as "this many levels, evenly spaced", which is not what
+        # anyone writing a single value means.
+        values = [values]
+    surf = mesh.contour(isosurfaces=list(values), scalars=cvar)
     log("isosurface: %d points, %d cells" % (surf.n_points, surf.n_cells))
     return surf
 
@@ -318,7 +359,7 @@ def _normal_vector(normal):
     return vec
 
 
-def _slice_surface(mesh, cfg, log=print):
+def _slice_surface(mesh, cfg, log=print, warn=None):
     """One cut plane, or `count` planes evenly spaced along the normal.
 
     One loop covers both, and covers an arbitrary normal: pyvista's
@@ -449,8 +490,35 @@ def _no_display():
     return sys.platform == "linux" and not os.environ.get("DISPLAY")
 
 
-def render_surface(cfg, surf, log=print):
-    """Save the surface and write one PNG per view. Returns the written files."""
+def _check_color_range(surf, color, crange, warn):
+    """Warn when the fixed colour range leaves the data outside it.
+
+    A range set orders of magnitude below the data is not a subtle mistake:
+    every point clamps to one end of the map or the other, and the surface comes
+    out in two flat colours. That reads as a broken render rather than a
+    mis-set number, so it is worth saying out loud.
+    """
+    import numpy as np
+
+    vals = np.asarray(surf.point_data[color], dtype=float).ravel()
+    if vals.size == 0:
+        return
+    inside = float(((vals >= crange[0]) & (vals <= crange[1])).mean())
+    if inside >= 0.05:
+        return
+    warn("colour range [%g, %g] holds %.1f%% of the surface, which spans "
+         "[%.4g, %.4g] -- nearly every point clamps to one end of the colour "
+         "map, so the picture comes out in two flat colours. That is the point "
+         "when colouring by the sign of a variable; widen the range if it is not."
+         % (crange[0], crange[1], 100 * inside, vals.min(), vals.max()))
+
+
+def render_surface(cfg, surf, log=print, warn=None, state=None):
+    """Save the surface and write one PNG per view. Returns the written files.
+
+    When color.range is null the scale is taken from this surface and written
+    back into cfg, so a caller rendering a sweep can pin it for the rest.
+    """
     prefix = cfg["output"]["prefix"]
     color = cfg["color"]["variable"]
 
@@ -480,10 +548,21 @@ def render_surface(cfg, surf, log=print):
 
     import pyvista as pv
 
+    warn = warn or log
     _prepare_display(log)
     os.makedirs(os.path.dirname(prefix) or ".", exist_ok=True)
-    crange = (cfg["color"].get("range")
-              or (list(surf.get_data_range(color)) if not empty else [0.0, 1.0]))
+    fixed = cfg["color"].get("range")
+    crange = fixed or (list(surf.get_data_range(color)) if not empty else [0.0, 1.0])
+    if fixed and not empty and not (state or {}).get("range_checked"):
+        # Once per run, not once per step: a sweep of 100 frames shares one
+        # range, so the same sentence 100 times is noise, not a warning.
+        _check_color_range(surf, color, crange, warn)
+        if state is not None:
+            state["range_checked"] = True
+    elif not fixed and not empty:
+        log("colour scale taken from the surface: [%.4g, %.4g]" % (crange[0], crange[1]))
+    # Record what was used, so a sweep can hold this scale for its later steps.
+    cfg["color"]["range"] = list(crange)
 
     body = _load_body(cfg, log)
     # Frame both, or a body sticking out past the isosurface gets cut off -- and
@@ -501,6 +580,13 @@ def render_surface(cfg, surf, log=print):
     html = cfg["output"].get("html")
     outputs = []
 
+    # Discrete bands, the way a Tecplot legend is banded. n_labels follows the
+    # bands so a tick lands on every boundary rather than at arbitrary values.
+    levels = cfg["color"].get("levels")
+    bar_args = {"title": cfg["color"].get("title") or color, "color": text_color}
+    if levels:
+        bar_args["n_labels"] = int(levels) + 1
+
     def scene(view):
         """The whole scene in a plotter, aimed at one view."""
         p = pv.Plotter(off_screen=True, window_size=res)
@@ -510,9 +596,9 @@ def render_surface(cfg, surf, log=print):
                        clim=crange, opacity=float(cfg["surface"].get("opacity", 1.0)),
                        show_edges=bool(cfg["surface"].get("show_edges")),
                        log_scale=bool(cfg["color"].get("log_scale")),
+                       n_colors=int(levels) if levels else 256,
                        show_scalar_bar=bool(cfg["color"].get("show_scalar_bar", True)),
-                       scalar_bar_args={"title": cfg["color"].get("title") or color,
-                                        "color": text_color})
+                       scalar_bar_args=bar_args)
         if body is not None:
             _add_body(p, body, cfg, text_color)
         if cfg["axes"].get("orientation_axes", True):
@@ -601,21 +687,33 @@ def pick_camera(cfg, surf, path, log=print):
     return frame
 
 
-def build_surface(cfg, mode, log=print):
+def build_surface(cfg, mode, log=print, warn=None):
     """The cut surface for a mode, without rendering it. Returns (cfg, surf)."""
     cfg = deep_merge(DEFAULTS, cfg or {})
     mesh = _prepare(cfg, mode, log)
     maker = {"iso": _iso_surface, "slice": _slice_surface}[mode]
-    return cfg, maker(mesh, cfg, log)
+    return cfg, maker(mesh, cfg, log, warn)
 
 
-def render_iso(cfg, log=print):
+def _render(cfg, mode, log=print, warn=None, state=None):
+    """Build the surface for a mode and render it.
+
+    `state`, when given, comes back holding 'color_range' -- the scale actually
+    used. A sweep renders one timestep at a time, so that is how the caller
+    learns what an automatic scale came out as and holds it for the rest.
+    """
+    merged, surf = build_surface(cfg, mode, log, warn)
+    outputs = render_surface(merged, surf, log, warn, state)
+    if state is not None:
+        state["color_range"] = merged["color"].get("range")
+    return outputs
+
+
+def render_iso(cfg, log=print, warn=None, state=None):
     """Render isosurface PNGs from a .vtu. Returns the list of written files."""
-    cfg, surf = build_surface(cfg, "iso", log)
-    return render_surface(cfg, surf, log)
+    return _render(cfg, "iso", log, warn, state)
 
 
-def render_slice(cfg, log=print):
+def render_slice(cfg, log=print, warn=None, state=None):
     """Render cut-plane PNGs from a .vtu. Returns the list of written files."""
-    cfg, surf = build_surface(cfg, "slice", log)
-    return render_surface(cfg, surf, log)
+    return _render(cfg, "slice", log, warn, state)

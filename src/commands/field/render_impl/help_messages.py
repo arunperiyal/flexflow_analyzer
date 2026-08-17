@@ -16,10 +16,15 @@ _COMMON_COLOR = f"""\
     {Colors.YELLOW}--color NAME{Colors.RESET}           Scalar to colour by          (default: U; use W for z-flow)
     {Colors.YELLOW}--color-range MIN MAX{Colors.RESET}  Fix the colour scale to this span (two numbers,
                            space-separated, so a negative MIN works)
-                           {Colors.DIM}Without it the scale is taken from each surface, so the
-                           same variable gets a different scale at every timestep
-                           and two frames cannot be compared -- or animated.
-                           Rendering a range without it is warned about.{Colors.RESET}"""
+                           {Colors.DIM}Without it the scale is taken from the first surface and
+                           held for the rest of a sweep, so the frames stay
+                           comparable -- but a later step with stronger
+                           structures clips at the ends. Rendering a range
+                           without it is warned about.
+                           A range narrower than the data is warned about too:
+                           outside it every point clamps to one of the two end
+                           colours, and the surface comes out in two flat
+                           colours rather than a gradient.{Colors.RESET}"""
 
 _COMMON_OUTPUT = f"""\
 {Colors.BOLD}OUTPUT:{Colors.RESET}
@@ -119,9 +124,17 @@ by another variable.
                            {Colors.DIM}Also accepts a variable the solver did not write:
                            {Colors.YELLOW}lambda2{Colors.RESET}{Colors.DIM} is computed from U,V,W and cached into the
                            .vtu. It is NEGATIVE in a vortex core, so contour it
-                           at a small negative value: --values -1
+                           below zero -- how far below depends on the flow, so
+                           read the range the renderer prints and take a few
+                           percent of its minimum.
                            `field list --variables` lists what can be computed.{Colors.RESET}
-    {Colors.YELLOW}--values V [V ...]{Colors.RESET}     Isosurface value(s)          (default: 20)
+    {Colors.YELLOW}--values V [V ...]{Colors.RESET}     Isosurface value(s)
+                           {Colors.DIM}Default: taken from the data -- the 99% percentile of the
+                           contour variable, or the 1% for one that is negative
+                           in a core (lambda2). It is reported when used; treat
+                           it as a starting point and pick your own by eye. No
+                           constant would do: the criterion is quadratic in the
+                           velocity gradient, so its scale follows the flow's.{Colors.RESET}
 {_COMMON_COLOR}
 
 {_COMMON_OUTPUT}
