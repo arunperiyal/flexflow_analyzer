@@ -72,6 +72,16 @@ threshold:                       # keep cells with scalar in [min,max]; null dis
 surface:
   opacity: 1.0
   show_edges: false
+  # Shading. A lit, curved tube is darker than the same colour in the flat
+  # legend swatch, because the shading follows the angle to the light.
+  lighting: null                 # false = no shading: exactly the legend's
+                                 # colours, but tubes go flat with no depth
+  ambient: null                  # 0..1, try 0.3 -- lifts the shadowed side
+                                 # while keeping the form. The better fix.
+  diffuse: null                  # 0..1, lower it as ambient goes up (try 0.8)
+  specular: null                 # 0..1, highlights; 0 kills the shine
+  specular_power: null
+  smooth_shading: null           # true rounds off the marching-cubes facets
 
 axes:
   orientation_axes: true
