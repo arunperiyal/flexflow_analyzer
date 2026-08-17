@@ -507,6 +507,30 @@ class FlexFlowCompleter(Completer):
         ],
     }
 
+    # Flags whose value is a file, and the extensions worth offering for each.
+    # key: (command, subcommand) -> {flag: extensions}
+    #
+    # The point of the filter is the directory a case is worked in: it holds
+    # PLTs, .vtu sidecars, images and a config or two, and an unfiltered list is
+    # long enough that reading it costs more than typing the name. An empty
+    # tuple offers every file.
+    #
+    # Flags that name a file to *write* (--write-template, --pick-camera) are
+    # filtered the same way: the completion is for landing in the right
+    # directory and for overwriting the file made a minute ago, and a name that
+    # does not exist yet is typed out either way.
+    _FILE_FLAGS: Dict[tuple, Dict[str, tuple]] = {
+        ('field', 'render'): {
+            '--config':         ('.yml', '.yaml'),
+            '--write-template': ('.yml', '.yaml'),
+            '--camera':         ('.yml', '.yaml', '.pvsm', '.py'),
+            '--pick-camera':    ('.yml', '.yaml'),
+            '--vtu':            ('.vtu',),
+        },
+        ('field', 'convert'): {'--output': ('.vtu',)},
+        ('field', 'extract'): {'--output-file': ('.csv', '.dat', '.txt')},
+    }
+
     # Shell built-in commands and their descriptions
     _SHELL_COMMANDS = [
         ('exit',    'Exit FlexFlow'),
@@ -611,14 +635,25 @@ class FlexFlowCompleter(Completer):
         
         return None
 
-    def _get_file_completions(self, word: str, directory: Path) -> List[tuple]:
+    def _get_file_completions(self, word: str, directory: Path,
+                              exts: tuple = ()) -> List[tuple]:
+        """Names in `directory` starting with `word`, as (name, is_dir) pairs.
+
+        `exts` narrows the *files* offered to those extensions; directories are
+        always offered whatever the filter, or there is no way to walk down to
+        the file being looked for.
+        """
         try:
             if not directory.exists():
                 return []
             completions = []
             for item in directory.iterdir():
-                if item.name.startswith(word):
-                    completions.append((item.name, item.is_dir()))
+                if not item.name.startswith(word):
+                    continue
+                is_dir = item.is_dir()
+                if exts and not is_dir and item.suffix.lower() not in exts:
+                    continue
+                completions.append((item.name, is_dir))
             return sorted(completions, key=lambda x: (not x[1], x[0]))
         except (PermissionError, OSError):
             return []
@@ -810,6 +845,14 @@ class FlexFlowCompleter(Completer):
                     yield from self._complete_path(words, ends_with_space)
                     return
 
+                # A flag whose value is a file: offer paths rather than the
+                # flag list again, narrowed to what that flag can take.
+                file_flags = self._FILE_FLAGS.get((cmd_name, subcmd_name), {})
+                if prev_word in file_flags:
+                    yield from self._complete_path(words, ends_with_space,
+                                                   exts=file_flags[prev_word])
+                    return
+
             # Otherwise complete flags
             if current_word.startswith('-') or ends_with_space:
                 yield from self._yield_flags(self._flags_for(cmd_name, subcmd_name), current_word)
@@ -937,8 +980,9 @@ class FlexFlowCompleter(Completer):
                 if val.startswith(word):
                     yield Completion(val, start_position=-len(word), display_meta=desc)
 
-    def _complete_path(self, words: List[str], ends_with_space: bool):
-        """Complete file/directory paths."""
+    def _complete_path(self, words: List[str], ends_with_space: bool,
+                       exts: tuple = ()):
+        """Complete file/directory paths, optionally only certain extensions."""
         if self.shell is None:
             return
 
@@ -954,7 +998,7 @@ class FlexFlowCompleter(Completer):
             else:
                 base_dir = self.shell._current_dir
 
-        for name, is_dir in self._get_file_completions(word, base_dir):
+        for name, is_dir in self._get_file_completions(word, base_dir, exts):
             suffix = '/' if is_dir else ''
             yield Completion(
                 name + suffix,
