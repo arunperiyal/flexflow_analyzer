@@ -477,6 +477,9 @@ def execute_render(args):
     renderer = render.render_iso if mode == "iso" else render.render_slice
     written = []
     total = len(steps)
+    # Scratch shared by every step of the run: the colour scale the first one
+    # settled on, and which one-off warnings have already been said.
+    state = {}
     for i, step in enumerate(steps, 1):
         if total > 1:
             # A sweep converts and renders one PLT per step and can run for many
@@ -502,7 +505,6 @@ def execute_render(args):
                 step_cfg["output"]["html"] = base + ".html"
                 step_cfg["output"]["save_vtp"] = False
 
-        state = {}
         try:
             outs = renderer(step_cfg, log=logger.info, warn=logger.warning,
                             state=state)

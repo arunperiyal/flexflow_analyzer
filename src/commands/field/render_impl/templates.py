@@ -39,6 +39,9 @@ body:                            # a surface zone drawn alongside, for context
 color:
   variable: U                    # flow in z -> W ; flow in x -> U
   preset: coolwarm               # matplotlib cmap, or a ParaView preset name
+                                 # bwr gives pure blue/red ends, coolwarm muted
+  levels: null                   # N discrete colour bands, as Tecplot bands a
+                                 # legend; null = a continuous ramp
   range: null                    # [min, max], or null to take it from the data
                                  # (over a sweep: from the first step, then held
                                  # for the rest so the frames can be compared).

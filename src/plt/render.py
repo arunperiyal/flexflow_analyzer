@@ -74,9 +74,11 @@ DEFAULTS = {
     # because a deforming body moves and cannot be converted once and reused.
     "body":    {"zone": None, "vtu": None, "color": "lightgray", "variable": None,
                 "opacity": 1.0, "show_edges": False},
+    # levels: N discrete colour bands instead of a continuous ramp, the way
+    # Tecplot and ParaView band a contour legend. null = continuous.
     "color":   {"variable": "U", "preset": "coolwarm", "range": None,
-                "log_scale": False, "title": None, "show_scalar_bar": True,
-                "text_color": [0.0, 0.0, 0.0]},
+                "levels": None, "log_scale": False, "title": None,
+                "show_scalar_bar": True, "text_color": [0.0, 0.0, 0.0]},
     "domain":  {"xmin": None, "xmax": None, "ymin": None, "ymax": None,
                 "zmin": None, "zmax": None},
     "threshold": {"variable": None, "min": None, "max": None},
@@ -506,11 +508,12 @@ def _check_color_range(surf, color, crange, warn):
         return
     warn("colour range [%g, %g] holds %.1f%% of the surface, which spans "
          "[%.4g, %.4g] -- nearly every point clamps to one end of the colour "
-         "map, so the picture comes out in two flat colours."
+         "map, so the picture comes out in two flat colours. That is the point "
+         "when colouring by the sign of a variable; widen the range if it is not."
          % (crange[0], crange[1], 100 * inside, vals.min(), vals.max()))
 
 
-def render_surface(cfg, surf, log=print, warn=None):
+def render_surface(cfg, surf, log=print, warn=None, state=None):
     """Save the surface and write one PNG per view. Returns the written files.
 
     When color.range is null the scale is taken from this surface and written
@@ -550,8 +553,12 @@ def render_surface(cfg, surf, log=print, warn=None):
     os.makedirs(os.path.dirname(prefix) or ".", exist_ok=True)
     fixed = cfg["color"].get("range")
     crange = fixed or (list(surf.get_data_range(color)) if not empty else [0.0, 1.0])
-    if fixed and not empty:
+    if fixed and not empty and not (state or {}).get("range_checked"):
+        # Once per run, not once per step: a sweep of 100 frames shares one
+        # range, so the same sentence 100 times is noise, not a warning.
         _check_color_range(surf, color, crange, warn)
+        if state is not None:
+            state["range_checked"] = True
     elif not fixed and not empty:
         log("colour scale taken from the surface: [%.4g, %.4g]" % (crange[0], crange[1]))
     # Record what was used, so a sweep can hold this scale for its later steps.
@@ -573,6 +580,13 @@ def render_surface(cfg, surf, log=print, warn=None):
     html = cfg["output"].get("html")
     outputs = []
 
+    # Discrete bands, the way a Tecplot legend is banded. n_labels follows the
+    # bands so a tick lands on every boundary rather than at arbitrary values.
+    levels = cfg["color"].get("levels")
+    bar_args = {"title": cfg["color"].get("title") or color, "color": text_color}
+    if levels:
+        bar_args["n_labels"] = int(levels) + 1
+
     def scene(view):
         """The whole scene in a plotter, aimed at one view."""
         p = pv.Plotter(off_screen=True, window_size=res)
@@ -582,9 +596,9 @@ def render_surface(cfg, surf, log=print, warn=None):
                        clim=crange, opacity=float(cfg["surface"].get("opacity", 1.0)),
                        show_edges=bool(cfg["surface"].get("show_edges")),
                        log_scale=bool(cfg["color"].get("log_scale")),
+                       n_colors=int(levels) if levels else 256,
                        show_scalar_bar=bool(cfg["color"].get("show_scalar_bar", True)),
-                       scalar_bar_args={"title": cfg["color"].get("title") or color,
-                                        "color": text_color})
+                       scalar_bar_args=bar_args)
         if body is not None:
             _add_body(p, body, cfg, text_color)
         if cfg["axes"].get("orientation_axes", True):
@@ -689,7 +703,7 @@ def _render(cfg, mode, log=print, warn=None, state=None):
     learns what an automatic scale came out as and holds it for the rest.
     """
     merged, surf = build_surface(cfg, mode, log, warn)
-    outputs = render_surface(merged, surf, log, warn)
+    outputs = render_surface(merged, surf, log, warn, state)
     if state is not None:
         state["color_range"] = merged["color"].get("range")
     return outputs
