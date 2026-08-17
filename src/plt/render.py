@@ -497,6 +497,24 @@ def _no_display():
     return sys.platform == "linux" and not os.environ.get("DISPLAY")
 
 
+def _view_path(prefix, name):
+    """Where one view's image goes: <output dir>/<view name>/<stem>.png
+
+    Grouped by view rather than all in one directory, because that is what a
+    sweep leaves behind: four views of a hundred steps is four hundred files,
+    and interleaved they are neither an image sequence nor readable. One
+    directory per view is a sequence in step order -- what ffmpeg wants, and
+    what flicking through with an image viewer wants.
+
+    The surface itself (.vtp) and the html page stay at the top level: there is
+    one of each per timestep, and the views are views *of* them.
+    """
+    safe = os.path.basename(str(name or "view").strip()) or "view"
+    directory = os.path.join(os.path.dirname(prefix), safe)
+    os.makedirs(directory, exist_ok=True)
+    return os.path.join(directory, os.path.basename(prefix) + ".png")
+
+
 def _as_point(value):
     """A sequence of three numbers -> [x, y, z] floats, or None."""
     if not isinstance(value, (list, tuple)) or len(value) != 3:
@@ -693,7 +711,9 @@ def render_surface(cfg, surf, log=print, warn=None, state=None):
         else:
             for view in views:
                 p = scene(view)
-                fn = exact or "%s_%s.png" % (prefix, view.get("name", "view"))
+                # An exact --output NAME.png names the file itself and is left
+                # exactly there; anything else is filed under its view.
+                fn = exact or _view_path(prefix, view.get("name", "view"))
                 p.screenshot(fn, transparent_background=transparent)
                 p.close()
                 log("saved %s" % fn)

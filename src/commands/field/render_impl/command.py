@@ -40,7 +40,8 @@ def _resolve_output(args, mode, logger):
     """Resolve --output to (directory, ext).
 
     A run always writes into a directory of its own: even one timestep produces
-    a file per camera view, and a range multiplies that by the number of steps.
+    a file per camera view (filed under a subdirectory named for that view), and
+    a range multiplies that by the number of steps.
     Loose files named after the .vtu would land in the case's binary/ among the
     PLTs, which is the last place to keep pictures.
 

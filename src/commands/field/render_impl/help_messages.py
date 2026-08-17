@@ -42,7 +42,15 @@ _COMMON_OUTPUT = f"""\
     {Colors.YELLOW}          NAME.vtu{Colors.RESET}      the same, as an unstructured grid
     {Colors.YELLOW}          NAME.csv{Colors.RESET}      the same, as an x,y,z + variables point table
 
-    {Colors.DIM}Files inside are named <NAME>_<step>_<view>.png, so a range sorts by step.
+    {Colors.DIM}Images are filed by camera view, one directory each, named for the step:
+
+        <case>/NAME/<view>/NAME_<step>.png
+
+    so a view's directory holds that view alone, one image per step. The .vtp of
+    the surface and a .html page sit at the top of NAME/ instead: there is one
+    of each per step, and the views are views of them.
+    (Step numbers are not zero-padded, so the names sort lexicographically --
+    ffmpeg over a glob needs -pattern_type glob and numeric sorting, or rename.)
     A .html carries the whole surface inside it, so it is far bigger than the
     PNG of the same thing -- and the .vtp is smaller still, for ParaView.{Colors.RESET}"""
 
@@ -98,8 +106,8 @@ Given a case, the PLT is auto-converted to a cached .vtu first.
 
 {Colors.BOLD}OUTPUT:{Colors.RESET}
     {Colors.DIM}Always a directory under the case -- <case>/render_<mode>/ by default, or
-    <case>/NAME/ with --output NAME. One run writes a file per camera view, and
-    a --t1/--t2 range writes that many per timestep.{Colors.RESET}
+    <case>/NAME/ with --output NAME, holding one subdirectory per camera view.
+    A --t1/--t2 range writes one image per step into each of them.{Colors.RESET}
 
 {Colors.BOLD}NOTES:{Colors.RESET}
     {Colors.DIM}- A flag belonging to the other mode is an error, not a no-op: --values
