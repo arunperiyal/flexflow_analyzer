@@ -29,11 +29,17 @@ _COMMON_OUTPUT = f"""\
     {Colors.YELLOW}--output NAME{Colors.RESET}          The directory <case>/NAME/  (default: render_<mode>/)
     {Colors.YELLOW}--output NAME.png{Colors.RESET}      ... holding PNGs only, no .vtp (single view)
     {Colors.YELLOW}--no-vtp{Colors.RESET}               Images only: skip the .vtp written beside each one
+    {Colors.YELLOW}--output NAME.html{Colors.RESET}     ... holding a page you can {Colors.BOLD}orbit in a browser{Colors.RESET}: one
+                           per timestep, no camera views, nothing to install to
+                           open it. Writing it needs {Colors.YELLOW}trame{Colors.RESET} alongside pyvista
+                           {Colors.DIM}(pip install trame trame-vtk trame-vuetify){Colors.RESET}
     {Colors.YELLOW}--output NAME.vtp{Colors.RESET}      ... holding the cut surface -- {Colors.BOLD}no image is rendered{Colors.RESET}
     {Colors.YELLOW}          NAME.vtu{Colors.RESET}      the same, as an unstructured grid
     {Colors.YELLOW}          NAME.csv{Colors.RESET}      the same, as an x,y,z + variables point table
 
-    {Colors.DIM}Files inside are named <NAME>_<step>_<view>.png, so a range sorts by step.{Colors.RESET}"""
+    {Colors.DIM}Files inside are named <NAME>_<step>_<view>.png, so a range sorts by step.
+    A .html carries the whole surface inside it, so it is far bigger than the
+    PNG of the same thing -- and the .vtp is smaller still, for ParaView.{Colors.RESET}"""
 
 _COMMON_MISC = f"""\
 {Colors.BOLD}MISC:{Colors.RESET}
@@ -129,6 +135,10 @@ by another variable.
 
   {Colors.BOLD}An existing .vtu with several iso values:{Colors.RESET}
     flexflow field render iso --vtu field.vtu --contour QCriterion --values 5 50 --output wake
+
+  {Colors.BOLD}A page to orbit, instead of pictures from fixed views:{Colors.RESET}
+    flexflow field render iso myCase --timestep 100 --values 20 --output wake.html
+    {Colors.DIM}(myCase/wake/wake_100.html -- open it in a browser and turn it by hand){Colors.RESET}
 
   {Colors.BOLD}A whole range on one fixed scale, so the frames can be compared:{Colors.RESET}
     flexflow field render iso myCase --t1 100 --t2 500 --color W --color-range -0.5 0.5

@@ -12,6 +12,9 @@ tqdm>=4.66.0              # Progress bars for long operations
 pandas>=2.2.0             # DataFrame operations, data export
 meshio>=5.3.0             # Write VTK .vtu from PLT (field convert)
 pyvista>=0.43.0           # Isosurface rendering (field iso); pulls in vtk
+# trame, trame-vtk, trame-vuetify   # only for `field render ... --output NAME.html`
+#                                   # (the browser-orbitable page); PNGs need none
+#                                   # of it, so it stays out of the default install
 prompt_toolkit>=3.0.43    # Interactive shell with autocompletion and history
 paramiko>=3.0.0           # SSH/SFTP for remote file transfer
 
