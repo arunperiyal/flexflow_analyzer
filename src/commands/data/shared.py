@@ -19,6 +19,27 @@ from ...utils.colors import Colors
 
 KINDS = ("othd", "oisd")
 
+# Short names for the two variables actually reached for. `aleDisp_y` is the
+# cross-flow displacement of a body node and `aleVel_y` its velocity, and they
+# are typed often enough that their full names are friction. The long names
+# keep working; a real variable of the same name always wins over an alias, so
+# adding one here can never shadow something a solver writes.
+ALIASES = {
+    "d": "aleDisp",
+    "v": "aleVel",
+}
+COMPONENT_LETTERS = {"x": 0, "y": 1, "z": 2}
+
+
+def alias_of(name, info):
+    """The short form of a variable's columns, if it has one. For listings."""
+    for short, full in ALIASES.items():
+        if full == name:
+            if info.ncomp == 1:
+                return short
+            return ", ".join(short + letter for letter in COMPONENT_LETTERS)
+    return None
+
 
 def resolve_case(case_arg, logger):
     """The case directory, or exit with a sentence about why not."""
@@ -82,30 +103,45 @@ def split_vars(raw):
     return names
 
 
-def resolve_columns(meta, requested, logger):
+def resolve_columns(meta, requested, logger, group=None):
     """Requested names -> [(variable, component index, column label)].
 
     A bare `vel` means all of its components; `vel_y` means that one. Both are
     worth accepting: one is what you ask for when exploring, the other when you
-    know which way the flow goes.
+    know which way the flow goes. Short forms (`dy`, `vx`) resolve last, so a
+    solver that writes a variable literally called `dy` keeps it.
     """
+    variables = meta.variables_of(group)
     lookup = {}
-    for name, info in meta.variables.items():
+    for name, info in variables.items():
         lookup[name.lower()] = (name, None)
         for idx, col in enumerate(info.columns):
             if info.ncomp > 1:
                 lookup[col.lower()] = (name, idx)
+
+    # Aliases fill in only where nothing real answers to that spelling.
+    for short, full in ALIASES.items():
+        info = variables.get(full)
+        if info is None:
+            continue
+        lookup.setdefault(short, (full, None))
+        if info.ncomp > 1:
+            for letter, idx in COMPONENT_LETTERS.items():
+                if idx < info.ncomp:
+                    lookup.setdefault(short + letter, (full, idx))
+
     chosen = []
     for want in requested:
         hit = lookup.get(want.lower())
         if hit is None:
-            available = ", ".join(sorted(meta.variables))
+            available = ", ".join(sorted(variables))
             logger.error(f"'{want}' is not in the {meta.kind} files. "
                          f"Available: {available}\n"
-                         f"        A component can be named too, e.g. vel_y.")
+                         f"        A component can be named too (vel_y), and "
+                         f"aleDisp/aleVel answer to d/v (dy, vx).")
             sys.exit(1)
         name, comp = hit
-        info = meta.variables[name]
+        info = variables[name]
         if comp is None:
             for idx, col in enumerate(info.columns):
                 chosen.append((name, idx, col))
@@ -147,9 +183,24 @@ def step_mask(meta, t1, t2, logger):
     return mask
 
 
-def resolve_node(meta, node, logger):
+def resolve_group(meta, group, logger):
+    """Which output group to read. One group means there is nothing to choose."""
+    if group is None:
+        if len(meta.groups) > 1:
+            logger.warning(f"these {meta.kind} files hold {len(meta.groups)} "
+                           f"{meta.group_label}s ({', '.join(str(g) for g in meta.groups)}); "
+                           f"reading {meta.groups[0]}. --group N picks another.")
+        return meta.default_group
+    if group not in meta.by_group:
+        logger.error(f"No {meta.group_label} {group} in the {meta.kind} files. "
+                     f"Present: {', '.join(str(g) for g in meta.groups)}")
+        sys.exit(1)
+    return group
+
+
+def resolve_node(meta, node, logger, group=None):
     """The node index to read. Integrated output has exactly one."""
-    if meta.integrated:
+    if meta.integrated_of(group):
         if node not in (None, 0):
             logger.warning(f"the {meta.kind} files hold integrated output -- one "
                            f"value per step, not per node -- so --node {node} "
@@ -157,17 +208,18 @@ def resolve_node(meta, node, logger):
         return 0
     if node is None:
         return 0
-    if node < 0 or node >= meta.nodes:
+    count = meta.nodes_of(group)
+    if node < 0 or node >= count:
         logger.error(f"Node {node} does not exist. The {meta.kind} files hold "
-                     f"nodes 0..{meta.nodes - 1}.")
+                     f"nodes 0..{count - 1}.")
         sys.exit(1)
     return node
 
 
-def gather(meta, columns, node, mask):
+def gather(meta, columns, node, mask, group=None):
     """(times, tsids, {label: values}) for the chosen columns, node and rows."""
     names = sorted({name for name, _, _ in columns})
-    data = series.load(meta.files, names, meta)
+    data = series.load(meta.files, names, meta, group)
     times = meta.times[mask]
     tsids = meta.tsids[mask]
     out = {}

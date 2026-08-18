@@ -27,7 +27,10 @@ Run it before `data table` or `data stats` to learn what can be named to --var.
       - how many timesteps, and the time and tsId span they cover
       - which tsIds also have a PLT beside them, from outFreq
       - every variable in the files, and the name to give {Colors.YELLOW}--var{Colors.RESET}
-        {Colors.DIM}(a 3-component variable is listed with its _x/_y/_z names too){Colors.RESET}
+        {Colors.DIM}(a 3-component variable is listed with its _x/_y/_z names, and
+        aleDisp/aleVel with their short forms dx/dy/dz and vx/vy/vz){Colors.RESET}
+      - the output groups, when a run wrote more than one othId/osgId into a
+        file -- each has its own nodes and its own variables
 
     The variables are read out of the files rather than listed in FlexFlow, so
     whatever a run was asked to write is what shows up here.

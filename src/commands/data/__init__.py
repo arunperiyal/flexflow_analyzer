@@ -61,6 +61,9 @@ class DataCommand(BaseCommand):
                                  help='Print the first N rows (default: 10)')
         table_parser.add_argument('--tail', type=int, metavar='N',
                                  help='Print the last N rows')
+        table_parser.add_argument('--group', type=int, metavar='ID',
+                                 help='Output group to read: othId in an othd '
+                                      'file, osgId in an oisd (default: the first)')
         table_parser.add_argument('--othd', action='store_true',
                                  help='Take variables from the othd files')
         table_parser.add_argument('--oisd', action='store_true',
@@ -95,6 +98,9 @@ class DataCommand(BaseCommand):
         stats_parser.add_argument('--freq', type=int, metavar='N',
                                  help='PLT output frequency for maxloc '
                                       '(default: outFreq from simflow.config)')
+        stats_parser.add_argument('--group', type=int, metavar='ID',
+                                 help='Output group to read: othId in an othd '
+                                      'file, osgId in an oisd (default: the first)')
         stats_parser.add_argument('--othd', action='store_true',
                                  help='Take variables from the othd files')
         stats_parser.add_argument('--oisd', action='store_true',

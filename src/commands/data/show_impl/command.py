@@ -26,10 +26,19 @@ def _describe(console, kind, meta, freq):
     info.add_column(style="white")
     info.add_column(style="yellow")
     info.add_row("Files", str(len(meta.files)))
-    if meta.integrated:
-        info.add_row("Nodes", "1  [dim](integrated output)[/dim]")
-    else:
-        info.add_row("Nodes", str(meta.nodes))
+    if len(meta.groups) > 1:
+        info.add_row(f"{meta.group_label}s",
+                     ", ".join(str(g) for g in meta.groups)
+                     + "  [dim](--group N picks one)[/dim]")
+    for group in meta.groups:
+        # Parentheses, not brackets: rich reads [othId 0] as a markup tag and
+        # swallows it, which is how this label went out empty the first time.
+        label = ("Nodes" if len(meta.groups) == 1
+                 else f"Nodes ({meta.group_label} {group})")
+        if meta.integrated_of(group):
+            info.add_row(label, "1  [dim](integrated output)[/dim]")
+        else:
+            info.add_row(label, str(meta.nodes_of(group)))
     info.add_row("Timesteps", str(len(meta.times)))
     info.add_row("Time", f"{meta.times.min():.6g} .. {meta.times.max():.6g}")
     info.add_row("tsId", f"{meta.tsids.min()} .. {meta.tsids.max()}")
@@ -43,20 +52,29 @@ def _describe(console, kind, meta, freq):
                          f"[dim]({len(with_plt)} with a PLT)[/dim]")
     console.print(info)
 
-    if not meta.variables:
-        console.print("  [yellow]no variables found[/yellow]\n")
-        return
-
-    variables = Table(box=box.SIMPLE, show_header=True, header_style="bold yellow")
-    variables.add_column("Variable", style="cyan")
-    variables.add_column("Components", justify="right", style="white")
-    variables.add_column("Name for --var", style="green")
-    for name in sorted(meta.variables):
-        var = meta.variables[name]
-        variables.add_row(name, str(var.ncomp),
-                          name if var.ncomp == 1 else ", ".join(var.columns))
-    console.print(variables)
-    console.print()
+    for group in meta.groups:
+        found = meta.variables_of(group)
+        if not found:
+            console.print("  [yellow]no variables found[/yellow]\n")
+            continue
+        variables = Table(box=box.SIMPLE, show_header=True,
+                          header_style="bold yellow")
+        if len(meta.groups) > 1:
+            variables.title = f"{meta.group_label} {group}"
+            variables.title_justify = "left"
+            variables.title_style = "dim"
+        variables.add_column("Variable", style="cyan")
+        variables.add_column("Components", justify="right", style="white")
+        variables.add_column("Name for --var", style="green")
+        variables.add_column("Short", style="magenta")
+        for name in sorted(found):
+            var = found[name]
+            variables.add_row(
+                name, str(var.ncomp),
+                name if var.ncomp == 1 else ", ".join(var.columns),
+                shared.alias_of(name, var) or "")
+        console.print(variables)
+        console.print()
 
 
 def execute_preview(args):

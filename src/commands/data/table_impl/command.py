@@ -71,14 +71,15 @@ def execute_table(args):
         logger.error(f"not in the {kind} files: {', '.join(missing)}")
         sys.exit(1)
 
-    columns = shared.resolve_columns(meta, requested, logger)
-    node = shared.resolve_node(meta, getattr(args, "node", None), logger)
+    group = shared.resolve_group(meta, getattr(args, "group", None), logger)
+    columns = shared.resolve_columns(meta, requested, logger, group)
+    node = shared.resolve_node(meta, getattr(args, "node", None), logger, group)
     mask = shared.step_mask(meta, getattr(args, "t1", None),
                             getattr(args, "t2", None), logger)
 
     logger.info(f"reading {len(columns)} column(s) from {len(meta.files)} "
                 f"{kind} file(s)")
-    times, tsids, values = shared.gather(meta, columns, node, mask)
+    times, tsids, values = shared.gather(meta, columns, node, mask, group)
 
     output = getattr(args, "output", None)
     if output:
@@ -89,7 +90,10 @@ def execute_table(args):
                              getattr(args, "tail", None), False)
     console = Console()
     console.print()
-    header = f"{kind} | node {node}" if not meta.integrated else f"{kind} | integrated"
+    header = (f"{kind} | integrated" if meta.integrated_of(group)
+              else f"{kind} | node {node}")
+    if len(meta.groups) > 1:
+        header += f" | {meta.group_label} {group}"
     console.print(f"[bold cyan]{case_dir.name}[/bold cyan]  [dim]{header}[/dim]")
     console.print(f"[dim]tsId {tsids.min()}..{tsids.max()}, "
                   f"time {times.min():.6g}..{times.max():.6g}, "
@@ -115,10 +119,17 @@ def execute_table(args):
     console.print()
 
 
-def _known(meta, name):
-    """Is `name` a variable or a component of one in this kind's files?"""
+def _known(meta, name, group=None):
+    """Is `name` a variable, a component, or an alias in this kind's files?"""
     low = name.lower()
-    for var, info in meta.variables.items():
+    for short, full in shared.ALIASES.items():
+        if full in meta.variables_of(group):
+            if low == short:
+                return True
+            if (len(low) == len(short) + 1 and low.startswith(short)
+                    and low[-1] in shared.COMPONENT_LETTERS):
+                return True
+    for var, info in meta.variables_of(group).items():
         if low == var.lower():
             return True
         if info.ncomp > 1 and low in {c.lower() for c in info.columns}:

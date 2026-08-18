@@ -63,28 +63,65 @@ class VarInfo:
 
 
 class SeriesMeta:
-    """What a set of othd/oisd files holds, without their numbers."""
+    """What a set of othd/oisd files holds, without their numbers.
 
-    def __init__(self, kind, files, times, tsids, variables):
+    A file may carry more than one output group -- several `othId`s in an othd,
+    several `osgId`s in an oisd -- each its own set of nodes writing its own
+    variables at every timestep. One group is the common case and the only one
+    these cases have so far, but two probe sets in one file is a thing the
+    format allows, and reading only the last of them would be silent and wrong.
+    """
+
+    def __init__(self, kind, files, times, tsids, by_group):
         self.kind = kind
         self.files = files
         self.times = np.asarray(times, dtype=float)
         self.tsids = np.asarray(tsids, dtype=int)
-        self.variables = variables          # name -> VarInfo
+        self.by_group = by_group            # group id -> {name: VarInfo}
+
+    @property
+    def groups(self):
+        """The output groups present, in file order."""
+        return sorted(self.by_group)
+
+    @property
+    def group_label(self):
+        """What this format calls a group."""
+        return "osgId" if self.kind == "oisd" else "othId"
+
+    @property
+    def default_group(self):
+        return self.groups[0] if self.groups else 0
+
+    def variables_of(self, group=None):
+        group = self.default_group if group is None else group
+        return self.by_group.get(group, {})
+
+    @property
+    def variables(self):
+        """The default group's variables -- the whole story when there is one."""
+        return self.variables_of()
+
+    def nodes_of(self, group=None):
+        vars_ = self.variables_of(group)
+        counts = {v.nnodes for v in vars_.values() if not v.inline}
+        return max(counts) if counts else 1
 
     @property
     def nodes(self):
         """Nodes per timestep. 1 means the file holds integrated output."""
-        counts = {v.nnodes for v in self.variables.values() if not v.inline}
-        return max(counts) if counts else 1
+        return self.nodes_of()
+
+    def integrated_of(self, group=None):
+        return self.nodes_of(group) == 1
 
     @property
     def integrated(self):
-        return self.nodes == 1
+        return self.integrated_of()
 
-    def column_names(self):
+    def column_names(self, group=None):
         cols = []
-        for v in self.variables.values():
+        for v in self.variables_of(group).values():
             cols.extend(v.columns)
         return cols
 
@@ -93,13 +130,14 @@ def kind_of(path):
     return "oisd" if str(path).endswith(".oisd") else "othd"
 
 
-def _scan_file(path, times, tsids, variables, seen_times):
+def _scan_file(path, times, tsids, by_group, seen_times):
     """One file's timesteps and variable shapes; numbers are stepped over."""
     with open(path, "r") as fh:
         lines = fh.readlines()
 
     i, n = 0, len(lines)
     tsid = None
+    group = 0
     while i < n:
         line = lines[i].strip()
         if not line:
@@ -109,6 +147,13 @@ def _scan_file(path, times, tsids, variables, seen_times):
         head = line.split(None, 1)[0]
         if head == "tsId":
             tsid = int(line.split()[1])
+            i += 1
+            continue
+        if head in ("othId", "osgId"):
+            # Everything after this line belongs to that group, until the next
+            # such line. A timestep with several groups repeats its blocks once
+            # per group rather than repeating the timestep.
+            group = int(line.split()[1])
             i += 1
             continue
         if head == "time":
@@ -127,16 +172,18 @@ def _scan_file(path, times, tsids, variables, seen_times):
         block = _BLOCK.match(line)
         if block:
             name, ncomp, nnodes = block.group(1), int(block.group(2)), int(block.group(3))
-            if name not in STRUCTURAL and name not in variables:
-                variables[name] = VarInfo(name, ncomp, nnodes)
+            found = by_group.setdefault(group, {})
+            if name not in STRUCTURAL and name not in found:
+                found[name] = VarInfo(name, ncomp, nnodes)
             i += 1 + nnodes                 # step over the data
             continue
 
         inline = _INLINE.match(line)
         if inline:
             name = inline.group(1)
-            if name not in STRUCTURAL and name not in variables:
-                variables[name] = VarInfo(name, 1, 1, inline=True)
+            found = by_group.setdefault(group, {})
+            if name not in STRUCTURAL and name not in found:
+                found[name] = VarInfo(name, 1, 1, inline=True)
         i += 1
 
 
@@ -145,22 +192,23 @@ def scan(paths):
     paths = [str(p) for p in paths]
     if not paths:
         raise ValueError("no files to scan")
-    times, tsids, variables, seen = [], [], {}, {}
+    times, tsids, by_group, seen = [], [], {}, {}
     for path in paths:
-        _scan_file(path, times, tsids, variables, seen)
+        _scan_file(path, times, tsids, by_group, seen)
     order = np.argsort(times)
     times = [times[i] for i in order]
     tsids = [tsids[i] for i in order]
-    return SeriesMeta(kind_of(paths[0]), paths, times, tsids, variables)
+    return SeriesMeta(kind_of(paths[0]), paths, times, tsids, by_group or {0: {}})
 
 
-def _load_file(path, wanted, meta, out, seen_times):
-    """Fill `out[name][step]` for the variables in `wanted`."""
+def _load_file(path, wanted, group, out, seen_times):
+    """Fill `out[name][step]` for `wanted`, reading `group` alone."""
     with open(path, "r") as fh:
         lines = fh.readlines()
 
     i, n = 0, len(lines)
     step = None
+    current = 0
     while i < n:
         line = lines[i].strip()
         if not line:
@@ -172,11 +220,15 @@ def _load_file(path, wanted, meta, out, seen_times):
             step = seen_times.get(float(line.split()[1]))
             i += 1
             continue
+        if head in ("othId", "osgId"):
+            current = int(line.split()[1])
+            i += 1
+            continue
 
         block = _BLOCK.match(line)
         if block:
             name, ncomp, nnodes = block.group(1), int(block.group(2)), int(block.group(3))
-            if name in wanted and step is not None:
+            if name in wanted and step is not None and current == group:
                 rows = lines[i + 1:i + 1 + nnodes]
                 values = np.fromstring(" ".join(rows), sep=" ")
                 if values.size == nnodes * ncomp:
@@ -185,32 +237,39 @@ def _load_file(path, wanted, meta, out, seen_times):
             continue
 
         inline = _INLINE.match(line)
-        if inline and inline.group(1) in wanted and step is not None:
+        if (inline and inline.group(1) in wanted and step is not None
+                and current == group):
             out[inline.group(1)][step] = float(inline.group(2))
         i += 1
 
 
-def load(paths, names, meta=None):
+def load(paths, names, meta=None, group=None):
     """Arrays for `names`, each shaped (timesteps, nodes, components).
 
-    Only the named variables are converted. A case's othd carries six of them
-    over tens of thousands of steps, and a table of one is not a reason to
-    parse the other five.
+    Only the named variables are converted, and only from the group asked for.
+    A case's othd carries six variables over tens of thousands of steps, and a
+    table of one is not a reason to parse the other five.
     """
     meta = meta or scan(paths)
-    unknown = [n for n in names if n not in meta.variables]
+    group = meta.default_group if group is None else group
+    if group not in meta.by_group:
+        raise KeyError("no %s %s in these files. Present: %s"
+                       % (meta.group_label, group,
+                          ", ".join(str(g) for g in meta.groups)))
+    variables = meta.variables_of(group)
+    unknown = [n for n in names if n not in variables]
     if unknown:
         raise KeyError("not in these files: %s. Available: %s"
-                       % (", ".join(unknown), ", ".join(sorted(meta.variables))))
+                       % (", ".join(unknown), ", ".join(sorted(variables))))
 
     nsteps = len(meta.times)
     out = {}
     for name in names:
-        info = meta.variables[name]
+        info = variables[name]
         out[name] = np.full((nsteps, info.nnodes, info.ncomp), np.nan)
 
     seen_times = {t: i for i, t in enumerate(meta.times)}
     wanted = set(names)
     for path in meta.files:
-        _load_file(path, wanted, meta, out, seen_times)
+        _load_file(path, wanted, group, out, seen_times)
     return out

@@ -276,6 +276,7 @@ class FlexFlowCompleter(Completer):
         },
         ('data', 'table'):   {
             **_COMMON_FLAGS,
+            '--group':  'Output group: othId (othd) or osgId (oisd)',
             '--var':    'Variable or component to tabulate (repeat or comma-separate)',
             '--t1':     'First tsId (alone: from there on)',
             '--t2':     'Last tsId',
@@ -288,6 +289,7 @@ class FlexFlowCompleter(Completer):
         },
         ('data', 'stats'):   {
             **_COMMON_FLAGS,
+            '--group':  'Output group: othId (othd) or osgId (oisd)',
             '--var':    'Variable or component to summarise (repeat or comma-separate)',
             '--func':   'min, max, mean, rms, std, range, maxloc',
             '--t1':     'First tsId (alone: from there on)',

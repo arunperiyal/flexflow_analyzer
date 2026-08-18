@@ -112,18 +112,21 @@ def execute_statistics(args):
 
     kind = next(iter(matched))
     meta = metas[kind]
-    columns = shared.resolve_columns(meta, requested, logger)
-    node = shared.resolve_node(meta, getattr(args, "node", None), logger)
+    group = shared.resolve_group(meta, getattr(args, "group", None), logger)
+    columns = shared.resolve_columns(meta, requested, logger, group)
+    node = shared.resolve_node(meta, getattr(args, "node", None), logger, group)
     mask = shared.step_mask(meta, getattr(args, "t1", None),
                             getattr(args, "t2", None), logger)
     freq = getattr(args, "freq", None) or shared.out_freq(case_dir)
 
-    times, tsids, values = shared.gather(meta, columns, node, mask)
+    times, tsids, values = shared.gather(meta, columns, node, mask, group)
 
     value_funcs = [f for f in funcs if f not in LOCATORS]
     console = Console()
     console.print()
-    where = f"node {node}" if not meta.integrated else "integrated"
+    where = "integrated" if meta.integrated_of(group) else f"node {node}"
+    if len(meta.groups) > 1:
+        where += f" | {meta.group_label} {group}"
     console.print(f"[bold cyan]{case_dir.name}[/bold cyan]  [dim]{kind} | {where} | "
                   f"tsId {tsids.min()}..{tsids.max()} ({len(times)} steps)[/dim]")
 
