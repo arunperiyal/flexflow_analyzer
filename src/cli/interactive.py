@@ -227,6 +227,9 @@ class FlexFlowCompleter(Completer):
         },
         ('case', 'status'):  {**_COMMON_FLAGS},
         ('case', 'upload'): {
+            '--binary':       'Upload binary/ only; with --t1/--t2, just those timesteps',
+            '--t1':           'With --binary: first timestep (alone: only that step)',
+            '--t2':           'With --binary: last timestep',
             **_COMMON_FLAGS,
             '--dir':          'Directories to upload (comma-separated, default: othd_files,oisd_files,binary)',
             '--files':        'Loose files from the case root (globs; alone = only those files)',
@@ -236,6 +239,9 @@ class FlexFlowCompleter(Completer):
             '--resume':       'Resume the last interrupted upload',
         },
         ('case', 'download'): {
+            '--binary':       'Download binary/ only; with --t1/--t2, just those timesteps',
+            '--t1':           'With --binary: first timestep (alone: only that step)',
+            '--t2':           'With --binary: last timestep',
             **_COMMON_FLAGS,
             '--dir':          'Directories to download (comma-separated, default: othd_files,oisd_files,binary)',
             '--files':        'Loose files from the remote case root (globs; alone = only those files)',
@@ -4329,6 +4335,18 @@ class InteractiveShell:
                 if self._current_t1 is not None and '--timestep' not in args:
                     args.append('--timestep'); args.append(str(int(self._current_t1)))
                     context_added.append(f"timestep: {int(self._current_t1)}")
+
+        # t1/t2 context -> case upload/download, but only alongside --binary:
+        # they select timesteps inside binary/, so on a transfer that is not
+        # carrying binary/ they would be rejected by argparse's own check.
+        if (cmd == 'case' and len(args) >= 2
+                and args[1] in ('upload', 'download') and '--binary' in args):
+            if self._current_t1 is not None and '--t1' not in args:
+                args.append('--t1'); args.append(str(self._current_t1))
+                context_added.append(f"t1: {self._current_t1}")
+            if self._current_t2 is not None and '--t2' not in args:
+                args.append('--t2'); args.append(str(self._current_t2))
+                context_added.append(f"t2: {self._current_t2}")
 
         # freq context -> --freq for `run post`
         if (cmd == 'run' and len(args) >= 2 and args[1] == 'post'
