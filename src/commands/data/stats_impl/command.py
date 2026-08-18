@@ -25,10 +25,11 @@ FUNCS = {
     "std":    ("standard deviation", lambda v: float(np.nanstd(v))),
     "range":  ("max - min, the peak-to-peak swing", lambda v: float(np.nanmax(v) - np.nanmin(v))),
     "maxloc": ("where the maximum occurs, and which PLT shows it", None),
+    "minloc": ("where the minimum occurs, and which PLT shows it", None),
 }
 # maxloc answers a different question from the rest -- a location, not a value --
 # so it is computed against the tsIds rather than the samples alone.
-LOCATORS = {"maxloc"}
+LOCATORS = ("maxloc", "minloc")
 
 
 def plt_rows(tsids, freq):
@@ -43,28 +44,29 @@ def plt_rows(tsids, freq):
     return (np.asarray(tsids) % freq) == 0
 
 
-def _maxloc(values, tsids, times, freq, runners=3):
-    """Where the maximum is, and which PLT file shows most of it.
+def _locate(values, tsids, times, freq, direction, runners=3):
+    """Where the extreme is, and which PLT file comes closest to it.
 
-    The maximum, signed -- not the largest excursion either way. Asking for the
-    max and being sent to a file holding a large negative is the opposite half
-    of the cycle, and no amount of it being "the biggest swing" makes it the
-    picture that was asked for. A trough is found by its own question, which is
-    what --func min is for.
+    `direction` is "max" or "min", and it means the signed extreme, not the
+    largest excursion either way. Asking for the max and being sent to a file
+    holding a large negative is the opposite half of the cycle, whatever its
+    magnitude; the other end of the swing has its own question.
 
-    The PLT to render is the one whose own value is highest, not the one
-    nearest the peak. Distance is only a proxy for amplitude and a poor one:
-    over this repo's sample case the nearest file is not the strongest in about
-    three windows out of four. The peak almost always falls between two
-    outputs, so the question is never "where is the maximum" but "which of the
-    files I have comes closest to it" -- and that is read off the files rather
-    than inferred.
+    The PLT to render is the one whose own value is most extreme in that
+    direction, not the one nearest the peak. Distance is only a proxy for
+    amplitude and a poor one: over this repo's sample case the nearest file is
+    not the strongest in about three windows out of four. The peak almost
+    always falls between two outputs, so the question is never "where is the
+    extreme" but "which of the files I have comes closest to it" -- and that is
+    read off the files rather than inferred.
 
     The runners-up come back too, because a frame is also chosen on what else
     is in it, and the second-best file is often as good a picture.
     """
-    idx = int(np.nanargmax(values))
+    high = direction == "max"
+    idx = int(np.nanargmax(values) if high else np.nanargmin(values))
     found = {
+        "direction": direction,
         "value": float(values[idx]),
         "tsId": int(tsids[idx]),
         "time": float(times[idx]),
@@ -79,14 +81,23 @@ def _maxloc(values, tsids, times, freq, runners=3):
 
     plt_ts = np.asarray(tsids)[rows]
     plt_v = np.asarray(values)[rows]
-    # Highest first; ties to the earlier file so the answer is stable.
-    order = sorted(range(len(plt_ts)), key=lambda i: (-plt_v[i], plt_ts[i]))
+    # Most extreme first; ties to the earlier file so the answer is stable.
+    order = sorted(range(len(plt_ts)),
+                   key=lambda i: (-plt_v[i] if high else plt_v[i], plt_ts[i]))
     found["plt_count"] = len(plt_ts)
     found["plt_ranked"] = [(int(plt_ts[i]), float(plt_v[i]))
                            for i in order[:1 + runners]]
     found["plt_tsId"] = int(plt_ts[order[0]])
     found["plt_value"] = float(plt_v[order[0]])
     return found
+
+
+def _maxloc(values, tsids, times, freq, runners=3):
+    return _locate(values, tsids, times, freq, "max", runners)
+
+
+def _minloc(values, tsids, times, freq, runners=3):
+    return _locate(values, tsids, times, freq, "min", runners)
 
 
 def _runners_up(found):
@@ -184,30 +195,34 @@ def execute_statistics(args):
             rows.append((label, [FUNCS[name][1](series_values) for name in value_funcs]))
         console.print(table)
 
-    if "maxloc" in funcs:
+    for direction in ("max", "min"):
+        name = direction + "loc"
+        if name not in funcs:
+            continue
         n_plt = int(plt_rows(tsids, freq).sum())
+        word = "maximum" if direction == "max" else "minimum"
         loc = Table(box=box.SIMPLE, show_header=True, header_style="bold yellow",
-                    title=("maxloc -- the maximum, and which of the "
+                    title=(f"{name} -- the {word}, and which of the "
                            f"{n_plt} PLT file(s) in range comes closest to it"),
                     title_justify="left", title_style="dim")
         loc.add_column("Variable", style="cyan")
-        loc.add_column("max", justify="right", style="green")
+        loc.add_column(direction, justify="right", style="green")
         loc.add_column("at tsId", justify="right", style="white")
         loc.add_column("time", justify="right", style="white")
         loc.add_column("PLT to open", justify="right", style="magenta")
         loc.add_column("value there", justify="right", style="magenta")
         loc.add_column("runners-up", style="dim")
         for label, series_values in values.items():
-            found = _maxloc(series_values, tsids, times, freq)
+            found = _locate(series_values, tsids, times, freq, direction)
             loc.add_row(label, f"{found['value']:.6e}", str(found["tsId"]),
                         f"{found['time']:.6g}",
                         str(found["plt_tsId"]) if found["plt_tsId"] else "-",
                         f"{found['plt_value']:.6e}" if found["plt_value"] is not None else "-",
                         _runners_up(found))
         console.print(loc)
-        if not freq:
-            logger.warning("no outFreq in simflow.config, so the PLT step could "
-                           "not be worked out; pass --freq N")
+    if any(name in funcs for name in LOCATORS) and not freq:
+        logger.warning("no outFreq in simflow.config, so the PLT step could "
+                       "not be worked out; pass --freq N")
 
     output = getattr(args, "output", None)
     if output:
@@ -225,16 +240,17 @@ def _write_csv(path, values, funcs, tsids, times, freq, logger):
         os.makedirs(directory, exist_ok=True)
     value_funcs = [f for f in funcs if f not in LOCATORS]
     header = ["variable"] + value_funcs
-    if "maxloc" in funcs:
-        header += ["maxloc_value", "maxloc_tsId", "maxloc_time",
-                   "maxloc_plt_tsId", "maxloc_plt_value", "maxloc_plt_ranked"]
+    located = [name for name in LOCATORS if name in funcs]
+    for name in located:
+        header += [f"{name}_value", f"{name}_tsId", f"{name}_time",
+                   f"{name}_plt_tsId", f"{name}_plt_value", f"{name}_plt_ranked"]
     with open(path, "w", newline="") as fh:
         writer = csv.writer(fh)
         writer.writerow(header)
         for label, series_values in values.items():
             row = [label] + [f"{FUNCS[f][1](series_values):.10g}" for f in value_funcs]
-            if "maxloc" in funcs:
-                found = _maxloc(series_values, tsids, times, freq)
+            for name in located:
+                found = _locate(series_values, tsids, times, freq, name[:-3])
                 row += [f"{found['value']:.10g}", found["tsId"],
                         f"{found['time']:.10g}", found["plt_tsId"] or "",
                         "" if found["plt_value"] is None else f"{found['plt_value']:.10g}",

@@ -291,7 +291,7 @@ class FlexFlowCompleter(Completer):
             **_COMMON_FLAGS,
             '--group':  'Output group: othId (othd) or osgId (oisd)',
             '--var':    'Variable or component to summarise (repeat or comma-separate)',
-            '--func':   'min, max, mean, rms, std, range, maxloc',
+            '--func':   'min, max, mean, rms, std, range, maxloc, minloc',
             '--t1':     'First tsId (alone: from there on)',
             '--t2':     'Last tsId',
             '--node':   'Node to read (default: 0)',
