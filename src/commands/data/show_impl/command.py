@@ -88,11 +88,11 @@ def execute_preview(args):
     if getattr(args, "examples", False):
         print_preview_examples()
         return
+    logger = Logger(verbose=getattr(args, "verbose", False))
     if not getattr(args, "case", None):
-        print_preview_help()
+        shared.no_case(args, logger, print_preview_help, ('othd', 'oisd'))
         return
 
-    logger = Logger(verbose=getattr(args, "verbose", False))
     case_dir = shared.resolve_case(args.case, logger)
     kinds = shared.which_kinds(args)
     metas = shared.scan_kinds(case_dir, kinds, logger)

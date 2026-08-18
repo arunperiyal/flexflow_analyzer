@@ -26,11 +26,11 @@ def execute_table(args):
     if getattr(args, "examples", False):
         print_table_examples()
         return
+    logger = Logger(verbose=getattr(args, "verbose", False))
     if not getattr(args, "case", None):
-        print_table_help()
+        shared.no_case(args, logger, print_table_help, ('var', 't1', 't2', 'node', 'output', 'head', 'tail', 'group'))
         return
 
-    logger = Logger(verbose=getattr(args, "verbose", False))
     case_dir = shared.resolve_case(args.case, logger)
     kinds = shared.which_kinds(args)
     metas = shared.scan_kinds(case_dir, kinds, logger)

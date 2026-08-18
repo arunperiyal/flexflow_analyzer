@@ -78,6 +78,23 @@ def alias_of(name, info, shorts):
     return None
 
 
+def no_case(args, logger, print_help, considered):
+    """Nothing to work on. Say why, when a case was clearly meant.
+
+    Falling back to the help is right for someone typing the command bare, but
+    it reads as "your flags were wrong" to someone who passed --var and simply
+    has no case set -- which is the same screen for two different problems.
+    """
+    asked = [f for f in considered if getattr(args, f, None) not in (None, False)]
+    if asked:
+        logger.error("no case to read: name one, or set it with "
+                     "`use case:NAME`.\n"
+                     "        (--" + ", --".join(asked) + " was given, so the "
+                     "case is the only thing missing.)")
+        print()
+    print_help()
+
+
 def resolve_case(case_arg, logger):
     """The case directory, or exit with a sentence about why not."""
     if not case_arg:

@@ -63,11 +63,11 @@ def execute_statistics(args):
     if getattr(args, "examples", False):
         print_statistics_examples()
         return
+    logger = Logger(verbose=getattr(args, "verbose", False))
     if not getattr(args, "case", None):
-        print_statistics_help()
+        shared.no_case(args, logger, print_statistics_help, ('var', 'func', 't1', 't2', 'node', 'output', 'group'))
         return
 
-    logger = Logger(verbose=getattr(args, "verbose", False))
     case_dir = shared.resolve_case(args.case, logger)
 
     funcs = shared.split_vars(getattr(args, "func", None))
