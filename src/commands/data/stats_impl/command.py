@@ -31,26 +31,53 @@ FUNCS = {
 LOCATORS = {"maxloc"}
 
 
+def plt_steps(tsids, freq):
+    """The tsIds in `tsids` that also have a PLT written for them.
+
+    Taken from the steps the data actually covers rather than from arithmetic
+    on freq, so a run that stopped between two outputs does not offer a file
+    that was never written.
+    """
+    if not freq:
+        return []
+    return [int(t) for t in tsids if int(t) % freq == 0]
+
+
 def _maxloc(values, tsids, times, freq):
-    """The step of the largest swing, and the PLT step at or before it.
+    """The step of the largest swing, and the PLT to open for it.
 
     Largest by magnitude, not by signed value: the biggest excursion of a
     vibration is as likely to be a trough as a crest, and either is the frame
     worth looking at.
 
-    A PLT exists only every `freq` steps, so the nearest one at or *below* the
-    peak is the file to open -- rounding up would name a file past the end of
-    the run.
+    A PLT exists only every `freq` steps, so the one to open is the *nearest*
+    of them -- not the nearest below. A peak at 4939 with files at 4900 and
+    4950 is 11 steps from one and 39 from the other, and 39 steps of a shedding
+    cycle is a different picture. Ties go to the earlier file, and if the peak
+    is past the last PLT the last one is all there is, so the bound takes care
+    of itself without a rule about rounding down.
     """
     idx = int(np.nanargmax(np.abs(values)))
     tsid = int(tsids[idx])
-    plt_step = (tsid // freq) * freq if freq else None
+    available = plt_steps(tsids, freq)
+    nearest = min(available, key=lambda s: (abs(s - tsid), s)) if available else None
     return {
         "value": float(values[idx]),
         "tsId": tsid,
         "time": float(times[idx]),
-        "plt_tsId": plt_step if plt_step else None,
+        "plt_tsId": nearest,
+        "plt_available": available,
     }
+
+
+def _summarise_steps(steps, limit=6):
+    """A readable rendering of the PLT steps on offer."""
+    if not steps:
+        return "-"
+    if len(steps) <= limit:
+        return ", ".join(str(s) for s in steps)
+    head = ", ".join(str(s) for s in steps[:limit - 2])
+    return f"{head}, ... {steps[-1]}  ({len(steps)} files)"
 
 
 def execute_statistics(args):
@@ -148,13 +175,15 @@ def execute_statistics(args):
         loc.add_column("|max|", justify="right", style="green")
         loc.add_column("at tsId", justify="right", style="white")
         loc.add_column("time", justify="right", style="white")
-        loc.add_column(f"PLT tsId" + (f" (every {freq})" if freq else ""),
-                       justify="right", style="magenta")
+        loc.add_column("nearest PLT", justify="right", style="magenta")
+        loc.add_column(f"PLTs in range" + (f" (every {freq})" if freq else ""),
+                       style="dim")
         for label, series_values in values.items():
             found = _maxloc(series_values, tsids, times, freq)
             loc.add_row(label, f"{found['value']:.6e}", str(found["tsId"]),
                         f"{found['time']:.6g}",
-                        str(found["plt_tsId"]) if found["plt_tsId"] else "-")
+                        str(found["plt_tsId"]) if found["plt_tsId"] else "-",
+                        _summarise_steps(found["plt_available"]))
         console.print(loc)
         if not freq:
             logger.warning("no outFreq in simflow.config, so the PLT step could "
@@ -177,7 +206,8 @@ def _write_csv(path, values, funcs, tsids, times, freq, logger):
     value_funcs = [f for f in funcs if f not in LOCATORS]
     header = ["variable"] + value_funcs
     if "maxloc" in funcs:
-        header += ["maxloc_value", "maxloc_tsId", "maxloc_time", "maxloc_plt_tsId"]
+        header += ["maxloc_value", "maxloc_tsId", "maxloc_time",
+                   "maxloc_plt_tsId", "maxloc_plt_available"]
     with open(path, "w", newline="") as fh:
         writer = csv.writer(fh)
         writer.writerow(header)
@@ -186,6 +216,7 @@ def _write_csv(path, values, funcs, tsids, times, freq, logger):
             if "maxloc" in funcs:
                 found = _maxloc(series_values, tsids, times, freq)
                 row += [f"{found['value']:.10g}", found["tsId"],
-                        f"{found['time']:.10g}", found["plt_tsId"] or ""]
+                        f"{found['time']:.10g}", found["plt_tsId"] or "",
+                        " ".join(str(s) for s in found["plt_available"])]
             writer.writerow(row)
     logger.success(f"wrote {len(values)} row(s) -> {path}")

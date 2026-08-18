@@ -42,11 +42,17 @@ One row per variable instead of one row per timestep.
 {Colors.BOLD}MAXLOC:{Colors.RESET}
     Answers "which PLT should I render to see the wake at peak amplitude".
     It reports the tsId of the largest {Colors.BOLD}absolute{Colors.RESET} value -- the biggest
-    excursion of a vibration is as likely to be a trough as a crest -- along
-    with its time, and the nearest tsId {Colors.BOLD}at or below{Colors.RESET} it that has a PLT.
+    excursion of a vibration is as likely to be a trough as a crest -- with its
+    time, the {Colors.BOLD}nearest{Colors.RESET} tsId that has a PLT, and every PLT tsId in the
+    window so another can be picked by eye.
 
-    Rounding down rather than up, because a PLT past the end of the run is no
-    use. The step size comes from outFreq in simflow.config, or {Colors.YELLOW}--freq{Colors.RESET}.
+    Nearest, not nearest-below: a peak at 4939 with files at 4900 and 4950 is
+    11 steps from one and 39 from the other, and 39 steps of a shedding cycle
+    is a different picture. Ties go to the earlier file.
+
+    The PLT steps offered are those the data actually covers, so a run that
+    stopped between two outputs never names a file that was not written. The
+    step size comes from outFreq in simflow.config, or {Colors.YELLOW}--freq{Colors.RESET}.
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
     flexflow data stats CS4SG1U1 --var aleDisp_y --node 24 --func max,rms
