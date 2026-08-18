@@ -24,7 +24,7 @@ FUNCS = {
     "rms":    ("root mean square", lambda v: float(np.sqrt(np.nanmean(v ** 2)))),
     "std":    ("standard deviation", lambda v: float(np.nanstd(v))),
     "range":  ("max - min, the peak-to-peak swing", lambda v: float(np.nanmax(v) - np.nanmin(v))),
-    "maxloc": ("where the largest |value| occurs, as a tsId", None),
+    "maxloc": ("where the maximum occurs, and which PLT shows it", None),
 }
 # maxloc answers a different question from the rest -- a location, not a value --
 # so it is computed against the tsIds rather than the samples alone.
@@ -44,25 +44,26 @@ def plt_rows(tsids, freq):
 
 
 def _maxloc(values, tsids, times, freq, runners=3):
-    """Where the largest swing is, and which PLT actually shows it.
+    """Where the maximum is, and which PLT file shows most of it.
 
-    Largest by magnitude, not by signed value: the biggest excursion of a
-    vibration is as likely to be a trough as a crest, and either is the frame
-    worth looking at.
+    The maximum, signed -- not the largest excursion either way. Asking for the
+    max and being sent to a file holding a large negative is the opposite half
+    of the cycle, and no amount of it being "the biggest swing" makes it the
+    picture that was asked for. A trough is found by its own question, which is
+    what --func min is for.
 
-    The PLT to render is the one whose *own* value is largest, not the one
+    The PLT to render is the one whose own value is highest, not the one
     nearest the peak. Distance is only a proxy for amplitude and a poor one:
     over this repo's sample case the nearest file is not the strongest in about
-    three windows out of four, and in the worst of them it shows a quarter of
-    the swing the best file does. The peak itself usually falls between two
+    three windows out of four. The peak almost always falls between two
     outputs, so the question is never "where is the maximum" but "which of the
-    files I have comes closest to it" -- and that can be read off directly
-    instead of inferred.
+    files I have comes closest to it" -- and that is read off the files rather
+    than inferred.
 
     The runners-up come back too, because a frame is also chosen on what else
     is in it, and the second-best file is often as good a picture.
     """
-    idx = int(np.nanargmax(np.abs(values)))
+    idx = int(np.nanargmax(values))
     found = {
         "value": float(values[idx]),
         "tsId": int(tsids[idx]),
@@ -78,8 +79,8 @@ def _maxloc(values, tsids, times, freq, runners=3):
 
     plt_ts = np.asarray(tsids)[rows]
     plt_v = np.asarray(values)[rows]
-    # Largest magnitude first; ties to the earlier file so the answer is stable.
-    order = sorted(range(len(plt_ts)), key=lambda i: (-abs(plt_v[i]), plt_ts[i]))
+    # Highest first; ties to the earlier file so the answer is stable.
+    order = sorted(range(len(plt_ts)), key=lambda i: (-plt_v[i], plt_ts[i]))
     found["plt_count"] = len(plt_ts)
     found["plt_ranked"] = [(int(plt_ts[i]), float(plt_v[i]))
                            for i in order[:1 + runners]]
@@ -186,11 +187,11 @@ def execute_statistics(args):
     if "maxloc" in funcs:
         n_plt = int(plt_rows(tsids, freq).sum())
         loc = Table(box=box.SIMPLE, show_header=True, header_style="bold yellow",
-                    title=("maxloc -- the largest swing, and which of the "
-                           f"{n_plt} PLT file(s) in range shows most of it"),
+                    title=("maxloc -- the maximum, and which of the "
+                           f"{n_plt} PLT file(s) in range comes closest to it"),
                     title_justify="left", title_style="dim")
         loc.add_column("Variable", style="cyan")
-        loc.add_column("|max|", justify="right", style="green")
+        loc.add_column("max", justify="right", style="green")
         loc.add_column("at tsId", justify="right", style="white")
         loc.add_column("time", justify="right", style="white")
         loc.add_column("PLT to open", justify="right", style="magenta")

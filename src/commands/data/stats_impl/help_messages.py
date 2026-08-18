@@ -42,12 +42,13 @@ One row per variable instead of one row per timestep.
 {Colors.BOLD}MAXLOC:{Colors.RESET}
     Answers "which PLT should I render to see the wake at peak amplitude".
 
-    It reports the tsId of the largest {Colors.BOLD}absolute{Colors.RESET} value -- the biggest
-    excursion of a vibration is as likely to be a trough as a crest -- and
-    then, separately, {Colors.BOLD}which PLT file shows the most of it{Colors.RESET}, with the value
-    that file actually holds and the next best few behind it.
+    It reports the tsId of the {Colors.BOLD}maximum{Colors.RESET} -- the real, signed value, the same
+    number {Colors.YELLOW}--func max{Colors.RESET} gives -- and then, separately, {Colors.BOLD}which PLT file comes
+    closest to it{Colors.RESET}, with the value that file actually holds and the next
+    best few behind it. For the largest downward swing, ask {Colors.YELLOW}--func min{Colors.RESET} for
+    the number; maxloc is about the top of the cycle, not either end of it.
 
-    The chosen file is the one whose own value is largest, {Colors.BOLD}not{Colors.RESET} the one
+    The chosen file is the one whose own value is highest, {Colors.BOLD}not{Colors.RESET} the one
     nearest the peak. The peak almost always falls between two outputs, so
     nearness is only a proxy for amplitude -- and a poor one: over this repo's
     sample case the nearest file is not the strongest in about three windows
