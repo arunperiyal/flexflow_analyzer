@@ -144,7 +144,7 @@ class FlexFlowCompleter(Completer):
 
     _SUBCOMMANDS: Dict[str, List[str]] = {
         'case':     ['show', 'create', 'run', 'organise', 'check', 'status', 'add', 'out', 'report', 'upload', 'download'],
-        'data':     ['show', 'stats'],
+        'data':     ['show', 'table', 'stats'],
         'field':    ['info', 'extract', 'compute', 'convert', 'render', 'list', 'check'],
         'def':      ['var'],
         'run':      ['check', 'pre', 'main', 'post', 'sq', 'sb', 'sc'],
@@ -271,14 +271,32 @@ class FlexFlowCompleter(Completer):
         ('data', None):      {**_COMMON_FLAGS},
         ('data', 'show'):    {
             **_COMMON_FLAGS,
-            '--node':       'Node ID',
-            '--start-time': 'Start time filter',
-            '--end-time':   'End time filter',
-            '--variable':   'Variable(s) to show',
+            '--othd':       'Report on the othd files only',
+            '--oisd':       'Report on the oisd files only',
+        },
+        ('data', 'table'):   {
+            **_COMMON_FLAGS,
+            '--var':    'Variable or component to tabulate (repeat or comma-separate)',
+            '--t1':     'First tsId (alone: from there on)',
+            '--t2':     'Last tsId',
+            '--node':   'Node to read (default: 0)',
+            '--output': 'Write every row to a .csv instead of printing',
+            '--head':   'Print the first N rows (default: 10)',
+            '--tail':   'Print the last N rows',
+            '--othd':   'Take variables from the othd files',
+            '--oisd':   'Take variables from the oisd files',
         },
         ('data', 'stats'):   {
             **_COMMON_FLAGS,
-            '--node': 'Node ID',
+            '--var':    'Variable or component to summarise (repeat or comma-separate)',
+            '--func':   'min, max, mean, rms, std, range, maxloc',
+            '--t1':     'First tsId (alone: from there on)',
+            '--t2':     'Last tsId',
+            '--node':   'Node to read (default: 0)',
+            '--output': 'Also write the summary to a .csv',
+            '--freq':   'PLT output frequency for maxloc (default: outFreq)',
+            '--othd':   'Take variables from the othd files',
+            '--oisd':   'Take variables from the oisd files',
         },
 
         # ── field ───────────────────────────────────────────────────────────
@@ -4244,14 +4262,19 @@ class InteractiveShell:
             context_added.append(f"freq: {self._current_freq}")
 
         # node/t1/t2 are injected ONLY where the target command+subcommand
-        # actually defines those flags (otherwise argparse would reject them).
-        # data show: node/start/end ; data stats: node only ; plot: node/start/end.
+        # actually defines those flags (otherwise argparse would reject them),
+        # and under the name that command spells them: `data table`/`data stats`
+        # take --t1/--t2 in tsIds, `plot` takes --start-time/--end-time in
+        # seconds. `data show` reports on the files as a whole and selects
+        # nothing out of them, so nothing is injected into it.
         time_subcmd = args[1] if (cmd == 'data' and len(args) >= 2) else None
         allowed = {
-            ('data', 'show'):  {'node', 't1', 't2'},
-            ('data', 'stats'): {'node'},
+            ('data', 'table'): {'node', 't1', 't2'},
+            ('data', 'stats'): {'node', 't1', 't2'},
             ('plot', None):    {'node', 't1', 't2'},
         }.get((cmd, time_subcmd), set())
+        t1_flag, t2_flag = (('--t1', '--t2') if cmd == 'data'
+                            else ('--start-time', '--end-time'))
 
         # Inject --node if set and not already present
         if 'node' in allowed and self._current_node is not None and '--node' not in args:
@@ -4259,15 +4282,13 @@ class InteractiveShell:
             args.append(str(self._current_node))
             context_added.append(f"node: {self._current_node}")
 
-        # Inject --start-time if t1 is set and not already present
-        if 't1' in allowed and self._current_t1 is not None and '--start-time' not in args:
-            args.append('--start-time')
+        if 't1' in allowed and self._current_t1 is not None and t1_flag not in args:
+            args.append(t1_flag)
             args.append(str(self._current_t1))
             context_added.append(f"t1: {self._current_t1}")
 
-        # Inject --end-time if t2 is set and not already present
-        if 't2' in allowed and self._current_t2 is not None and '--end-time' not in args:
-            args.append('--end-time')
+        if 't2' in allowed and self._current_t2 is not None and t2_flag not in args:
+            args.append(t2_flag)
             args.append(str(self._current_t2))
             context_added.append(f"t2: {self._current_t2}")
 
