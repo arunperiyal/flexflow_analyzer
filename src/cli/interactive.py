@@ -905,7 +905,7 @@ class FlexFlowCompleter(Completer):
             't1':      'Set start time',
             't2':      'Set end time',
             'remote':  'Set remote machine for uploads',
-            'var':     'Default variable(s) for field extract',
+            'var':     'Default variable(s) for field extract, data table/stats',
             'zone':    'Default zone for field extract/convert/render',
             'freq':    'Output frequency for field extract / run post',
         }
@@ -1075,7 +1075,7 @@ class InteractiveShell:
         self._current_t1: Optional[float] = None  # Start time for data/field/plot commands
         self._current_t2: Optional[float] = None  # End time for data/field/plot commands
         self._current_remote: Optional[str] = None  # Remote machine for uploads
-        self._current_var: Optional[str] = None  # Default variable(s) for field extract
+        self._current_var: Optional[str] = None  # Default variable(s) for field extract / data table / data stats
         self._current_zone: Optional[str] = None  # Default zone for field extract/convert/render
         self._current_freq: Optional[int] = None  # Output frequency for field extract / run post
         self._current_dir: Path = Path.cwd()  # Track current working directory
@@ -4283,6 +4283,17 @@ class InteractiveShell:
             args.append('--node')
             args.append(str(self._current_node))
             context_added.append(f"node: {self._current_node}")
+
+        # var context -> --var for `data table` / `data stats`. The same idea as
+        # `field extract --variables`, spelled the way these take it. Both
+        # spellings of the flag count as already given, since --variable is an
+        # accepted alias of --var.
+        if (cmd == 'data' and time_subcmd in ('table', 'stats')
+                and self._current_var is not None
+                and '--var' not in args and '--variable' not in args):
+            args.append('--var')
+            args.append(self._current_var)
+            context_added.append(f"var: {self._current_var}")
 
         if 't1' in allowed and self._current_t1 is not None and t1_flag not in args:
             args.append(t1_flag)
