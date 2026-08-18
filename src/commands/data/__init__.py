@@ -49,12 +49,11 @@ class DataCommand(BaseCommand):
                                  help='Variable or component to tabulate '
                                       '(repeat, or comma-separate)')
         table_parser.add_argument('--t1', type=float, metavar='TSID',
-                                 help='First tsId (alone: only that step)')
+                                 help='First tsId (alone: from there to the end)')
         table_parser.add_argument('--t2', type=float, metavar='TSID',
                                  help='Last tsId')
         table_parser.add_argument('--node', type=int,
-                                 help='Node to read (default: 0; ignored for '
-                                      'integrated output)')
+                                 help='Node to read (default: 0)')
         table_parser.add_argument('--output', type=str, metavar='FILE',
                                  help='Write every row to a .csv instead of printing')
         table_parser.add_argument('--head', type=int, metavar='N',
@@ -87,12 +86,11 @@ class DataCommand(BaseCommand):
                                  help='min, max, mean, rms, std, range, maxloc '
                                       '(repeat, or comma-separate)')
         stats_parser.add_argument('--t1', type=float, metavar='TSID',
-                                 help='First tsId (alone: only that step)')
+                                 help='First tsId (alone: from there to the end)')
         stats_parser.add_argument('--t2', type=float, metavar='TSID',
                                  help='Last tsId')
         stats_parser.add_argument('--node', type=int,
-                                 help='Node to read (default: 0; ignored for '
-                                      'integrated output)')
+                                 help='Node to read (default: 0)')
         stats_parser.add_argument('--output', type=str, metavar='FILE',
                                  help='Also write the summary to a .csv')
         stats_parser.add_argument('--freq', type=int, metavar='N',

@@ -103,21 +103,19 @@ class SeriesMeta:
         return self.variables_of()
 
     def nodes_of(self, group=None):
+        """Nodes this group writes per timestep.
+
+        A count of 1 is just a count of 1: a surface-integrated output has one,
+        and so does a single probe point. Which of those a file holds is not
+        something the node count can be asked, so nothing here guesses at it.
+        """
         vars_ = self.variables_of(group)
         counts = {v.nnodes for v in vars_.values() if not v.inline}
         return max(counts) if counts else 1
 
     @property
     def nodes(self):
-        """Nodes per timestep. 1 means the file holds integrated output."""
         return self.nodes_of()
-
-    def integrated_of(self, group=None):
-        return self.nodes_of(group) == 1
-
-    @property
-    def integrated(self):
-        return self.integrated_of()
 
     def column_names(self, group=None):
         cols = []

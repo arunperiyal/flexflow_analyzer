@@ -9,6 +9,7 @@ vel_y` mean the same selection rather than two similar ones.
 
 import glob
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -19,21 +20,57 @@ from ...utils.colors import Colors
 
 KINDS = ("othd", "oisd")
 
-# Short names for the two variables actually reached for. `aleDisp_y` is the
-# cross-flow displacement of a body node and `aleVel_y` its velocity, and they
-# are typed often enough that their full names are friction. The long names
-# keep working; a real variable of the same name always wins over an alias, so
-# adding one here can never shadow something a solver writes.
-ALIASES = {
-    "d": "aleDisp",
-    "v": "aleVel",
+# Short names. A solver writes camelCase names that are precise and long, and
+# `--var aveTurbYPSrf` is not a thing anyone wants to type twice.
+#
+# The known vocabulary is spelled out rather than derived, because the useful
+# short name is not always the mechanical one: aleDisp is the body's motion and
+# earns the single letter `d`, while `vel` is the fluid velocity and `aleVel`
+# the body's, so the pair cannot both be `v`. Anything not listed falls back to
+# camelCase initials, so a run that writes something new still gets one.
+SHORT_NAMES = {
+    # othd -- per-node history
+    "aleDisp": "d", "aleVel": "v", "vel": "u", "pres": "p",
+    "eddy": "ed", "orderPar": "op",
+    # oisd -- surface output
+    "totTrac": "tt", "totMoment": "tm", "totMomFlux": "tmf",
+    "totMassFlux": "tmass", "totArea": "ta", "totPower": "tp",
+    "aveVel": "av", "avePres": "ap", "aveEddy": "ae", "aveDens": "ad",
+    "aveTotPres": "atp", "aveTurbYPSrf": "ay",
+    "aveAleDisp": "aad", "aveAleVel": "aav",
 }
 COMPONENT_LETTERS = {"x": 0, "y": 1, "z": 2}
 
+_CAMEL = re.compile(r"[A-Z]?[a-z0-9]+")
 
-def alias_of(name, info):
-    """The short form of a variable's columns, if it has one. For listings."""
-    for short, full in ALIASES.items():
+
+def _derive_short(name):
+    """camelCase initials, for a variable not in the table above."""
+    parts = _CAMEL.findall(name)
+    return "".join(part[0].lower() for part in parts) if parts else None
+
+
+def short_names(variables):
+    """{short name: variable} for one group's variables.
+
+    A short name is dropped rather than guessed at when it would collide with
+    another variable's real name or with another short name: two things
+    answering to `tmf` is worse than typing one of them out.
+    """
+    real = {name.lower() for name in variables}
+    candidates = {}
+    for name in variables:
+        short = SHORT_NAMES.get(name) or _derive_short(name)
+        if not short or short.lower() in real:
+            continue
+        candidates.setdefault(short.lower(), []).append(name)
+    return {short: names[0] for short, names in candidates.items()
+            if len(names) == 1}
+
+
+def alias_of(name, info, shorts):
+    """The short form of a variable's columns, for a listing."""
+    for short, full in shorts.items():
         if full == name:
             if info.ncomp == 1:
                 return short
@@ -119,11 +156,9 @@ def resolve_columns(meta, requested, logger, group=None):
             if info.ncomp > 1:
                 lookup[col.lower()] = (name, idx)
 
-    # Aliases fill in only where nothing real answers to that spelling.
-    for short, full in ALIASES.items():
-        info = variables.get(full)
-        if info is None:
-            continue
+    # Short names fill in only where nothing real answers to that spelling.
+    for short, full in short_names(variables).items():
+        info = variables[full]
         lookup.setdefault(short, (full, None))
         if info.ncomp > 1:
             for letter, idx in COMPONENT_LETTERS.items():
@@ -137,8 +172,9 @@ def resolve_columns(meta, requested, logger, group=None):
             available = ", ".join(sorted(variables))
             logger.error(f"'{want}' is not in the {meta.kind} files. "
                          f"Available: {available}\n"
-                         f"        A component can be named too (vel_y), and "
-                         f"aleDisp/aleVel answer to d/v (dy, vx).")
+                         f"\n        A component can be named too (vel_y), and "
+                         f"every variable has a short name -- `data show` lists "
+                         f"them.")
             sys.exit(1)
         name, comp = hit
         info = variables[name]
@@ -154,6 +190,29 @@ def resolve_columns(meta, requested, logger, group=None):
             seen.add(item[2])
             unique.append(item)
     return unique
+
+
+def known_name(meta, name, group=None):
+    """Is `name` a variable, a component, or a short name of this group's?
+
+    The mirror of resolve_columns, used to work out which file kind a --var
+    belongs to before committing to one.
+    """
+    variables = meta.variables_of(group)
+    low = name.lower()
+    for var, info in variables.items():
+        if low == var.lower():
+            return True
+        if info.ncomp > 1 and low in {c.lower() for c in info.columns}:
+            return True
+    for short, full in short_names(variables).items():
+        if low == short:
+            return True
+        info = variables[full]
+        if info.ncomp > 1 and low in {short + letter
+                                      for letter in COMPONENT_LETTERS}:
+            return True
+    return False
 
 
 def step_mask(meta, t1, t2, logger):
@@ -199,18 +258,18 @@ def resolve_group(meta, group, logger):
 
 
 def resolve_node(meta, node, logger, group=None):
-    """The node index to read. Integrated output has exactly one."""
-    if meta.integrated_of(group):
-        if node not in (None, 0):
-            logger.warning(f"the {meta.kind} files hold integrated output -- one "
-                           f"value per step, not per node -- so --node {node} "
-                           f"is ignored")
-        return 0
+    """The node index to read, checked against how many this group writes."""
+    count = meta.nodes_of(group)
     if node is None:
         return 0
-    count = meta.nodes_of(group)
+    if count == 1 and node != 0:
+        # One node is one node, whether that is a surface integral or a single
+        # probe point. Either way there is nothing else to ask for.
+        logger.warning(f"this {meta.kind} group writes one node, so --node "
+                       f"{node} is ignored")
+        return 0
     if node < 0 or node >= count:
-        logger.error(f"Node {node} does not exist. The {meta.kind} files hold "
+        logger.error(f"Node {node} does not exist. This {meta.kind} group holds "
                      f"nodes 0..{count - 1}.")
         sys.exit(1)
     return node

@@ -16,10 +16,10 @@ and variables across the columns.
 {Colors.BOLD}OPTIONS:{Colors.RESET}
     {Colors.YELLOW}--var NAME{Colors.RESET}             Variable or component. Repeat it, or comma-separate.
                            {Colors.DIM}`vel` gives all three components; `vel_y` gives one.
-                           aleDisp and aleVel answer to {Colors.RESET}{Colors.YELLOW}d{Colors.RESET}{Colors.DIM} and {Colors.RESET}{Colors.YELLOW}v{Colors.RESET}{Colors.DIM}, so
-                           dx/dy/dz and vx/vy/vz work too.
+                           Every variable has a short name too: aleDisp is
+                           {Colors.RESET}{Colors.YELLOW}d{Colors.RESET}{Colors.DIM} (dx/dy/dz), aleVel is {Colors.RESET}{Colors.YELLOW}v{Colors.RESET}{Colors.DIM}, vel is {Colors.RESET}{Colors.YELLOW}u{Colors.RESET}{Colors.DIM}, totTrac is {Colors.RESET}{Colors.YELLOW}tt{Colors.RESET}{Colors.DIM}.
                            `data show` lists every name this case has.{Colors.RESET}
-    {Colors.YELLOW}--t1 TSID{Colors.RESET}              First tsId (alone: only that step)
+    {Colors.YELLOW}--t1 TSID{Colors.RESET}              First tsId (alone: from there to the end)
     {Colors.YELLOW}--t2 TSID{Colors.RESET}              Last tsId
     {Colors.YELLOW}--node N{Colors.RESET}               Node to read       (default: 0)
     {Colors.YELLOW}--group ID{Colors.RESET}             Output group: othId in an othd file, osgId in an

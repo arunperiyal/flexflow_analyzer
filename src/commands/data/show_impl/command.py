@@ -26,19 +26,18 @@ def _describe(console, kind, meta, freq):
     info.add_column(style="white")
     info.add_column(style="yellow")
     info.add_row("Files", str(len(meta.files)))
-    if len(meta.groups) > 1:
-        info.add_row(f"{meta.group_label}s",
-                     ", ".join(str(g) for g in meta.groups)
-                     + "  [dim](--group N picks one)[/dim]")
+    # Always, not only when there are several: how a file is grouped is part of
+    # what it holds, and "there is one group, numbered 0" is an answer.
+    groups = ", ".join(str(g) for g in meta.groups)
+    suffix = "  [dim](--group N picks one)[/dim]" if len(meta.groups) > 1 else ""
+    label = meta.group_label + ("s" if len(meta.groups) > 1 else "")
+    info.add_row(label, groups + suffix)
     for group in meta.groups:
         # Parentheses, not brackets: rich reads [othId 0] as a markup tag and
         # swallows it, which is how this label went out empty the first time.
         label = ("Nodes" if len(meta.groups) == 1
                  else f"Nodes ({meta.group_label} {group})")
-        if meta.integrated_of(group):
-            info.add_row(label, "1  [dim](integrated output)[/dim]")
-        else:
-            info.add_row(label, str(meta.nodes_of(group)))
+        info.add_row(label, str(meta.nodes_of(group)))
     info.add_row("Timesteps", str(len(meta.times)))
     info.add_row("Time", f"{meta.times.min():.6g} .. {meta.times.max():.6g}")
     info.add_row("tsId", f"{meta.tsids.min()} .. {meta.tsids.max()}")
@@ -54,15 +53,17 @@ def _describe(console, kind, meta, freq):
 
     for group in meta.groups:
         found = meta.variables_of(group)
+        shorts = shared.short_names(found)
         if not found:
             console.print("  [yellow]no variables found[/yellow]\n")
             continue
         variables = Table(box=box.SIMPLE, show_header=True,
                           header_style="bold yellow")
-        if len(meta.groups) > 1:
-            variables.title = f"{meta.group_label} {group}"
-            variables.title_justify = "left"
-            variables.title_style = "dim"
+        variables.title = (f"{meta.group_label} {group}  "
+                           f"({meta.nodes_of(group)} node"
+                           f"{'' if meta.nodes_of(group) == 1 else 's'})")
+        variables.title_justify = "left"
+        variables.title_style = "dim"
         variables.add_column("Variable", style="cyan")
         variables.add_column("Components", justify="right", style="white")
         variables.add_column("Name for --var", style="green")
@@ -72,7 +73,7 @@ def _describe(console, kind, meta, freq):
             variables.add_row(
                 name, str(var.ncomp),
                 name if var.ncomp == 1 else ", ".join(var.columns),
-                shared.alias_of(name, var) or "")
+                shared.alias_of(name, var, shorts) or "")
         console.print(variables)
         console.print()
 

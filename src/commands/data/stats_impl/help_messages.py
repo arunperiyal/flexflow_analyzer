@@ -14,9 +14,10 @@ One row per variable instead of one row per timestep.
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
     {Colors.YELLOW}--var NAME{Colors.RESET}             Variable or component. Repeat it, or comma-separate.
-                           {Colors.DIM}aleDisp/aleVel answer to d/v: dy, vx.{Colors.RESET}
+                           {Colors.DIM}Every variable has a short name: dy, vx, ttx.
+                           `data show` lists them.{Colors.RESET}
     {Colors.YELLOW}--func FUNC{Colors.RESET}            What to work out. Repeat it, or comma-separate.
-    {Colors.YELLOW}--t1 TSID{Colors.RESET}              First tsId (alone: only that step)
+    {Colors.YELLOW}--t1 TSID{Colors.RESET}              First tsId (alone: from there to the end)
     {Colors.YELLOW}--t2 TSID{Colors.RESET}              Last tsId
     {Colors.YELLOW}--node N{Colors.RESET}               Node to read       (default: 0)
     {Colors.YELLOW}--group ID{Colors.RESET}             Output group: othId in an othd file, osgId in an

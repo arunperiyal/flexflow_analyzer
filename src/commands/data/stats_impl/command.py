@@ -96,8 +96,8 @@ def execute_statistics(args):
                      "        `data show` lists what this case has.")
         sys.exit(1)
 
-    from ..table_impl.command import _known
-    matched = {k: [r for r in requested if _known(m, r)] for k, m in metas.items()}
+    matched = {k: [r for r in requested if shared.known_name(m, r)]
+               for k, m in metas.items()}
     matched = {k: v for k, v in matched.items() if v}
     if not matched:
         available = ", ".join(sorted(
@@ -124,9 +124,7 @@ def execute_statistics(args):
     value_funcs = [f for f in funcs if f not in LOCATORS]
     console = Console()
     console.print()
-    where = "integrated" if meta.integrated_of(group) else f"node {node}"
-    if len(meta.groups) > 1:
-        where += f" | {meta.group_label} {group}"
+    where = f"{meta.group_label} {group} | node {node}"
     console.print(f"[bold cyan]{case_dir.name}[/bold cyan]  [dim]{kind} | {where} | "
                   f"tsId {tsids.min()}..{tsids.max()} ({len(times)} steps)[/dim]")
 

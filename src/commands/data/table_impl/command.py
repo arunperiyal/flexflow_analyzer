@@ -49,7 +49,7 @@ def execute_table(args):
     # given: `--var vel` is othd, `--var totTrac` is oisd, and asking for both
     # at once is refused rather than silently answered from one of them.
     owners = {kind: [r for r in requested
-                     if _known(metas[kind], r)] for kind in metas}
+                     if shared.known_name(metas[kind], r)] for kind in metas}
     matched = {k: v for k, v in owners.items() if v}
     if not matched:
         available = ", ".join(sorted(
@@ -90,10 +90,9 @@ def execute_table(args):
                              getattr(args, "tail", None), False)
     console = Console()
     console.print()
-    header = (f"{kind} | integrated" if meta.integrated_of(group)
-              else f"{kind} | node {node}")
-    if len(meta.groups) > 1:
-        header += f" | {meta.group_label} {group}"
+    header = f"{kind} | {meta.group_label} {group} | node {node}"
+    if meta.nodes_of(group) == 1:
+        header += " [dim](the only one)[/dim]"
     console.print(f"[bold cyan]{case_dir.name}[/bold cyan]  [dim]{header}[/dim]")
     console.print(f"[dim]tsId {tsids.min()}..{tsids.max()}, "
                   f"time {times.min():.6g}..{times.max():.6g}, "
@@ -120,18 +119,5 @@ def execute_table(args):
 
 
 def _known(meta, name, group=None):
-    """Is `name` a variable, a component, or an alias in this kind's files?"""
-    low = name.lower()
-    for short, full in shared.ALIASES.items():
-        if full in meta.variables_of(group):
-            if low == short:
-                return True
-            if (len(low) == len(short) + 1 and low.startswith(short)
-                    and low[-1] in shared.COMPONENT_LETTERS):
-                return True
-    for var, info in meta.variables_of(group).items():
-        if low == var.lower():
-            return True
-        if info.ncomp > 1 and low in {c.lower() for c in info.columns}:
-            return True
-    return False
+    """Kept as a name the stats command imports; the logic lives in shared."""
+    return shared.known_name(meta, name, group)
