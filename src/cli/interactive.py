@@ -144,7 +144,7 @@ class FlexFlowCompleter(Completer):
 
     _SUBCOMMANDS: Dict[str, List[str]] = {
         'case':     ['show', 'create', 'run', 'organise', 'check', 'status', 'add', 'out', 'report', 'upload', 'download'],
-        'data':     ['show', 'stats'],
+        'data':     ['show', 'table', 'stats'],
         'field':    ['info', 'extract', 'compute', 'convert', 'render', 'list', 'check'],
         'def':      ['var'],
         'run':      ['check', 'pre', 'main', 'post', 'sq', 'sb', 'sc'],
@@ -271,14 +271,34 @@ class FlexFlowCompleter(Completer):
         ('data', None):      {**_COMMON_FLAGS},
         ('data', 'show'):    {
             **_COMMON_FLAGS,
-            '--node':       'Node ID',
-            '--start-time': 'Start time filter',
-            '--end-time':   'End time filter',
-            '--variable':   'Variable(s) to show',
+            '--othd':       'Report on the othd files only',
+            '--oisd':       'Report on the oisd files only',
+        },
+        ('data', 'table'):   {
+            **_COMMON_FLAGS,
+            '--group':  'Output group: othId (othd) or osgId (oisd)',
+            '--var':    'Variable or component to tabulate (repeat or comma-separate)',
+            '--t1':     'First tsId (alone: from there on)',
+            '--t2':     'Last tsId',
+            '--node':   'Node to read (default: 0)',
+            '--output': 'Write every row to a .csv instead of printing',
+            '--head':   'Print the first N rows (default: 10)',
+            '--tail':   'Print the last N rows',
+            '--othd':   'Take variables from the othd files',
+            '--oisd':   'Take variables from the oisd files',
         },
         ('data', 'stats'):   {
             **_COMMON_FLAGS,
-            '--node': 'Node ID',
+            '--group':  'Output group: othId (othd) or osgId (oisd)',
+            '--var':    'Variable or component to summarise (repeat or comma-separate)',
+            '--func':   'min, max, mean, rms, std, range, maxloc, minloc',
+            '--t1':     'First tsId (alone: from there on)',
+            '--t2':     'Last tsId',
+            '--node':   'Node to read (default: 0)',
+            '--output': 'Also write the summary to a .csv',
+            '--freq':   'PLT output frequency for maxloc (default: outFreq)',
+            '--othd':   'Take variables from the othd files',
+            '--oisd':   'Take variables from the oisd files',
         },
 
         # ── field ───────────────────────────────────────────────────────────
@@ -885,7 +905,7 @@ class FlexFlowCompleter(Completer):
             't1':      'Set start time',
             't2':      'Set end time',
             'remote':  'Set remote machine for uploads',
-            'var':     'Default variable(s) for field extract',
+            'var':     'Default variable(s) for field extract, data table/stats',
             'zone':    'Default zone for field extract/convert/render',
             'freq':    'Output frequency for field extract / run post',
         }
@@ -1055,7 +1075,7 @@ class InteractiveShell:
         self._current_t1: Optional[float] = None  # Start time for data/field/plot commands
         self._current_t2: Optional[float] = None  # End time for data/field/plot commands
         self._current_remote: Optional[str] = None  # Remote machine for uploads
-        self._current_var: Optional[str] = None  # Default variable(s) for field extract
+        self._current_var: Optional[str] = None  # Default variable(s) for field extract / data table / data stats
         self._current_zone: Optional[str] = None  # Default zone for field extract/convert/render
         self._current_freq: Optional[int] = None  # Output frequency for field extract / run post
         self._current_dir: Path = Path.cwd()  # Track current working directory
@@ -4150,7 +4170,7 @@ class InteractiveShell:
         case_commands = {
             'case': {'show': 2, 'run': 2, 'organise': 2, 'check': 2, 'status': 2, 'upload': 2, 'download': 2,
                      'out': 2},  # case show <case>
-            'data': {'show': 2, 'stats': 2},  # data show <case>
+            'data': {'show': 2, 'table': 2, 'stats': 2},  # data show <case>
             'field': {'info': 2, 'extract': 2, 'compute': 3, 'render': 3},  # field compute <quantity> <case>
             'run': {'check': 2, 'pre': 2, 'main': 2, 'post': 2},  # run check <case>
             'template': {'script': 3},  # template script <type> <case>
@@ -4244,14 +4264,19 @@ class InteractiveShell:
             context_added.append(f"freq: {self._current_freq}")
 
         # node/t1/t2 are injected ONLY where the target command+subcommand
-        # actually defines those flags (otherwise argparse would reject them).
-        # data show: node/start/end ; data stats: node only ; plot: node/start/end.
+        # actually defines those flags (otherwise argparse would reject them),
+        # and under the name that command spells them: `data table`/`data stats`
+        # take --t1/--t2 in tsIds, `plot` takes --start-time/--end-time in
+        # seconds. `data show` reports on the files as a whole and selects
+        # nothing out of them, so nothing is injected into it.
         time_subcmd = args[1] if (cmd == 'data' and len(args) >= 2) else None
         allowed = {
-            ('data', 'show'):  {'node', 't1', 't2'},
-            ('data', 'stats'): {'node'},
+            ('data', 'table'): {'node', 't1', 't2'},
+            ('data', 'stats'): {'node', 't1', 't2'},
             ('plot', None):    {'node', 't1', 't2'},
         }.get((cmd, time_subcmd), set())
+        t1_flag, t2_flag = (('--t1', '--t2') if cmd == 'data'
+                            else ('--start-time', '--end-time'))
 
         # Inject --node if set and not already present
         if 'node' in allowed and self._current_node is not None and '--node' not in args:
@@ -4259,15 +4284,24 @@ class InteractiveShell:
             args.append(str(self._current_node))
             context_added.append(f"node: {self._current_node}")
 
-        # Inject --start-time if t1 is set and not already present
-        if 't1' in allowed and self._current_t1 is not None and '--start-time' not in args:
-            args.append('--start-time')
+        # var context -> --var for `data table` / `data stats`. The same idea as
+        # `field extract --variables`, spelled the way these take it. Both
+        # spellings of the flag count as already given, since --variable is an
+        # accepted alias of --var.
+        if (cmd == 'data' and time_subcmd in ('table', 'stats')
+                and self._current_var is not None
+                and '--var' not in args and '--variable' not in args):
+            args.append('--var')
+            args.append(self._current_var)
+            context_added.append(f"var: {self._current_var}")
+
+        if 't1' in allowed and self._current_t1 is not None and t1_flag not in args:
+            args.append(t1_flag)
             args.append(str(self._current_t1))
             context_added.append(f"t1: {self._current_t1}")
 
-        # Inject --end-time if t2 is set and not already present
-        if 't2' in allowed and self._current_t2 is not None and '--end-time' not in args:
-            args.append('--end-time')
+        if 't2' in allowed and self._current_t2 is not None and t2_flag not in args:
+            args.append(t2_flag)
             args.append(str(self._current_t2))
             context_added.append(f"t2: {self._current_t2}")
 

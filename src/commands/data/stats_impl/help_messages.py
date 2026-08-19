@@ -1,52 +1,89 @@
-"""Help messages for statistics command."""
+"""Help text for `data stats`."""
 
-from src.utils.colors import Colors
+from ....utils.colors import Colors
+
 
 def print_statistics_help():
-    """Print statistics command help."""
     print(f"""
 {Colors.BOLD}{Colors.CYAN}FlexFlow Data Stats Command{Colors.RESET}
 
-Display statistical information about displacement and force data.
+One row per variable instead of one row per timestep.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    flexflow data stats {Colors.YELLOW}<case_directory>{Colors.RESET} [options]
+    flexflow data stats [{Colors.YELLOW}case{Colors.RESET}] --var {Colors.YELLOW}NAME{Colors.RESET} --func {Colors.YELLOW}FUNC{Colors.RESET} [options]
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
-    {Colors.YELLOW}--node <node_id>{Colors.RESET}       Show statistics for a specific node (default: all nodes)
-    {Colors.YELLOW}--verbose, -v{Colors.RESET}          Show detailed information
-    {Colors.YELLOW}--examples{Colors.RESET}             Show usage examples
-    {Colors.YELLOW}--help, -h{Colors.RESET}             Show this help message
+    {Colors.YELLOW}--var NAME{Colors.RESET}             Variable or component. Repeat it, or comma-separate.
+                           {Colors.DIM}Every variable has a short name: dy, vx, ttx.
+                           `data show` lists them.{Colors.RESET}
+    {Colors.YELLOW}--func FUNC{Colors.RESET}            What to work out. Repeat it, or comma-separate.
+    {Colors.YELLOW}--t1 TSID{Colors.RESET}              First tsId (alone: from there to the end)
+    {Colors.YELLOW}--t2 TSID{Colors.RESET}              Last tsId
+    {Colors.YELLOW}--node N{Colors.RESET}               Node to read       (default: 0)
+    {Colors.YELLOW}--group ID{Colors.RESET}             Output group: othId in an othd file, osgId in an
+                           oisd (default: the first). Only matters when a run
+                           wrote more than one probe set into a file.
+    {Colors.YELLOW}--output FILE{Colors.RESET}          Also write the summary to a .csv
+    {Colors.YELLOW}--freq N{Colors.RESET}               PLT output frequency for maxloc
+                           {Colors.DIM}(default: outFreq from simflow.config){Colors.RESET}
+    {Colors.YELLOW}--othd{Colors.RESET} / {Colors.YELLOW}--oisd{Colors.RESET}        Which files to take variables from
+    {Colors.YELLOW}-v, --verbose{Colors.RESET}          Verbose output
+    {Colors.YELLOW}-h, --help{Colors.RESET}             Show this help message
 
-{Colors.BOLD}DESCRIPTION:{Colors.RESET}
-    The statistics command provides comprehensive statistical analysis of simulation data:
-    
-    For displacement data (OTHD):
-    - Mean, standard deviation, min, max, and range for dx, dy, dz components
-    - Magnitude statistics
-    
-    For force/traction data (OISD):
-    - Mean, standard deviation, min, max, and range for tx, ty, tz components
-    - Moment statistics (mx, my, mz)
-    - Average pressure statistics
-    
-    When --node is specified, statistics are calculated only for that node.
-    Otherwise, statistics are computed across all nodes and timesteps.
+{Colors.BOLD}FUNCTIONS:{Colors.RESET}
+    {Colors.YELLOW}min{Colors.RESET}      smallest value in the window
+    {Colors.YELLOW}max{Colors.RESET}      largest value
+    {Colors.YELLOW}mean{Colors.RESET}     arithmetic mean
+    {Colors.YELLOW}rms{Colors.RESET}      root mean square -- the amplitude of a vibration
+    {Colors.YELLOW}std{Colors.RESET}      standard deviation
+    {Colors.YELLOW}range{Colors.RESET}    max - min, the peak-to-peak swing
+    {Colors.YELLOW}maxloc{Colors.RESET}   {Colors.BOLD}where{Colors.RESET} the maximum happens, not how big it is
+    {Colors.YELLOW}minloc{Colors.RESET}   the same for the minimum
+
+{Colors.BOLD}MAXLOC / MINLOC:{Colors.RESET}
+    Answer "which PLT should I render to see the wake at peak amplitude" --
+    maxloc for the top of the cycle, minloc for the bottom.
+
+    Each reports the tsId of the {Colors.BOLD}signed{Colors.RESET} extreme -- the same number
+    {Colors.YELLOW}--func max{Colors.RESET} or {Colors.YELLOW}--func min{Colors.RESET} gives -- and then, separately, {Colors.BOLD}which PLT
+    file comes closest to it{Colors.RESET}, with the value that file actually holds and
+    the next best few behind it. Ask for both to bracket a cycle.
+
+    The chosen file is the one whose own value is most extreme, {Colors.BOLD}not{Colors.RESET} the one
+    nearest the extreme. The peak almost always falls between two outputs, so
+    nearness is only a proxy for amplitude -- and a poor one: over this repo's
+    sample case the nearest file is not the strongest in about three windows
+    out of four, and in the worst of them it shows a quarter of the swing the
+    best file does. Ties go to the earlier file.
+
+    The runners-up are listed because a frame is also chosen on what else is in
+    it, and the second-best file is often as good a picture.
+
+    Candidates are the steps the data actually covers, so a run that stopped
+    between two outputs never names a file that was not written. The step size
+    comes from outFreq in simflow.config, or {Colors.YELLOW}--freq{Colors.RESET}.
+
+{Colors.BOLD}EXAMPLES:{Colors.RESET}
+    flexflow data stats CS4SG1U1 --var aleDisp_y --node 24 --func max,rms
+    flexflow data stats CS4SG1U1 --var aleDisp_y --node 24 --func maxloc,minloc
+    flexflow data stats CS4SG1U1 --var totTrac --func rms,std --t1 3000 --t2 5000
+    flexflow data stats CS4SG1U1 --var aleDisp --node 24 --func range --output swing.csv
 """)
 
 
 def print_statistics_examples():
-    """Print statistics command examples."""
     print(f"""
-{Colors.BOLD}{Colors.CYAN}Statistics Command Examples{Colors.RESET}
+{Colors.BOLD}{Colors.CYAN}Data Stats Examples{Colors.RESET}
 
-{Colors.BOLD}Show statistics for all nodes:{Colors.RESET}
-    flexflow data stats CS4SG1U1
+  {Colors.BOLD}Amplitude of cross-flow vibration, once the run has settled:{Colors.RESET}
+    flexflow data stats CS4SG1U1 --var aleDisp_y --node 24 --func rms --t1 3000
 
-{Colors.BOLD}Show statistics for a specific node:{Colors.RESET}
-    flexflow data stats CS4SG1U1 --node 0
-    flexflow data stats CS4SG1U1 --node 10
+  {Colors.BOLD}Which PLT to render at each end of the cycle:{Colors.RESET}
+    flexflow data stats CS4SG1U1 --var aleDisp_y --node 24 --func maxloc,minloc
 
-{Colors.BOLD}Show statistics with verbose output:{Colors.RESET}
-    flexflow data stats CS4SG1U1 --node 0 --verbose
+  {Colors.BOLD}Peak-to-peak, every component:{Colors.RESET}
+    flexflow data stats CS4SG1U1 --var aleDisp --node 24 --func range
+
+  {Colors.BOLD}Integrated loads:{Colors.RESET}
+    flexflow data stats CS4SG1U1 --var totTrac --func max,rms,maxloc
 """)
