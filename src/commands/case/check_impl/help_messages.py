@@ -47,6 +47,11 @@ Must specify at least one action flag.
         Check PLT files in binary/ and the active run directory:
           • Builds the expected set from outFreq and maxTimeSteps in the .def file
             (e.g. outFreq=50, maxTimeSteps=5000 → expects 50, 100, ..., 5000)
+          • {Colors.YELLOW}--freq N{Colors.RESET} checks against N instead. simflow.config records what
+            the run was asked to write; after a restart at another frequency,
+            or an edit since, that is a different claim from what is on disk --
+            and checking the wrong one calls every file that was never meant to
+            exist missing. The freq context supplies it: {Colors.DIM}use freq:50{Colors.RESET}
           • Reports how many expected files are present / missing
           • Lists each missing tsId explicitly
           • Reports extra files not in the expected set
@@ -80,6 +85,7 @@ Must specify at least one action flag.
 
     # Check PLT files against expected set
     case check CS4SG1U1 --plt
+    case check CS4SG1U1 --plt --freq 50
 
     # Check .def File() references exist
     case check CS4SG1U1 --def

@@ -202,6 +202,7 @@ class FlexFlowCompleter(Completer):
             '--no-confirm':   'Skip confirmation prompts',
         },
         ('case', 'check'):   {
+            '--freq':        'PLT frequency to check against, overriding outFreq',
             **_COMMON_FLAGS,
             '--run':     'Check .othd/.oisd in the active run directory',
             '--archive': 'Check all archived files in othd_files/oisd_files',
@@ -4278,6 +4279,16 @@ class InteractiveShell:
             if self._current_t2 is not None and '--t2' not in args:
                 args.append('--t2'); args.append(str(self._current_t2))
                 context_added.append(f"t2: {self._current_t2}")
+
+        # freq context -> --freq for `case check --plt`, which compares what is
+        # on disk against every Nth step. simflow.config is the default, but it
+        # records what the run was *asked* to write; when the two disagree the
+        # context is the one the user just stated.
+        if (cmd == 'case' and len(args) >= 2 and args[1] == 'check'
+                and self._current_freq is not None and '--freq' not in args):
+            args.append('--freq')
+            args.append(str(self._current_freq))
+            context_added.append(f"freq: {self._current_freq}")
 
         # freq context -> --freq for `run post`
         if (cmd == 'run' and len(args) >= 2 and args[1] == 'post'

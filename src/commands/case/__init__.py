@@ -128,6 +128,9 @@ class CaseCommand(BaseCommand):
                                   help='Check that all File() references in the .def file exist')
         check_parser.add_argument('--all', action='store_true',
                                   help='Run all checks (--run + --archive + --config + --plt + --def)')
+        check_parser.add_argument('--freq', type=int, metavar='N',
+                                  help='PLT output frequency to check against, '
+                                       'overriding outFreq from simflow.config')
         check_parser.add_argument('-v', '--verbose', action='store_true',
                                   help='Enable verbose output')
         check_parser.add_argument('-h', '--help', action='store_true',
