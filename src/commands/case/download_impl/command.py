@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from src.utils.ssh_client import SSHClientWrapper
@@ -17,6 +18,56 @@ from rich import box
 # that keep its history readable once the mesh file is gone. Globs, so they hold
 # whatever the case calls its problem.
 DEFAULT_UPLOAD_FILES = ["simflow.config", "*.def", "*.geo", "*.map"]
+
+# A timestep in a binary/ filename: riser.5000.plt, and the .vtu sidecars that
+# sit beside it (riser.5000.vtu, riser.5000.z1.vtu). The first dotted number is
+# the step; a name without one -- a script, a summary .csv -- carries no step at
+# all and so cannot be placed in a time window.
+STEP_IN_NAME = re.compile(r"\.(\d+)\.")
+
+
+def step_of(name: str) -> Optional[int]:
+    """The timestep a binary/ filename carries, or None if it carries none."""
+    match = STEP_IN_NAME.search(name)
+    return int(match.group(1)) if match else None
+
+
+def resolve_step_window(t1, t2) -> Optional[tuple]:
+    """--t1/--t2 -> the inclusive (lo, hi) window of steps, or None for all.
+
+    The same reading as `field extract` and `field render` give the same two
+    flags: both bounds make a range, and one alone names that single step. Two
+    meanings for one flag in one program would be worse than the surprise of
+    either.
+    """
+    if t1 is None and t2 is None:
+        return None
+    if t1 is not None and t2 is not None:
+        lo, hi = sorted((float(t1), float(t2)))
+        return (lo, hi)
+    only = float(t1 if t1 is not None else t2)
+    return (only, only)
+
+
+def select_steps(names: List[str], window: Optional[tuple]) -> tuple:
+    """Split `names` into (kept, no_step) for a step window.
+
+    Without a window everything is kept. With one, a file is kept when its step
+    falls inside it, and a file with no step at all is set aside rather than
+    silently swept along: asking for one timestep should not drag the whole
+    post-processing script collection across the wire.
+    """
+    if window is None:
+        return sorted(names), []
+    lo, hi = window
+    kept, no_step = [], []
+    for name in names:
+        step = step_of(name)
+        if step is None:
+            no_step.append(name)
+        elif lo <= step <= hi:
+            kept.append(name)
+    return sorted(kept), sorted(no_step)
 
 
 def show_upload_help() -> None:
@@ -38,6 +89,10 @@ Upload case directories from local machine to a remote server.
                            (default: othd_files,oisd_files,binary)
     {Colors.YELLOW}--files [PATTERNS]{Colors.RESET}     Loose files from the case root, as comma-separated
                            globs (default: simflow.config,*.def,*.geo,*.map)
+    {Colors.YELLOW}--binary{Colors.RESET}               binary/ only -- with --t1/--t2, only the timesteps
+                           in that range
+    {Colors.YELLOW}--t1 STEP{Colors.RESET}              With --binary: first timestep (alone: only that step)
+    {Colors.YELLOW}--t2 STEP{Colors.RESET}              With --binary: last timestep
     {Colors.YELLOW}--remote-path PATH{Colors.RESET}     Override remote base path (default: remote config path)
     {Colors.YELLOW}--force{Colors.RESET}                Create remote directories if they do not exist
     {Colors.YELLOW}--resume{Colors.RESET}               Resume the last interrupted upload
@@ -66,7 +121,22 @@ Upload case directories from local machine to a remote server.
     Only files sitting directly in the case root are matched; a recursive
     match would sweep up the very data --files exists to avoid.
 
+{Colors.BOLD}TIMESTEPS:{Colors.RESET}
+    A case's binary/ is nearly all of its size, and most of it is timesteps you
+    already have. {Colors.YELLOW}--binary{Colors.RESET} carries that directory alone; with
+    {Colors.YELLOW}--t1{Colors.RESET}/{Colors.YELLOW}--t2{Colors.RESET} it carries only the steps in the range, matching them
+    on the number in the filename (riser.5000.plt, and the .vtu sidecars beside
+    it). A file with no step in its name -- a script, a summary table -- is left
+    where it is, and the count of those is reported.
+
+    The two flags read as they do everywhere else in FlexFlow: both bounds make
+    a range, one alone names that single step. They need {Colors.YELLOW}--binary{Colors.RESET}, since
+    nothing else in a case is written per step. The t1/t2 context supplies them:
+    {Colors.DIM}use t1:1000 t2:5000{Colors.RESET}, then {Colors.DIM}case upload CS4SG1U1 --binary{Colors.RESET}.
+
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
+    case upload CS4SG1U1 --to server --binary --t1 1000 --t2 5000
+    case upload CS4SG1U1 --to server --binary --t1 5000
     case upload CS4SG1U1 --to server --files
     case upload CS4SG1U1 --to server --files "*.map"
     case upload * --to server --files --force
@@ -98,6 +168,10 @@ Download case directories from a remote server to the local machine.
     {Colors.YELLOW}--files [PATTERNS]{Colors.RESET}     Loose files from the remote case root, as
                            comma-separated globs
                            (default: simflow.config,*.def,*.geo,*.map)
+    {Colors.YELLOW}--binary{Colors.RESET}               binary/ only -- with --t1/--t2, only the timesteps
+                           in that range
+    {Colors.YELLOW}--t1 STEP{Colors.RESET}              With --binary: first timestep (alone: only that step)
+    {Colors.YELLOW}--t2 STEP{Colors.RESET}              With --binary: last timestep
     {Colors.YELLOW}--remote-path PATH{Colors.RESET}     Override remote base path (default: remote config path)
     {Colors.YELLOW}--force{Colors.RESET}                Create the local case directory if it does not exist
     {Colors.YELLOW}--resume{Colors.RESET}               Resume the last interrupted download
@@ -123,7 +197,22 @@ Download case directories from a remote server to the local machine.
     Given {Colors.BOLD}without --dir{Colors.RESET} it downloads only those files, so a case's
     definition can be pulled without its data directories.
 
+{Colors.BOLD}TIMESTEPS:{Colors.RESET}
+    A case's binary/ is nearly all of its size, and most of it is timesteps you
+    already have. {Colors.YELLOW}--binary{Colors.RESET} carries that directory alone; with
+    {Colors.YELLOW}--t1{Colors.RESET}/{Colors.YELLOW}--t2{Colors.RESET} it carries only the steps in the range, matching them
+    on the number in the filename (riser.5000.plt, and the .vtu sidecars beside
+    it). A file with no step in its name -- a script, a summary table -- is left
+    where it is, and the count of those is reported.
+
+    The two flags read as they do everywhere else in FlexFlow: both bounds make
+    a range, one alone names that single step. They need {Colors.YELLOW}--binary{Colors.RESET}, since
+    nothing else in a case is written per step. The t1/t2 context supplies them:
+    {Colors.DIM}use t1:1000 t2:5000{Colors.RESET}, then {Colors.DIM}case download CS4SG1U1 --binary{Colors.RESET}.
+
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
+    case download CS4SG1U1 --from server --binary --t1 1000 --t2 5000
+    case download CS4SG1U1 --from server --binary --t1 5000
     case download CS4SG1U1 --from server --files
     case download CS4SG1U1 --from server --files "*.map"
     case download * --from server --files --force
@@ -211,6 +300,7 @@ class CaseUploadCommand:
         force: bool,
         wildcard: bool,
         file_patterns: Optional[List[str]] = None,
+        step_window: Optional[tuple] = None,
     ) -> dict:
         """Construct a new resumable transfer state document."""
         return {
@@ -223,6 +313,7 @@ class CaseUploadCommand:
             'directories': directories,
             'file_patterns': list(file_patterns or []),
             'force': force,
+            'step_window': list(step_window) if step_window else None,
             'cases': case_entries,
             'completed_targets': [],
         }
@@ -317,6 +408,8 @@ class CaseUploadCommand:
             case_selection = state.get('case_selection', '')
             wildcard = state.get('case_mode') == 'wildcard'
             completed_targets = set(state.get('completed_targets', []))
+            saved_window = state.get('step_window')
+            step_window = tuple(saved_window) if saved_window else None
         else:
             case_selection = self.validate_case_path(self._get_arg(args, 'case'))
             if not case_selection:
@@ -334,10 +427,23 @@ class CaseUploadCommand:
             force_enabled = bool(self._get_arg(args, 'force', False))
             file_patterns = self.parse_files(self._get_arg(args, 'files'))
             dir_arg = self._get_arg(args, 'dir')
-            # --files on its own means just the files: the default directories
-            # include binary/, which is the opposite of a quick definition push.
-            directories = [] if (file_patterns and not dir_arg) \
-                else self.parse_directories(dir_arg)
+            binary_only = bool(self._get_arg(args, 'binary', False))
+            step_window = resolve_step_window(self._get_arg(args, 't1'),
+                                              self._get_arg(args, 't2'))
+            if step_window and not binary_only:
+                self.console.print(
+                    "[red]Error:[/red] --t1/--t2 select timesteps inside binary/, "
+                    "so they need --binary. Nothing else in a case is written "
+                    "per step."
+                )
+                return 1
+            if binary_only and not dir_arg:
+                # --binary on its own means binary/ alone, the way --files on its
+                # own means the files alone.
+                directories = ['binary']
+            else:
+                directories = [] if (file_patterns and not dir_arg) \
+                    else self.parse_directories(dir_arg)
             remote = self.validate_remote(remote_name)
             if not remote:
                 return 1
@@ -380,6 +486,7 @@ class CaseUploadCommand:
                 force_enabled,
                 wildcard,
                 file_patterns,
+                step_window,
             )
             self._save_transfer_state(state)
 
@@ -411,6 +518,10 @@ class CaseUploadCommand:
         table.add_row('Directories', ', '.join(directories) or '(none)')
         if file_patterns:
             table.add_row('Files', ', '.join(file_patterns))
+        if step_window:
+            lo, hi = step_window
+            table.add_row('Timesteps',
+                          f"{lo:g}" if lo == hi else f"{lo:g} .. {hi:g}")
         table.add_row('Force Create Missing Dir', 'Yes' if force_enabled else 'No')
         if resume_requested:
             table.add_row('Completed Targets', str(len(completed_targets)))
@@ -475,6 +586,22 @@ class CaseUploadCommand:
                         file_patterns,
                         force=force_enabled,
                     )
+                elif step_window and target['directory'] == 'binary':
+                    if is_upload:
+                        ok = self.upload_binary_range(
+                            ssh,
+                            target['remote_case_path'],
+                            target['case_path'],
+                            step_window,
+                            force=force_enabled,
+                        )
+                    else:
+                        ok = self.download_binary_range(
+                            ssh,
+                            target['remote_case_path'],
+                            target['case_path'],
+                            step_window,
+                        )
                 elif is_upload:
                     ok = self.upload_directory(
                         ssh,
@@ -895,6 +1022,156 @@ class CaseUploadCommand:
     ) -> bool:
         """Backward-compatible alias used by older tests/imports."""
         return self.upload_directory(ssh, remote_case_path, local_case_path, directory_name, force=force)
+
+    def upload_binary_range(
+        self,
+        ssh: SSHClientWrapper,
+        remote_case_path: str,
+        local_case_path: str,
+        window: Optional[tuple],
+        force: bool = False,
+    ) -> bool:
+        """Upload binary/, restricted to the timesteps inside `window`.
+
+        File by file rather than whole-directory, because that is what a window
+        means: a case's binary/ is the bulk of it, and the point of naming a
+        time range is not to move the rest.
+        """
+        local_dir = os.path.join(local_case_path, "binary")
+        remote_dir = f"{remote_case_path}/binary"
+
+        if not os.path.isdir(local_dir):
+            self.console.print(
+                f"[yellow]Warning:[/yellow] Local directory not found: {local_dir}"
+            )
+            return False
+
+        names = [n for n in os.listdir(local_dir)
+                 if os.path.isfile(os.path.join(local_dir, n))]
+        kept, no_step = select_steps(names, window)
+        if not self._report_selection(kept, no_step, window, local_dir):
+            return True
+
+        if not ssh.remote_path_exists(remote_dir):
+            if not force:
+                self.console.print(
+                    f"[yellow]Warning:[/yellow] Remote directory not found: {remote_dir}"
+                )
+                self.console.print("[dim]Use --force to create remote directories[/dim]")
+                return False
+            self.console.print(f"[cyan]Creating:[/cyan] Remote directory {remote_dir}")
+            if not ssh.make_remote_dir(remote_dir):
+                self.console.print(
+                    f"[red]Error:[/red] Failed to create remote directory: {remote_dir}"
+                )
+                return False
+
+        total_bytes = sum(os.path.getsize(os.path.join(local_dir, n)) for n in kept)
+        try:
+            with Progress(
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                DownloadColumn(),
+                TransferSpeedColumn(),
+                TimeRemainingColumn(),
+            ) as progress:
+                task = progress.add_task("Transferring binary...", total=total_bytes or None)
+                done = 0
+                for name in kept:
+                    local_file = os.path.join(local_dir, name)
+                    ssh.upload_file(local_file, f"{remote_dir}/{name}")
+                    done += os.path.getsize(local_file)
+                    progress.update(task, completed=done, description=f"Transferred {name}")
+            self.console.print(
+                f"[green]\u2713[/green] Uploaded {len(kept)} file(s) to {remote_dir}"
+            )
+            return True
+        except Exception as e:
+            self.console.print(f"[red]Error:[/red] Failed to upload binary: {e}")
+            return False
+
+    def download_binary_range(
+        self,
+        ssh: SSHClientWrapper,
+        remote_case_path: str,
+        local_case_path: str,
+        window: Optional[tuple],
+    ) -> bool:
+        """Download binary/, restricted to the timesteps inside `window`."""
+        remote_dir = f"{remote_case_path}/binary"
+        local_dir = os.path.join(local_case_path, "binary")
+
+        if not ssh.remote_path_exists(remote_dir):
+            self.console.print(
+                f"[yellow]Warning:[/yellow] Remote directory not found: {remote_dir}"
+            )
+            return False
+        if not ssh.remote_is_dir(remote_dir):
+            self.console.print(
+                f"[yellow]Warning:[/yellow] Remote path is not a directory: {remote_dir}"
+            )
+            return False
+
+        try:
+            entries = ssh.list_remote_dir(remote_dir)
+        except Exception as exc:
+            self.console.print(f"[red]Error:[/red] Could not list {remote_dir}: {exc}")
+            return False
+
+        # Only names carrying a step can be placed in the window, and those are
+        # never directories, so the remote stat per entry that resolve_remote_files
+        # does is not needed here.
+        kept, no_step = select_steps(entries, window)
+        if not self._report_selection(kept, no_step, window, remote_dir):
+            return True
+
+        os.makedirs(local_dir, exist_ok=True)
+        try:
+            with Progress(
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                DownloadColumn(),
+                TransferSpeedColumn(),
+                TimeRemainingColumn(),
+            ) as progress:
+                task = progress.add_task("Transferring binary...", total=None)
+                state = {"done": 0, "last": 0}
+
+                def update_progress(transferred, _file_total):
+                    if transferred < state["last"]:
+                        state["done"] += state["last"]
+                    state["last"] = transferred
+                    progress.update(task, completed=state["done"] + transferred)
+
+                for name in kept:
+                    ssh.download_file(f"{remote_dir}/{name}",
+                                      os.path.join(local_dir, name),
+                                      callback=update_progress)
+            self.console.print(
+                f"[green]\u2713[/green] Downloaded {len(kept)} file(s) to {local_dir}"
+            )
+            return True
+        except Exception as e:
+            self.console.print(f"[red]Error:[/red] Failed to download binary: {e}")
+            return False
+
+    def _report_selection(self, kept, no_step, window, where) -> bool:
+        """Say what the window picked out. False when there is nothing to move."""
+        if window:
+            lo, hi = window
+            span = f"step {lo:g}" if lo == hi else f"steps {lo:g}..{hi:g}"
+            self.console.print(f"[cyan]Selecting:[/cyan] {span} in binary/")
+        if no_step:
+            self.console.print(
+                f"[dim]    skipping {len(no_step)} file(s) with no timestep in "
+                f"the name[/dim]"
+            )
+        if not kept:
+            self.console.print(
+                f"[yellow]Warning:[/yellow] No files in that step range in {where}"
+            )
+            return False
+        return True
 
     def download_case_directory(
         self,

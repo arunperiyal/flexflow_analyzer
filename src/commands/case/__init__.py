@@ -208,6 +208,13 @@ class CaseCommand(BaseCommand):
                                   help='Remote machine name (or use context with "use remote:name")')
         upload_parser.add_argument('--remote-path', type=str, metavar='PATH',
                                   help='Override remote base path (default: use remote config)')
+        upload_parser.add_argument('--binary', action='store_true',
+                                  help='Upload binary/ only. With --t1/--t2 it carries just the timesteps in that range, instead of the whole directory')
+        upload_parser.add_argument('--t1', type=float, metavar='STEP',
+                                  help='With --binary: first timestep to upload '
+                                       '(alone: only that step)')
+        upload_parser.add_argument('--t2', type=float, metavar='STEP',
+                                  help='With --binary: last timestep to upload')
         upload_parser.add_argument('--force', action='store_true',
                                   help='Create remote directories if they do not exist')
         upload_parser.add_argument('--resume', action='store_true',
@@ -233,6 +240,13 @@ class CaseCommand(BaseCommand):
                                     help='Remote machine name (or use context with "use remote:name")')
         download_parser.add_argument('--remote-path', type=str, metavar='PATH',
                                     help='Override remote base path (default: use remote config)')
+        download_parser.add_argument('--binary', action='store_true',
+                                  help='Download binary/ only. With --t1/--t2 it carries just the timesteps in that range, instead of the whole directory')
+        download_parser.add_argument('--t1', type=float, metavar='STEP',
+                                  help='With --binary: first timestep to download '
+                                       '(alone: only that step)')
+        download_parser.add_argument('--t2', type=float, metavar='STEP',
+                                  help='With --binary: last timestep to download')
         download_parser.add_argument('--force', action='store_true',
                                     help='Create the local case directory if it does not exist')
         download_parser.add_argument('--resume', action='store_true',
