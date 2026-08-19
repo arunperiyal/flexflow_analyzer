@@ -917,14 +917,20 @@ class FlexFlowCompleter(Completer):
             current_word = words[-1] if len(words) > 1 else ''
 
         # Support restoring previously saved context set.
+        if (len(words) == 1 or (len(words) == 2 and not ends_with_space)) and 'list'.startswith(current_word):
+            yield Completion(
+                'list',
+                start_position=-len(current_word),
+                display_meta='Show every context, set or not',
+            )
         if (len(words) == 1 or (len(words) == 2 and not ends_with_space)) and 'last'.startswith(current_word):
             yield Completion(
                 'last',
                 start_position=-len(current_word),
-                display_meta='Restore last saved use context',
+                display_meta='Restore the context the last session ended with',
             )
 
-        if len(words) >= 2 and words[1] == 'last':
+        if len(words) >= 2 and words[1] in ('last', 'list'):
             return
 
         if ':' in current_word:
@@ -1446,6 +1452,13 @@ class InteractiveShell:
                 self.show_use_help()
                 return True
 
+            if parts[1].lower() == 'list':
+                if len(parts) > 2:
+                    self.console.print("[yellow]Usage:[/yellow] use list")
+                    return True
+                self._list_contexts()
+                return True
+
             if parts[1].lower() == 'last':
                 if len(parts) > 2:
                     self.console.print("[yellow]Usage:[/yellow] use last")
@@ -1453,7 +1466,7 @@ class InteractiveShell:
                 self._use_last_context()
                 return True
 
-            self._apply_use_context_tokens(parts[1:], save_as_last=True)
+            self._apply_use_context_tokens(parts[1:], save_as_last=False)
             return True
 
         # Clear context with subcommands
@@ -1498,36 +1511,12 @@ class InteractiveShell:
                     self.console.print("[dim]Use: unuse [case|problem|rundir|dir|node|t1|t2|remote|var|zone|freq|all][/dim]")
             return True
 
-        # Show current directory and all contexts
+        # Show the working directory. The contexts moved to `use list`, which
+        # is where someone setting them is already looking.
         if cmd == 'pwd':
             self.console.print(f"Working directory: [cyan]{self._current_dir}[/cyan]")
-            if self._current_case:
-                self.console.print(f"Case context: [cyan]{self._current_case}[/cyan]")
-            if self._current_problem:
-                self.console.print(f"Problem context: [cyan]{self._current_problem}[/cyan]")
-            if self._current_rundir:
-                self.console.print(f"Run directory: [cyan]{self._current_rundir}[/cyan]")
-            if self._current_output_dir:
-                self.console.print(f"Output directory: [cyan]{self._current_output_dir}[/cyan]")
-            if self._current_node is not None:
-                self.console.print(f"Node context: [cyan]{self._current_node}[/cyan]")
-            if self._current_t1 is not None:
-                self.console.print(f"Start time (t1): [cyan]{self._current_t1}[/cyan]")
-            if self._current_t2 is not None:
-                self.console.print(f"End time (t2): [cyan]{self._current_t2}[/cyan]")
-            if self._current_remote:
-                self.console.print(f"Remote context: [cyan]{self._current_remote}[/cyan]")
-            if self._current_var is not None:
-                self.console.print(f"Variable context: [cyan]{self._current_var}[/cyan]")
-            if self._current_zone is not None:
-                self.console.print(f"Zone context: [cyan]{self._current_zone}[/cyan]")
-            if self._current_freq is not None:
-                self.console.print(f"Frequency context: [cyan]{self._current_freq}[/cyan]")
-            if not any([self._current_case, self._current_problem, self._current_rundir, self._current_output_dir,
-                       self._current_node is not None, self._current_t1 is not None, self._current_t2 is not None,
-                       self._current_remote, self._current_var is not None, self._current_zone is not None,
-                       self._current_freq is not None]):
-                self.console.print("[dim]No context set[/dim]")
+            if self._current_context_tokens():
+                self.console.print("[dim]`use list` shows the context[/dim]")
             return True
 
         # alias / unalias
@@ -2533,7 +2522,8 @@ class InteractiveShell:
         self.console.print()
         self.console.print("[bold]USAGE:[/bold]")
         self.console.print("  use context:value [context:value ...]")
-        self.console.print("  use last")
+        self.console.print("  use list                         [dim]# what is set, and what else can be[/dim]")
+        self.console.print("  use last                         [dim]# the context the last session ended with[/dim]")
         self.console.print()
         self.console.print("[bold]CONTEXTS:[/bold]")
         self.console.print("  case       Case directory path (or * to iterate all cases from .cases file)")
@@ -2544,6 +2534,9 @@ class InteractiveShell:
         self.console.print("  t1         Start time for data/field/plot commands")
         self.console.print("  t2         End time for data/field/plot commands")
         self.console.print("  remote     Remote machine for uploads (default for 'case upload')")
+        self.console.print("  var        Variable(s) for field extract, data table/stats")
+        self.console.print("  zone       Zone for field extract/compute/convert/render")
+        self.console.print("  freq       Output frequency for field sweeps and run post")
         self.console.print()
         self.console.print("[bold]EXAMPLES:[/bold]")
         self.console.print("  [dim]# Single context[/dim]")
@@ -2556,7 +2549,14 @@ class InteractiveShell:
         self.console.print("  use case:Case015 problem:rigid node:0")
         self.console.print("  use case:Case015 node:24 t1:50.0 t2:100.0")
         self.console.print("  use node:0 t1:150.0 t2:200.0")
-        self.console.print("  use last                         [dim]# Restore the most recent successful use command[/dim]")
+        self.console.print()
+        self.console.print("  [dim]# What is set, and what else could be[/dim]")
+        self.console.print("  use list")
+        self.console.print()
+        self.console.print("  [dim]# Pick up where the last session left off[/dim]")
+        self.console.print("  use last")
+        self.console.print("  [dim]# The whole context is written when a shell exits, so this[/dim]")
+        self.console.print("  [dim]# restores everything that was set -- not just the last `use`.[/dim]")
         self.console.print()
         self.console.print("[bold]ITERATE OVER ALL CASES (from .cases file):[/bold]")
         self.console.print("  [dim]# Use case:* to iterate over all cases in .cases registry[/dim]")
@@ -2616,6 +2616,44 @@ class InteractiveShell:
     def _valid_use_contexts_csv(self) -> str:
         """Return comma-separated valid context names for user-facing errors."""
         return ", ".join(self._use_context_handlers().keys())
+
+    # context name -> the attribute holding it. The order is the order they are
+    # listed in and restored in: the case first, because several of the others
+    # are only meaningful inside one.
+    _CONTEXT_ATTRS = (
+        ('case', '_current_case'),
+        ('problem', '_current_problem'),
+        ('rundir', '_current_rundir'),
+        ('dir', '_current_output_dir'),
+        ('node', '_current_node'),
+        ('t1', '_current_t1'),
+        ('t2', '_current_t2'),
+        ('remote', '_current_remote'),
+        ('var', '_current_var'),
+        ('zone', '_current_zone'),
+        ('freq', '_current_freq'),
+    )
+
+    def _current_context_tokens(self) -> List[str]:
+        """Everything set right now, as `use` tokens."""
+        tokens = []
+        for name, attr in self._CONTEXT_ATTRS:
+            value = getattr(self, attr, None)
+            if value is not None and value != '':
+                tokens.append(f"{name}:{value}")
+        return tokens
+
+    def _save_context_snapshot(self) -> None:
+        """Record the whole context on the way out.
+
+        On exit rather than on every `use`, so what comes back is the state the
+        session was actually left in -- not whichever handful of contexts the
+        last `use` happened to name. Nothing is written when the context is
+        empty, so quitting a stray shell does not wipe a real one's snapshot.
+        """
+        tokens = self._current_context_tokens()
+        if tokens:
+            self._save_last_use_context_tokens(tokens)
 
     def _get_last_use_context_tokens(self) -> List[str]:
         """Return last saved `use` context tokens from settings."""
@@ -2686,14 +2724,49 @@ class InteractiveShell:
 
         return applied_tokens
 
+    def _list_contexts(self) -> None:
+        """Every context, set or not, and what `use last` would restore.
+
+        All of them rather than only the ones set: this is the one place the
+        contexts are listed now, so it has to answer "what else could I set"
+        as well as "what is set".
+        """
+        from rich.table import Table
+        from rich import box
+
+        live = dict(token.split(':', 1) for token in self._current_context_tokens())
+        saved = dict(token.split(':', 1)
+                     for token in self._get_last_use_context_tokens())
+
+        table = Table(box=box.SIMPLE, show_header=True, header_style="bold yellow")
+        table.add_column("Context", style="cyan")
+        table.add_column("Value", style="white")
+        for name, _ in self._CONTEXT_ATTRS:
+            value = live.get(name)
+            table.add_row(name, value if value is not None else "[dim]-[/dim]")
+        self.console.print()
+        self.console.print(table)
+
+        if not live:
+            self.console.print("[dim]Nothing set. `use case:NAME node:24 ...` to "
+                               "set some.[/dim]")
+        if saved and saved != live:
+            differs = " ".join(f"{k}:{v}" for k, v in saved.items()
+                               if live.get(k) != v)
+            self.console.print(f"[dim]`use last` would set: {differs}[/dim]")
+        self.console.print()
+
     def _use_last_context(self) -> None:
-        """Restore the last successful multi-context `use` setting."""
+        """Restore the whole context the last session was left with."""
         tokens = self._get_last_use_context_tokens()
         if not tokens:
-            self.console.print("[dim]No saved context found. Use 'use context:value ...' first.[/dim]")
+            self.console.print(
+                "[dim]No saved context. One is written when a shell with a "
+                "context set exits.[/dim]")
             return
 
-        self.console.print(f"[dim]Restoring last context: {' '.join(tokens)}[/dim]")
+        self.console.print(f"[dim]Restoring the context of the last session: "
+                           f"{' '.join(tokens)}[/dim]")
         self._apply_use_context_tokens(tokens, save_as_last=False)
 
     def use_case(self, case_input: str) -> bool:
@@ -4420,6 +4493,7 @@ class InteractiveShell:
                 f"[yellow]Session timeout reached after {self._session_timeout_minutes} {unit}. Exiting.[/yellow]"
             )
 
+        self._save_context_snapshot()
         self._compact_history_file(log_summary=False)
         self.print_goodbye()
         return 0
