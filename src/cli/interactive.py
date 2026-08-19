@@ -900,16 +900,18 @@ class FlexFlowCompleter(Completer):
         Each token after `use` is context:value.
         """
         # Contexts whose value is a filesystem path (directories)
-        _PATH_CONTEXTS = {'case', 'rundir', 'dir'}
+        _PATH_CONTEXTS = {'case', 'rundir'}
         # All supported context keys
-        _ALL_CONTEXTS = ['case', 'problem', 'rundir', 'dir', 'node', 't1', 't2', 'remote', 'var', 'zone', 'freq']
+        _ALL_CONTEXTS = ['case', 'problem', 'rundir', 'node', 'time', 't1', 't2',
+                         'remote', 'var', 'zone', 'freq']
         _CONTEXT_DESCS = {
             'case':    'Set current case directory',
             'problem': 'Override problem name',
             'rundir':  'Override run directory',
             'node':    'Set node ID for data/field commands',
-            't1':      'Set start time',
-            't2':      'Set end time',
+            'time':    'Set a single timestep (clears t1/t2)',
+            't1':      'Set start time (clears time)',
+            't2':      'Set end time (clears time)',
             'remote':  'Set remote machine for uploads',
             'var':     'Default variable(s) for field extract, data table/stats',
             'zone':    'Default zone for field extract/convert/render',
@@ -999,6 +1001,7 @@ class FlexFlowCompleter(Completer):
                 ('problem', 'Clear problem context'),
                 ('rundir',  'Clear run directory context'),
                 ('node',    'Clear node context'),
+                ('time',    'Clear the single timestep'),
                 ('t1',      'Clear start time'),
                 ('t2',      'Clear end time'),
                 ('remote',  'Clear remote context'),
@@ -1082,6 +1085,7 @@ class InteractiveShell:
         self._current_problem: Optional[str] = None  # Problem name/ID
         self._current_rundir: Optional[str] = None  # Run directory
         self._current_node: Optional[int] = None  # Node ID for data/field commands
+        self._current_time: Optional[float] = None  # a single timestep, in place of t1/t2
         self._current_t1: Optional[float] = None  # Start time for data/field/plot commands
         self._current_t2: Optional[float] = None  # End time for data/field/plot commands
         self._current_remote: Optional[str] = None  # Remote machine for uploads
@@ -1337,6 +1341,8 @@ class InteractiveShell:
             contexts.append(f'<remote>rem:{self._current_remote}</remote>')
         if self._current_node is not None:
             contexts.append(f'<node>n:{self._current_node}</node>')
+        if self._current_time is not None:
+            contexts.append(f'<t1>time:{self._current_time}</t1>')
         if self._current_t1 is not None:
             contexts.append(f'<t1>t1:{self._current_t1}</t1>')
         if self._current_t2 is not None:
@@ -1490,6 +1496,8 @@ class InteractiveShell:
                     self.unuse_rundir()
                 elif subcommand == 'node':
                     self.unuse_node()
+                elif subcommand == 'time':
+                    self.unuse_time()
                 elif subcommand == 't1':
                     self.unuse_t1()
                 elif subcommand == 't2':
@@ -1506,7 +1514,7 @@ class InteractiveShell:
                     self.unuse_all()
                 else:
                     self.console.print(f"[yellow]Unknown subcommand:[/yellow] {subcommand}")
-                    self.console.print("[dim]Use: unuse [case|problem|rundir|node|t1|t2|remote|var|zone|freq|all][/dim]")
+                    self.console.print("[dim]Use: unuse [case|problem|rundir|node|time|t1|t2|remote|var|zone|freq|all][/dim]")
             return True
 
         # Show the working directory. The contexts moved to `use list`, which
@@ -2528,8 +2536,9 @@ class InteractiveShell:
         self.console.print("  problem    Problem name")
         self.console.print("  rundir     Run directory inside the case (e.g. RUN_1)")
         self.console.print("  node       Node ID for data/field commands")
-        self.console.print("  t1         Start time for data/field/plot commands")
-        self.console.print("  t2         End time for data/field/plot commands")
+        self.console.print("  time       A single timestep -- clears t1/t2, and they clear it")
+        self.console.print("  t1         Start of a timestep range (clears time)")
+        self.console.print("  t2         End of a timestep range (clears time)")
         self.console.print("  remote     Remote machine for uploads (default for 'case upload')")
         self.console.print("  var        Variable(s) for field extract, data table/stats")
         self.console.print("  zone       Zone for field extract/compute/convert/render")
@@ -2545,6 +2554,7 @@ class InteractiveShell:
         self.console.print("  [dim]# Multiple contexts[/dim]")
         self.console.print("  use case:Case015 problem:rigid node:0")
         self.console.print("  use case:Case015 node:24 t1:50.0 t2:100.0")
+        self.console.print("  use case:Case015 node:24 time:4800   [dim]# one step, not a range[/dim]")
         self.console.print("  use node:0 t1:150.0 t2:200.0")
         self.console.print()
         self.console.print("  [dim]# What is set, and what else could be[/dim]")
@@ -2599,6 +2609,7 @@ class InteractiveShell:
             'problem': self.use_problem,
             'rundir': self.use_rundir,
             'node': self.use_node,
+            'time': self.use_time,
             't1': self.use_t1,
             't2': self.use_t2,
             'remote': self.use_remote,
@@ -2619,6 +2630,7 @@ class InteractiveShell:
         ('problem', '_current_problem'),
         ('rundir', '_current_rundir'),
         ('node', '_current_node'),
+        ('time', '_current_time'),
         ('t1', '_current_t1'),
         ('t2', '_current_t2'),
         ('remote', '_current_remote'),
@@ -2902,6 +2914,38 @@ class InteractiveShell:
             self.console.print("[dim]Node ID must be an integer[/dim]")
             return False
 
+    def use_time(self, time_input: str) -> bool:
+        """Set a single timestep, in place of a t1/t2 range.
+
+        One value rather than the same value twice. It and the range are two
+        ways of saying the same kind of thing, so holding both would leave the
+        commands to guess which was meant -- setting either clears the other.
+        """
+        try:
+            value = float(time_input)
+        except ValueError:
+            self.console.print(f"[red]Error:[/red] Invalid time value: {time_input}")
+            self.console.print("[dim]Time must be a number[/dim]")
+            return False
+        self._current_time = value
+        dropped = [name for name, held in (("t1", self._current_t1),
+                                           ("t2", self._current_t2))
+                   if held is not None]
+        self._current_t1 = self._current_t2 = None
+        self.console.print(f"[green]✓[/green] Time set to: [cyan]{value}[/cyan]")
+        if dropped:
+            self.console.print(f"[dim]cleared {' and '.join(dropped)}: a single "
+                               f"time and a range cannot both apply[/dim]")
+        return True
+
+    def _clear_time_for_range(self, which: str) -> None:
+        """Setting either end of a range drops a single time, and says so."""
+        if self._current_time is not None:
+            old = self._current_time
+            self._current_time = None
+            self.console.print(f"[dim]cleared time ({old}): {which} makes it a "
+                               f"range[/dim]")
+
     def use_t1(self, time_input: str) -> bool:
         """
         Set start time context for data/field/plot commands.
@@ -2911,6 +2955,7 @@ class InteractiveShell:
         """
         try:
             start_time = float(time_input)
+            self._clear_time_for_range("t1")
             self._current_t1 = start_time
             self.console.print(f"[green]✓[/green] Start time (t1) set to: [cyan]{start_time}[/cyan]")
             return True
@@ -2928,6 +2973,7 @@ class InteractiveShell:
         """
         try:
             end_time = float(time_input)
+            self._clear_time_for_range("t2")
             self._current_t2 = end_time
             self.console.print(f"[green]✓[/green] End time (t2) set to: [cyan]{end_time}[/cyan]")
             return True
@@ -3025,6 +3071,15 @@ class InteractiveShell:
         else:
             self.console.print("[dim]No node context is set[/dim]")
 
+    def unuse_time(self) -> None:
+        """Clear the single-timestep context."""
+        if self._current_time is not None:
+            old = self._current_time
+            self._current_time = None
+            self.console.print(f"[green]✓[/green] Time context cleared: [dim]{old}[/dim]")
+        else:
+            self.console.print("[dim]No time context is set[/dim]")
+
     def unuse_t1(self) -> None:
         """Clear start time context."""
         if self._current_t1 is not None:
@@ -3086,6 +3141,9 @@ class InteractiveShell:
         if self._current_node is not None:
             cleared.append(f"node: {self._current_node}")
             self._current_node = None
+        if self._current_time is not None:
+            cleared.append(f"time: {self._current_time}")
+            self._current_time = None
         if self._current_t1 is not None:
             cleared.append(f"t1: {self._current_t1}")
             self._current_t1 = None
@@ -4253,6 +4311,14 @@ class InteractiveShell:
             # t1/t2 select the timestep(s): extract, compute and render take
             # --t1/--t2 (a single step or a range -- render draws one figure per
             # step in it); convert takes a single --timestep from t1.
+            # A single time is exactly what --timestep is for, and every field
+            # subcommand has one. It also beats --t1/--t2 inside the command,
+            # and unlike a one-step range it is not filtered out by --freq.
+            if (subcmd in ('extract', 'compute', 'render', 'convert')
+                    and self._current_time is not None
+                    and '--timestep' not in args):
+                args.append('--timestep'); args.append(str(int(self._current_time)))
+                context_added.append(f"time: {self._current_time}")
             if subcmd in ('extract', 'compute', 'render'):
                 if self._current_t1 is not None and '--t1' not in args:
                     args.append('--t1'); args.append(str(self._current_t1))
@@ -4264,7 +4330,8 @@ class InteractiveShell:
                     args.append('--freq'); args.append(str(self._current_freq))
                     context_added.append(f"freq: {self._current_freq}")
             elif subcmd == 'convert':
-                if self._current_t1 is not None and '--timestep' not in args:
+                if (self._current_t1 is not None and '--timestep' not in args
+                        and self._current_time is None):
                     args.append('--timestep'); args.append(str(int(self._current_t1)))
                     context_added.append(f"timestep: {int(self._current_t1)}")
 
@@ -4273,6 +4340,12 @@ class InteractiveShell:
         # carrying binary/ they would be rejected by argparse's own check.
         if (cmd == 'case' and len(args) >= 2
                 and args[1] in ('upload', 'download') and '--binary' in args):
+            if (self._current_time is not None
+                    and '--t1' not in args and '--t2' not in args):
+                # No --timestep here, so a single time is the window [t, t].
+                args += ['--t1', str(self._current_time),
+                         '--t2', str(self._current_time)]
+                context_added.append(f"time: {self._current_time}")
             if self._current_t1 is not None and '--t1' not in args:
                 args.append('--t1'); args.append(str(self._current_t1))
                 context_added.append(f"t1: {self._current_t1}")
@@ -4337,6 +4410,13 @@ class InteractiveShell:
             args.append('--var')
             args.append(self._current_var)
             context_added.append(f"var: {self._current_var}")
+
+        if ('t1' in allowed and self._current_time is not None
+                and t1_flag not in args and t2_flag not in args):
+            # Neither takes a single-step flag, so one time is the window [t, t].
+            args += [t1_flag, str(self._current_time),
+                     t2_flag, str(self._current_time)]
+            context_added.append(f"time: {self._current_time}")
 
         if 't1' in allowed and self._current_t1 is not None and t1_flag not in args:
             args.append(t1_flag)
