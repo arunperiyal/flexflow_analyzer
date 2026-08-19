@@ -906,7 +906,6 @@ class FlexFlowCompleter(Completer):
             'case':    'Set current case directory',
             'problem': 'Override problem name',
             'rundir':  'Override run directory',
-            'dir':     'Override output directory',
             'node':    'Set node ID for data/field commands',
             't1':      'Set start time',
             't2':      'Set end time',
@@ -998,7 +997,6 @@ class FlexFlowCompleter(Completer):
                 ('case',    'Clear case context'),
                 ('problem', 'Clear problem context'),
                 ('rundir',  'Clear run directory context'),
-                ('dir',     'Clear output directory context'),
                 ('node',    'Clear node context'),
                 ('t1',      'Clear start time'),
                 ('t2',      'Clear end time'),
@@ -1082,7 +1080,6 @@ class InteractiveShell:
         self._current_case_name: Optional[str] = None  # Just the case name for display
         self._current_problem: Optional[str] = None  # Problem name/ID
         self._current_rundir: Optional[str] = None  # Run directory
-        self._current_output_dir: Optional[str] = None  # Output directory (dir from simflow.config)
         self._current_node: Optional[int] = None  # Node ID for data/field commands
         self._current_t1: Optional[float] = None  # Start time for data/field/plot commands
         self._current_t2: Optional[float] = None  # End time for data/field/plot commands
@@ -1277,7 +1274,6 @@ class InteractiveShell:
             'case': '#00aaff bold',     # Cyan for case
             'problem': '#ffaa00',       # Yellow/orange for problem
             'rundir': '#ff00ff',        # Magenta for rundir
-            'outputdir': '#00ff00',     # Green for output dir
             'remote': '#ffaaee',        # Light magenta for remote
             'var': '#00ddaa',           # Teal for variable
             'zone': '#dd88ff',          # Light purple for zone
@@ -1336,9 +1332,6 @@ class InteractiveShell:
         if self._current_rundir:
             rundir_name = Path(self._current_rundir).name
             contexts.append(f'<rundir>r:{rundir_name}</rundir>')
-        if self._current_output_dir:
-            output_dir_name = Path(self._current_output_dir).name
-            contexts.append(f'<outputdir>d:{output_dir_name}</outputdir>')
         if self._current_remote:
             contexts.append(f'<remote>rem:{self._current_remote}</remote>')
         if self._current_node is not None:
@@ -1494,8 +1487,6 @@ class InteractiveShell:
                     self.unuse_problem()
                 elif subcommand == 'rundir':
                     self.unuse_rundir()
-                elif subcommand == 'dir':
-                    self.unuse_dir()
                 elif subcommand == 'node':
                     self.unuse_node()
                 elif subcommand == 't1':
@@ -1514,7 +1505,7 @@ class InteractiveShell:
                     self.unuse_all()
                 else:
                     self.console.print(f"[yellow]Unknown subcommand:[/yellow] {subcommand}")
-                    self.console.print("[dim]Use: unuse [case|problem|rundir|dir|node|t1|t2|remote|var|zone|freq|all][/dim]")
+                    self.console.print("[dim]Use: unuse [case|problem|rundir|node|t1|t2|remote|var|zone|freq|all][/dim]")
             return True
 
         # Show the working directory. The contexts moved to `use list`, which
@@ -2534,15 +2525,14 @@ class InteractiveShell:
         self.console.print("[bold]CONTEXTS:[/bold]")
         self.console.print("  case       Case directory path (or * to iterate all cases from .cases file)")
         self.console.print("  problem    Problem name")
-        self.console.print("  rundir     Run directory path")
-        self.console.print("  dir        Output directory (relative to case)")
+        self.console.print("  rundir     Run directory inside the case (e.g. RUN_1)")
         self.console.print("  node       Node ID for data/field commands")
         self.console.print("  t1         Start time for data/field/plot commands")
         self.console.print("  t2         End time for data/field/plot commands")
         self.console.print("  remote     Remote machine for uploads (default for 'case upload')")
         self.console.print("  var        Variable(s) for field extract, data table/stats")
         self.console.print("  zone       Zone for field extract/compute/convert/render")
-        self.console.print("  freq       Output frequency for field sweeps and run post")
+        self.console.print("  freq       PLT output frequency: field sweeps, run post, data stats")
         self.console.print()
         self.console.print("[bold]EXAMPLES:[/bold]")
         self.console.print("  [dim]# Single context[/dim]")
@@ -2586,7 +2576,6 @@ class InteractiveShell:
         self.console.print("  unuse case              Clear case context")
         self.console.print("  unuse problem           Clear problem context")
         self.console.print("  unuse rundir            Clear run directory context")
-        self.console.print("  unuse dir               Clear output directory context")
         self.console.print("  unuse node              Clear node context")
         self.console.print("  unuse t1                Clear start time context")
         self.console.print("  unuse t2                Clear end time context")
@@ -2599,7 +2588,6 @@ class InteractiveShell:
         self.console.print("  unuse case              [dim]# Clear only case context[/dim]")
         self.console.print("  unuse node              [dim]# Clear only node context[/dim]")
         self.console.print("  unuse problem           [dim]# Clear only problem context[/dim]")
-        self.console.print("  unuse dir               [dim]# Clear only output directory[/dim]")
         self.console.print("  unuse                   [dim]# Clear everything[/dim]")
         self.console.print()
 
@@ -2609,7 +2597,6 @@ class InteractiveShell:
             'case': self.use_case,
             'problem': self.use_problem,
             'rundir': self.use_rundir,
-            'dir': self.use_dir,
             'node': self.use_node,
             't1': self.use_t1,
             't2': self.use_t2,
@@ -2630,7 +2617,6 @@ class InteractiveShell:
         ('case', '_current_case'),
         ('problem', '_current_problem'),
         ('rundir', '_current_rundir'),
-        ('dir', '_current_output_dir'),
         ('node', '_current_node'),
         ('t1', '_current_t1'),
         ('t2', '_current_t2'),
@@ -2853,49 +2839,6 @@ class InteractiveShell:
         self.console.print("[dim]Commands like 'case upload' will use this remote by default[/dim]")
         return True
 
-    def use_dir(self, dir_input: str) -> bool:
-        """
-        Set current output directory context (from simflow.config dir field).
-
-        This is for convenience when multiple output directories exist within a case.
-        The directory is relative to the case directory, not the current working directory.
-
-        Args:
-            dir_input: Output directory name/path (e.g., 'RUN_1', './RUN_2')
-        """
-        # Check if case context is set
-        if not self._current_case:
-            self.console.print("[yellow]Warning:[/yellow] No case context set. Use 'use case <case>' first.")
-            self.console.print("[dim]Setting output directory anyway - will be relative to case when case is set[/dim]")
-            self._current_output_dir = dir_input
-            self.console.print(f"[green]✓[/green] Output directory set to: [cyan]{dir_input}[/cyan]")
-            return True
-
-        try:
-            # Output directory is relative to case directory
-            case_path = Path(self._current_case)
-            dir_path = Path(dir_input)
-
-            # Remove leading ./ if present
-            if str(dir_path).startswith('./'):
-                dir_path = Path(str(dir_path)[2:])
-
-            # If not absolute, make it relative to case directory
-            if not dir_path.is_absolute():
-                dir_path = case_path / dir_path
-
-            dir_path = dir_path.resolve()
-
-            # No existence check - this is just for convenience/context
-            self._current_output_dir = str(dir_path)
-            self.console.print(f"[green]✓[/green] Output directory set to: [cyan]{dir_path.name}[/cyan]")
-            self.console.print(f"[dim]Path: {dir_path}[/dim]")
-            return True
-
-        except Exception as e:
-            self.console.print(f"[red]Error resolving path: {e}[/red]")
-            return False
-
     def use_rundir(self, rundir_input: str) -> bool:
         """
         Set current run directory context (output directory within case).
@@ -3063,15 +3006,6 @@ class InteractiveShell:
             self.console.print(f"[green]✓[/green] Remote context cleared: [dim]{old_remote}[/dim]")
         else:
             self.console.print("[dim]No remote context is set[/dim]")
-    def unuse_dir(self) -> None:
-        """Clear output directory context."""
-        if self._current_output_dir:
-            old_dir = Path(self._current_output_dir).name
-            self._current_output_dir = None
-            self.console.print(f"[green]✓[/green] Output directory context cleared: [dim]{old_dir}[/dim]")
-        else:
-            self.console.print("[dim]No output directory context is set[/dim]")
-
     def unuse_rundir(self) -> None:
         """Clear run directory context."""
         if self._current_rundir:
@@ -3148,9 +3082,6 @@ class InteractiveShell:
         if self._current_rundir:
             cleared.append(f"rundir: {Path(self._current_rundir).name}")
             self._current_rundir = None
-        if self._current_output_dir:
-            cleared.append(f"output dir: {Path(self._current_output_dir).name}")
-            self._current_output_dir = None
         if self._current_node is not None:
             cleared.append(f"node: {self._current_node}")
             self._current_node = None
@@ -4374,6 +4305,16 @@ class InteractiveShell:
             args.append('--node')
             args.append(str(self._current_node))
             context_added.append(f"node: {self._current_node}")
+
+        # freq context -> --freq for `data stats`, whose maxloc/minloc need the
+        # PLT output frequency. Without this the flag stays unset and the
+        # command falls back to outFreq in simflow.config -- so a freq set in
+        # the shell looked like it did nothing, because it never arrived.
+        if (cmd == 'data' and time_subcmd == 'stats'
+                and self._current_freq is not None and '--freq' not in args):
+            args.append('--freq')
+            args.append(str(self._current_freq))
+            context_added.append(f"freq: {self._current_freq}")
 
         # var context -> --var for `data table` / `data stats`. The same idea as
         # `field extract --variables`, spelled the way these take it. Both
