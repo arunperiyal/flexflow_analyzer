@@ -713,6 +713,16 @@ def _add_lights(p, cfg, center, span, warn):
     specs = cfg.get("lights") or []
     if not specs:
         return
+    if isinstance(specs, dict):
+        # `lights:` followed by an indented mapping is one light without its
+        # dash. Iterating it would walk the keys and reject each as malformed,
+        # which is a confusing way to say "you left out a `-`".
+        warn("lights: must be a list -- each light starts with a dash:\n"
+             "        lights:\n"
+             "          - direction: [0, 0.574, 0.819]\n"
+             "            intensity: 1.0\n"
+             "        Reading the one given as a single light.")
+        specs = [specs]
     import pyvista as pv
 
     p.remove_all_lights()
