@@ -6,9 +6,14 @@ truth the CLI has to override. And a combined template carrying both `contour:`
 and `slice:` would teach the reader that both apply to both modes, when in fact
 each mode ignores the other's section entirely.
 
-Everything except that one section is common to both, deliberately kept
-byte-identical so a config written for one mode can be adapted to the other by
-swapping the block.
+Most of the file is shared. The `surface:` block is not, because the advice
+genuinely inverts between the modes: an isosurface is a curved tube whose form
+lives in its shading, and a cut plane is flat and facing the camera, where
+lighting can only dim it. A shared block would have to recommend one and be
+wrong for the other, so each mode carries its own.
+
+The strings are concatenated, never `.format()`-ed: a YAML comment showing a
+mapping is full of braces, and every one would have to be doubled.
 """
 
 _COMMON_HEAD = """\
@@ -17,29 +22,39 @@ input:
 
 output:
   # prefix is ignored: paths come from --output and the case directory.
+  # Images are filed per camera view: <case>/NAME/<view>/NAME_<step>.png
   save_vtp: true                 # also write the cut surface as .vtp beside each
                                  # image -- one per timestep, so a long sweep
                                  # leaves a lot of them. false, or --no-vtp,
                                  # gives images alone.
 
 image:
-  resolution: [1600, 1000]
+  resolution: [1600, 1000]       # match it to the domain's aspect or the render
+                                 # is letterboxed: a 10-wide by 12-tall crop
+                                 # wants something near [1000, 1200]
   background: white              # name (white/black/gray) or RGB [r,g,b] in 0-1
-  transparent: false
+  transparent: false             # true drops the background, for a figure that
+                                 # sits on a coloured page
   ssao: null                     # true, or a mapping of its options --
                                  #   ssao:
                                  #     radius: 0.05
                                  #     bias: 0.005
                                  #     blur: true
-                                 # Ambient occlusion: darkens crevices, so relief
-                                 # shows even on a face lit head-on, where
+                                 # Ambient occlusion: darkens crevices, so a
+                                 # groove shows even on a face lit head-on where
                                  # ordinary shading gives up. radius is in world
-                                 # units -- set it near the feature's own size.
+                                 # units -- set it near the feature's own size,
+                                 # not the body's. Much smaller and nothing
+                                 # darkens; much larger and everything does.
 """
 
-_COMMON_TAIL = """\
+_BODY_AND_COLOR = """\
 body:                            # a surface zone drawn alongside, for context
   zone: null                     # e.g. cyl -- the body the wake comes off; null = none
+                                 # Re-read every timestep, so a deforming body
+                                 # follows the flow. Not cropped by domain:
+                                 # below, so the whole span stays in frame and
+                                 # keeps driving the camera fit.
   color: lightgray               # solid colour, used when `variable` is null
   variable: null                 # or colour the body by a scalar (e.g. Pressure).
                                  # `relief` is computed from the body's own
@@ -50,13 +65,16 @@ body:                            # a surface zone drawn alongside, for context
                                  # the one reliable way to show a groove.
                                  # Greys_r and no scalar bar by default; set
                                  # preset:, range: and show_scalar_bar: to change
-  opacity: 1.0
-  show_edges: false
+  opacity: 1.0                   # the body hides the cut where they overlap,
+                                 # which is usually wanted: the plane passes
+                                 # through the body's middle
+  show_edges: false              # every cell boundary. A diagnostic, not a
+                                 # finish -- see feature_edges below
   # Shading. On a solid colour this is the only thing that shows the body's
-  # shape -- grooves, strakes, a fairing. But it does the work only when the
-  # light is off to one side: see lights: below. Measured on a 4-groove
-  # cylinder, these settings with a raking light took the groove contrast from
-  # 2 grey levels to 139.
+  # shape, and it does that work only when the light is off to one side: see
+  # lights: below. Measured on a 4-groove cylinder, these settings WITH a
+  # raking light took the groove contrast from 2 grey levels to 139. Without
+  # one they made it worse than leaving the block alone.
   lighting: null                 # false = flat, and relief disappears entirely
   ambient: null                  # 0..1, try 0.35 -- keeps the shadow side
                                  # readable without filling the grooves in
@@ -75,7 +93,8 @@ body:                            # a surface zone drawn alongside, for context
   edge_width: 2.0
 
 color:
-  variable: U                    # flow in z -> W ; flow in x -> U
+  variable: U                    # flow in z -> W ; flow in x -> U ; xVor/yVor/
+                                 # zVor for vorticity about each axis
   preset: coolwarm               # matplotlib cmap, or a ParaView preset name
                                  # bwr gives pure blue/red ends, coolwarm muted
                                  # small_rainbow is Tecplot's Small Rainbow, for
@@ -88,30 +107,53 @@ color:
                                  # for the rest so the frames can be compared).
                                  # A range narrower than the data is warned
                                  # about -- outside it everything clamps to the
-                                 # two end colours.
+                                 # two end colours, which is exactly what you
+                                 # want when colouring by the SIGN of a variable
+                                 # and a mistake otherwise
   log_scale: false
-  title: null
+  title: null                    # the scalar bar's label; default is the
+                                 # variable's own name
   show_scalar_bar: true
   text_color: black
 
 domain:                          # crop to a box before cutting; null = no limit
-  xmin: null
-  xmax: null
-  ymin: null
-  ymax: null
-  zmin: null
+  xmin: null                     # The biggest lever on how long a sweep takes:
+  xmax: null                     # a far field 30 diameters across contributes
+  ymin: null                     # nothing to a wake picture but is cut, framed
+  ymax: null                     # and rendered all the same. Cropping also
+  zmin: null                     # frames the camera on what is left.
   zmax: null
 
 threshold:                       # keep cells with scalar in [min,max]; null disables
   variable: null
   min: null
   max: null
+"""
 
+_SURFACE_SLICE = """\
 surface:
   opacity: 1.0
   show_edges: false
-  # Shading. A lit, curved tube is darker than the same colour in the flat
-  # legend swatch, because the shading follows the angle to the light.
+  # A cut plane is flat and faces the camera, so every point on it is lit
+  # identically and lighting can only scale the colours down: ambient 0.3 plus
+  # diffuse 0.6 renders the whole plane at 90% and a pure red comes out at 229
+  # instead of 254. false gives exactly what the colormap defines, which is
+  # what a figure sitting beside a Tecplot one needs.
+  lighting: false
+  ambient: null                  # only reached when lighting is true; on a flat
+  diffuse: null                  # cut there is nothing for them to reveal
+  specular: null
+  specular_power: null
+  smooth_shading: null
+"""
+
+_SURFACE_ISO = """\
+surface:
+  opacity: 1.0
+  show_edges: false
+  # An isosurface is curved, so its shading is what gives it form -- but a lit
+  # tube is darker than the same colour in the flat legend swatch, because the
+  # shading follows the angle to the light.
   lighting: null                 # false = no shading: exactly the legend's
                                  # colours, but tubes go flat with no depth
   ambient: null                  # 0..1, try 0.3 -- lifts the shadowed side
@@ -120,26 +162,44 @@ surface:
   specular: null                 # 0..1, highlights; 0 kills the shine
   specular_power: null
   smooth_shading: null           # true rounds off the marching-cubes facets
+"""
 
+_COMMON_END = """\
 axes:
-  orientation_axes: true
+  orientation_axes: true         # the little xyz triad in the corner
   bounds_grid: false             # a labelled box around the data -- use it to
                                  # read off the coordinates for a ruler below
 
 lights: []                       # empty keeps VTK's default kit, which lights
-                                 # from the camera -- and a groove seen head-on
-                                 # is then lit as evenly as the land beside it.
-                                 # A raking light off to one side is what makes
-                                 # relief read. One strong light, not two:
+                                 # from the camera. That is the worst place for
+                                 # showing shape: a groove seen head-on is lit
+                                 # as evenly as the land beside it, and no
+                                 # amount of ambient/diffuse tuning recovers a
+                                 # gradient the geometry never produced.
+                                 #
+                                 # A raking light -- off to one side, the trick
+                                 # every photograph of a coin uses -- is what
+                                 # makes relief read:
+                                 #
+                                 #   lights:
+                                 #     - direction: [0, 0.574, 0.819]
+                                 #       intensity: 1.0
+                                 #
+                                 # 55 degrees off the view axis measured best on
+                                 # a 4-groove cylinder. ONE light, not two:
                                  # lights on both sides fill each other's
-                                 # shadows and the contrast collapses.
-                                 # - direction: [0, 0.574, 0.819]   # 55 deg off
-                                 #   intensity: 1.0                 # the view axis
+                                 # shadows and the contrast collapses from 139
+                                 # back to 9. If the shadow side goes too dark,
+                                 # raise body.ambient rather than adding a
+                                 # second light.
+                                 #
                                  # direction is a vector from the subject toward
-                                 # the light, scaled to the scene, so it carries
-                                 # between cases; position: is absolute instead.
-                                 # Pair it with body ambient ~0.35, diffuse ~0.75,
-                                 # specular 0, smooth_shading false.
+                                 # the light, scaled to the scene span, so it
+                                 # carries between cases; position: is absolute
+                                 # instead, and distance: (default 2.5 spans)
+                                 # sets how far out a direction reaches.
+                                 # A single light may be written as a mapping
+                                 # rather than a one-item list.
 
 annotations:
   rulers: []                     # dimension lines, in the mesh's coordinates:
@@ -154,7 +214,10 @@ annotations:
 
 ISO_TEMPLATE = """\
 # flexflow field render iso -- configuration
-""" + _COMMON_HEAD.format(prefix="iso") + """
+#
+# An isosurface of a scalar -- Q-criterion or lambda2 for vortex tubes --
+# coloured by another variable, with the body drawn alongside for context.
+""" + _COMMON_HEAD + """
 contour:
   variable: QCriterion          # or lambda2 -- computed from U,V,W if
                                # the solver did not write it. lambda2 is
@@ -165,8 +228,9 @@ contour:
                                # Reported when it is used -- replace it with a
                                # value picked by eye, e.g. [20] or [-1]
 
-""" + _COMMON_TAIL + """
-# One PNG per view. Pick ONE camera style: camera_file / direction / position / azimuth.
+""" + _BODY_AND_COLOR + "\n" + _SURFACE_ISO + "\n" + _COMMON_END + """
+# One PNG per view, each in its own directory. Pick ONE camera style per view:
+# camera_file / direction / position / azimuth.
 views:
   - {name: iso, azimuth: 30, elevation: 20, zoom: 1.0}
   - {name: top, direction: "+z", up: [0, 1, 0]}
@@ -176,18 +240,54 @@ views:
 
 SLICE_TEMPLATE = """\
 # flexflow field render slice -- configuration
-""" + _COMMON_HEAD.format(prefix="slice") + """
+#
+# A cut plane through the volume, coloured by a scalar, with the body drawn
+# beside it for context.
+#
+# The plane and the body want opposite treatment, and most of the confusion
+# here comes from giving them the same:
+#
+#   the cut plane   is flat and faces the camera. Lighting can only dim it, so
+#                   surface.lighting is false below and the colours come out
+#                   exactly as the colormap defines them.
+#
+#   the body        is curved, and on a solid colour its shape exists only in
+#                   the shading -- which needs a light off to one side, or the
+#                   shape turned into colour instead.
+#
+# To show a grooved or straked body, in order of how reliably it works:
+#
+#   1. body.variable: relief     colour from the geometry itself. Independent
+#                                of the light and of which way a groove faces.
+#   2. lights: one raking light  plus body ambient ~0.35, diffuse ~0.75,
+#                                specular 0, smooth_shading false
+#   3. image.ssao: true          darkens the crevices
+#   4. body.feature_edges: 30    outline the creases, without a wireframe
+#
+# They compose. 1 alone is usually enough; 2 is what makes a grey body read as
+# a solid object rather than a flat band.
+""" + _COMMON_HEAD + """
 slice:
   normal: z                      # axis (x/y/z, -x/-y/-z) or a vector [nx, ny, nz]
-  origin: null                   # null = the mesh centre
-  count: 1                       # >1: that many planes evenly spaced along the normal
+                                 # An axis name also aims the default camera
+                                 # down it; a vector cannot, so set views: too
+  origin: null                   # null = the mesh centre. [0, 0, 0] to cut
+                                 # through the body's own axis
+  count: 1                       # >1: that many planes evenly spaced along the
+                                 # normal, all in one image -- not one file each
 
-""" + _COMMON_TAIL + """
+""" + _BODY_AND_COLOR + "\n" + _SURFACE_SLICE + "\n" + _COMMON_END + """
 # A plane is invisible edge-on, so the default is a single view looking straight
-# down the normal, in parallel projection. Override freely -- an explicit views:
-# block always wins over what --normal would have chosen.
+# down the normal, in parallel projection. An explicit views: block always wins
+# over what --normal would have chosen.
+#
+# `up` sets which way the body's axis runs in the frame: up: [1, 0, 0] puts the
+# x axis vertical. Looking straight down the normal is the honest view of a cut
+# but the worst one for the body's relief -- add a second, oblique view if the
+# body is the point.
 views:
   - {name: plane, direction: "+z", parallel: true}
+  # - {name: oblique, azimuth: 25, elevation: 15, zoom: 1.4}
   # - {name: saved, camera_file: cam.yml}       # a view saved by --pick-camera
   # - {name: saved, camera_file: mystate.pvsm}  # or a ParaView Save State frame
 """
