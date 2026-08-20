@@ -25,6 +25,8 @@ Config schema (dict; missing keys fall back to DEFAULTS):
     threshold: variable, min, max
     surface  : opacity, show_edges
     axes     : orientation_axes, bounds_grid
+    lights   : list; each {direction|position, intensity, distance} -- a raking
+               light is what makes a groove or a strake read as relief
     body     : zone, color, variable, opacity, show_edges + the shading keys
     annotations: rulers [{from: [x,y,z], to: [x,y,z], title}]
     views    : list; each view picks ONE of camera_file / direction /
@@ -107,6 +109,9 @@ DEFAULTS = {
     # Dimension lines: each {from: [x,y,z], to: [x,y,z]} draws a ruler between
     # two points of the mesh's own coordinates, with the distance labelled.
     "annotations": {"rulers": []},
+    # Lights. Empty keeps VTK's default kit, which lights from the camera and so
+    # flattens exactly the relief a raking light reveals. See _add_lights.
+    "lights": [],
     "views": [
         {"name": "iso", "azimuth": 30, "elevation": 20, "roll": 0, "zoom": 1.0},
         {"name": "xy",  "direction": "+z", "up": [0, 1, 0]},
@@ -687,6 +692,52 @@ def _enable_ssao(p, cfg, warn):
         warn(f"could not enable ssao: {exc}")
 
 
+def _add_lights(p, cfg, center, span, warn):
+    """Replace the default lighting with lights of one's own.
+
+    VTK lights from the camera, which is the worst possible position for
+    showing relief: a groove seen head-on is lit as evenly as the land beside
+    it, and no amount of ambient/diffuse tuning recovers a gradient that the
+    geometry never produced. A light off to one side -- a raking light, the
+    trick every photograph of a coin or a carving uses -- turns the same groove
+    into a bright wall and a dark one.
+
+    Symmetry undoes it: lights on both sides fill each other's shadows and the
+    contrast collapses. One strong light and, if the shadow side goes too dark,
+    ambient rather than a second light.
+
+    `direction` is a vector from the subject toward the light, scaled to the
+    scene, and travels between cases; `position` is absolute, for when a case
+    wants a particular one.
+    """
+    specs = cfg.get("lights") or []
+    if not specs:
+        return
+    import pyvista as pv
+
+    p.remove_all_lights()
+    for i, spec in enumerate(specs, 1):
+        if not isinstance(spec, dict):
+            warn(f"lights[{i}] should be a mapping with `direction` or `position`")
+            continue
+        focal = _as_point(spec.get("focal_point")) or list(center)
+        position = _as_point(spec.get("position"))
+        if position is None:
+            direction = _as_point(spec.get("direction"))
+            if direction is None:
+                warn(f"lights[{i}] needs `direction` (or `position`), three numbers")
+                continue
+            length = sum(v * v for v in direction) ** 0.5 or 1.0
+            reach = float(spec.get("distance") or 2.5) * span
+            position = [focal[j] + direction[j] / length * reach for j in range(3)]
+        try:
+            p.add_light(pv.Light(position=position, focal_point=focal,
+                                 intensity=float(spec.get("intensity", 1.0)),
+                                 light_type=spec.get("type", "scene light")))
+        except Exception as exc:
+            warn(f"lights[{i}]: {exc}")
+
+
 def _add_annotations(p, cfg, text_color, warn):
     """Dimension lines and a graduated box -- what makes a picture measurable.
 
@@ -840,6 +891,7 @@ def render_surface(cfg, surf, log=print, warn=None, state=None):
             _add_body(p, body, cfg, text_color)
         if cfg["axes"].get("orientation_axes", True):
             p.add_axes(color=text_color)
+        _add_lights(p, cfg, center, span, warn)
         _enable_ssao(p, cfg, warn)
         _add_annotations(p, cfg, text_color, warn)
         _setup_camera(p, view, center, span)

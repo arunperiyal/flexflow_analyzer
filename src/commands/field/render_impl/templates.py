@@ -45,15 +45,19 @@ body:                            # a surface zone drawn alongside, for context
   opacity: 1.0
   show_edges: false
   # Shading. On a solid colour this is the only thing that shows the body's
-  # shape -- grooves, strakes, a fairing. Low ambient keeps the troughs dark
-  # and a little specular picks out their edges. Leave smooth_shading off:
-  # it rounds over exactly the creases that make a groove read as a groove.
+  # shape -- grooves, strakes, a fairing. But it does the work only when the
+  # light is off to one side: see lights: below. Measured on a 4-groove
+  # cylinder, these settings with a raking light took the groove contrast from
+  # 2 grey levels to 139.
   lighting: null                 # false = flat, and relief disappears entirely
-  ambient: null                  # 0..1, try 0.15 for relief
-  diffuse: null                  # 0..1, try 0.9
-  specular: null                 # 0..1, try 0.4 to catch the groove edges
-  specular_power: null           # try 15
-  smooth_shading: null
+  ambient: null                  # 0..1, try 0.35 -- keeps the shadow side
+                                 # readable without filling the grooves in
+  diffuse: null                  # 0..1, try 0.75
+  specular: null                 # 0..1, 0 for a matte body. A highlight sits
+                                 # on the lands and washes the grooves out
+  specular_power: null
+  smooth_shading: null           # false: true interpolates normals across the
+                                 # groove edges and rounds them away
   feature_edges: null            # N degrees: outline the creases sharper than
                                  # this -- a groove's lip and root, and nothing
                                  # else. Not show_edges, which draws every cell
@@ -113,6 +117,21 @@ axes:
   orientation_axes: true
   bounds_grid: false             # a labelled box around the data -- use it to
                                  # read off the coordinates for a ruler below
+
+lights: []                       # empty keeps VTK's default kit, which lights
+                                 # from the camera -- and a groove seen head-on
+                                 # is then lit as evenly as the land beside it.
+                                 # A raking light off to one side is what makes
+                                 # relief read. One strong light, not two:
+                                 # lights on both sides fill each other's
+                                 # shadows and the contrast collapses.
+                                 # - direction: [0, 0.574, 0.819]   # 55 deg off
+                                 #   intensity: 1.0                 # the view axis
+                                 # direction is a vector from the subject toward
+                                 # the light, scaled to the scene, so it carries
+                                 # between cases; position: is absolute instead.
+                                 # Pair it with body ambient ~0.35, diffuse ~0.75,
+                                 # specular 0, smooth_shading false.
 
 annotations:
   rulers: []                     # dimension lines, in the mesh's coordinates:
