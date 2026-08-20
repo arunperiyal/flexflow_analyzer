@@ -87,7 +87,9 @@ DEFAULTS = {
                 "ambient": None, "diffuse": None, "specular": None,
                 "specular_power": None, "smooth_shading": None,
                 # feature_edges: outline creases sharper than N degrees.
-                "feature_edges": None, "edge_color": None, "edge_width": 2.0},
+                "feature_edges": None, "edge_color": None, "edge_width": 2.0,
+                # variable: "relief" is computed from the body's own geometry.
+                "preset": None, "range": None, "show_scalar_bar": None},
     # levels: N discrete colour bands instead of a continuous ramp, the way
     # Tecplot and ParaView band a contour legend. null = continuous.
     "color":   {"variable": "U", "preset": "coolwarm", "range": None,
@@ -502,6 +504,54 @@ def _union_bounds(*meshes):
         for i in range(6))
 
 
+RELIEF = "relief"
+
+
+def body_relief(body):
+    """Each point's radial deviation from its station's median radius.
+
+    Zero on the land, negative in a groove, positive on a strake. Colouring by
+    it turns relief into colour, which is the one way of showing a groove that
+    does not depend on where the light is or which way the body faces: a groove
+    on the far edge of the silhouette reads exactly as strongly as one facing
+    the camera.
+
+    The station centroid is recomputed along the body rather than assumed at
+    the origin, so a cylinder that has displaced -- as a vibrating one has, by
+    most of a diameter here -- still measures its own shape rather than its
+    offset. And the reference radius is the station's *median*, not its mean,
+    so grooves cutting a third of the circumference do not drag the level they
+    are being measured against down with them.
+    """
+    import numpy as np
+
+    pts = np.asarray(body.points, dtype=float)
+    if len(pts) < 8:
+        return np.zeros(len(pts))
+    extent = pts.max(0) - pts.min(0)
+    axis = int(np.argmax(extent))
+    other = [i for i in range(3) if i != axis]
+    if extent[axis] <= 0:
+        return np.zeros(len(pts))
+
+    # Binned rather than matched on exact coordinates: a structured body repeats
+    # its axial stations exactly and an unstructured one never does.
+    nbins = int(min(400, max(20, len(pts) // 200)))
+    edges = np.linspace(pts[:, axis].min(), pts[:, axis].max() + 1e-12, nbins + 1)
+    which = np.clip(np.digitize(pts[:, axis], edges) - 1, 0, nbins - 1)
+
+    relief = np.zeros(len(pts))
+    for b in range(nbins):
+        sel = np.where(which == b)[0]
+        if len(sel) < 4:
+            continue
+        ring = pts[sel][:, other]
+        centre = ring.mean(0)
+        r = np.hypot(ring[:, 0] - centre[0], ring[:, 1] - centre[1])
+        relief[sel] = r - np.median(r)
+    return relief
+
+
 def _add_feature_edges(p, body, spec, text_color):
     """Draw the body's creases as lines: a groove's outline, not a wireframe.
 
@@ -541,13 +591,23 @@ def _add_body(p, body, cfg, text_color):
     """
     spec = cfg.get("body", {})
     variable = spec.get("variable")
+    if variable == RELIEF and RELIEF not in body.point_data:
+        body.point_data[RELIEF] = body_relief(body)
     common = dict(opacity=float(spec.get("opacity", 1.0)),
                   show_edges=bool(spec.get("show_edges")),
                   **shading_kwargs(cfg, "body"))
     _add_feature_edges(p, body, spec, text_color)
     if variable and variable in body.point_data:
-        p.add_mesh(body, scalars=variable, cmap=to_cmap(spec.get("preset", "viridis")),
-                   scalar_bar_args={"title": variable, "color": text_color}, **common)
+        # Greys for relief: it is the body's shape, not a field, and should
+        # still look like a body rather than a heat map.
+        default_cmap = "Greys_r" if variable == RELIEF else "viridis"
+        p.add_mesh(body, scalars=variable,
+                   cmap=to_cmap(spec.get("preset") or default_cmap),
+                   clim=spec.get("range"),
+                   show_scalar_bar=bool(spec.get("show_scalar_bar",
+                                                 variable != RELIEF)),
+                   scalar_bar_args={"title": variable, "color": text_color},
+                   **common)
     else:
         # A solid colour is the usual want: the body is context, and a second
         # scalar bar competing with the isosurface's is rarely what you meant.

@@ -41,7 +41,15 @@ _COMMON_TAIL = """\
 body:                            # a surface zone drawn alongside, for context
   zone: null                     # e.g. cyl -- the body the wake comes off; null = none
   color: lightgray               # solid colour, used when `variable` is null
-  variable: null                 # or colour the body by a scalar (e.g. Pressure)
+  variable: null                 # or colour the body by a scalar (e.g. Pressure).
+                                 # `relief` is computed from the body's own
+                                 # geometry: 0 on the land, negative in a groove,
+                                 # positive on a strake. It shows shape as colour,
+                                 # so unlike shading it does not depend on where
+                                 # the light is or which way a feature faces --
+                                 # the one reliable way to show a groove.
+                                 # Greys_r and no scalar bar by default; set
+                                 # preset:, range: and show_scalar_bar: to change
   opacity: 1.0
   show_edges: false
   # Shading. On a solid colour this is the only thing that shows the body's
