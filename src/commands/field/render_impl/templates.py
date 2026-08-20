@@ -35,6 +35,16 @@ body:                            # a surface zone drawn alongside, for context
   variable: null                 # or colour the body by a scalar (e.g. Pressure)
   opacity: 1.0
   show_edges: false
+  # Shading. On a solid colour this is the only thing that shows the body's
+  # shape -- grooves, strakes, a fairing. Low ambient keeps the troughs dark
+  # and a little specular picks out their edges. Leave smooth_shading off:
+  # it rounds over exactly the creases that make a groove read as a groove.
+  lighting: null                 # false = flat, and relief disappears entirely
+  ambient: null                  # 0..1, try 0.15 for relief
+  diffuse: null                  # 0..1, try 0.9
+  specular: null                 # 0..1, try 0.4 to catch the groove edges
+  specular_power: null           # try 15
+  smooth_shading: null
 
 color:
   variable: U                    # flow in z -> W ; flow in x -> U

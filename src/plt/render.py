@@ -25,6 +25,7 @@ Config schema (dict; missing keys fall back to DEFAULTS):
     threshold: variable, min, max
     surface  : opacity, show_edges
     axes     : orientation_axes, bounds_grid
+    body     : zone, color, variable, opacity, show_edges + the shading keys
     annotations: rulers [{from: [x,y,z], to: [x,y,z], title}]
     views    : list; each view picks ONE of camera_file / direction /
                position+focal+up / azimuth+elevation+roll ; optional zoom, parallel
@@ -74,8 +75,12 @@ DEFAULTS = {
     # A surface zone drawn alongside for context -- the body the vortices are
     # shedding from. `vtu` is filled in per timestep by the command layer,
     # because a deforming body moves and cannot be converted once and reused.
+    # Shading as for the surface: on a solid colour it is the only thing that
+    # shows the body's shape. See _add_body.
     "body":    {"zone": None, "vtu": None, "color": "lightgray", "variable": None,
-                "opacity": 1.0, "show_edges": False},
+                "opacity": 1.0, "show_edges": False, "lighting": None,
+                "ambient": None, "diffuse": None, "specular": None,
+                "specular_power": None, "smooth_shading": None},
     # levels: N discrete colour bands instead of a continuous ramp, the way
     # Tecplot and ParaView band a contour legend. null = continuous.
     "color":   {"variable": "U", "preset": "coolwarm", "range": None,
@@ -488,11 +493,20 @@ def _union_bounds(*meshes):
 
 
 def _add_body(p, body, cfg, text_color):
-    """Draw the context surface: a solid colour, or coloured by a variable."""
+    """Draw the context surface: a solid colour, or coloured by a variable.
+
+    The body carries the shape of the thing the flow is running past -- grooves,
+    strakes, fairings -- and on a flat colour that shape is visible only through
+    shading. So it takes the same lighting settings the cut surface does: low
+    ambient keeps the troughs dark, and a little specular picks out their edges.
+    Smooth shading is the one to leave off here, since it rounds over exactly
+    the creases that make a groove read as a groove.
+    """
     spec = cfg.get("body", {})
     variable = spec.get("variable")
     common = dict(opacity=float(spec.get("opacity", 1.0)),
-                  show_edges=bool(spec.get("show_edges")))
+                  show_edges=bool(spec.get("show_edges")),
+                  **shading_kwargs(cfg, "body"))
     if variable and variable in body.point_data:
         p.add_mesh(body, scalars=variable, cmap=to_cmap(spec.get("preset", "viridis")),
                    scalar_bar_args={"title": variable, "color": text_color}, **common)
@@ -571,8 +585,8 @@ SHADING_KEYS = ("lighting", "ambient", "diffuse", "specular", "specular_power",
                 "smooth_shading")
 
 
-def shading_kwargs(cfg):
-    """The surface's shading settings, passed on only where one was given.
+def shading_kwargs(cfg, section="surface"):
+    """A section's shading settings, passed on only where one was given.
 
     A lit, curved tube reads darker than the same colour in a flat legend
     swatch: the shading multiplies it by the angle between the surface and the
@@ -584,8 +598,8 @@ def shading_kwargs(cfg):
     silhouettes. Raising `ambient` instead lifts the shadowed side towards the
     true colour while keeping the form, which is generally the better trade.
     """
-    surface = cfg.get("surface", {}) or {}
-    return {k: surface[k] for k in SHADING_KEYS if surface.get(k) is not None}
+    block = cfg.get(section, {}) or {}
+    return {k: block[k] for k in SHADING_KEYS if block.get(k) is not None}
 
 
 def _as_point(value):
