@@ -26,6 +26,15 @@ image:
   resolution: [1600, 1000]
   background: white              # name (white/black/gray) or RGB [r,g,b] in 0-1
   transparent: false
+  ssao: null                     # true, or a mapping of its options --
+                                 #   ssao:
+                                 #     radius: 0.05
+                                 #     bias: 0.005
+                                 #     blur: true
+                                 # Ambient occlusion: darkens crevices, so relief
+                                 # shows even on a face lit head-on, where
+                                 # ordinary shading gives up. radius is in world
+                                 # units -- set it near the feature's own size.
 """
 
 _COMMON_TAIL = """\
@@ -45,6 +54,13 @@ body:                            # a surface zone drawn alongside, for context
   specular: null                 # 0..1, try 0.4 to catch the groove edges
   specular_power: null           # try 15
   smooth_shading: null
+  feature_edges: null            # N degrees: outline the creases sharper than
+                                 # this -- a groove's lip and root, and nothing
+                                 # else. Not show_edges, which draws every cell
+                                 # boundary and hides what it meant to show.
+                                 # try 30. A smooth body has none, and draws none
+  edge_color: null               # default: the text colour
+  edge_width: 2.0
 
 color:
   variable: U                    # flow in z -> W ; flow in x -> U

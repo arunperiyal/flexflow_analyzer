@@ -65,7 +65,10 @@ DEFAULTS = {
     # html: an orbitable page instead of PNGs (set by --output NAME.html).
     "output":  {"prefix": "iso", "save_vtp": True, "geometry": None,
                 "images": True, "image_path": None, "html": None},
-    "image":   {"resolution": [1600, 1000], "background": [1.0, 1.0, 1.0], "transparent": False},
+    # ssao: true, or a mapping of its options (radius, bias, kernel_size, blur).
+    # Darkens crevices, which is how relief shows on a face lit head-on.
+    "image":   {"resolution": [1600, 1000], "background": [1.0, 1.0, 1.0],
+                "transparent": False, "ssao": None},
     # isosurfaces: null lets the value be taken from the data. No constant can
     # serve as a default here -- see _default_isovalue.
     "contour": {"variable": "QCriterion", "isosurfaces": None},
@@ -80,7 +83,9 @@ DEFAULTS = {
     "body":    {"zone": None, "vtu": None, "color": "lightgray", "variable": None,
                 "opacity": 1.0, "show_edges": False, "lighting": None,
                 "ambient": None, "diffuse": None, "specular": None,
-                "specular_power": None, "smooth_shading": None},
+                "specular_power": None, "smooth_shading": None,
+                # feature_edges: outline creases sharper than N degrees.
+                "feature_edges": None, "edge_color": None, "edge_width": 2.0},
     # levels: N discrete colour bands instead of a continuous ramp, the way
     # Tecplot and ParaView band a contour legend. null = continuous.
     "color":   {"variable": "U", "preset": "coolwarm", "range": None,
@@ -492,6 +497,33 @@ def _union_bounds(*meshes):
         for i in range(6))
 
 
+def _add_feature_edges(p, body, spec, text_color):
+    """Draw the body's creases as lines: a groove's outline, not a wireframe.
+
+    show_edges draws every cell boundary, which on a body of any refinement is
+    a grey haze that hides the thing it was meant to reveal. Feature edges are
+    the ones where two faces meet at more than `feature_edges` degrees -- the
+    lip and the root of a groove, and nothing else. On a smooth cylinder there
+    are none, which is the right answer there too.
+    """
+    angle = spec.get("feature_edges")
+    if not angle:
+        return
+    try:
+        edges = body.extract_feature_edges(
+            feature_angle=float(angle), boundary_edges=False,
+            non_manifold_edges=False, manifold_edges=False, feature_edges=True)
+    except Exception:
+        return
+    if edges is None or edges.n_points == 0:
+        return
+    # `or`, not a .get default: edge_color is present in DEFAULTS as None, so
+    # the default argument never fires.
+    p.add_mesh(edges, color=to_rgb(spec.get("edge_color") or text_color),
+               line_width=float(spec.get("edge_width") or 2.0),
+               lighting=False, show_scalar_bar=False)
+
+
 def _add_body(p, body, cfg, text_color):
     """Draw the context surface: a solid colour, or coloured by a variable.
 
@@ -507,6 +539,7 @@ def _add_body(p, body, cfg, text_color):
     common = dict(opacity=float(spec.get("opacity", 1.0)),
                   show_edges=bool(spec.get("show_edges")),
                   **shading_kwargs(cfg, "body"))
+    _add_feature_edges(p, body, spec, text_color)
     if variable and variable in body.point_data:
         p.add_mesh(body, scalars=variable, cmap=to_cmap(spec.get("preset", "viridis")),
                    scalar_bar_args={"title": variable, "color": text_color}, **common)
@@ -627,6 +660,31 @@ def _kwargs_for(func, wanted):
     except (TypeError, ValueError):
         return dict(wanted)
     return {k: v for k, v in wanted.items() if k in allowed}
+
+
+def _enable_ssao(p, cfg, warn):
+    """Screen-space ambient occlusion: darken what is tucked away.
+
+    The one effect that shows relief without depending on where the light is.
+    A groove is a crevice, and SSAO darkens a point in proportion to how much
+    geometry surrounds it -- so the troughs go dark and the lands stay bright
+    even on a face pointing straight at the camera, which is exactly where
+    ordinary shading gives up.
+
+    Its radius is in world units and matters: much smaller than the feature and
+    nothing darkens, much larger and the whole body does.
+    """
+    spec = cfg.get("image", {}).get("ssao")
+    if not spec:
+        return
+    if not hasattr(p, "enable_ssao"):
+        warn("this pyvista has no enable_ssao, so image.ssao was ignored")
+        return
+    options = spec if isinstance(spec, dict) else {}
+    try:
+        p.enable_ssao(**_kwargs_for(p.enable_ssao, options))
+    except Exception as exc:
+        warn(f"could not enable ssao: {exc}")
 
 
 def _add_annotations(p, cfg, text_color, warn):
@@ -782,6 +840,7 @@ def render_surface(cfg, surf, log=print, warn=None, state=None):
             _add_body(p, body, cfg, text_color)
         if cfg["axes"].get("orientation_axes", True):
             p.add_axes(color=text_color)
+        _enable_ssao(p, cfg, warn)
         _add_annotations(p, cfg, text_color, warn)
         _setup_camera(p, view, center, span)
         return p
