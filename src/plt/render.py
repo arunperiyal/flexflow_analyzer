@@ -25,6 +25,9 @@ Config schema (dict; missing keys fall back to DEFAULTS):
     threshold: variable, min, max
     surface  : opacity, show_edges
     axes     : orientation_axes, bounds_grid
+    lights   : list; each {direction|position, intensity, distance} -- a raking
+               light is what makes a groove or a strake read as relief
+    body     : zone, color, variable, opacity, show_edges + the shading keys
     annotations: rulers [{from: [x,y,z], to: [x,y,z], title}]
     views    : list; each view picks ONE of camera_file / direction /
                position+focal+up / azimuth+elevation+roll ; optional zoom, parallel
@@ -64,7 +67,10 @@ DEFAULTS = {
     # html: an orbitable page instead of PNGs (set by --output NAME.html).
     "output":  {"prefix": "iso", "save_vtp": True, "geometry": None,
                 "images": True, "image_path": None, "html": None},
-    "image":   {"resolution": [1600, 1000], "background": [1.0, 1.0, 1.0], "transparent": False},
+    # ssao: true, or a mapping of its options (radius, bias, kernel_size, blur).
+    # Darkens crevices, which is how relief shows on a face lit head-on.
+    "image":   {"resolution": [1600, 1000], "background": [1.0, 1.0, 1.0],
+                "transparent": False, "ssao": None},
     # isosurfaces: null lets the value be taken from the data. No constant can
     # serve as a default here -- see _default_isovalue.
     "contour": {"variable": "QCriterion", "isosurfaces": None},
@@ -74,8 +80,16 @@ DEFAULTS = {
     # A surface zone drawn alongside for context -- the body the vortices are
     # shedding from. `vtu` is filled in per timestep by the command layer,
     # because a deforming body moves and cannot be converted once and reused.
+    # Shading as for the surface: on a solid colour it is the only thing that
+    # shows the body's shape. See _add_body.
     "body":    {"zone": None, "vtu": None, "color": "lightgray", "variable": None,
-                "opacity": 1.0, "show_edges": False},
+                "opacity": 1.0, "show_edges": False, "lighting": None,
+                "ambient": None, "diffuse": None, "specular": None,
+                "specular_power": None, "smooth_shading": None,
+                # feature_edges: outline creases sharper than N degrees.
+                "feature_edges": None, "edge_color": None, "edge_width": 2.0,
+                # variable: "relief" is computed from the body's own geometry.
+                "preset": None, "range": None, "show_scalar_bar": None},
     # levels: N discrete colour bands instead of a continuous ramp, the way
     # Tecplot and ParaView band a contour legend. null = continuous.
     "color":   {"variable": "U", "preset": "coolwarm", "range": None,
@@ -97,6 +111,9 @@ DEFAULTS = {
     # Dimension lines: each {from: [x,y,z], to: [x,y,z]} draws a ruler between
     # two points of the mesh's own coordinates, with the distance labelled.
     "annotations": {"rulers": []},
+    # Lights. Empty keeps VTK's default kit, which lights from the camera and so
+    # flattens exactly the relief a raking light reveals. See _add_lights.
+    "lights": [],
     "views": [
         {"name": "iso", "azimuth": 30, "elevation": 20, "roll": 0, "zoom": 1.0},
         {"name": "xy",  "direction": "+z", "up": [0, 1, 0]},
@@ -487,15 +504,110 @@ def _union_bounds(*meshes):
         for i in range(6))
 
 
+RELIEF = "relief"
+
+
+def body_relief(body):
+    """Each point's radial deviation from its station's median radius.
+
+    Zero on the land, negative in a groove, positive on a strake. Colouring by
+    it turns relief into colour, which is the one way of showing a groove that
+    does not depend on where the light is or which way the body faces: a groove
+    on the far edge of the silhouette reads exactly as strongly as one facing
+    the camera.
+
+    The station centroid is recomputed along the body rather than assumed at
+    the origin, so a cylinder that has displaced -- as a vibrating one has, by
+    most of a diameter here -- still measures its own shape rather than its
+    offset. And the reference radius is the station's *median*, not its mean,
+    so grooves cutting a third of the circumference do not drag the level they
+    are being measured against down with them.
+    """
+    import numpy as np
+
+    pts = np.asarray(body.points, dtype=float)
+    if len(pts) < 8:
+        return np.zeros(len(pts))
+    extent = pts.max(0) - pts.min(0)
+    axis = int(np.argmax(extent))
+    other = [i for i in range(3) if i != axis]
+    if extent[axis] <= 0:
+        return np.zeros(len(pts))
+
+    # Binned rather than matched on exact coordinates: a structured body repeats
+    # its axial stations exactly and an unstructured one never does.
+    nbins = int(min(400, max(20, len(pts) // 200)))
+    edges = np.linspace(pts[:, axis].min(), pts[:, axis].max() + 1e-12, nbins + 1)
+    which = np.clip(np.digitize(pts[:, axis], edges) - 1, 0, nbins - 1)
+
+    relief = np.zeros(len(pts))
+    for b in range(nbins):
+        sel = np.where(which == b)[0]
+        if len(sel) < 4:
+            continue
+        ring = pts[sel][:, other]
+        centre = ring.mean(0)
+        r = np.hypot(ring[:, 0] - centre[0], ring[:, 1] - centre[1])
+        relief[sel] = r - np.median(r)
+    return relief
+
+
+def _add_feature_edges(p, body, spec, text_color):
+    """Draw the body's creases as lines: a groove's outline, not a wireframe.
+
+    show_edges draws every cell boundary, which on a body of any refinement is
+    a grey haze that hides the thing it was meant to reveal. Feature edges are
+    the ones where two faces meet at more than `feature_edges` degrees -- the
+    lip and the root of a groove, and nothing else. On a smooth cylinder there
+    are none, which is the right answer there too.
+    """
+    angle = spec.get("feature_edges")
+    if not angle:
+        return
+    try:
+        edges = body.extract_feature_edges(
+            feature_angle=float(angle), boundary_edges=False,
+            non_manifold_edges=False, manifold_edges=False, feature_edges=True)
+    except Exception:
+        return
+    if edges is None or edges.n_points == 0:
+        return
+    # `or`, not a .get default: edge_color is present in DEFAULTS as None, so
+    # the default argument never fires.
+    p.add_mesh(edges, color=to_rgb(spec.get("edge_color") or text_color),
+               line_width=float(spec.get("edge_width") or 2.0),
+               lighting=False, show_scalar_bar=False)
+
+
 def _add_body(p, body, cfg, text_color):
-    """Draw the context surface: a solid colour, or coloured by a variable."""
+    """Draw the context surface: a solid colour, or coloured by a variable.
+
+    The body carries the shape of the thing the flow is running past -- grooves,
+    strakes, fairings -- and on a flat colour that shape is visible only through
+    shading. So it takes the same lighting settings the cut surface does: low
+    ambient keeps the troughs dark, and a little specular picks out their edges.
+    Smooth shading is the one to leave off here, since it rounds over exactly
+    the creases that make a groove read as a groove.
+    """
     spec = cfg.get("body", {})
     variable = spec.get("variable")
+    if variable == RELIEF and RELIEF not in body.point_data:
+        body.point_data[RELIEF] = body_relief(body)
     common = dict(opacity=float(spec.get("opacity", 1.0)),
-                  show_edges=bool(spec.get("show_edges")))
+                  show_edges=bool(spec.get("show_edges")),
+                  **shading_kwargs(cfg, "body"))
+    _add_feature_edges(p, body, spec, text_color)
     if variable and variable in body.point_data:
-        p.add_mesh(body, scalars=variable, cmap=to_cmap(spec.get("preset", "viridis")),
-                   scalar_bar_args={"title": variable, "color": text_color}, **common)
+        # Greys for relief: it is the body's shape, not a field, and should
+        # still look like a body rather than a heat map.
+        default_cmap = "Greys_r" if variable == RELIEF else "viridis"
+        p.add_mesh(body, scalars=variable,
+                   cmap=to_cmap(spec.get("preset") or default_cmap),
+                   clim=spec.get("range"),
+                   show_scalar_bar=bool(spec.get("show_scalar_bar",
+                                                 variable != RELIEF)),
+                   scalar_bar_args={"title": variable, "color": text_color},
+                   **common)
     else:
         # A solid colour is the usual want: the body is context, and a second
         # scalar bar competing with the isosurface's is rarely what you meant.
@@ -571,8 +683,8 @@ SHADING_KEYS = ("lighting", "ambient", "diffuse", "specular", "specular_power",
                 "smooth_shading")
 
 
-def shading_kwargs(cfg):
-    """The surface's shading settings, passed on only where one was given.
+def shading_kwargs(cfg, section="surface"):
+    """A section's shading settings, passed on only where one was given.
 
     A lit, curved tube reads darker than the same colour in a flat legend
     swatch: the shading multiplies it by the angle between the surface and the
@@ -584,8 +696,8 @@ def shading_kwargs(cfg):
     silhouettes. Raising `ambient` instead lifts the shadowed side towards the
     true colour while keeping the form, which is generally the better trade.
     """
-    surface = cfg.get("surface", {}) or {}
-    return {k: surface[k] for k in SHADING_KEYS if surface.get(k) is not None}
+    block = cfg.get(section, {}) or {}
+    return {k: block[k] for k in SHADING_KEYS if block.get(k) is not None}
 
 
 def _as_point(value):
@@ -613,6 +725,87 @@ def _kwargs_for(func, wanted):
     except (TypeError, ValueError):
         return dict(wanted)
     return {k: v for k, v in wanted.items() if k in allowed}
+
+
+def _enable_ssao(p, cfg, warn):
+    """Screen-space ambient occlusion: darken what is tucked away.
+
+    The one effect that shows relief without depending on where the light is.
+    A groove is a crevice, and SSAO darkens a point in proportion to how much
+    geometry surrounds it -- so the troughs go dark and the lands stay bright
+    even on a face pointing straight at the camera, which is exactly where
+    ordinary shading gives up.
+
+    Its radius is in world units and matters: much smaller than the feature and
+    nothing darkens, much larger and the whole body does.
+    """
+    spec = cfg.get("image", {}).get("ssao")
+    if not spec:
+        return
+    if not hasattr(p, "enable_ssao"):
+        warn("this pyvista has no enable_ssao, so image.ssao was ignored")
+        return
+    options = spec if isinstance(spec, dict) else {}
+    try:
+        p.enable_ssao(**_kwargs_for(p.enable_ssao, options))
+    except Exception as exc:
+        warn(f"could not enable ssao: {exc}")
+
+
+def _add_lights(p, cfg, center, span, warn):
+    """Replace the default lighting with lights of one's own.
+
+    VTK lights from the camera, which is the worst possible position for
+    showing relief: a groove seen head-on is lit as evenly as the land beside
+    it, and no amount of ambient/diffuse tuning recovers a gradient that the
+    geometry never produced. A light off to one side -- a raking light, the
+    trick every photograph of a coin or a carving uses -- turns the same groove
+    into a bright wall and a dark one.
+
+    Symmetry undoes it: lights on both sides fill each other's shadows and the
+    contrast collapses. One strong light and, if the shadow side goes too dark,
+    ambient rather than a second light.
+
+    `direction` is a vector from the subject toward the light, scaled to the
+    scene, and travels between cases; `position` is absolute, for when a case
+    wants a particular one.
+    """
+    specs = cfg.get("lights") or []
+    if not specs:
+        return
+    if isinstance(specs, dict):
+        # `lights:` followed by an indented mapping is one light without its
+        # dash. Iterating it would walk the keys and reject each as malformed,
+        # which is a confusing way to say "you left out a `-`".
+        warn("lights: must be a list -- each light starts with a dash:\n"
+             "        lights:\n"
+             "          - direction: [0, 0.574, 0.819]\n"
+             "            intensity: 1.0\n"
+             "        Reading the one given as a single light.")
+        specs = [specs]
+    import pyvista as pv
+
+    p.remove_all_lights()
+    for i, spec in enumerate(specs, 1):
+        if not isinstance(spec, dict):
+            warn(f"lights[{i}] should be a mapping with `direction` or `position`")
+            continue
+        focal = _as_point(spec.get("focal_point")) or list(center)
+        position = _as_point(spec.get("position"))
+        if position is None:
+            direction = _as_point(spec.get("direction"))
+            if direction is None:
+                warn(f"lights[{i}] needs `direction` (or `position`), three numbers")
+                continue
+            length = sum(v * v for v in direction) ** 0.5 or 1.0
+            reach = float(spec.get("distance") or 2.5) * span
+            position = [focal[j] + direction[j] / length * reach for j in range(3)]
+        try:
+            p.add_light(pv.Light(position=position, focal_point=focal,
+                                 intensity=float(spec.get("intensity", 1.0)),
+                                 light_type=spec.get("type", "scene light")))
+        except Exception as exc:
+            warn(f"lights[{i}]: {exc}")
 
 
 def _add_annotations(p, cfg, text_color, warn):
@@ -768,6 +961,8 @@ def render_surface(cfg, surf, log=print, warn=None, state=None):
             _add_body(p, body, cfg, text_color)
         if cfg["axes"].get("orientation_axes", True):
             p.add_axes(color=text_color)
+        _add_lights(p, cfg, center, span, warn)
+        _enable_ssao(p, cfg, warn)
         _add_annotations(p, cfg, text_color, warn)
         _setup_camera(p, view, center, span)
         return p
