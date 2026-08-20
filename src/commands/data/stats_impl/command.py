@@ -26,10 +26,11 @@ FUNCS = {
     "range":  ("max - min, the peak-to-peak swing", lambda v: float(np.nanmax(v) - np.nanmin(v))),
     "maxloc": ("where the maximum occurs, and which PLT shows it", None),
     "minloc": ("where the minimum occurs, and which PLT shows it", None),
+    "zeroloc": ("where the signal crosses zero, and which PLT shows it", None),
 }
 # maxloc answers a different question from the rest -- a location, not a value --
 # so it is computed against the tsIds rather than the samples alone.
-LOCATORS = ("maxloc", "minloc")
+LOCATORS = ("maxloc", "minloc", "zeroloc")
 
 
 def plt_rows(tsids, freq):
@@ -98,6 +99,84 @@ def _maxloc(values, tsids, times, freq, runners=3):
 
 def _minloc(values, tsids, times, freq, runners=3):
     return _locate(values, tsids, times, freq, "min", runners)
+
+
+def _crossings(values, direction):
+    """Indices i where the signal crosses zero between sample i and i+1.
+
+    Literal zero, not the window's mean: "the displacement is zero" is a
+    statement about the cylinder's undeflected position, and a signal with a
+    steady offset crossing its own mean is a different question from crossing
+    the axis.
+    """
+    v = np.asarray(values, dtype=float)
+    if len(v) < 2:
+        return np.array([], dtype=int)
+    if direction == "descending":
+        return np.where((v[:-1] > 0) & (v[1:] <= 0))[0]
+    return np.where((v[:-1] < 0) & (v[1:] >= 0))[0]
+
+
+def _zeroloc(values, tsids, times, freq, direction, runners=3):
+    """The zero crossing best captured by an existing PLT, and the runners-up.
+
+    A settled run crosses zero once per half cycle -- six times in a window
+    that holds three cycles -- so "the crossing" has to be chosen. It is chosen
+    the way maxloc chooses: by which of the files on disk comes closest to
+    showing it. A crossing no PLT sits near cannot be rendered, whatever its
+    other merits.
+
+    Candidates are the PLT steps moving in the right direction, ranked by how
+    close to zero they are. Direction is read off the local slope, so a step at
+    the top of the swing on its way down is descending even though its value is
+    nowhere near zero -- it simply ranks last.
+
+    No sample lands exactly on zero, so a crossing is reported as whichever of
+    the two straddling samples is nearer to it.
+    """
+    v = np.asarray(values, dtype=float)
+    found = {
+        "direction": direction,
+        "count": 0,
+        "tsId": None, "time": None, "value": None,
+        "plt_tsId": None, "plt_value": None, "plt_ranked": [], "plt_offset": None,
+    }
+    cross = _crossings(v, direction)
+    found["count"] = len(cross)
+    if not len(cross):
+        return found
+
+    # Each crossing stands at whichever of its two samples is nearer zero.
+    reps = np.array([i if abs(v[i]) <= abs(v[i + 1]) else i + 1 for i in cross])
+
+    def stand_at(idx):
+        found["tsId"] = int(tsids[idx])
+        found["time"] = float(times[idx])
+        found["value"] = float(v[idx])
+
+    slope = np.gradient(v) if len(v) > 1 else np.zeros_like(v)
+    moving = slope < 0 if direction == "descending" else slope > 0
+    candidates = np.where(plt_rows(tsids, freq) & moving)[0]
+    if not len(candidates):
+        # Nothing on disk to render it with; the last crossing is the most
+        # settled one, which is the best that can be said without files.
+        stand_at(reps[-1])
+        return found
+
+    order = sorted(candidates, key=lambda i: (abs(v[i]), int(tsids[i])))
+    found["plt_ranked"] = [(int(tsids[i]), float(v[i])) for i in order[:1 + runners]]
+    best = order[0]
+    found["plt_tsId"] = int(tsids[best])
+    found["plt_value"] = float(v[best])
+    # How near zero the best file actually is, as a fraction of the swing. When
+    # the output frequency is coarse against the period every file can land on
+    # a peak, and the closest descending one is then a crest -- the right answer
+    # to the question asked, and a poor picture of a crossing. Say so.
+    amplitude = float(np.nanmax(np.abs(v))) or 1.0
+    found["plt_offset"] = abs(found["plt_value"]) / amplitude
+    # Report the crossing that file actually sits on.
+    stand_at(reps[int(np.argmin(np.abs(tsids[reps] - tsids[best])))])
+    return found
 
 
 def _runners_up(found):
@@ -220,6 +299,46 @@ def execute_statistics(args):
                         f"{found['plt_value']:.6e}" if found["plt_value"] is not None else "-",
                         _runners_up(found))
         console.print(loc)
+    if "zeroloc" in funcs:
+        n_plt = int(plt_rows(tsids, freq).sum())
+        zl = Table(box=box.SIMPLE, show_header=True, header_style="bold yellow",
+                   title=("zeroloc -- the zero crossing best caught by one of "
+                          f"the {n_plt} PLT file(s) in range"),
+                   title_justify="left", title_style="dim")
+        zl.add_column("Variable", style="cyan")
+        zl.add_column("direction", style="white")
+        zl.add_column("crossing", justify="right", style="green")
+        zl.add_column("time", justify="right", style="white")
+        zl.add_column("value", justify="right", style="green")
+        zl.add_column("PLT to open", justify="right", style="magenta")
+        zl.add_column("value there", justify="right", style="magenta")
+        zl.add_column("runners-up", style="dim")
+        empty, far = [], []
+        for label, series_values in values.items():
+            for direction in ("descending", "ascending"):
+                found = _zeroloc(series_values, tsids, times, freq, direction)
+                if not found["count"]:
+                    empty.append(f"{label} {direction}")
+                    continue
+                if (found["plt_offset"] or 0) > 0.25:
+                    far.append(
+                        f"{label} {direction}: the closest PLT holds "
+                        f"{found['plt_value']:.3g}, {100 * found['plt_offset']:.0f}% "
+                        f"of the swing from zero -- no file lands near a crossing "
+                        f"at this frequency")
+                zl.add_row(
+                    label, direction, str(found["tsId"]),
+                    f"{found['time']:.6g}", f"{found['value']:.6e}",
+                    str(found["plt_tsId"]) if found["plt_tsId"] else "-",
+                    f"{found['plt_value']:.6e}" if found["plt_value"] is not None else "-",
+                    _runners_up(found))
+        if zl.row_count:
+            console.print(zl)
+        for note in far:
+            logger.warning(note)
+        for what in empty:
+            logger.warning(f"{what}: the signal never crosses zero in this window")
+
     if any(name in funcs for name in LOCATORS) and not freq:
         logger.warning("no outFreq in simflow.config, so the PLT step could "
                        "not be worked out; pass --freq N")
@@ -240,10 +359,16 @@ def _write_csv(path, values, funcs, tsids, times, freq, logger):
         os.makedirs(directory, exist_ok=True)
     value_funcs = [f for f in funcs if f not in LOCATORS]
     header = ["variable"] + value_funcs
-    located = [name for name in LOCATORS if name in funcs]
+    located = [name for name in LOCATORS if name in funcs and name != "zeroloc"]
     for name in located:
         header += [f"{name}_value", f"{name}_tsId", f"{name}_time",
                    f"{name}_plt_tsId", f"{name}_plt_value", f"{name}_plt_ranked"]
+    # zeroloc reports a crossing per direction, so it takes a block per side.
+    zero_dirs = ("descending", "ascending") if "zeroloc" in funcs else ()
+    for direction in zero_dirs:
+        tag = f"zeroloc_{direction}"
+        header += [f"{tag}_count", f"{tag}_tsId", f"{tag}_time", f"{tag}_value",
+                   f"{tag}_plt_tsId", f"{tag}_plt_value"]
     with open(path, "w", newline="") as fh:
         writer = csv.writer(fh)
         writer.writerow(header)
@@ -255,5 +380,13 @@ def _write_csv(path, values, funcs, tsids, times, freq, logger):
                         f"{found['time']:.10g}", found["plt_tsId"] or "",
                         "" if found["plt_value"] is None else f"{found['plt_value']:.10g}",
                         " ".join(f"{ts}:{v:.6g}" for ts, v in found["plt_ranked"])]
+            for direction in zero_dirs:
+                z = _zeroloc(series_values, tsids, times, freq, direction)
+                row += [z["count"],
+                        z["tsId"] if z["tsId"] is not None else "",
+                        "" if z["time"] is None else f"{z['time']:.10g}",
+                        "" if z["value"] is None else f"{z['value']:.10g}",
+                        z["plt_tsId"] if z["plt_tsId"] is not None else "",
+                        "" if z["plt_value"] is None else f"{z['plt_value']:.10g}"]
             writer.writerow(row)
     logger.success(f"wrote {len(values)} row(s) -> {path}")

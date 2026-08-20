@@ -202,6 +202,7 @@ class FlexFlowCompleter(Completer):
             '--no-confirm':   'Skip confirmation prompts',
         },
         ('case', 'check'):   {
+            '--freq':        'PLT frequency to check against, overriding outFreq',
             **_COMMON_FLAGS,
             '--run':     'Check .othd/.oisd in the active run directory',
             '--archive': 'Check all archived files in othd_files/oisd_files',
@@ -297,7 +298,7 @@ class FlexFlowCompleter(Completer):
             **_COMMON_FLAGS,
             '--group':  'Output group: othId (othd) or osgId (oisd)',
             '--var':    'Variable or component to summarise (repeat or comma-separate)',
-            '--func':   'min, max, mean, rms, std, range, maxloc, minloc',
+            '--func':   'min, max, mean, rms, std, range, maxloc, minloc, zeroloc',
             '--t1':     'First tsId (alone: from there on)',
             '--t2':     'Last tsId',
             '--node':   'Node to read (default: 0)',
@@ -899,17 +900,18 @@ class FlexFlowCompleter(Completer):
         Each token after `use` is context:value.
         """
         # Contexts whose value is a filesystem path (directories)
-        _PATH_CONTEXTS = {'case', 'rundir', 'dir'}
+        _PATH_CONTEXTS = {'case', 'rundir'}
         # All supported context keys
-        _ALL_CONTEXTS = ['case', 'problem', 'rundir', 'dir', 'node', 't1', 't2', 'remote', 'var', 'zone', 'freq']
+        _ALL_CONTEXTS = ['case', 'problem', 'rundir', 'node', 'time', 't1', 't2',
+                         'remote', 'var', 'zone', 'freq']
         _CONTEXT_DESCS = {
             'case':    'Set current case directory',
             'problem': 'Override problem name',
             'rundir':  'Override run directory',
-            'dir':     'Override output directory',
             'node':    'Set node ID for data/field commands',
-            't1':      'Set start time',
-            't2':      'Set end time',
+            'time':    'Set a single timestep (clears t1/t2)',
+            't1':      'Set start time (clears time)',
+            't2':      'Set end time (clears time)',
             'remote':  'Set remote machine for uploads',
             'var':     'Default variable(s) for field extract, data table/stats',
             'zone':    'Default zone for field extract/convert/render',
@@ -998,8 +1000,8 @@ class FlexFlowCompleter(Completer):
                 ('case',    'Clear case context'),
                 ('problem', 'Clear problem context'),
                 ('rundir',  'Clear run directory context'),
-                ('dir',     'Clear output directory context'),
                 ('node',    'Clear node context'),
+                ('time',    'Clear the single timestep'),
                 ('t1',      'Clear start time'),
                 ('t2',      'Clear end time'),
                 ('remote',  'Clear remote context'),
@@ -1082,8 +1084,8 @@ class InteractiveShell:
         self._current_case_name: Optional[str] = None  # Just the case name for display
         self._current_problem: Optional[str] = None  # Problem name/ID
         self._current_rundir: Optional[str] = None  # Run directory
-        self._current_output_dir: Optional[str] = None  # Output directory (dir from simflow.config)
         self._current_node: Optional[int] = None  # Node ID for data/field commands
+        self._current_time: Optional[float] = None  # a single timestep, in place of t1/t2
         self._current_t1: Optional[float] = None  # Start time for data/field/plot commands
         self._current_t2: Optional[float] = None  # End time for data/field/plot commands
         self._current_remote: Optional[str] = None  # Remote machine for uploads
@@ -1277,7 +1279,6 @@ class InteractiveShell:
             'case': '#00aaff bold',     # Cyan for case
             'problem': '#ffaa00',       # Yellow/orange for problem
             'rundir': '#ff00ff',        # Magenta for rundir
-            'outputdir': '#00ff00',     # Green for output dir
             'remote': '#ffaaee',        # Light magenta for remote
             'var': '#00ddaa',           # Teal for variable
             'zone': '#dd88ff',          # Light purple for zone
@@ -1336,13 +1337,12 @@ class InteractiveShell:
         if self._current_rundir:
             rundir_name = Path(self._current_rundir).name
             contexts.append(f'<rundir>r:{rundir_name}</rundir>')
-        if self._current_output_dir:
-            output_dir_name = Path(self._current_output_dir).name
-            contexts.append(f'<outputdir>d:{output_dir_name}</outputdir>')
         if self._current_remote:
             contexts.append(f'<remote>rem:{self._current_remote}</remote>')
         if self._current_node is not None:
             contexts.append(f'<node>n:{self._current_node}</node>')
+        if self._current_time is not None:
+            contexts.append(f'<t1>time:{self._current_time}</t1>')
         if self._current_t1 is not None:
             contexts.append(f'<t1>t1:{self._current_t1}</t1>')
         if self._current_t2 is not None:
@@ -1494,10 +1494,10 @@ class InteractiveShell:
                     self.unuse_problem()
                 elif subcommand == 'rundir':
                     self.unuse_rundir()
-                elif subcommand == 'dir':
-                    self.unuse_dir()
                 elif subcommand == 'node':
                     self.unuse_node()
+                elif subcommand == 'time':
+                    self.unuse_time()
                 elif subcommand == 't1':
                     self.unuse_t1()
                 elif subcommand == 't2':
@@ -1514,7 +1514,7 @@ class InteractiveShell:
                     self.unuse_all()
                 else:
                     self.console.print(f"[yellow]Unknown subcommand:[/yellow] {subcommand}")
-                    self.console.print("[dim]Use: unuse [case|problem|rundir|dir|node|t1|t2|remote|var|zone|freq|all][/dim]")
+                    self.console.print("[dim]Use: unuse [case|problem|rundir|node|time|t1|t2|remote|var|zone|freq|all][/dim]")
             return True
 
         # Show the working directory. The contexts moved to `use list`, which
@@ -2534,15 +2534,15 @@ class InteractiveShell:
         self.console.print("[bold]CONTEXTS:[/bold]")
         self.console.print("  case       Case directory path (or * to iterate all cases from .cases file)")
         self.console.print("  problem    Problem name")
-        self.console.print("  rundir     Run directory path")
-        self.console.print("  dir        Output directory (relative to case)")
+        self.console.print("  rundir     Run directory inside the case (e.g. RUN_1)")
         self.console.print("  node       Node ID for data/field commands")
-        self.console.print("  t1         Start time for data/field/plot commands")
-        self.console.print("  t2         End time for data/field/plot commands")
+        self.console.print("  time       A single timestep -- clears t1/t2, and they clear it")
+        self.console.print("  t1         Start of a timestep range (clears time)")
+        self.console.print("  t2         End of a timestep range (clears time)")
         self.console.print("  remote     Remote machine for uploads (default for 'case upload')")
         self.console.print("  var        Variable(s) for field extract, data table/stats")
         self.console.print("  zone       Zone for field extract/compute/convert/render")
-        self.console.print("  freq       Output frequency for field sweeps and run post")
+        self.console.print("  freq       PLT output frequency: field sweeps, run post, data stats")
         self.console.print()
         self.console.print("[bold]EXAMPLES:[/bold]")
         self.console.print("  [dim]# Single context[/dim]")
@@ -2554,6 +2554,7 @@ class InteractiveShell:
         self.console.print("  [dim]# Multiple contexts[/dim]")
         self.console.print("  use case:Case015 problem:rigid node:0")
         self.console.print("  use case:Case015 node:24 t1:50.0 t2:100.0")
+        self.console.print("  use case:Case015 node:24 time:4800   [dim]# one step, not a range[/dim]")
         self.console.print("  use node:0 t1:150.0 t2:200.0")
         self.console.print()
         self.console.print("  [dim]# What is set, and what else could be[/dim]")
@@ -2586,7 +2587,6 @@ class InteractiveShell:
         self.console.print("  unuse case              Clear case context")
         self.console.print("  unuse problem           Clear problem context")
         self.console.print("  unuse rundir            Clear run directory context")
-        self.console.print("  unuse dir               Clear output directory context")
         self.console.print("  unuse node              Clear node context")
         self.console.print("  unuse t1                Clear start time context")
         self.console.print("  unuse t2                Clear end time context")
@@ -2599,7 +2599,6 @@ class InteractiveShell:
         self.console.print("  unuse case              [dim]# Clear only case context[/dim]")
         self.console.print("  unuse node              [dim]# Clear only node context[/dim]")
         self.console.print("  unuse problem           [dim]# Clear only problem context[/dim]")
-        self.console.print("  unuse dir               [dim]# Clear only output directory[/dim]")
         self.console.print("  unuse                   [dim]# Clear everything[/dim]")
         self.console.print()
 
@@ -2609,8 +2608,8 @@ class InteractiveShell:
             'case': self.use_case,
             'problem': self.use_problem,
             'rundir': self.use_rundir,
-            'dir': self.use_dir,
             'node': self.use_node,
+            'time': self.use_time,
             't1': self.use_t1,
             't2': self.use_t2,
             'remote': self.use_remote,
@@ -2630,8 +2629,8 @@ class InteractiveShell:
         ('case', '_current_case'),
         ('problem', '_current_problem'),
         ('rundir', '_current_rundir'),
-        ('dir', '_current_output_dir'),
         ('node', '_current_node'),
+        ('time', '_current_time'),
         ('t1', '_current_t1'),
         ('t2', '_current_t2'),
         ('remote', '_current_remote'),
@@ -2853,49 +2852,6 @@ class InteractiveShell:
         self.console.print("[dim]Commands like 'case upload' will use this remote by default[/dim]")
         return True
 
-    def use_dir(self, dir_input: str) -> bool:
-        """
-        Set current output directory context (from simflow.config dir field).
-
-        This is for convenience when multiple output directories exist within a case.
-        The directory is relative to the case directory, not the current working directory.
-
-        Args:
-            dir_input: Output directory name/path (e.g., 'RUN_1', './RUN_2')
-        """
-        # Check if case context is set
-        if not self._current_case:
-            self.console.print("[yellow]Warning:[/yellow] No case context set. Use 'use case <case>' first.")
-            self.console.print("[dim]Setting output directory anyway - will be relative to case when case is set[/dim]")
-            self._current_output_dir = dir_input
-            self.console.print(f"[green]✓[/green] Output directory set to: [cyan]{dir_input}[/cyan]")
-            return True
-
-        try:
-            # Output directory is relative to case directory
-            case_path = Path(self._current_case)
-            dir_path = Path(dir_input)
-
-            # Remove leading ./ if present
-            if str(dir_path).startswith('./'):
-                dir_path = Path(str(dir_path)[2:])
-
-            # If not absolute, make it relative to case directory
-            if not dir_path.is_absolute():
-                dir_path = case_path / dir_path
-
-            dir_path = dir_path.resolve()
-
-            # No existence check - this is just for convenience/context
-            self._current_output_dir = str(dir_path)
-            self.console.print(f"[green]✓[/green] Output directory set to: [cyan]{dir_path.name}[/cyan]")
-            self.console.print(f"[dim]Path: {dir_path}[/dim]")
-            return True
-
-        except Exception as e:
-            self.console.print(f"[red]Error resolving path: {e}[/red]")
-            return False
-
     def use_rundir(self, rundir_input: str) -> bool:
         """
         Set current run directory context (output directory within case).
@@ -2958,6 +2914,38 @@ class InteractiveShell:
             self.console.print("[dim]Node ID must be an integer[/dim]")
             return False
 
+    def use_time(self, time_input: str) -> bool:
+        """Set a single timestep, in place of a t1/t2 range.
+
+        One value rather than the same value twice. It and the range are two
+        ways of saying the same kind of thing, so holding both would leave the
+        commands to guess which was meant -- setting either clears the other.
+        """
+        try:
+            value = float(time_input)
+        except ValueError:
+            self.console.print(f"[red]Error:[/red] Invalid time value: {time_input}")
+            self.console.print("[dim]Time must be a number[/dim]")
+            return False
+        self._current_time = value
+        dropped = [name for name, held in (("t1", self._current_t1),
+                                           ("t2", self._current_t2))
+                   if held is not None]
+        self._current_t1 = self._current_t2 = None
+        self.console.print(f"[green]✓[/green] Time set to: [cyan]{value}[/cyan]")
+        if dropped:
+            self.console.print(f"[dim]cleared {' and '.join(dropped)}: a single "
+                               f"time and a range cannot both apply[/dim]")
+        return True
+
+    def _clear_time_for_range(self, which: str) -> None:
+        """Setting either end of a range drops a single time, and says so."""
+        if self._current_time is not None:
+            old = self._current_time
+            self._current_time = None
+            self.console.print(f"[dim]cleared time ({old}): {which} makes it a "
+                               f"range[/dim]")
+
     def use_t1(self, time_input: str) -> bool:
         """
         Set start time context for data/field/plot commands.
@@ -2967,6 +2955,7 @@ class InteractiveShell:
         """
         try:
             start_time = float(time_input)
+            self._clear_time_for_range("t1")
             self._current_t1 = start_time
             self.console.print(f"[green]✓[/green] Start time (t1) set to: [cyan]{start_time}[/cyan]")
             return True
@@ -2984,6 +2973,7 @@ class InteractiveShell:
         """
         try:
             end_time = float(time_input)
+            self._clear_time_for_range("t2")
             self._current_t2 = end_time
             self.console.print(f"[green]✓[/green] End time (t2) set to: [cyan]{end_time}[/cyan]")
             return True
@@ -3063,15 +3053,6 @@ class InteractiveShell:
             self.console.print(f"[green]✓[/green] Remote context cleared: [dim]{old_remote}[/dim]")
         else:
             self.console.print("[dim]No remote context is set[/dim]")
-    def unuse_dir(self) -> None:
-        """Clear output directory context."""
-        if self._current_output_dir:
-            old_dir = Path(self._current_output_dir).name
-            self._current_output_dir = None
-            self.console.print(f"[green]✓[/green] Output directory context cleared: [dim]{old_dir}[/dim]")
-        else:
-            self.console.print("[dim]No output directory context is set[/dim]")
-
     def unuse_rundir(self) -> None:
         """Clear run directory context."""
         if self._current_rundir:
@@ -3089,6 +3070,15 @@ class InteractiveShell:
             self.console.print(f"[green]✓[/green] Node context cleared: [dim]{old_node}[/dim]")
         else:
             self.console.print("[dim]No node context is set[/dim]")
+
+    def unuse_time(self) -> None:
+        """Clear the single-timestep context."""
+        if self._current_time is not None:
+            old = self._current_time
+            self._current_time = None
+            self.console.print(f"[green]✓[/green] Time context cleared: [dim]{old}[/dim]")
+        else:
+            self.console.print("[dim]No time context is set[/dim]")
 
     def unuse_t1(self) -> None:
         """Clear start time context."""
@@ -3148,12 +3138,12 @@ class InteractiveShell:
         if self._current_rundir:
             cleared.append(f"rundir: {Path(self._current_rundir).name}")
             self._current_rundir = None
-        if self._current_output_dir:
-            cleared.append(f"output dir: {Path(self._current_output_dir).name}")
-            self._current_output_dir = None
         if self._current_node is not None:
             cleared.append(f"node: {self._current_node}")
             self._current_node = None
+        if self._current_time is not None:
+            cleared.append(f"time: {self._current_time}")
+            self._current_time = None
         if self._current_t1 is not None:
             cleared.append(f"t1: {self._current_t1}")
             self._current_t1 = None
@@ -4321,6 +4311,14 @@ class InteractiveShell:
             # t1/t2 select the timestep(s): extract, compute and render take
             # --t1/--t2 (a single step or a range -- render draws one figure per
             # step in it); convert takes a single --timestep from t1.
+            # A single time is exactly what --timestep is for, and every field
+            # subcommand has one. It also beats --t1/--t2 inside the command,
+            # and unlike a one-step range it is not filtered out by --freq.
+            if (subcmd in ('extract', 'compute', 'render', 'convert')
+                    and self._current_time is not None
+                    and '--timestep' not in args):
+                args.append('--timestep'); args.append(str(int(self._current_time)))
+                context_added.append(f"time: {self._current_time}")
             if subcmd in ('extract', 'compute', 'render'):
                 if self._current_t1 is not None and '--t1' not in args:
                     args.append('--t1'); args.append(str(self._current_t1))
@@ -4332,7 +4330,8 @@ class InteractiveShell:
                     args.append('--freq'); args.append(str(self._current_freq))
                     context_added.append(f"freq: {self._current_freq}")
             elif subcmd == 'convert':
-                if self._current_t1 is not None and '--timestep' not in args:
+                if (self._current_t1 is not None and '--timestep' not in args
+                        and self._current_time is None):
                     args.append('--timestep'); args.append(str(int(self._current_t1)))
                     context_added.append(f"timestep: {int(self._current_t1)}")
 
@@ -4341,12 +4340,28 @@ class InteractiveShell:
         # carrying binary/ they would be rejected by argparse's own check.
         if (cmd == 'case' and len(args) >= 2
                 and args[1] in ('upload', 'download') and '--binary' in args):
+            if (self._current_time is not None
+                    and '--t1' not in args and '--t2' not in args):
+                # No --timestep here, so a single time is the window [t, t].
+                args += ['--t1', str(self._current_time),
+                         '--t2', str(self._current_time)]
+                context_added.append(f"time: {self._current_time}")
             if self._current_t1 is not None and '--t1' not in args:
                 args.append('--t1'); args.append(str(self._current_t1))
                 context_added.append(f"t1: {self._current_t1}")
             if self._current_t2 is not None and '--t2' not in args:
                 args.append('--t2'); args.append(str(self._current_t2))
                 context_added.append(f"t2: {self._current_t2}")
+
+        # freq context -> --freq for `case check --plt`, which compares what is
+        # on disk against every Nth step. simflow.config is the default, but it
+        # records what the run was *asked* to write; when the two disagree the
+        # context is the one the user just stated.
+        if (cmd == 'case' and len(args) >= 2 and args[1] == 'check'
+                and self._current_freq is not None and '--freq' not in args):
+            args.append('--freq')
+            args.append(str(self._current_freq))
+            context_added.append(f"freq: {self._current_freq}")
 
         # freq context -> --freq for `run post`
         if (cmd == 'run' and len(args) >= 2 and args[1] == 'post'
@@ -4375,6 +4390,16 @@ class InteractiveShell:
             args.append(str(self._current_node))
             context_added.append(f"node: {self._current_node}")
 
+        # freq context -> --freq for `data stats`, whose maxloc/minloc need the
+        # PLT output frequency. Without this the flag stays unset and the
+        # command falls back to outFreq in simflow.config -- so a freq set in
+        # the shell looked like it did nothing, because it never arrived.
+        if (cmd == 'data' and time_subcmd == 'stats'
+                and self._current_freq is not None and '--freq' not in args):
+            args.append('--freq')
+            args.append(str(self._current_freq))
+            context_added.append(f"freq: {self._current_freq}")
+
         # var context -> --var for `data table` / `data stats`. The same idea as
         # `field extract --variables`, spelled the way these take it. Both
         # spellings of the flag count as already given, since --variable is an
@@ -4385,6 +4410,13 @@ class InteractiveShell:
             args.append('--var')
             args.append(self._current_var)
             context_added.append(f"var: {self._current_var}")
+
+        if ('t1' in allowed and self._current_time is not None
+                and t1_flag not in args and t2_flag not in args):
+            # Neither takes a single-step flag, so one time is the window [t, t].
+            args += [t1_flag, str(self._current_time),
+                     t2_flag, str(self._current_time)]
+            context_added.append(f"time: {self._current_time}")
 
         if 't1' in allowed and self._current_t1 is not None and t1_flag not in args:
             args.append(t1_flag)

@@ -46,6 +46,11 @@ def execute_case_check(args):
     if do_all:
         do_run = do_archive = do_config = do_plt = do_def = True
 
+    # --freq overrides outFreq from simflow.config. The config says what the run
+    # was asked to write; the files say what it wrote, and after a restart at a
+    # different frequency those are not the same claim.
+    freq = getattr(args, 'freq', None)
+
     if not (do_run or do_archive or do_config or do_plt or do_def):
         print_check_help()
         return
@@ -57,7 +62,7 @@ def execute_case_check(args):
 
     # Check if wildcard - if so, iterate over all cases
     if is_wildcard_case(case_name):
-        _execute_check_on_all_cases(args, do_run, do_archive, do_config, do_plt, do_def)
+        _execute_check_on_all_cases(args, do_run, do_archive, do_config, do_plt, do_def, freq)
         return
 
     # Single case execution
@@ -65,7 +70,7 @@ def execute_case_check(args):
     if case_dir is None:
         return
 
-    _execute_check_on_case(case_dir, do_run, do_archive, do_config, do_plt, do_def)
+    _execute_check_on_case(case_dir, do_run, do_archive, do_config, do_plt, do_def, freq)
 
 
 def _get_case_name(args) -> Optional[str]:
@@ -85,7 +90,7 @@ def _get_case_name(args) -> Optional[str]:
         return None
 
 
-def _execute_check_on_all_cases(args, do_run, do_archive, do_config, do_plt, do_def):
+def _execute_check_on_all_cases(args, do_run, do_archive, do_config, do_plt, do_def, freq=None):
     """Execute check on all cases from .cases file."""
     from src.cli.interactive import InteractiveShell
     
@@ -119,14 +124,14 @@ def _execute_check_on_all_cases(args, do_run, do_archive, do_config, do_plt, do_
             console.print(f"[red]Error:[/red] Case directory not found: {case_path}\n")
             continue
 
-        _execute_check_on_case(case_path, do_run, do_archive, do_config, do_plt, do_def)
+        _execute_check_on_case(case_path, do_run, do_archive, do_config, do_plt, do_def, freq)
 
     console.print(f"[cyan]{'─' * 60}[/cyan]")
     console.print(f"[green]✓ Processed {len(cases)} cases[/green]")
     console.print(f"[cyan]{'─' * 60}[/cyan]\n")
 
 
-def _execute_check_on_case(case_dir: Path, do_run, do_archive, do_config, do_plt, do_def):
+def _execute_check_on_case(case_dir: Path, do_run, do_archive, do_config, do_plt, do_def, freq=None):
     """Execute check on a single case."""
     logger  = Logger(verbose=False)
     console = Console()
@@ -161,7 +166,7 @@ def _execute_check_on_case(case_dir: Path, do_run, do_archive, do_config, do_plt
         _check_archive(cfg, case_dir, console)
 
     if do_plt:
-        _check_plt(cfg, case_dir, console)
+        _check_plt(cfg, case_dir, console, freq)
 
     console.print()
 
@@ -510,8 +515,15 @@ def _check_def(cfg, case_dir: Path, console: Console) -> bool:
 # --plt check
 # ---------------------------------------------------------------------------
 
-def _check_plt(cfg, case_dir: Path, console: Console):
-    """Check PLT files in binary/ and the run directory against expected set."""
+def _check_plt(cfg, case_dir: Path, console: Console, freq: Optional[int] = None):
+    """Check PLT files in binary/ and the run directory against expected set.
+
+    `freq` overrides outFreq from simflow.config. The config records what the
+    run was asked to write; a restart at another frequency, or a config edited
+    since, makes that a different claim from what is on disk -- and checking
+    against the wrong one reports every file that was never meant to exist as
+    missing.
+    """
     console.print("[bold]PLT file check[/bold]")
 
     problem = cfg.problem
@@ -520,9 +532,10 @@ def _check_plt(cfg, case_dir: Path, console: Console):
         console.print()
         return
 
-    out_freq = cfg.out_freq
+    out_freq = freq or cfg.out_freq
     if not out_freq:
         console.print("  [yellow]⚠[/yellow]  'outFreq' not set in simflow.config — cannot determine expected PLT files")
+        console.print("  [dim]give --freq N to check against a frequency anyway[/dim]")
         console.print()
         return
 
@@ -593,7 +606,8 @@ def _check_plt(cfg, case_dir: Path, console: Console):
         console.print(
             f"    Range : [cyan]{_fmt_tsid(min(present))}[/cyan]"
             f" → [cyan]{_fmt_tsid(max(present))}[/cyan]"
-            f"  (outFreq={out_freq},  maxTimeSteps={_fmt_tsid(max_steps)})"
+            f"  ({'--freq' if freq else 'outFreq'}={out_freq},  "
+            f"maxTimeSteps={_fmt_tsid(max_steps)})"
         )
 
         # Missing tsIds

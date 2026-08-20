@@ -83,7 +83,7 @@ class DataCommand(BaseCommand):
                                  help='Variable or component to summarise '
                                       '(repeat, or comma-separate)')
         stats_parser.add_argument('--func', type=str, action='append', metavar='FUNC',
-                                 help='min, max, mean, rms, std, range, maxloc, minloc '
+                                 help='min, max, mean, rms, std, range, maxloc, minloc, zeroloc '
                                       '(repeat, or comma-separate)')
         stats_parser.add_argument('--t1', type=float, metavar='TSID',
                                  help='First tsId (alone: from there to the end)')
