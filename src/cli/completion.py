@@ -44,7 +44,7 @@ _flexflow_completions() {
             # Parse for subcommand (show, create, or run)
             local subcommand=""
             for (( i=2; i < cword; i++ )); do
-                if [[ "${words[i]}" == "show" ]] || [[ "${words[i]}" == "create" ]] || [[ "${words[i]}" == "run" ]] || [[ "${words[i]}" == "out" ]]; then
+                if [[ "${words[i]}" == "show" ]] || [[ "${words[i]}" == "create" ]] || [[ "${words[i]}" == "run" ]] || [[ "${words[i]}" == "out" ]] || [[ "${words[i]}" == "domain" ]]; then
                     subcommand="${words[i]}"
                     break
                 fi
@@ -53,7 +53,7 @@ _flexflow_completions() {
             if [[ -z "$subcommand" ]]; then
                 # No subcommand yet
                 local flags="-v --verbose -h --help --examples"
-                COMPREPLY=( $(compgen -W "show create run out $flags" -- "$cur") )
+                COMPREPLY=( $(compgen -W "show create run out domain $flags" -- "$cur") )
             else
                 # Have subcommand
                 case "$subcommand" in
@@ -87,6 +87,21 @@ _flexflow_completions() {
                         local flags="--list --map --probe-type --closed -v --verbose -h --help"
                         if [[ "$cur" == -* ]]; then
                             COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
+                        else
+                            _flexflow_complete_cases
+                        fi
+                        ;;
+                    domain)
+                        local flags="--init --check --path --list --show --add --remove --name --set --type --geotag --plttag --radius --length --origin --axis --force -v --verbose -h --help"
+                        if [[ "$cur" == -* ]]; then
+                            COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
+                        elif [[ "$prev" == "domain" ]]; then
+                            # The slot after `domain` takes either the target or a
+                            # case, so both are offered. _flexflow_complete_cases
+                            # assigns COMPREPLY outright, so the targets are added
+                            # after it rather than before.
+                            _flexflow_complete_cases
+                            COMPREPLY+=( $(compgen -W "body field" -- "$cur") )
                         else
                             _flexflow_complete_cases
                         fi

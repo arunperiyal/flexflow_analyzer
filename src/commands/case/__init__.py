@@ -1,6 +1,6 @@
 """
 Case command group - Manages simulation cases
-Subcommands: show, create, run
+Subcommands: show, create, run, domain, ...
 """
 
 import sys
@@ -183,6 +183,59 @@ class CaseCommand(BaseCommand):
         write_parser.add_argument('-h', '--help', action='store_true',
                                   help='Show help for write command')
 
+        # case domain
+        # `body`/`field` and the case share the two positional slots and are told
+        # apart in the command, not here: making them a sub-parser would make
+        # `case domain <case> --init` an "invalid choice" error naming the case.
+        domain_parser = case_subparsers.add_parser(
+            'domain', add_help=False,
+            help="Declare what the case's domain is made of, in domain.yml")
+        domain_parser.add_argument('target', nargs='?', metavar='TARGET',
+                                   help='body or field; omit for a summary of both')
+        domain_parser.add_argument('case', nargs='?', help='Case directory path')
+        domain_parser.add_argument('--init', action='store_true',
+                                   help='Write domain.yml from the case .def and PLT zones')
+        domain_parser.add_argument('--check', action='store_true',
+                                   help='Check every name, tag and type against the '
+                                        'case files')
+        domain_parser.add_argument('--path', action='store_true',
+                                   help="Print domain.yml's path and stop")
+        domain_parser.add_argument('--list', action='store_true',
+                                   help='Table of what is declared')
+        domain_parser.add_argument('--show', nargs='?', const=True, default=None,
+                                   metavar='NAME',
+                                   help='One entry in full, with its geometry files')
+        domain_parser.add_argument('--add', action='store_true',
+                                   help='Declare a new body or field (needs --name, --type)')
+        domain_parser.add_argument('--remove', type=str, metavar='NAME',
+                                   help='Remove a body')
+        domain_parser.add_argument('--name', type=str, metavar='NAME',
+                                   help='Which body to edit, or the name for a new one')
+        domain_parser.add_argument('--set', action='append', metavar='KEY=VALUE',
+                                   help='Set any key; repeatable, dotted keys reach '
+                                        'inside (geometry.radius=0.5)')
+        domain_parser.add_argument('--type', dest='type', type=str, metavar='TYPE',
+                                   help='beam, rigid or fixed for a body; fluid for '
+                                        'the field')
+        domain_parser.add_argument('--geotag', type=str, metavar='TAG',
+                                   help='Token in the geometry file names (riser.<TAG>.srf)')
+        domain_parser.add_argument('--plttag', type=str, metavar='TAG',
+                                   help='Zone name inside a .plt')
+        domain_parser.add_argument('--radius', type=str, metavar='R',
+                                   help='Body radius (= --set geometry.radius=R)')
+        domain_parser.add_argument('--length', type=str, metavar='L',
+                                   help='Body length (= --set geometry.length=L)')
+        domain_parser.add_argument('--origin', type=str, metavar='X,Y,Z',
+                                   help='Body origin (= --set geometry.origin=[X,Y,Z])')
+        domain_parser.add_argument('--axis', type=str, metavar='AXIS',
+                                   help="Body axis: +x -x +y -y +z -z, or '[1, 0, 0]'")
+        domain_parser.add_argument('--force', action='store_true',
+                                   help='With --init: derive again over an existing file')
+        domain_parser.add_argument('-v', '--verbose', action='store_true',
+                                   help='Enable verbose output')
+        domain_parser.add_argument('-h', '--help', action='store_true',
+                                   help='Show help for domain command')
+
         # case report
         report_parser = case_subparsers.add_parser('report', add_help=False,
                                                    help='Print a compact status table for all registered cases')
@@ -295,6 +348,9 @@ class CaseCommand(BaseCommand):
         elif hasattr(args, 'case_subcommand') and args.case_subcommand == 'out':
             from .out_impl.command import execute_out
             execute_out(args)
+        elif hasattr(args, 'case_subcommand') and args.case_subcommand == 'domain':
+            from .domain_impl import execute_domain
+            execute_domain(args)
         elif hasattr(args, 'case_subcommand') and args.case_subcommand == 'report':
             from .report_impl import execute_report
             execute_report(args)
@@ -336,6 +392,7 @@ class CaseCommand(BaseCommand):
         table.add_row("check", "Inspect OTHD/OISD ranges and validate config")
         table.add_row("status", "Check case data file completeness")
         table.add_row("out", "Inspect a case's declared outputs and write othd node maps")
+        table.add_row("domain", "Declare the field and bodies the domain is made of")
         table.add_row("add", "Scan a directory and build the .cases registry")
         table.add_row("report", "Print a compact status table for all registered cases")
         table.add_row("upload", "Upload case directories from local to remote server")
@@ -355,6 +412,9 @@ class CaseCommand(BaseCommand):
         console.print("    flexflow case check CS4SG1U1 --run")
         console.print("    flexflow case check CS4SG1U1 --all")
         console.print("    flexflow case status CS4SG1U1")
+        console.print("    flexflow case domain CS4SG1U1 --init")
+        console.print("    flexflow case domain body --list")
+        console.print("    flexflow case domain body --add --name cyl --type beam")
         console.print("    flexflow case add --dir /scratch/me/project")
         console.print("    flexflow case report")
         console.print("    flexflow case upload ./myCase --to remote-server")

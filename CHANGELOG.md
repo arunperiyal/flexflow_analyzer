@@ -2,6 +2,72 @@
 
 ## Unreleased
 
+### ✨ `case domain`: one name for a body, instead of four
+
+- **`case domain` *(new)*** — a case names the same cylinder four times, in four
+  vocabularies, and joins none of them up: `beamSolid( "beam_1" )` in the .def,
+  `riser.cyl.srf` / `riser.cyl_BL.nbc` on disk, zone `cyl` in the PLT, and
+  `outputTimeHistory( "riser_probe" )` writing along `riser.cyl_nodes.nbc`. So
+  `field compute --zone cyl`, `case out --map cyl_nodes` and the beamSolid the
+  displacements belong to are four names for one body, and only the person at the
+  keyboard knows it. The command writes that join down once, in a **`domain.yml`**
+  beside the .def, as a `field` and a list of `bodies` each carrying a **`name`**,
+  a **`type`** (`beam` / `rigid` / `fixed`, the field is `fluid`), a **`geotag`**
+  (the token in its geometry file names), a **`plttag`** (its zone in a PLT) and,
+  for a body, **`outputs`** (the outputTimeHistory blocks written along it, each
+  with the node file that orders its records) and **`geometry`**. An entry
+  resolves by *any* of its names, so whichever one a caller has to hand will
+  find it.
+- **It says where a thing is, not what it is made of.** Shape is in it because
+  nothing else records it. A beam's stiffnesses and the fluid's density and
+  viscosity are not: the .def has them and the solver reads them from there, and a
+  second copy in a file nobody feeds back would only drift out of agreement with
+  the first.
+- **`--init` derives it from the case's own files.** The field is the first
+  `elementGroup`, tagged from the element file it names (`riser.fluid.cnn` →
+  `fluid`). Every `beamSolid` becomes a body, with origin, length and axis from
+  `pnt1`/`pnt2`; its geotag comes from `surfaceOutputs` → `outputSurface` → the
+  `.srf` that block names, and its outputs are the nodal `outputTimeHistory`
+  blocks whose node file carries the body's tag (`riser.cyl_nodes.nbc` belongs to
+  `cyl`; `riser.cylinder2.nbc` does not). plttags come from the zone names in the
+  newest PLT under `binary/` — volume zone to the field, surface zone to a body —
+  reading the header only, so it stays fast on a 500 MB file. A beam's **radius**
+  is in the mesh, not the .def, so it is written `null` rather than guessed: a
+  guessed radius silently rescales every coefficient normalised by it. Everything
+  `--init` could not work out is printed as a note, including a body nothing
+  records a history for.
+- **Editing:** `case domain body --list / --show NAME / --add / --remove NAME`,
+  `case domain field --list / --show / --set`, with `--set key=value` taking
+  dotted keys (`geometry.radius=0.5`) and reading the value as YAML, so `0.5` is a
+  number and `[0, 0, 0]` is a vector. Anything else you want on an entry can be
+  set by hand or with `--set`; `--init` simply does not invent it. Shorthands `--type --geotag --plttag
+  --radius --length --origin --axis` write the same places. On `--add`, geotag and
+  plttag default to the body's name and it says so.
+- **Refusing to overwrite says when the existing file is from an older shape.**
+  `--init` never overwrites, so a domain.yml written before `properties`/`source`
+  were dropped stays as it was, and a fresh one looks different for no visible
+  reason. The refusal now names the retired keys it still carries and says
+  `--force` rewrites it.
+- **`--check`** validates the file against the case: geotags against the geometry
+  files present, plttags against the real PLT zones, every output's node file
+  against what is on disk, types against the closed vocabulary, and every name/tag
+  for collisions. Exits non-zero on an error. The
+  errors it would raise are also reported straight after any edit.
+- The `*` wildcard case works for `--list` and `--init` across the `.cases`
+  registry; it is refused for edits, which would write the same body into every
+  case.
+- **`DefConfig.evaluate()` / `.resolved_variables` *(new)*** — `define{}` values are
+  written in terms of each other (`SPAN = 12*DIA`, `EI = (4*PI^2 * ...)/(...)`), so
+  a caller wanting a number has to follow the chain. It now can — which is what
+  turns `pnt2 = {SPAN, 0, 0}` into a body 12 long — with `^` read as
+  exponentiation rather than Python's xor, over an AST whitelist rather than
+  `eval`. Non-arithmetic values (`fixFix`) and cycles give `None` rather than
+  raising.
+- **`parse_blocks()` *(new, in `def_parser`)*** — reads any `kind( "name" ) { ... }`
+  block by matching braces by depth. The existing `\{([^}]*)\}` regexes cannot:
+  a `beamSolid` body holds `pnt1 = {0, 0, 0}`, so the first `}` closes a vector and
+  the parse ends four lines in, losing `bcType`, `activeDof` and `surfaceOutputs`.
+
 ### ♻️ Field command: Tecplot-free backend
 
 - **Removed the Tecplot/pytecplot dependency** from `field`. PLT files are now
