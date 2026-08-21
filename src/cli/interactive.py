@@ -143,7 +143,7 @@ class FlexFlowCompleter(Completer):
     # ---------------------------------------------------------------------------
 
     _SUBCOMMANDS: Dict[str, List[str]] = {
-        'case':     ['show', 'create', 'run', 'organise', 'check', 'status', 'add', 'out', 'report', 'upload', 'download'],
+        'case':     ['show', 'create', 'run', 'organise', 'check', 'status', 'add', 'out', 'domain', 'report', 'upload', 'download'],
         'data':     ['show', 'table', 'stats'],
         'field':    ['info', 'extract', 'compute', 'convert', 'render', 'list', 'check'],
         'def':      ['var'],
@@ -221,6 +221,30 @@ class FlexFlowCompleter(Completer):
             '--map':        'Write node maps for outputTimeHistory blocks',
             '--probe-type': 'Declare the probe geometry: point|line|helix|surface|cloud',
             '--closed':     'With --probe-type line or helix: the curve joins up',
+        },
+        ('case', 'domain'): {
+            # Not _COMMON_FLAGS wholesale: `case domain` takes no --examples, and
+            # offering a flag the parser will reject is worse than not offering it.
+            '--help': 'Show help message', '-h': 'Show help message',
+            '--verbose': 'Enable verbose output', '-v': 'Enable verbose output',
+            '--init':    'Write domain.yml from the case .def and PLT zones',
+            '--check':   'Check every name, tag and type against the case files',
+            '--path':    "Print domain.yml's path and stop",
+            '--list':    'Table of what is declared',
+            '--show':    'One entry in full, with its geometry files',
+            '--add':     'Declare a new body or field (needs --name, --type)',
+            '--remove':  'Remove a body',
+            '--name':    'Which body to edit, or the name for a new one',
+            '--set':     'Set any key; repeatable, dotted (geometry.radius=0.5)',
+            '--type':    'beam, rigid or fixed for a body; fluid for the field',
+            '--geotag':  'Token in the geometry file names (riser.<TAG>.srf)',
+            '--plttag':  'Zone name inside a .plt',
+            '--velocity': 'Field only: free-stream velocity as X,Y,Z',
+            '--radius':  'Body radius (= --set geometry.radius=R)',
+            '--length':  'Body length (= --set geometry.length=L)',
+            '--origin':  'Body origin as X,Y,Z',
+            '--axis':    'Body axis: +x -x +y -y +z -z, or a vector',
+            '--force':   'With --init: derive again over an existing file',
         },
         ('case', 'report'): {
             **_COMMON_FLAGS,
@@ -348,7 +372,10 @@ class FlexFlowCompleter(Completer):
             '--t1':        'Start step (alone: that step; with --t2: range)',
             '--t2':        'End step of a range',
             '--freq':      'With --t1/--t2: keep steps that are multiples of FREQ',
-            '--output':    'Output .csv (per element) / .vtu / .pvd; omit for totals',
+            '--output':    'Bare NAME -> <body>.forces / <body>.force_coeff; or .csv / .vtu / .pvd',
+            '--sectional': 'force_coeff: cut the body into N spanwise sections',
+            '--direction': "force_coeff: axis the sections are cut along (default: the body's)",
+            '--flow':      'force_coeff: free-stream direction (default: from the .def)',
             '--pressure':  'Pressure variable name (default: Pressure)',
             '--nen':       'Force nodes-per-element on the volume zone',
             '--no-progress': 'Do not draw the progress bar',
@@ -523,7 +550,12 @@ class FlexFlowCompleter(Completer):
             ('slice', 'A cut plane, or a series of them'),
         ],
         ('field', 'compute', 0): [('force', 'Per-element pressure force'),
+                                  ('force_coeff', 'Cd/Cl for the body, and per section'),
                                   ('lambda2', 'Vortex criterion, as a nodal field')],
+        # `case domain` takes the target in the slot a case would otherwise go in,
+        # so both are offered: the target names are exact, a case is anything else.
+        ('case', 'domain', 0): [('body', 'Bodies in the domain'),
+                                ('field', 'The continuum they sit in')],
         ('template', 'plot',   0): [('simple', 'Simple time-series'), ('multi', 'Multi-node plot')],
         ('template', 'case',   0): [('basic', 'Basic case config'), ('full', 'Full case config')],
         ('template', 'script', 0): [

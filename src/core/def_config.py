@@ -20,15 +20,34 @@ Usage
 
     # define{} block variables
     cfg.variables               # dict[str, str]  e.g. {'DIA': '1.0', 'SPAN': '12*DIA'}
+    cfg.resolved_variables      # dict[str, float] -- the ones that evaluate
+    cfg.evaluate('12*DIA')      # float | None    -- arithmetic over those variables
 
     # Path info
     cfg.path                    # Path to .def file
     cfg.exists                  # bool
 """
 
+import ast
+import operator
 import re
 from pathlib import Path
 from typing import Optional, Union
+
+
+class _NotANumber(Exception):
+    """An expression node that is not arithmetic over define{} variables."""
+
+
+# `^` is exponentiation in a .def, not xor; it is rewritten before parsing.
+_BINARY_OPS = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+    ast.Div: operator.truediv,
+    ast.Pow: operator.pow,
+    ast.Mod: operator.mod,
+}
 
 
 class DefConfig:
@@ -174,6 +193,127 @@ class DefConfig:
     def file_references(self) -> list:
         """Unique filenames referenced via File( "..." ), in first-seen order."""
         return list(self._file_refs)
+
+    @property
+    def resolved_variables(self) -> dict:
+        """Dict of name -> float for every define{} variable that evaluates.
+
+        A variable that references something undefined, or that is not an
+        arithmetic expression at all, is left out rather than given a stand-in
+        value.
+        """
+        out = {}
+        for name in self._variables:
+            value = self.evaluate(name)
+            if value is not None:
+                out[name] = value
+        return out
+
+    def evaluate(self, expression: Union[str, float, int]) -> Optional[float]:
+        """Evaluate a .def expression against the define{} variables.
+
+        define{} values are written in terms of each other -- ``SPAN = 12*DIA``,
+        ``EI = (4*PI^2 * SPEED^2 * MASSPERL * SPAN^4)/(DIA^2 * (4.73^4) * Ur^2)``
+        -- so a caller that wants a number from one of them has to follow the
+        chain. This does, using ``^`` as exponentiation the way the .def means it
+        rather than Python's bitwise xor.
+
+        Returns None rather than raising when the expression names something
+        undefined, is circular, or is not arithmetic (``fixFix``, ``second``):
+        a .def carries plenty of values that are simply not numbers, and asking
+        is how you find out which.
+        """
+        if expression is None:
+            return None
+        if isinstance(expression, (int, float)):
+            return float(expression)
+        return self._evaluate(str(expression), set())
+
+    def _evaluate(self, expression: str, seen: set) -> Optional[float]:
+        text = expression.strip()
+        if not text:
+            return None
+        # A bare name is a variable reference; anything else is arithmetic over
+        # them. Both paths go through the same guard against a cycle.
+        try:
+            node = ast.parse(text.replace('^', '**'), mode='eval').body
+        except (SyntaxError, ValueError, MemoryError, RecursionError):
+            return None
+        try:
+            return self._eval_node(node, seen)
+        except (_NotANumber, ArithmeticError, RecursionError):
+            return None
+
+    def _eval_node(self, node, seen: set) -> float:
+        """Walk one expression node. Raises _NotANumber for anything unsupported.
+
+        Deliberately not ``eval``: a .def is an input file, and evaluating one
+        should not be able to reach beyond arithmetic.
+        """
+        if isinstance(node, ast.Constant):
+            if isinstance(node.value, bool) or not isinstance(node.value, (int, float)):
+                raise _NotANumber(node.value)
+            return float(node.value)
+        if isinstance(node, ast.Name):
+            name = node.id
+            if name in seen:
+                raise _NotANumber(f"{name} is defined in terms of itself")
+            if name not in self._variables:
+                raise _NotANumber(name)
+            value = self._evaluate(self._variables[name], seen | {name})
+            if value is None:
+                raise _NotANumber(name)
+            return value
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.UAdd, ast.USub)):
+            value = self._eval_node(node.operand, seen)
+            return value if isinstance(node.op, ast.UAdd) else -value
+        if isinstance(node, ast.BinOp) and type(node.op) in _BINARY_OPS:
+            return _BINARY_OPS[type(node.op)](self._eval_node(node.left, seen),
+                                              self._eval_node(node.right, seen))
+        raise _NotANumber(ast.dump(node))
+
+    # ------------------------------------------------------------------
+    # Reference quantities
+    #
+    # A coefficient needs a density, and the .def has it -- but behind a chain of
+    # names the case author chose, not at a fixed key. This follows the chain
+    # rather than assuming it, and returns None rather than a stand-in when it
+    # breaks: a Cd normalised by a guessed density is wrong by exactly the factor
+    # nobody will notice.
+    #
+    # There is deliberately no free-stream reader here. The nearest thing the .def
+    # has is initField( velocity ), which is the *initial condition* -- a case
+    # started from rest has one that says nothing about the flow a body ends up in
+    # -- so the free stream is declared in domain.yml instead.
+    # ------------------------------------------------------------------
+
+    def density(self, element_group: Optional[str] = None) -> Optional[float]:
+        """Fluid density, followed through the .def's own chain of model names.
+
+        ``elementGroup`` -> ``elementProperty`` -> ``materialModel`` ->
+        ``densityModel``. With no `element_group`, the first one in the file is
+        taken. Returns None if any link is missing or the value is not a number.
+        """
+        from .parsers.def_parser import as_string, parse_blocks
+
+        blocks = parse_blocks(self._path)
+        groups = [b for b in blocks if b['kind'] == 'elementGroup']
+        if element_group is None:
+            element_group = groups[0]['name'] if groups else None
+
+        material = None
+        prop = next((b for b in blocks if b['kind'] == 'elementProperty'
+                     and b['name'] == element_group), None)
+        if prop:
+            material = as_string(prop['values'].get('materialModel'))
+        model = next((b for b in blocks if b['kind'] == 'materialModel'
+                      and (material is None or b['name'] == material)), None)
+        if not model:
+            return None
+        named = as_string(model['values'].get('densityModel'))
+        block = next((b for b in blocks if b['kind'] == 'densityModel'
+                      and (named is None or b['name'] == named)), None)
+        return self.evaluate(block['values'].get('density')) if block else None
 
     # ------------------------------------------------------------------
     # Write support

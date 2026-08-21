@@ -23,33 +23,95 @@ from ....utils.progress import progress_enabled, spinner, step_bar
 from ....plt.fxplt import PltFile, VOLUME_ZTYPES
 from ....plt import surface
 from ..locate import problem_name, find_plt, zone_index, resolve_steps
+from . import coefficients
 
-QUANTITIES = ("force", "lambda2")
-# force integrates over a surface zone's elements; lambda2 is a nodal field
-# over the volume, so it takes a different path and does not want --zone.
-SURFACE_QUANTITIES = ("force",)
+QUANTITIES = ("force", "force_coeff", "lambda2")
+# force and force_coeff integrate over a surface zone's elements; lambda2 is a
+# nodal field over the volume, so it takes a different path and does not want
+# --zone.
+SURFACE_QUANTITIES = ("force", "force_coeff")
 SURFACE_ZTYPES = (2, 3)          # FETRIANGLE, FEQUADRILATERAL
 COLUMNS = ["element", "x", "y", "z", "area", "nx", "ny", "nz"]
 SUMMARY_COLUMNS = ["timestep", "elements", "area", "Fx", "Fy", "Fz"]
+SECTIONAL_COLUMNS = ["section", "station", "Fx", "Fy", "Fz", "Fd", "Fl",
+                     "Cd", "Cl", "area", "elements"]
+COEFF_SUMMARY_COLUMNS = ["timestep", "elements", "area", "Fx", "Fy", "Fz",
+                         "Fd", "Fl", "Cd", "Cl"]
+
+# What each quantity's output directory is called, after the body it is about:
+# `cyl.forces`, `cyl.force_coeff`. Naming outputs after the body rather than the
+# run is what lets one case hold several bodies without their tables colliding.
+OUTPUT_SUFFIX = {"force": "forces", "force_coeff": "force_coeff"}
+# ...which puts a dot in a directory name, so `cyl.force_coeff` would otherwise
+# read as a file with a '.force_coeff' extension. These are the suffixes that mean
+# "directory"; a suffix in neither set is a typo and is reported as one, rather
+# than quietly becoming a directory nobody asked for.
+DIR_SUFFIXES = tuple(f".{v}" for v in OUTPUT_SUFFIX.values())
 
 
-def _comment_block(case_dir, args, pressure_var, n_elements, span):
-    """The '#' header every table this command writes carries."""
-    return [
-        "FlexFlow field compute force -- pressure force per surface element",
+def _comment_block(case_dir, args, pressure_var, n_elements, span, reference=None):
+    """The '#' header every table this command writes carries.
+
+    With a `reference`, the coefficient's whole basis goes in too -- every number
+    it was divided by and where that number came from. A Cd is meaningless
+    without them, and a file that carries them can be checked years later.
+    """
+    quantity = getattr(args, "quantity", "force")
+    lines = [
+        f"FlexFlow field compute {quantity} -- pressure force per surface element",
         f"case: {case_dir.name}   zone: {args.zone}   pressure: {pressure_var}",
         "force: -p n dA, pressure only (no viscous skin friction)",
         "normal: unit, pointing out of the body (oriented by the adjacent volume cell)",
         f"elements: {n_elements:,}   {span}",
     ]
+    if reference is not None:
+        lines += [f"body: {reference.body}"] + reference.describe() + [
+            "Cd = Fd / (q * D * dx) per section, / (q * D * L) for the whole body",
+            "coefficients are from pressure alone: no skin friction is included",
+        ]
+    return lines
 
 
-def _surface_zone(plt, name, logger):
+def _zone_via_domain(case_dir, plt, name):
+    """The PLT zone `name` means, when `name` is a body rather than a zone.
+
+    A body has three names -- its own, its geotag, its plttag -- and only the
+    plttag is what a PLT calls it. Anyone who has read domain.yml is as likely to
+    type one of the other two, so a name that is not a zone is looked up there
+    before being called missing. Returns (zone name, how it was found) or
+    (None, None).
+    """
+    try:
+        from ....core.domain import DomainConfig
+        domain = DomainConfig.find(case_dir)
+        if not domain.exists:
+            return None, None
+        entry = domain.entry(name)
+        tag = domain.plt_zone(name)
+    except Exception:
+        return None, None
+    if not tag or zone_index(plt, tag) is None:
+        return None, None
+    return tag, (f"'{name}' is {(entry or {}).get('name', name)} in domain.yml, "
+                 f"whose plttag is '{tag}'")
+
+
+def _surface_zone(plt, name, logger, case_dir=None, announced=None):
     """Resolve --zone to a surface zone index, or exit explaining why it cannot be."""
     zi = zone_index(plt, name)
+    if zi is None and case_dir is not None:
+        resolved, how = _zone_via_domain(case_dir, plt, name)
+        if resolved:
+            # Said once, not once per timestep: it is orientation, not a warning.
+            if announced is not None and not announced:
+                logger.info(how)
+                announced.append(True)
+            zi, name = zone_index(plt, resolved), resolved
     if zi is None:
-        logger.error(f"Zone '{name}' not found. Available: "
-                     f"{', '.join(z['name'] for z in plt.zones)}")
+        known = ', '.join(z['name'] for z in plt.zones)
+        logger.error(f"Zone '{name}' not found. Available: {known}. A body name or "
+                     "geotag from domain.yml works too, when its plttag names one "
+                     "of these.")
         sys.exit(1)
     ztype = plt.zones[zi]["ztype"]
     if ztype in VOLUME_ZTYPES:
@@ -76,7 +138,7 @@ def _orient(normal, centroid, area, pts, volume_conn, owners, logger, warned):
     return surface.orient_by_divergence(normal, centroid, area)
 
 
-INT_COLUMNS = ("timestep", "element", "elements")
+INT_COLUMNS = ("timestep", "element", "elements", "section")
 
 
 def _write_csv(path, header, rows, comments):
@@ -114,32 +176,48 @@ def _write_pvd(path, entries):
     Path(path).write_text("\n".join(lines) + "\n")
 
 
-def _resolve_output(args, logger):
-    """Resolve --output to (path, kind).
+def _output_name(args, quantity, default_body):
+    """What --output asked for, or None for "nothing".
 
-    A bare NAME is a directory holding one element table per timestep plus a
-    summary -- splitting a long run into per-step files without a script to do it.
-    A NAME with an extension is a single file: .csv for the combined table,
-    .vtu/.vtk or .pvd for the surface mesh.
+    `--output NAME` is NAME. A bare `--output` -- and, for force_coeff, no
+    --output at all, since its tables *are* the result -- is the default
+    directory for this quantity and body: `cyl.forces`, `cyl.force_coeff`.
     """
-    if not getattr(args, "output_file", None):
+    raw = getattr(args, "output_file", None)
+    if raw is None and quantity != "force_coeff":
+        return None
+    if isinstance(raw, str) and raw:
+        return raw
+    return f"{default_body}.{OUTPUT_SUFFIX.get(quantity, quantity)}"
+
+
+def _resolve_output(name, case, logger, kinds=(".csv", ".vtu", ".vtk", ".pvd")):
+    """Resolve an output name to (path, kind).
+
+    A bare NAME is a directory holding one table per timestep plus a summary --
+    splitting a long run into per-step files without a script to do it. A NAME
+    with an extension is a single file: .csv for the combined table, .vtu/.vtk or
+    .pvd for the surface mesh.
+    """
+    if not name:
         return None, None
-    base = Path(args.case) if args.case else Path.cwd()
-    raw = Path(args.output_file)
+    base = Path(case) if case else Path.cwd()
+    raw = Path(name)
     target = raw if raw.is_absolute() else base / raw
     ext = target.suffix.lower()
-    if ext == "":
+    if ext == "" or ext in DIR_SUFFIXES:
         target.mkdir(parents=True, exist_ok=True)
         return target, "dir"
-    if ext in (".csv", ".vtu", ".vtk", ".pvd"):
+    if ext in kinds:
         target.parent.mkdir(parents=True, exist_ok=True)
         return target, ext
-    logger.error(f"Unsupported output extension '{ext}'. Use a bare NAME for a "
-                 "directory of per-timestep files, or .csv, .vtu/.vtk or .pvd.")
+    logger.error(f"Unsupported output extension '{ext}'. Use a bare NAME (or one "
+                 f"ending {' / '.join(DIR_SUFFIXES)}) for a directory of "
+                 f"per-timestep files, or {' / '.join(kinds)} for a single file.")
     sys.exit(1)
 
 
-def _print_totals(totals, multi):
+def _print_totals(totals, multi, columns=SUMMARY_COLUMNS):
     """Show the integrated force per timestep -- the summary the rows add up to."""
     from rich.console import Console
     from rich.table import Table
@@ -149,11 +227,11 @@ def _print_totals(totals, multi):
     table = Table(box=box.SIMPLE, show_header=True, header_style="bold yellow")
     if multi:
         table.add_column("timestep", justify="right")
-    for name in ("elements", "area", "Fx", "Fy", "Fz"):
+    for name in columns[1:]:
         table.add_column(name, justify="right")
     shown = totals[:20]
     for row in shown:
-        cells = ([str(row[0])] if multi else []) + [f"{row[1]:,}"] + \
+        cells = ([str(int(row[0]))] if multi else []) + [f"{int(row[1]):,}"] + \
                 [f"{v:.6g}" for v in row[2:]]
         table.add_row(*cells)
     console.print(table)
@@ -173,6 +251,8 @@ def _compute_lambda2(args, steps, binary_dir, problem, logger):
     import pyvista as pv
 
     raw = getattr(args, "output_file", None)
+    if raw is True:
+        raw = "lambda2"      # a bare --output: name it after the quantity
     if not raw:
         logger.error("--output is required for lambda2: it writes a mesh "
                      "(NAME.vtu), or a directory NAME/ for a range of steps")
@@ -213,6 +293,41 @@ def _compute_lambda2(args, steps, binary_dir, problem, logger):
     print(f"lambda2 over {len(written)} timestep{'' if len(written) == 1 else 's'} -> {where}")
 
 
+def _finish_coefficients(out_path, ext, totals, rows, entries, comments, multi,
+                         n_sections, reference, logger):
+    """Report and write what force_coeff produced.
+
+    The whole-body series always goes to summary.csv -- it is the thing a
+    coefficient run is usually for -- and the per-section tables go beside it,
+    one per timestep, when --sectional asked for them.
+    """
+    _print_totals(totals, multi, COEFF_SUMMARY_COLUMNS)
+    cd = np.asarray([row[-2] for row in totals], dtype=float)
+    cl = np.asarray([row[-1] for row in totals], dtype=float)
+    if len(cd) > 1:
+        print(f"Cd {cd.mean():.4f} +/- {cd.std():.4f}   "
+              f"Cl {cl.mean():+.4f} +/- {cl.std():.4f}   "
+              f"over {len(cd)} timestep(s), pressure only")
+    else:
+        print(f"Cd {cd[0]:.4f}   Cl {cl[0]:+.4f}   (pressure only)")
+
+    if out_path is None:
+        return
+    if ext == "dir":
+        _write_csv(out_path / "summary.csv", COEFF_SUMMARY_COLUMNS,
+                   np.asarray(totals), comments)
+        print(f"Wrote {len(entries)} sectional table(s) x {n_sections} section(s) "
+              f"+ summary.csv -> {out_path}/")
+        return
+    if rows:
+        header = (["timestep"] if multi else []) + SECTIONAL_COLUMNS
+        _write_csv(out_path, header, np.vstack(rows), comments)
+        print(f"Wrote {sum(len(r) for r in rows):,} section row(s) -> {out_path}")
+    else:
+        _write_csv(out_path, COEFF_SUMMARY_COLUMNS, np.asarray(totals), comments)
+        print(f"Wrote {len(totals)} timestep row(s) of whole-body Cd/Cl -> {out_path}")
+
+
 def execute_compute(args):
     from .help_messages import print_compute_help
 
@@ -230,6 +345,11 @@ def execute_compute(args):
     if quantity in SURFACE_QUANTITIES and not getattr(args, "zone", None):
         logger.error("--zone is required (the surface zone to integrate over)")
         print(); print_compute_help(); sys.exit(1)
+    for flag in ("sectional", "direction", "flow"):
+        if quantity != "force_coeff" and getattr(args, flag, None) is not None:
+            logger.error(f"--{flag} shapes a coefficient, so it belongs to "
+                         f"`field compute force_coeff`, not '{quantity}'.")
+            sys.exit(1)
 
     case_dir = Path(args.case)
     binary_dir = case_dir / "binary"
@@ -250,12 +370,38 @@ def execute_compute(args):
         _compute_lambda2(args, steps, binary_dir, problem, logger)
         return
 
-    out_path, ext = _resolve_output(args, logger)
+    reference = sections = None
+    n_sections = getattr(args, "sectional", None)
+    if quantity == "force_coeff":
+        # Resolved before a single PLT is opened: everything it needs is in
+        # domain.yml and the .def, and failing here costs nothing, where failing
+        # after reading forty timesteps costs the lot.
+        try:
+            reference = coefficients.resolve(case_dir, args.zone, args, logger)
+        except coefficients.ReferenceError as exc:
+            logger.error(str(exc)); sys.exit(1)
+        if n_sections is not None and n_sections < 1:
+            logger.error(f"--sectional wants a positive count of slices (got "
+                         f"{n_sections})")
+            sys.exit(1)
+
+    default_body = reference.body if reference else (args.zone or "zone")
+    out_path, ext = _resolve_output(
+        _output_name(args, quantity, default_body), args.case, logger,
+        kinds=(".csv",) if quantity == "force_coeff" else
+              (".csv", ".vtu", ".vtk", ".pvd"))
+    if quantity == "force_coeff" and ext == "dir" and n_sections is None:
+        # Without --sectional there is nothing per timestep, so the directory holds
+        # summary.csv alone. It still goes in the directory: everything about this
+        # body belongs in one place whether or not sections were asked for.
+        out_path, ext = out_path / "summary.csv", ".csv"
+
     pressure_var = getattr(args, "pressure", None) or "Pressure"
     multi = mode == "range"
     rows, totals, entries = [], [], []
     owners = cached_surf = cached_vol = None
     warned = False
+    zone_announced = []
     bar_on, spin_on = (lambda on: (on and len(steps) > 1, on and len(steps) == 1))(
         progress_enabled(args, len(steps)))
 
@@ -266,7 +412,7 @@ def execute_compute(args):
             if not plt_path:
                 logger.warning(f"no PLT for timestep {ts}; skipping"); bar.advance(); continue
             plt = PltFile(plt_path)
-            si = _surface_zone(plt, args.zone, logger)
+            si = _surface_zone(plt, args.zone, logger, case_dir, zone_announced)
             vi = plt.first_volume_zone()
             surf_conn = plt.load_connectivity(si)
             if surf_conn is None or not len(surf_conn):
@@ -295,6 +441,37 @@ def execute_compute(args):
             warned = warned or (owners < 0).any()
 
             face_p, force = surface.pressure_force(pdata[pressure_var], surf_conn, area, normal)
+
+            if quantity == "force_coeff":
+                drag, lift, cd, cl = coefficients.total_coefficients(force, reference)
+                totals.append([ts, len(surf_conn), area.sum(),
+                               *force.sum(axis=0), drag, lift, cd, cl])
+                if n_sections is not None:
+                    # Built once and reused: element ids are stable across
+                    # timesteps, so a section keeps the same facets as the body
+                    # deflects. Rebuilt only if the mesh itself changed, which
+                    # would otherwise make the series one of two different things.
+                    if sections is None or len(sections.index) != len(surf_conn):
+                        if sections is not None:
+                            logger.warning(f"step {ts}: element count changed; "
+                                           "re-cutting the sections")
+                        sections = coefficients.build_sections(
+                            centroid, reference, n_sections, logger)
+                    block = coefficients.sectional_rows(force, area, sections,
+                                                        reference)
+                    if ext == "dir":
+                        piece = out_path / f"sectional_{ts}.csv"
+                        _write_csv(piece, SECTIONAL_COLUMNS, block,
+                                   _comment_block(case_dir, args, pressure_var,
+                                                  len(surf_conn), f"timestep: {ts}",
+                                                  reference))
+                        entries.append((ts, piece))
+                    else:
+                        rows.append(np.column_stack([np.full(len(block), ts), block])
+                                    if multi else block)
+                bar.advance()
+                continue
+
             totals.append([ts, len(surf_conn), area.sum(),
                            force[:, 0].sum(), force[:, 1].sum(), force[:, 2].sum()])
 
@@ -331,9 +508,16 @@ def execute_compute(args):
 
     span = (f"timesteps: {steps[0] if len(steps) == 1 else f'{steps[0]}..{steps[-1]}'} "
             f"({len(totals)} written)")
-    comments = _comment_block(case_dir, args, pressure_var, int(totals[0][1]), span)
+    comments = _comment_block(case_dir, args, pressure_var, int(totals[0][1]), span,
+                              reference)
     for line in comments:
         logger.info(line)
+
+    if quantity == "force_coeff":
+        _finish_coefficients(out_path, ext, totals, rows, entries, comments, multi,
+                             n_sections, reference, logger)
+        return
+
     _print_totals(totals, multi)
 
     if out_path is None:

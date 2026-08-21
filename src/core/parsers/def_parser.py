@@ -166,3 +166,144 @@ def parse_def_file(case_directory, problem_name=None):
     config['def_file'] = def_file
     
     return config
+
+
+# ---------------------------------------------------------------------------
+# Generic block reading
+#
+# The functions above each know one block by name. Anything that wants to read a
+# block the .def happens to carry -- beamSolid, elementGroup, densityModel --
+# needs the general form, and it cannot be had with `\{([^}]*)\}`: a beamSolid
+# body contains `pnt1 = {0, 0, 0}`, so the first `}` that regex finds closes a
+# vector, not the block, and the parse ends four lines in with rhoA and nothing
+# else. Braces are matched by depth here instead.
+# ---------------------------------------------------------------------------
+
+# A block label is quoted in most of the .def -- elementGroup( "interior" ) -- but
+# not always: initField( velocity ) writes it bare, and reading only the quoted
+# form silently skips the block rather than reporting anything.
+_BLOCK_OPEN = re.compile(
+    r'(?<![\w.])([A-Za-z]\w*)\s*(?:\(\s*(?:"([^"]*)"|([A-Za-z_]\w*))\s*\)\s*)?\{')
+
+
+def _strip_all_comments(content):
+    """Drop both '#' and '//' comment styles; .def files use each in places."""
+    return re.sub(r'(#|//)[^\n]*', '', content)
+
+
+def _match_brace(content, open_index):
+    """Index of the '}' closing the '{' at `open_index`, or None if unbalanced."""
+    depth = 0
+    for i in range(open_index, len(content)):
+        if content[i] == '{':
+            depth += 1
+        elif content[i] == '}':
+            depth -= 1
+            if depth == 0:
+                return i
+    return None
+
+
+def _split_assignments(body):
+    """`key = value` pairs from a block body, in file order.
+
+    Values are kept as written -- `File( "x" )`, `{0, 1, 1}`, `MASSPERL`, `5e-4`
+    -- because what a value means depends on the key, and turning them all into
+    one type here would only have to be undone. `as_file`, `as_list` and
+    `as_string` read the forms that need reading.
+
+    A value whose braces do not close on its own line is continued onto the next,
+    so a vector split across lines still arrives whole.
+    """
+    values = {}
+    key = None
+    pending = ''
+    for line in body.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        if pending:
+            pending += ' ' + line
+        elif '=' in line:
+            raw_key, _, raw_val = line.partition('=')
+            key = raw_key.strip()
+            pending = raw_val.strip()
+            if not key:
+                key, pending = None, ''
+                continue
+        else:
+            continue
+        if pending.count('{') > pending.count('}'):
+            continue          # a vector broken over lines; keep reading
+        values[key] = pending
+        key, pending = None, ''
+    if key and pending:
+        values[key] = pending
+    return values
+
+
+def parse_blocks(def_file_path, kind=None):
+    """Every top-level block in a .def, in file order.
+
+    Returns a list of dicts with `kind` (the keyword: beamSolid, elementGroup,
+    ...), `name` (the label in parentheses, quoted or bare, or None for an
+    unlabelled block such as `nodeCoordinates {`) and `values` (its `key = value`
+    pairs as written). Pass `kind` to keep only blocks of that keyword.
+
+    Only top-level blocks are returned: a nested `{...}` is part of its parent's
+    body, not a block of its own.
+    """
+    try:
+        with open(def_file_path, 'r') as f:
+            content = _strip_all_comments(f.read())
+    except OSError:
+        return []
+
+    blocks = []
+    position = 0
+    while True:
+        match = _BLOCK_OPEN.search(content, position)
+        if not match:
+            break
+        open_index = match.end() - 1
+        close_index = _match_brace(content, open_index)
+        if close_index is None:
+            break                      # unbalanced from here on; nothing to gain
+        if kind is None or match.group(1) == kind:
+            blocks.append({
+                'kind': match.group(1),
+                'name': match.group(2) if match.group(2) is not None else match.group(3),
+                'values': _split_assignments(content[open_index + 1:close_index]),
+            })
+        position = close_index + 1     # skip the body, so nested braces are not blocks
+    return blocks
+
+
+def as_file(raw):
+    """The filename in a `File( "name" )` value, or None if it is not one."""
+    if not raw:
+        return None
+    match = re.match(r'^File\s*\(\s*"([^"]*)"\s*\)$', raw.strip())
+    return match.group(1) if match else None
+
+
+def as_list(raw):
+    """The items of a `{a, b, c}` value, or None if it is not one.
+
+    Items are returned as written and unquoted, so `{ "cylinder_body" }` gives
+    ['cylinder_body'] and `{0, 1, 1}` gives ['0', '1', '1'].
+    """
+    if not raw:
+        return None
+    text = raw.strip()
+    if not (text.startswith('{') and text.endswith('}')):
+        return None
+    inner = text[1:-1].strip()
+    if not inner:
+        return []
+    return [item.strip().strip('"').strip() for item in inner.split(',')]
+
+
+def as_string(raw):
+    """A value with any surrounding quotes removed."""
+    return raw.strip().strip('"').strip() if raw else raw

@@ -56,6 +56,8 @@ case run <case>            # Submit jobs
 case organise <case>       # Clean up case files
 case out <case> --map      # Write othd maps (row → node/point coordinates)
 case out <case> --list     # Table of the case's outputTimeHistory blocks
+case domain <case> --init  # Declare the field and bodies, in domain.yml
+case domain body --list    # What the domain is made of
 case upload <case> --to R  # Send case data/files to a remote
 case download <case> --from R
 
@@ -68,6 +70,7 @@ field info <case>          # Show PLT info (zones, variables, mesh audit)
 field extract <case> --variables U,V,W --zone FIELD --output out.csv
 field extract <case> --probe 1,2,3    # Sample a point over time
 field compute force <case> --zone cyl # Per-element pressure force
+field compute force_coeff <case> --zone cyl --sectional 48   # Cd/Cl, per section
 field convert <case> --output mesh.vtu
 field check <file>         # Validate a produced .vtu/.pvd
 field render iso <case>    # Isosurface PNGs
