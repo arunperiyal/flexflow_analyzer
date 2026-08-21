@@ -92,7 +92,7 @@ _flexflow_completions() {
                         fi
                         ;;
                     domain)
-                        local flags="--init --check --path --list --show --add --remove --name --set --type --geotag --plttag --radius --length --origin --axis --force -v --verbose -h --help"
+                        local flags="--init --check --path --list --show --add --remove --name --set --type --geotag --plttag --velocity --radius --length --origin --axis --force -v --verbose -h --help"
                         if [[ "$cur" == -* ]]; then
                             COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
                         elif [[ "$prev" == "domain" ]]; then

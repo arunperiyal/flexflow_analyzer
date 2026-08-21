@@ -7,9 +7,16 @@ free-stream speed, a reference area and a direction to call drag, none of which
 are in the PLT. Every one of them is somewhere in the case, though, so none of
 them has to be typed:
 
-    density, free stream   the .def -- through its own chain of model names
+    density                the .def -- through its own chain of model names
+    free stream            domain.yml -- the field's declared velocity
     diameter, length, axis domain.yml -- the body's geometry
     drag / lift directions the free-stream vector, and the body's own axis
+
+The free stream is *declared*, not read from the .def. The nearest thing the .def
+has is `initField( velocity )`, and that is the initial condition: a case started
+from rest, or ramped up at the inlet, has one that says nothing about the flow the
+body ends up in. It would be right often enough to be trusted and wrong quietly
+enough to matter.
 
 That is the whole reason this needs `case domain`. What cannot be found is
 reported by name, with the command that sets it, rather than defaulted: a Cd
@@ -108,8 +115,8 @@ def axis_label(vector):
     return "[" + ", ".join(f"{c:.4g}" for c in vector) + "]"
 
 
-def _body_for(case_dir, zone, logger):
-    """The domain.yml body that `zone` names, or a DomainError-shaped complaint."""
+def _domain_for(case_dir, zone):
+    """The case's domain.yml and the body `zone` names, or why neither can be had."""
     from ....core.domain import FILENAME, DomainConfig, DomainError
 
     case_dir = Path(case_dir)
@@ -119,17 +126,39 @@ def _body_for(case_dir, zone, logger):
         raise ReferenceError(str(exc))
     if not domain.exists:
         raise ReferenceError(
-            f"No {FILENAME} in {case_dir.name}, so there is no diameter, length or "
-            f"axis to normalise by. Write one with `case domain {case_dir.name} "
-            "--init`, then set the radius the .def cannot know: "
-            f"`case domain body {case_dir.name} --name {zone} --radius R`.")
+            f"No {FILENAME} in {case_dir.name}, so there is no free stream, diameter, "
+            f"length or axis to normalise by. Write one with "
+            f"`case domain {case_dir.name} --init`, then declare the two things the "
+            "case does not state: `case domain field --velocity X,Y,Z` and "
+            f"`case domain body --name {zone} --radius R`.")
     body = domain.body(zone)
     if body is None:
         raise ReferenceError(
             f"No body in {FILENAME} matches '{zone}'. Declared: "
             f"{', '.join(domain.body_names()) or 'none'}. A body resolves by name, "
             "geotag or plttag; `case domain body --list` shows all three.")
-    return body
+    return domain, body
+
+
+def _free_stream(domain, case_dir):
+    """The field's declared velocity, as three numbers, or why it cannot be used."""
+    how = f"Declare it with `case domain field {Path(case_dir).name} --velocity X,Y,Z`."
+    velocity = domain.velocity
+    if velocity is None:
+        raise ReferenceError(
+            "domain.yml declares no velocity for the field, and a coefficient needs "
+            f"one: its direction is what drag is measured along, its magnitude the U "
+            f"in 0.5*rho*U^2. {how}")
+    if (not isinstance(velocity, list) or len(velocity) != 3
+            or not all(isinstance(c, (int, float)) and not isinstance(c, bool)
+                       for c in velocity)):
+        raise ReferenceError(f"domain.yml has velocity {velocity!r} for the field, "
+                             f"which is not three numbers. {how}")
+    if not any(velocity):
+        raise ReferenceError(
+            "domain.yml gives the field a velocity of zero, so there is no flow "
+            f"direction and U_inf is 0, which every coefficient would divide by. {how}")
+    return velocity
 
 
 def _required(body, key, case_dir, zone, how):
@@ -160,7 +189,7 @@ def resolve(case_dir, zone, args, logger):
     from ....core.simflow_config import SimflowConfig
 
     case_dir = Path(case_dir)
-    body = _body_for(case_dir, zone, logger)
+    domain, body = _domain_for(case_dir, zone)
     name = body.get('name') or zone
     sources = {}
 
@@ -204,32 +233,16 @@ def resolve(case_dir, zone, args, logger):
         raise ReferenceError(f"{cfg.path.name} gives a density of {rho:g}")
     sources['rho'] = f"{cfg.path.name} densityModel"
 
-    stream = cfg.free_stream()
-    if stream is None:
-        raise ReferenceError(
-            f"{cfg.path.name} gives no free-stream velocity: initField( velocity ) "
-            "has no defaultValues that resolve to three numbers. Check them with "
-            "`def var`.")
+    stream = _free_stream(domain, case_dir)
     speed = float(np.linalg.norm(stream))
 
     if getattr(args, 'flow', None):
         flow = axis_vector(args.flow, '--flow')
         sources['flow'] = "--flow"
-    elif speed == 0:
-        raise ReferenceError(
-            f"{cfg.path.name} initialises the velocity to zero, so the .def does not "
-            "say which way the flow goes. Pass --flow to say which direction drag is "
-            "measured along.")
     else:
         flow = np.asarray(stream, dtype=float) / speed
-        sources['flow'] = f"{cfg.path.name} initField( velocity )"
-
-    if speed == 0:
-        raise ReferenceError(
-            f"{cfg.path.name} initialises the velocity to zero, so U_inf is 0 and "
-            "every coefficient would divide by zero. A coefficient needs a "
-            "non-zero reference speed.")
-    sources['U_inf'] = f"|{cfg.path.name} initField( velocity )| = {speed:g}"
+        sources['flow'] = "domain.yml velocity"
+    sources['U_inf'] = f"|domain.yml velocity| = {speed:g}"
 
     # -- lift: perpendicular to both -------------------------------------------
     # flow x span rather than span x flow, so that a body along +x in flow along

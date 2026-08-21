@@ -47,15 +47,18 @@ RETIRED_KEYS = ('properties', 'source', 'solver')
 # Kept as a table because the same flags have to be recognised when adding, when
 # setting, and when reporting that one was given with nothing to apply it to.
 ATTRIBUTE_FLAGS = (
-    ('type',   'type'),
-    ('geotag', 'geotag'),
-    ('plttag', 'plttag'),
-    ('radius', 'geometry.radius'),
-    ('length', 'geometry.length'),
-    ('origin', 'geometry.origin'),
-    ('axis',   'geometry.axis'),
+    ('type',     'type'),
+    ('geotag',   'geotag'),
+    ('plttag',   'plttag'),
+    ('velocity', 'velocity'),
+    ('radius',   'geometry.radius'),
+    ('length',   'geometry.length'),
+    ('origin',   'geometry.origin'),
+    ('axis',     'geometry.axis'),
 )
 GEOMETRY_ONLY_FLAGS = ('radius', 'length', 'origin', 'axis')
+# The free stream belongs to the continuum, not to anything sitting in it.
+FIELD_ONLY_FLAGS = ('velocity',)
 
 
 class DomainCommandError(Exception):
@@ -147,14 +150,15 @@ def _scalar(text):
         return text
 
 
-def _origin(text):
-    """`--origin 0,0,0` or `--origin "[0, 0, 0]"` as three numbers."""
+def _vector3(text, what):
+    """`0,0,1` or `"[0, 0, 1]"` as three numbers -- both forms people write."""
     value = _scalar(text) if text.strip().startswith('[') else [
         _scalar(part) for part in text.split(',')]
     if (not isinstance(value, list) or len(value) != 3
             or not all(isinstance(c, (int, float)) and not isinstance(c, bool)
                        for c in value)):
-        raise DomainCommandError(f"--origin wants three numbers, e.g. 0,0,0 (got '{text}')")
+        raise DomainCommandError(f"{what} wants three numbers, e.g. 0,0,1 "
+                                 f"(got '{text}')")
     return value
 
 
@@ -174,6 +178,10 @@ def _assignments(args, kind):
             raise DomainCommandError(
                 f"--{flag} describes a body's shape; the field has none. Use "
                 f"`case domain body --set {key}=...` for a body.")
+        if kind != 'field' and flag in FIELD_ONLY_FLAGS:
+            raise DomainCommandError(
+                f"--{flag} describes the flow the bodies sit in, which belongs to "
+                f"the field. Use `case domain field --{flag} ...`.")
         if flag == 'type' and raw not in types:
             raise DomainCommandError(f"Unknown --type '{raw}' for a {kind}. Choose one "
                                      f"of: {', '.join(types)}")
@@ -181,8 +189,8 @@ def _assignments(args, kind):
             raise DomainCommandError(f"Unknown --axis '{raw}'. Choose one of "
                                      f"{', '.join(AXES)}, or give a vector like "
                                      f"'[1, 0, 0]'")
-        if flag == 'origin':
-            pairs.append((key, _origin(raw)))
+        if flag in ('origin', 'velocity'):
+            pairs.append((key, _vector3(raw, f"--{flag}")))
         elif flag == 'axis':
             pairs.append((key, _scalar(raw) if raw.strip().startswith('[') else raw))
         elif flag in ('radius', 'length'):
@@ -247,6 +255,18 @@ def _shape_summary(entry):
     return " ".join(parts) if parts else None
 
 
+def _flow_summary(entry):
+    """The field's free stream: '[0, 0, 1] |U| = 1', or that it is not declared."""
+    velocity = entry.get('velocity')
+    if velocity is None:
+        return "[yellow]velocity unset[/yellow]"
+    if not isinstance(velocity, list) or len(velocity) != 3:
+        return f"[yellow]{velocity!r}[/yellow]"
+    speed = sum(float(c) ** 2 for c in velocity) ** 0.5
+    return ("[" + ", ".join(_number(c) for c in velocity) + "]"
+            + f" [dim]|U| = {_number(speed)}[/dim]")
+
+
 def _properties_summary(entry, limit=3):
     """The first few properties, flattened: 'density=1000, viscosity=1'."""
     properties = entry.get('properties') or {}
@@ -298,9 +318,10 @@ def _cells(kind, entry, domain, case_dir, problem):
     name = entry.get('name') or "[yellow]<unnamed>[/yellow]"
     files = domain.geometry_files(entry.get('name') or entry.get('geotag') or '',
                                   problem, case_dir) if entry.get('geotag') else []
-    # Shape for a body; the field has none. Properties are not derived any more,
-    # but a hand-written file may carry some, and showing them beats a bare '--'.
-    describes = _shape_summary(entry) or _properties_summary(entry)
+    # A body is described by its shape, the field by the flow it carries: one
+    # column, because no entry has both and two would leave half of each empty.
+    describes = (_flow_summary(entry) if kind == 'field'
+                 else _shape_summary(entry) or _properties_summary(entry))
     return (kind, name, entry.get('type') or "[dim]--[/dim]",
             tag(entry.get('geotag'), len(files)), tag(entry.get('plttag')),
             describes or "[dim]--[/dim]",
@@ -322,7 +343,8 @@ def _table(title, with_case=False):
                   title=title, title_justify="left", title_style="bold cyan")
     if with_case:
         table.add_column("Case")
-    for column in ("Kind", "Name", "Type", "Geotag", "Plttag", "Shape", "Output"):
+    for column in ("Kind", "Name", "Type", "Geotag", "Plttag", "Shape / flow",
+                   "Output"):
         table.add_column(column)
     return table
 

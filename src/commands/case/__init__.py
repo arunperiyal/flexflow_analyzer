@@ -221,6 +221,9 @@ class CaseCommand(BaseCommand):
                                    help='Token in the geometry file names (riser.<TAG>.srf)')
         domain_parser.add_argument('--plttag', type=str, metavar='TAG',
                                    help='Zone name inside a .plt')
+        domain_parser.add_argument('--velocity', type=str, metavar='X,Y,Z',
+                                   help='Field only: the free-stream velocity '
+                                        '(direction and magnitude)')
         domain_parser.add_argument('--radius', type=str, metavar='R',
                                    help='Body radius (= --set geometry.radius=R)')
         domain_parser.add_argument('--length', type=str, metavar='L',

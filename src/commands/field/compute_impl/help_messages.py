@@ -40,7 +40,7 @@ Quantities derived from a surface zone's own elements (Tecplot-free).
                           {Colors.DIM}Default: the body's own axis from domain.yml{Colors.RESET}
     {Colors.YELLOW}--flow AXIS{Colors.RESET}           Free-stream direction -- the one drag is measured
                           along; lift is perpendicular to it and to the span.
-                          {Colors.DIM}Default: initField( velocity ) in the .def{Colors.RESET}
+                          {Colors.DIM}Default: the field's velocity in domain.yml{Colors.RESET}
                           Both take an axis ({Colors.YELLOW}x -x y -y z -z{Colors.RESET}) or a vector '[1, 0, 0]'.
 
 {Colors.BOLD}OPTIONAL:{Colors.RESET}
@@ -97,10 +97,16 @@ Quantities derived from a surface zone's own elements (Tecplot-free).
 
       {Colors.YELLOW}rho{Colors.RESET}          the .def, followed through its own chain of model names:
                    elementGroup -> elementProperty -> materialModel -> densityModel
-      {Colors.YELLOW}U{Colors.RESET}            the .def, |initField( velocity )| -- define{{}} variables
-                   evaluated, so U = (U^2+V^2+W^2)^0.5 resolves to a number
+      {Colors.YELLOW}U, flow{Colors.RESET}      domain.yml, the field's declared {Colors.YELLOW}velocity{Colors.RESET} -- its magnitude
+                   is U, its direction is what drag is measured along.
+                   --flow re-aims the direction; U stays the magnitude declared
       {Colors.YELLOW}D, L, axis{Colors.RESET}   domain.yml, the body's own geometry
-      {Colors.YELLOW}flow{Colors.RESET}         the .def's velocity direction; --flow overrides it
+
+    The free stream is {Colors.BOLD}declared, not read from the .def{Colors.RESET}. The nearest thing the
+    .def has is initField( velocity ), and that is the initial condition: a case
+    started from rest, or ramped up at the inlet, has one that says nothing about
+    the flow the body ends up in. Right often enough to be trusted, wrong quietly
+    enough to matter.
 
     Which body is decided by --zone, resolved through domain.yml -- by name,
     geotag or plttag, so any of the three finds it.
@@ -108,9 +114,9 @@ Quantities derived from a surface zone's own elements (Tecplot-free).
     Every one of those, and where it came from, is written into the '#' header of
     each table. A Cd without them cannot be checked; with them it can, years later.
 
-    Nothing is defaulted. A missing radius is an error naming the command that
-    sets it, because a Cd normalised by a guessed diameter is wrong by exactly the
-    factor nobody notices.
+    Nothing is defaulted. A missing radius or velocity is an error naming the
+    command that sets it, because a Cd normalised by a guessed diameter is wrong
+    by exactly the factor nobody notices.
 
 {Colors.BOLD}HOW NORMALS ARE ORIENTED:{Colors.RESET}
 
@@ -138,7 +144,8 @@ Quantities derived from a surface zone's own elements (Tecplot-free).
 
   {Colors.BOLD}Sectional Cd/Cl, one table per timestep:{Colors.RESET}
     flexflow case domain BR0SG0U1P0 --init            {Colors.DIM}# once{Colors.RESET}
-    flexflow case domain body --name cyl --radius 0.5 {Colors.DIM}# the .def cannot know it{Colors.RESET}
+    flexflow case domain body --name cyl --radius 0.5 {Colors.DIM}# the case states neither{Colors.RESET}
+    flexflow case domain field --velocity 0,0,1
     flexflow field compute force_coeff BR0SG0U1P0 --zone cyl \\
       --t1 50 --t2 5000 --freq 50 --sectional 48
       {Colors.DIM}# -> <case>/cyl.force_coeff/sectional_50.csv .. + summary.csv{Colors.RESET}

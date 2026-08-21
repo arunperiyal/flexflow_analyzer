@@ -91,6 +91,14 @@ elementProperty( "interior" ) {
 	materialModel	= "fluid"
 }
 
+initField( velocity ) {
+    defaultValues   = {U, V, W}
+}
+
+initField( pressure ) {
+    defaultValue    = 0.0
+}
+
 outputSurface( "cylinder_body"  ){
     surfaces        = File( "riser.cyl.srf" )
     elementGroup    = "interior"
@@ -131,8 +139,8 @@ def _args(**overrides):
     """An argparse Namespace with every flag `case domain` reads, defaulted off."""
     defaults = dict(target=None, case=None, init=False, check=False, path=False,
                     list=False, show=None, add=False, remove=None, name=None,
-                    set=None, type=None, geotag=None, plttag=None, radius=None,
-                    length=None, origin=None, axis=None, force=False,
+                    set=None, type=None, geotag=None, plttag=None, velocity=None,
+                    radius=None, length=None, origin=None, axis=None, force=False,
                     verbose=False, help=False)
     defaults.update(overrides)
     return argparse.Namespace(**defaults)
@@ -239,7 +247,7 @@ def test_nothing_the_def_already_holds_is_copied(case):
     and viscosity; none of them belong here, where a second copy could drift.
     """
     domain, _ = derive_from_def(case)
-    assert set(domain.field) == {"name", "type", "geotag", "plttag"}
+    assert set(domain.field) == {"name", "type", "geotag", "plttag", "velocity"}
     assert set(domain.bodies[0]) == {"name", "type", "geotag", "plttag",
                                      "geometry", "outputs"}
 
@@ -541,3 +549,44 @@ def test_force_rewrites_an_older_file_in_the_current_shape(case):
     init_case(case, force=True)
     text = (case / "domain.yml").read_text()
     assert "properties:" not in text and "source:" not in text
+
+
+def test_init_leaves_the_velocity_to_be_declared(case):
+    """The .def's initField is an initial condition, not the free stream."""
+    domain, notes = derive_from_def(case)
+    assert domain.field["velocity"] is None
+    assert any("initial condition" in note for note in notes)
+
+
+def test_velocity_is_the_fields_and_not_a_bodys(case):
+    init_case(case)
+    execute_domain(_args(target="field", case=str(case), velocity="0,0,1.5"))
+    assert DomainConfig(case / "domain.yml").velocity == [0, 0, 1.5]
+    with pytest.raises(SystemExit):
+        execute_domain(_args(target="body", case=str(case), name="cyl",
+                             velocity="0,0,1"))
+
+
+def test_a_velocity_that_is_not_three_numbers_is_refused(case, capsys):
+    init_case(case)
+    with pytest.raises(SystemExit):
+        execute_domain(_args(target="field", case=str(case), velocity="fast"))
+    assert "three numbers" in capsys.readouterr().err
+
+
+def test_check_flags_an_undeclared_or_zero_velocity(case):
+    init_case(case)
+    assert any(severity == "warning" and "velocity" in message
+               for severity, message in check_case(case))
+    domain = DomainConfig(case / "domain.yml")
+    domain.set_field("velocity", [0, 0, 0])
+    domain.save()
+    assert any(severity == "error" and "zero" in message
+               for severity, message in check_case(case))
+
+
+def test_an_unquoted_block_label_is_read(case):
+    """`initField( velocity )` writes its label bare where the .def mostly quotes."""
+    blocks = parse_blocks(case / "riser.def", "initField")
+    assert [b["name"] for b in blocks] == ["velocity", "pressure"]
+    assert as_list(blocks[0]["values"]["defaultValues"]) == ["U", "V", "W"]

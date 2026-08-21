@@ -102,6 +102,7 @@ def case(tmp_path):
     domain = DomainConfig.find(tmp_path)
     domain.set_body("cyl", "geometry.radius", 0.5)
     domain.set_body("cyl", "plttag", "cyl")
+    domain.set_field("velocity", [0, 0, 2])
     domain.save()
     return tmp_path
 
@@ -124,16 +125,20 @@ def test_density_follows_the_defs_own_chain(case):
     assert DefConfig.find(case, "riser").density() == 1000.0
 
 
-def test_free_stream_evaluates_its_variables(case):
-    # defaultValues = {U, V, W}, which are define{} names, not numbers
-    assert DefConfig.find(case, "riser").free_stream() == [0.0, 0.0, 2.0]
+def test_the_def_is_not_asked_for_a_free_stream(case):
+    """initField( velocity ) is an initial condition, not the flow a body sees.
+
+    It is right often enough to be trusted and wrong quietly enough to matter, so
+    the free stream is declared in domain.yml and nothing reads the .def for it.
+    """
+    assert not hasattr(DefConfig.find(case, "riser"), "free_stream")
 
 
 def test_reference_is_assembled_from_domain_and_def(case):
     ref = co.resolve(case, "cyl", _args(), LOG)
     assert ref.body == "cyl"
     assert ref.rho == 1000.0
-    assert ref.u_inf == 2.0                      # |{0, 0, 2}|
+    assert ref.u_inf == 2.0                      # |domain.yml velocity|
     assert ref.diameter == 1.0                   # 2 x radius
     assert ref.length == 12.0                    # |pnt2 - pnt1|
     assert ref.dynamic_pressure == 0.5 * 1000.0 * 4.0
@@ -147,7 +152,7 @@ def test_reference_is_assembled_from_domain_and_def(case):
 def test_the_reference_says_where_every_number_came_from(case):
     text = " ".join(co.resolve(case, "cyl", _args(), LOG).describe())
     for expected in ("rho: 1000", "U_inf: 2", "diameter: 1", "length: 12",
-                     "riser.def densityModel", "domain.yml"):
+                     "riser.def densityModel", "domain.yml velocity"):
         assert expected in text
 
 
@@ -192,20 +197,38 @@ def test_an_unknown_body_lists_the_declared_ones(case):
     assert "cyl" in str(exc.value)
 
 
-def test_a_still_fluid_gives_no_reference_speed(tmp_path):
-    """U_inf = 0 would divide every coefficient by zero."""
-    (tmp_path / "riser.def").write_text(DEF_TEMPLATE.replace(
-        "\tvariable = W\n\tvalue = 2.0", "\tvariable = W\n\tvalue = 0.0"))
-    (tmp_path / "simflow.config").write_text('problem = "riser"\n')
-    (tmp_path / "riser.cyl.srf").write_text("1 2 3 4\n")
-    from src.commands.case.domain_impl.command import init_case
-    init_case(tmp_path)
-    domain = DomainConfig.find(tmp_path)
-    domain.set_body("cyl", "geometry.radius", 0.5)
+def test_an_undeclared_velocity_names_the_command_that_sets_it(case):
+    domain = DomainConfig.find(case)
+    domain.set_field("velocity", None)
     domain.save()
     with pytest.raises(co.ReferenceError) as exc:
-        co.resolve(tmp_path, "cyl", _args(flow="z"), LOG)
+        co.resolve(case, "cyl", _args(), LOG)
+    assert "velocity" in str(exc.value) and "case domain field" in str(exc.value)
+
+
+def test_a_still_fluid_gives_no_reference_speed(case):
+    """U_inf = 0 would divide every coefficient by zero."""
+    domain = DomainConfig.find(case)
+    domain.set_field("velocity", [0, 0, 0])
+    domain.save()
+    with pytest.raises(co.ReferenceError) as exc:
+        co.resolve(case, "cyl", _args(flow="z"), LOG)
     assert "zero" in str(exc.value)
+
+
+def test_a_velocity_that_is_not_three_numbers_is_refused(case):
+    domain = DomainConfig.find(case)
+    domain.set_field("velocity", "downstream")
+    domain.save()
+    with pytest.raises(co.ReferenceError):
+        co.resolve(case, "cyl", _args(), LOG)
+
+
+def test_flow_overrides_the_direction_but_not_the_speed(case):
+    """--flow re-aims drag; U_inf stays the magnitude that was declared."""
+    ref = co.resolve(case, "cyl", _args(flow="y"), LOG)
+    np.testing.assert_allclose(ref.flow, [0, 1, 0])
+    assert ref.u_inf == 2.0
 
 
 def test_span_and_flow_may_not_be_the_same_direction(case):
@@ -341,6 +364,7 @@ def test_matches_the_cases_own_reference_implementation(tmp_path):
     init_case(case)
     domain = DomainConfig.find(case)
     domain.set_body("cyl", "geometry.radius", 0.5)     # D = 1, as binary/config.py
+    domain.set_field("velocity", [0, 0, 1])            # U_INF = 1, DRAG_AXIS = Z
     domain.save()
 
     execute_compute(argparse.Namespace(

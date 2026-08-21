@@ -14,15 +14,21 @@
   things no PLT holds, and the case already says all of them:
   - **ρ** from the .def, followed through its own chain of names —
     `elementGroup` → `elementProperty` → `materialModel` → `densityModel`;
-  - **U** from the .def, `|initField( velocity )|`, with `define{}` variables
-    evaluated so `{U, V, W}` resolves to numbers;
+  - **U and the flow direction** from `domain.yml` — the field's declared
+    `velocity`, whose magnitude is U and whose direction is what drag is measured
+    along; lift is perpendicular to it and to the span (`flow × span`);
   - **D, L and the span axis** from `domain.yml` — which is what `case domain` was
-    for;
-  - **the flow direction** from that same velocity, giving drag; lift is
-    perpendicular to it and to the span (`flow × span`).
+    for.
 
-  `--direction` and `--flow` override the two directions; nothing else is
-  overridable and **nothing is defaulted**. A body with no radius is an error
+  The free stream is **declared, not read from the .def**. The nearest thing the
+  .def has is `initField( velocity )`, and that is the *initial condition*: a case
+  started from rest, or ramped up at the inlet, has one that says nothing about the
+  flow the body ends up in — right often enough to be trusted, wrong quietly enough
+  to matter.
+
+  `--direction` and `--flow` override the two directions (`--flow` re-aims drag;
+  U stays the declared magnitude); nothing else is overridable and **nothing is
+  defaulted**. A body with no radius, or a field with no velocity, is an error
   naming the command that sets it, because a Cd normalised by a guessed diameter
   is wrong by exactly the factor nobody notices. Every number and its origin goes
   into the `#` header of each table written.
@@ -41,9 +47,10 @@
 - **`parse_blocks` reads unquoted block labels.** `initField( velocity )` writes
   its label bare where most of the .def quotes it; reading only the quoted form
   skipped the block silently, which is how the free-stream velocity went missing.
-- **`DefConfig.density()` / `.free_stream()` *(new)*** — the two .def readers the
-  above needs, each following the chain rather than assuming a fixed key, and each
-  returning `None` rather than a stand-in when a link is broken.
+- **`DefConfig.density()` *(new)*** — the .def reader the above needs, following
+  the chain rather than assuming a fixed key and returning `None` rather than a
+  stand-in when a link is broken. There is deliberately no free-stream reader: see
+  above.
 
 ### ✨ `case domain`: one name for a body, instead of four
 
@@ -56,16 +63,18 @@
   keyboard knows it. The command writes that join down once, in a **`domain.yml`**
   beside the .def, as a `field` and a list of `bodies` each carrying a **`name`**,
   a **`type`** (`beam` / `rigid` / `fixed`, the field is `fluid`), a **`geotag`**
-  (the token in its geometry file names), a **`plttag`** (its zone in a PLT) and,
-  for a body, **`outputs`** (the outputTimeHistory blocks written along it, each
-  with the node file that orders its records) and **`geometry`**. An entry
-  resolves by *any* of its names, so whichever one a caller has to hand will
-  find it.
-- **It says where a thing is, not what it is made of.** Shape is in it because
-  nothing else records it. A beam's stiffnesses and the fluid's density and
-  viscosity are not: the .def has them and the solver reads them from there, and a
-  second copy in a file nobody feeds back would only drift out of agreement with
-  the first.
+  (the token in its geometry file names) and a **`plttag`** (its zone in a PLT);
+  a body also carries **`geometry`** and **`outputs`** (the outputTimeHistory
+  blocks written along it, each with the node file that orders its records), and
+  the field a **`velocity`**. An entry resolves by *any* of its names, so
+  whichever one a caller has to hand will find it.
+- **It says where a thing is, not what it is made of.** A beam's stiffnesses and
+  the fluid's density are not in it: the .def has them and the solver reads them
+  from there, and a second copy would only drift. What *is* in it is what the case
+  states nowhere — a body's **radius** and the field's **velocity**. Neither is a
+  copy: the mesh has the shape but no number saying which diameter to normalise
+  by, and the .def has no free stream at all, only an initial condition. Both are
+  declared, and both start out `null`.
 - **`--init` derives it from the case's own files.** The field is the first
   `elementGroup`, tagged from the element file it names (`riser.fluid.cnn` →
   `fluid`). Every `beamSolid` becomes a body, with origin, length and axis from
@@ -78,7 +87,7 @@
   is in the mesh, not the .def, so it is written `null` rather than guessed: a
   guessed radius silently rescales every coefficient normalised by it. Everything
   `--init` could not work out is printed as a note, including a body nothing
-  records a history for.
+  records a history for and the velocity it will not guess at.
 - **Editing:** `case domain body --list / --show NAME / --add / --remove NAME`,
   `case domain field --list / --show / --set`, with `--set key=value` taking
   dotted keys (`geometry.radius=0.5`) and reading the value as YAML, so `0.5` is a

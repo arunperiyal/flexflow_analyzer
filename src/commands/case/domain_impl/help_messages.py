@@ -42,14 +42,22 @@ What a case's domain is made of -- the fluid field and the bodies in it -- kept 
         {Colors.BOLD}plttag{Colors.RESET}   its zone name inside a .plt
         {Colors.BOLD}outputs{Colors.RESET}  the outputTimeHistory block written along it, and the node
                  file that orders its records
+        {Colors.BOLD}velocity{Colors.RESET} the field's free stream, as a vector: its direction is what
+                 drag is measured along, its magnitude the U in 0.5*rho*U^2
 
     Given those, a body named once resolves to its mesh files, its PLT zone and
     its displacement history without anything re-deriving the convention.
 
-    It says {Colors.BOLD}where a thing is{Colors.RESET}, not what it is made of. Shape is here because
-    nothing else records it. A beam's stiffnesses and the fluid's density and
-    viscosity are not: the .def has them and the solver reads them from there,
-    and a second copy in a file nobody feeds back would only drift.
+    It says {Colors.BOLD}where a thing is{Colors.RESET}, not what it is made of. A beam's stiffnesses
+    and the fluid's density are not here: the .def has them and the solver reads
+    them from there, and a second copy would only drift.
+
+    What {Colors.BOLD}is{Colors.RESET} here is what the case states nowhere -- a body's {Colors.YELLOW}radius{Colors.RESET} and the
+    field's {Colors.YELLOW}velocity{Colors.RESET}. Neither is a copy: the mesh has the shape but no
+    number saying which diameter to normalise by, and the .def's nearest thing to
+    a free stream is initField( velocity ), which is the {Colors.BOLD}initial condition{Colors.RESET} --
+    for a case started from rest it says nothing about the flow the body ends up
+    in. Both are declared, and both start out null.
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
 
@@ -79,6 +87,8 @@ What a case's domain is made of -- the fluid field and the bodies in it -- kept 
     {Colors.YELLOW}--type T{Colors.RESET}           beam | rigid | fixed for a body, fluid for the field
     {Colors.YELLOW}--geotag T{Colors.RESET}         Token in the geometry file names
     {Colors.YELLOW}--plttag T{Colors.RESET}         Zone name in the PLT
+    {Colors.YELLOW}--velocity X,Y,Z{Colors.RESET}   Field only: the free-stream velocity
+                       {Colors.DIM}(= --set velocity=[X,Y,Z]){Colors.RESET}
     {Colors.YELLOW}--radius R{Colors.RESET}         Body radius        {Colors.DIM}(= --set geometry.radius=R){Colors.RESET}
     {Colors.YELLOW}--length L{Colors.RESET}         Body length        {Colors.DIM}(= --set geometry.length=L){Colors.RESET}
     {Colors.YELLOW}--origin X,Y,Z{Colors.RESET}     Body origin        {Colors.DIM}(= --set geometry.origin=[X,Y,Z]){Colors.RESET}
@@ -104,10 +114,11 @@ What a case's domain is made of -- the fluid field and the bodies in it -- kept 
     plttags come from the zone names in the newest PLT under binary/: the volume
     zone is the field, a surface zone is a body.
 
-    A beam's {Colors.BOLD}radius{Colors.RESET} is in the mesh, not the .def, so it is written as
-    {Colors.YELLOW}null{Colors.RESET} rather than guessed. A guessed radius would silently rescale
-    every coefficient normalised by it, and nothing downstream could tell.
-    Everything --init could not work out is printed as a note when it runs.
+    A beam's {Colors.BOLD}radius{Colors.RESET} and the field's {Colors.BOLD}velocity{Colors.RESET} are written as {Colors.YELLOW}null{Colors.RESET} rather
+    than guessed -- the first is in the mesh rather than the .def, the second
+    nowhere at all. A guessed radius silently rescales every coefficient
+    normalised by it, and nothing downstream could tell. Everything --init could
+    not work out is printed as a note when it runs.
 
 {Colors.BOLD}EDITING:{Colors.RESET}
 
@@ -129,6 +140,7 @@ What a case's domain is made of -- the fluid field and the bodies in it -- kept 
 
   {Colors.BOLD}Fill in what the .def could not say:{Colors.RESET}
     flexflow case domain body --name cyl --radius 0.5
+    flexflow case domain field --velocity 0,0,1
     flexflow case domain field --set name=water
     {Colors.DIM}(--init names the field after its elementGroup, e.g. 'interior'){Colors.RESET}
 

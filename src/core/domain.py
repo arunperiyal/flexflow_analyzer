@@ -17,6 +17,7 @@ the person at the keyboard knows that. `domain.yml` writes the join down once:
       type: fluid
       geotag: fluid          # riser.fluid.cnn
       plttag: FIELD          # zone in the .plt
+      velocity: [0, 0, 1]    # the free stream, declared -- see below
 
     bodies:
       - name: cyl
@@ -36,10 +37,16 @@ writes its displacements. Those records are positional -- row k is the k-th node
 of the file the block names -- so the node file is the one thing that turns a row
 back into a point on the body.
 
-It says *where a thing is*, not what it is made of. Shape is here because nothing
-else records it. A beam's stiffnesses and the fluid's density and viscosity are
-not: the .def has them, the solver reads them from there, and a second copy in a
-file nobody feeds back would only drift out of agreement with the first.
+It says *where a thing is*, not what it is made of. A beam's stiffnesses and the
+fluid's density are not here: the .def has them, the solver reads them from there,
+and a second copy in a file nobody feeds back would only drift.
+
+What *is* here is what the case does not state anywhere -- a body's radius, and
+the field's free-stream velocity. Neither is a copy. The mesh has the shape but no
+number saying which diameter a coefficient is normalised by; and the .def's
+nearest thing to a free stream, `initField( velocity )`, is the initial condition,
+which for a case started from rest or ramped up at the inlet says nothing about
+the flow the body ends up in. Both are declared, and both start out null.
 
 Most of it can be *derived* -- `derive_from_def` reads the .def and any PLT
 present and fills in what it can find. What it cannot know it leaves blank rather
@@ -353,6 +360,16 @@ class DomainConfig:
         entry = self.entry(token)
         return entry.get('geotag') if entry else None
 
+    @property
+    def velocity(self) -> Optional[list]:
+        """The free-stream velocity the field declares, or None if it has not.
+
+        Direction and magnitude in one declaration, so the two cannot disagree:
+        a coefficient needs the direction to resolve drag from lift and the
+        magnitude for its dynamic pressure, and both come from this.
+        """
+        return (self.field or {}).get('velocity')
+
     def outputs(self, token: str) -> list:
         """The outputTimeHistory blocks declared for whatever `token` names.
 
@@ -528,6 +545,21 @@ class DomainConfig:
                                   f"{label}: output '{output['block']}' reads {nodes}, "
                                   f"which is not in {Path(case_dir).name}"))
 
+            if kind == 'field':
+                velocity = entry.get('velocity')
+                if velocity is None:
+                    found.append(('warning', f"{label}: no velocity, so there is no "
+                                             "free stream to normalise a coefficient "
+                                             "against"))
+                elif (not isinstance(velocity, list) or len(velocity) != 3
+                        or not all(isinstance(c, (int, float))
+                                   and not isinstance(c, bool) for c in velocity)):
+                    found.append(('error', f"{label}: velocity {velocity!r} is not "
+                                           "three numbers"))
+                elif not any(velocity):
+                    found.append(('error', f"{label}: velocity is zero, which gives "
+                                           "no flow direction and no reference speed"))
+
             axis = (entry.get('geometry') or {}).get('axis')
             if isinstance(axis, str) and axis not in AXES:
                 found.append(('error', f"{label}: axis '{axis}' is not one of "
@@ -538,7 +570,7 @@ class DomainConfig:
 
     def _ordered(self) -> dict:
         """The data with its keys in reading order: what a thing *is* before its numbers."""
-        head = ('name', 'type', 'geotag', 'plttag')
+        head = ('name', 'type', 'geotag', 'plttag', 'velocity')
         # `properties` and `source` are not derived any more, but a hand-written
         # file may still carry them, and they belong at the end where they were.
         tail = ('geometry', 'outputs', 'properties', 'source')
@@ -594,6 +626,8 @@ HEADER = """\
 #   plttag   its zone name inside a .plt -- what `field compute --zone` wants
 #   outputs  the outputTimeHistory block written along the body, and the node file
 #            that orders its records: row k of the othd is that file's k-th node
+#   velocity the field's free stream, as a vector -- its direction is what drag is
+#            measured along, its magnitude the U in 0.5*rho*U^2
 #
 # It says where a thing is, not what it is made of. Shape is here because nothing
 # else records it; a beam's stiffnesses and the fluid's density are not, because
@@ -712,11 +746,20 @@ def _derive_field(blocks, problem, volume_zones, notes):
     if geotag is None:
         notes.append(f"elementGroup(\"{group['name']}\") names no element file, so "
                      "the field's geotag is left blank")
+    # The free stream is left for a person to declare. The .def's nearest thing to
+    # it is initField( velocity ), and that is the *initial condition*: a case
+    # started from rest, or ramped up at the inlet, has one that says nothing about
+    # the flow the body eventually sees. Reading it would be right often enough to
+    # be trusted and wrong quietly enough to matter.
+    notes.append("the field's velocity is left blank: the .def's initField is an "
+                 "initial condition, not the free stream. Declare it with "
+                 "`case domain field --velocity X,Y,Z`")
     return {
         'name': group['name'] or geotag or 'field',
         'type': 'fluid',
         'geotag': geotag,
         'plttag': _pick_zone(geotag, volume_zones),
+        'velocity': None,
     }
 
 

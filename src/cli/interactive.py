@@ -239,6 +239,7 @@ class FlexFlowCompleter(Completer):
             '--type':    'beam, rigid or fixed for a body; fluid for the field',
             '--geotag':  'Token in the geometry file names (riser.<TAG>.srf)',
             '--plttag':  'Zone name inside a .plt',
+            '--velocity': 'Field only: free-stream velocity as X,Y,Z',
             '--radius':  'Body radius (= --set geometry.radius=R)',
             '--length':  'Body length (= --set geometry.length=L)',
             '--origin':  'Body origin as X,Y,Z',

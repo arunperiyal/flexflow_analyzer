@@ -275,11 +275,16 @@ class DefConfig:
     # ------------------------------------------------------------------
     # Reference quantities
     #
-    # A coefficient needs a density and a free-stream speed, and both are in the
-    # .def -- but behind a chain of names the case author chose, not at a fixed
-    # key. These follow the chain rather than assuming it, and return None rather
-    # than a stand-in when it breaks: a Cd normalised by a guessed density is
-    # wrong by exactly the factor nobody will notice.
+    # A coefficient needs a density, and the .def has it -- but behind a chain of
+    # names the case author chose, not at a fixed key. This follows the chain
+    # rather than assuming it, and returns None rather than a stand-in when it
+    # breaks: a Cd normalised by a guessed density is wrong by exactly the factor
+    # nobody will notice.
+    #
+    # There is deliberately no free-stream reader here. The nearest thing the .def
+    # has is initField( velocity ), which is the *initial condition* -- a case
+    # started from rest has one that says nothing about the flow a body ends up in
+    # -- so the free stream is declared in domain.yml instead.
     # ------------------------------------------------------------------
 
     def density(self, element_group: Optional[str] = None) -> Optional[float]:
@@ -309,28 +314,6 @@ class DefConfig:
         block = next((b for b in blocks if b['kind'] == 'densityModel'
                       and (named is None or b['name'] == named)), None)
         return self.evaluate(block['values'].get('density')) if block else None
-
-    def free_stream(self) -> Optional[list]:
-        """The free-stream velocity as [u, v, w], from ``initField( velocity )``.
-
-        The block holds ``defaultValues = {U, V, W}``, which are usually define{}
-        variables rather than literals -- so each component is evaluated. Returns
-        None if the block is absent or a component does not resolve.
-        """
-        from .parsers.def_parser import as_list, parse_blocks
-
-        blocks = parse_blocks(self._path, 'initField')
-        block = next((b for b in blocks if b['name'] == 'velocity'), None)
-        if not block and len(blocks) == 1 and blocks[0]['name'] is None:
-            # A lone unlabelled initField can only be the velocity one.
-            block = blocks[0]
-        if not block:
-            return None
-        items = as_list(block['values'].get('defaultValues'))
-        if not items or len(items) != 3:
-            return None
-        values = [self.evaluate(item) for item in items]
-        return values if all(v is not None for v in values) else None
 
     # ------------------------------------------------------------------
     # Write support
