@@ -2,6 +2,49 @@
 
 ## Unreleased
 
+### ✨ `field compute force_coeff`: Cd and Cl, normalised by what the case says
+
+- **`field compute force_coeff` *(new)*** — the same pressure force `force`
+  integrates, divided by a reference state: whole-body Cd/Cl per timestep, and
+  with **`--sectional N`** the body cut into N spanwise slices with Cd/Cl for
+  each, one table per timestep. This is the calculation that until now lived as a
+  five-module script in a case's `binary/` directory, re-copied and re-edited per
+  case.
+- **The reference state is read, not typed.** `Cd = Fd / (½ρU²A)` needs four
+  things no PLT holds, and the case already says all of them:
+  - **ρ** from the .def, followed through its own chain of names —
+    `elementGroup` → `elementProperty` → `materialModel` → `densityModel`;
+  - **U** from the .def, `|initField( velocity )|`, with `define{}` variables
+    evaluated so `{U, V, W}` resolves to numbers;
+  - **D, L and the span axis** from `domain.yml` — which is what `case domain` was
+    for;
+  - **the flow direction** from that same velocity, giving drag; lift is
+    perpendicular to it and to the span (`flow × span`).
+
+  `--direction` and `--flow` override the two directions; nothing else is
+  overridable and **nothing is defaulted**. A body with no radius is an error
+  naming the command that sets it, because a Cd normalised by a guessed diameter
+  is wrong by exactly the factor nobody notices. Every number and its origin goes
+  into the `#` header of each table written.
+- **Validated against the case's own reference implementation.** `examples/`
+  ships `sectional_Cd_Cl_<step>.csv` produced by the hand-rolled `binary/main.py`;
+  the new command reproduces them to ~1e-9 relative — sectioning, axes, sign of
+  lift and reference areas all agree. That comparison is a test.
+- **`--zone` now resolves through `domain.yml`** for every `field compute`
+  quantity: a body has three names and only the plttag is what a PLT calls it, so
+  a name that is not a zone is looked up as a body before being called missing.
+- **Output directories are named after the body**: `--output` given with **no
+  name** is `<body>.forces` / `<body>.force_coeff` in the case directory, and
+  `force_coeff` writes there by default since its tables are the result. One
+  place per body, so a case with several does not collide. `--output NAME` is
+  unchanged, and `force` without `--output` still just prints totals.
+- **`parse_blocks` reads unquoted block labels.** `initField( velocity )` writes
+  its label bare where most of the .def quotes it; reading only the quoted form
+  skipped the block silently, which is how the free-stream velocity went missing.
+- **`DefConfig.density()` / `.free_stream()` *(new)*** — the two .def readers the
+  above needs, each following the chain rather than assuming a fixed key, and each
+  returning `None` rather than a stand-in when a link is broken.
+
 ### ✨ `case domain`: one name for a body, instead of four
 
 - **`case domain` *(new)*** — a case names the same cylinder four times, in four

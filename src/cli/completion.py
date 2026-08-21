@@ -216,12 +216,14 @@ _flexflow_completions() {
                         fi
                         ;;
                     compute)
-                        local flags="force lambda2 --zone --timestep --t1 --t2 --freq --output --pressure --nen --no-progress -v --verbose -h --help"
+                        local flags="force force_coeff lambda2 --zone --timestep --t1 --t2 --freq --output --sectional --direction --flow --pressure --nen --no-progress -v --verbose -h --help"
                         if [[ "$cur" == -* ]]; then
                             COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
                         else
                             case "$prev" in
                                 --output) _filedir ;;
+                                --direction|--flow)
+                                    COMPREPLY=( $(compgen -W "x -x y -y z -z" -- "$cur") ) ;;
                                 *) _flexflow_complete_cases ;;
                             esac
                         fi

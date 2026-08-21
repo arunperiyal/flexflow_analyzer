@@ -179,7 +179,11 @@ def parse_def_file(case_directory, problem_name=None):
 # else. Braces are matched by depth here instead.
 # ---------------------------------------------------------------------------
 
-_BLOCK_OPEN = re.compile(r'(?<![\w.])([A-Za-z]\w*)\s*(?:\(\s*"([^"]*)"\s*\)\s*)?\{')
+# A block label is quoted in most of the .def -- elementGroup( "interior" ) -- but
+# not always: initField( velocity ) writes it bare, and reading only the quoted
+# form silently skips the block rather than reporting anything.
+_BLOCK_OPEN = re.compile(
+    r'(?<![\w.])([A-Za-z]\w*)\s*(?:\(\s*(?:"([^"]*)"|([A-Za-z_]\w*))\s*\)\s*)?\{')
 
 
 def _strip_all_comments(content):
@@ -242,9 +246,9 @@ def parse_blocks(def_file_path, kind=None):
     """Every top-level block in a .def, in file order.
 
     Returns a list of dicts with `kind` (the keyword: beamSolid, elementGroup,
-    ...), `name` (the quoted label, or None for an unlabelled block such as
-    `nodeCoordinates {`) and `values` (its `key = value` pairs as written).
-    Pass `kind` to keep only blocks of that keyword.
+    ...), `name` (the label in parentheses, quoted or bare, or None for an
+    unlabelled block such as `nodeCoordinates {`) and `values` (its `key = value`
+    pairs as written). Pass `kind` to keep only blocks of that keyword.
 
     Only top-level blocks are returned: a nested `{...}` is part of its parent's
     body, not a block of its own.
@@ -268,7 +272,7 @@ def parse_blocks(def_file_path, kind=None):
         if kind is None or match.group(1) == kind:
             blocks.append({
                 'kind': match.group(1),
-                'name': match.group(2),
+                'name': match.group(2) if match.group(2) is not None else match.group(3),
                 'values': _split_assignments(content[open_index + 1:close_index]),
             })
         position = close_index + 1     # skip the body, so nested braces are not blocks

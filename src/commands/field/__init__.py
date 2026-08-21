@@ -104,7 +104,7 @@ class FieldCommand(BaseCommand):
         compute_parser = field_subparsers.add_parser('compute', add_help=False,
                                                      help='Compute quantities on a surface zone')
         compute_parser.add_argument('quantity', nargs='?',
-                                    help='Quantity to compute (force)')
+                                    help='Quantity to compute (force, force_coeff, lambda2)')
         compute_parser.add_argument('case', nargs='?', help='Case directory path')
         compute_parser.add_argument('-v', '--verbose', action='store_true',
                                     help='Enable verbose output')
@@ -117,10 +117,22 @@ class FieldCommand(BaseCommand):
         compute_parser.add_argument('--t2', type=float, help='End step of a range')
         compute_parser.add_argument('--freq', type=int,
                                     help='With --t1/--t2: keep steps that are multiples of FREQ')
-        compute_parser.add_argument('--output', '--output-file', dest='output_file', type=str,
+        compute_parser.add_argument('--output', '--output-file', dest='output_file',
+                                    nargs='?', const=True, default=None, metavar='NAME',
                                     help='Bare NAME -> a directory of per-timestep element '
                                          'tables + summary.csv; or .csv / .vtu/.vtk / .pvd '
-                                         'for a single file; omit for totals on screen')
+                                         'for a single file. Given with no NAME it is '
+                                         '<body>.forces / <body>.force_coeff in the case; '
+                                         'omitted, force prints totals only')
+        compute_parser.add_argument('--sectional', type=int, metavar='N',
+                                    help='force_coeff: cut the body into N spanwise '
+                                         'sections and write Cd/Cl for each')
+        compute_parser.add_argument('--direction', type=str, metavar='AXIS',
+                                    help='force_coeff: axis the sections are cut along '
+                                         "(default: the body's axis in domain.yml)")
+        compute_parser.add_argument('--flow', type=str, metavar='AXIS',
+                                    help='force_coeff: free-stream direction, the one drag '
+                                         'is measured along (default: from the .def)')
         compute_parser.add_argument('--pressure', type=str,
                                     help='Pressure variable name (default: Pressure)')
         compute_parser.add_argument('--nen', type=int,

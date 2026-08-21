@@ -273,6 +273,66 @@ class DefConfig:
         raise _NotANumber(ast.dump(node))
 
     # ------------------------------------------------------------------
+    # Reference quantities
+    #
+    # A coefficient needs a density and a free-stream speed, and both are in the
+    # .def -- but behind a chain of names the case author chose, not at a fixed
+    # key. These follow the chain rather than assuming it, and return None rather
+    # than a stand-in when it breaks: a Cd normalised by a guessed density is
+    # wrong by exactly the factor nobody will notice.
+    # ------------------------------------------------------------------
+
+    def density(self, element_group: Optional[str] = None) -> Optional[float]:
+        """Fluid density, followed through the .def's own chain of model names.
+
+        ``elementGroup`` -> ``elementProperty`` -> ``materialModel`` ->
+        ``densityModel``. With no `element_group`, the first one in the file is
+        taken. Returns None if any link is missing or the value is not a number.
+        """
+        from .parsers.def_parser import as_string, parse_blocks
+
+        blocks = parse_blocks(self._path)
+        groups = [b for b in blocks if b['kind'] == 'elementGroup']
+        if element_group is None:
+            element_group = groups[0]['name'] if groups else None
+
+        material = None
+        prop = next((b for b in blocks if b['kind'] == 'elementProperty'
+                     and b['name'] == element_group), None)
+        if prop:
+            material = as_string(prop['values'].get('materialModel'))
+        model = next((b for b in blocks if b['kind'] == 'materialModel'
+                      and (material is None or b['name'] == material)), None)
+        if not model:
+            return None
+        named = as_string(model['values'].get('densityModel'))
+        block = next((b for b in blocks if b['kind'] == 'densityModel'
+                      and (named is None or b['name'] == named)), None)
+        return self.evaluate(block['values'].get('density')) if block else None
+
+    def free_stream(self) -> Optional[list]:
+        """The free-stream velocity as [u, v, w], from ``initField( velocity )``.
+
+        The block holds ``defaultValues = {U, V, W}``, which are usually define{}
+        variables rather than literals -- so each component is evaluated. Returns
+        None if the block is absent or a component does not resolve.
+        """
+        from .parsers.def_parser import as_list, parse_blocks
+
+        blocks = parse_blocks(self._path, 'initField')
+        block = next((b for b in blocks if b['name'] == 'velocity'), None)
+        if not block and len(blocks) == 1 and blocks[0]['name'] is None:
+            # A lone unlabelled initField can only be the velocity one.
+            block = blocks[0]
+        if not block:
+            return None
+        items = as_list(block['values'].get('defaultValues'))
+        if not items or len(items) != 3:
+            return None
+        values = [self.evaluate(item) for item in items]
+        return values if all(v is not None for v in values) else None
+
+    # ------------------------------------------------------------------
     # Write support
     # ------------------------------------------------------------------
 
