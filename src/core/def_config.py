@@ -20,15 +20,34 @@ Usage
 
     # define{} block variables
     cfg.variables               # dict[str, str]  e.g. {'DIA': '1.0', 'SPAN': '12*DIA'}
+    cfg.resolved_variables      # dict[str, float] -- the ones that evaluate
+    cfg.evaluate('12*DIA')      # float | None    -- arithmetic over those variables
 
     # Path info
     cfg.path                    # Path to .def file
     cfg.exists                  # bool
 """
 
+import ast
+import operator
 import re
 from pathlib import Path
 from typing import Optional, Union
+
+
+class _NotANumber(Exception):
+    """An expression node that is not arithmetic over define{} variables."""
+
+
+# `^` is exponentiation in a .def, not xor; it is rewritten before parsing.
+_BINARY_OPS = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+    ast.Div: operator.truediv,
+    ast.Pow: operator.pow,
+    ast.Mod: operator.mod,
+}
 
 
 class DefConfig:
@@ -174,6 +193,84 @@ class DefConfig:
     def file_references(self) -> list:
         """Unique filenames referenced via File( "..." ), in first-seen order."""
         return list(self._file_refs)
+
+    @property
+    def resolved_variables(self) -> dict:
+        """Dict of name -> float for every define{} variable that evaluates.
+
+        A variable that references something undefined, or that is not an
+        arithmetic expression at all, is left out rather than given a stand-in
+        value.
+        """
+        out = {}
+        for name in self._variables:
+            value = self.evaluate(name)
+            if value is not None:
+                out[name] = value
+        return out
+
+    def evaluate(self, expression: Union[str, float, int]) -> Optional[float]:
+        """Evaluate a .def expression against the define{} variables.
+
+        define{} values are written in terms of each other -- ``SPAN = 12*DIA``,
+        ``EI = (4*PI^2 * SPEED^2 * MASSPERL * SPAN^4)/(DIA^2 * (4.73^4) * Ur^2)``
+        -- so a caller that wants a number from one of them has to follow the
+        chain. This does, using ``^`` as exponentiation the way the .def means it
+        rather than Python's bitwise xor.
+
+        Returns None rather than raising when the expression names something
+        undefined, is circular, or is not arithmetic (``fixFix``, ``second``):
+        a .def carries plenty of values that are simply not numbers, and asking
+        is how you find out which.
+        """
+        if expression is None:
+            return None
+        if isinstance(expression, (int, float)):
+            return float(expression)
+        return self._evaluate(str(expression), set())
+
+    def _evaluate(self, expression: str, seen: set) -> Optional[float]:
+        text = expression.strip()
+        if not text:
+            return None
+        # A bare name is a variable reference; anything else is arithmetic over
+        # them. Both paths go through the same guard against a cycle.
+        try:
+            node = ast.parse(text.replace('^', '**'), mode='eval').body
+        except (SyntaxError, ValueError, MemoryError, RecursionError):
+            return None
+        try:
+            return self._eval_node(node, seen)
+        except (_NotANumber, ArithmeticError, RecursionError):
+            return None
+
+    def _eval_node(self, node, seen: set) -> float:
+        """Walk one expression node. Raises _NotANumber for anything unsupported.
+
+        Deliberately not ``eval``: a .def is an input file, and evaluating one
+        should not be able to reach beyond arithmetic.
+        """
+        if isinstance(node, ast.Constant):
+            if isinstance(node.value, bool) or not isinstance(node.value, (int, float)):
+                raise _NotANumber(node.value)
+            return float(node.value)
+        if isinstance(node, ast.Name):
+            name = node.id
+            if name in seen:
+                raise _NotANumber(f"{name} is defined in terms of itself")
+            if name not in self._variables:
+                raise _NotANumber(name)
+            value = self._evaluate(self._variables[name], seen | {name})
+            if value is None:
+                raise _NotANumber(name)
+            return value
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.UAdd, ast.USub)):
+            value = self._eval_node(node.operand, seen)
+            return value if isinstance(node.op, ast.UAdd) else -value
+        if isinstance(node, ast.BinOp) and type(node.op) in _BINARY_OPS:
+            return _BINARY_OPS[type(node.op)](self._eval_node(node.left, seen),
+                                              self._eval_node(node.right, seen))
+        raise _NotANumber(ast.dump(node))
 
     # ------------------------------------------------------------------
     # Write support
