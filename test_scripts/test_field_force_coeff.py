@@ -344,6 +344,32 @@ def _read_csv(path):
 EXAMPLE = Path("examples/BR0SG0U1P0")
 
 
+def _lean_case(destination, steps=(100,)):
+    """The example case with only what a compute run reads, PLTs symlinked.
+
+    BR0SG0U1P0 is 1.5 GB, most of it five 162 MB PLT files, so copying it whole
+    per test fills a tmpfs and costs seconds a time. A run only ever *reads* a
+    PLT, so those are symlinked; the rest is text, and 24 KB of it, which the run
+    may then write over.
+    """
+    import shutil
+
+    destination.mkdir(parents=True, exist_ok=True)
+    for name in ("riser.def", "simflow.config", "riser.cyl_nodes.nbc"):
+        if (EXAMPLE / name).exists():
+            shutil.copy2(EXAMPLE / name, destination / name)
+    binary = destination / "binary"
+    binary.mkdir(exist_ok=True)
+    for step in steps:
+        plt = (EXAMPLE / "binary" / f"riser.{step}.plt").resolve()
+        (binary / plt.name).symlink_to(plt)
+        # The reference implementation's own output, for the comparison below.
+        produced = EXAMPLE / "binary" / f"sectional_Cd_Cl_{step}.csv"
+        if produced.exists():
+            shutil.copy2(produced, binary / produced.name)
+    return destination
+
+
 @pytest.mark.skipif(not (EXAMPLE / "binary" / "riser.100.plt").exists(),
                     reason="needs the BR0SG0U1P0 example case")
 def test_matches_the_cases_own_reference_implementation(tmp_path):
@@ -354,13 +380,10 @@ def test_matches_the_cases_own_reference_implementation(tmp_path):
     case, so agreeing with it to rounding is the real check that the sectioning,
     the axes, the sign of lift and the reference areas are all right.
     """
-    import shutil
-
     from src.commands.case.domain_impl.command import init_case
     from src.commands.field.compute_impl.command import execute_compute
 
-    case = tmp_path / "BR0SG0U1P0"
-    shutil.copytree(EXAMPLE, case)
+    case = _lean_case(tmp_path / "BR0SG0U1P0", steps=(100, 300, 500))
     init_case(case)
     domain = DomainConfig.find(case)
     domain.set_body("cyl", "geometry.radius", 0.5)     # D = 1, as binary/config.py
