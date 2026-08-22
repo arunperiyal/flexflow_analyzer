@@ -294,26 +294,51 @@ class DefConfig:
         ``densityModel``. With no `element_group`, the first one in the file is
         taken. Returns None if any link is missing or the value is not a number.
         """
-        from .parsers.def_parser import as_string, parse_blocks
+        from .parsers.def_parser import parse_blocks
 
         blocks = parse_blocks(self._path)
+        model = self._material_model(blocks, element_group)
+        if not model:
+            return None
+        return self._material_value(blocks, model, 'densityModel', 'density')
+
+    def viscosity(self, element_group: Optional[str] = None) -> Optional[float]:
+        """Dynamic viscosity, followed through the same chain as `density`.
+
+        `mu`, not the kinematic `nu`: it is what multiplies a velocity gradient to
+        give a stress, which is what a wall shear needs.
+        """
+        from .parsers.def_parser import parse_blocks
+
+        blocks = parse_blocks(self._path)
+        model = self._material_model(blocks, element_group)
+        if not model:
+            return None
+        return self._material_value(blocks, model, 'viscosityModel', 'viscosity')
+
+    def _material_model(self, blocks, element_group):
+        """The materialModel block an elementGroup leads to, or None."""
+        from .parsers.def_parser import as_string
+
         groups = [b for b in blocks if b['kind'] == 'elementGroup']
         if element_group is None:
             element_group = groups[0]['name'] if groups else None
-
         material = None
         prop = next((b for b in blocks if b['kind'] == 'elementProperty'
                      and b['name'] == element_group), None)
         if prop:
             material = as_string(prop['values'].get('materialModel'))
-        model = next((b for b in blocks if b['kind'] == 'materialModel'
-                      and (material is None or b['name'] == material)), None)
-        if not model:
-            return None
-        named = as_string(model['values'].get('densityModel'))
-        block = next((b for b in blocks if b['kind'] == 'densityModel'
+        return next((b for b in blocks if b['kind'] == 'materialModel'
+                     and (material is None or b['name'] == material)), None)
+
+    def _material_value(self, blocks, model, kind, key):
+        """Follow a materialModel to one of its named sub-models and read `key`."""
+        from .parsers.def_parser import as_string
+
+        named = as_string(model['values'].get(kind))
+        block = next((b for b in blocks if b['kind'] == kind
                       and (named is None or b['name'] == named)), None)
-        return self.evaluate(block['values'].get('density')) if block else None
+        return self.evaluate(block['values'].get(key)) if block else None
 
     # ------------------------------------------------------------------
     # Write support

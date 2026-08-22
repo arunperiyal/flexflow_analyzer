@@ -23,25 +23,36 @@ from ....utils.progress import progress_enabled, spinner, step_bar
 from ....plt.fxplt import PltFile, VOLUME_ZTYPES
 from ....plt import surface
 from ..locate import problem_name, find_plt, zone_index, resolve_steps
-from . import coefficients
+from . import coefficients, separation as sep, wall_shear as shear
 
-QUANTITIES = ("force", "force_coeff", "lambda2")
+QUANTITIES = ("force", "force_coeff", "wall_shear", "separation", "lambda2")
 # force and force_coeff integrate over a surface zone's elements; lambda2 is a
 # nodal field over the volume, so it takes a different path and does not want
 # --zone.
-SURFACE_QUANTITIES = ("force", "force_coeff")
+SURFACE_QUANTITIES = ("force", "force_coeff", "wall_shear")
+# `separation` reads what wall_shear wrote rather than a PLT, so it needs neither
+# a timestep range nor the mesh -- only the tables and the case's own declarations.
+TABLE_QUANTITIES = ("separation",)
 SURFACE_ZTYPES = (2, 3)          # FETRIANGLE, FEQUADRILATERAL
 COLUMNS = ["element", "x", "y", "z", "area", "nx", "ny", "nz"]
 SUMMARY_COLUMNS = ["timestep", "elements", "area", "Fx", "Fy", "Fz"]
+SHEAR_SUMMARY_COLUMNS = ["timestep", "elements", "area", "Cf_mean", "Cf_max",
+                         "reversed_fraction"]
 SECTIONAL_COLUMNS = ["section", "station", "Fx", "Fy", "Fz", "Fd", "Fl",
                      "Cd", "Cl", "area", "elements"]
+# Same leading columns as an element force table, so one reader serves both.
+SHEAR_COLUMNS = ["element", "x", "y", "z", "area", "nx", "ny", "nz",
+                 "wx", "wy", "wz", "taux", "tauy", "tauz",
+                 "tau_theta", "tau_axial", "Cf", "theta", "station",
+                 "Pressure", "Cp"]
 COEFF_SUMMARY_COLUMNS = ["timestep", "elements", "area", "Fx", "Fy", "Fz",
                          "Fd", "Fl", "Cd", "Cl"]
 
 # What each quantity's output directory is called, after the body it is about:
 # `cyl.forces`, `cyl.force_coeff`. Naming outputs after the body rather than the
 # run is what lets one case hold several bodies without their tables colliding.
-OUTPUT_SUFFIX = {"force": "forces", "force_coeff": "force_coeff"}
+OUTPUT_SUFFIX = {"force": "forces", "force_coeff": "force_coeff",
+                 "wall_shear": "wall_shear", "separation": "separation"}
 # ...which puts a dot in a directory name, so `cyl.force_coeff` would otherwise
 # read as a file with a '.force_coeff' extension. These are the suffixes that mean
 # "directory"; a suffix in neither set is a typo and is reported as one, rather
@@ -95,6 +106,58 @@ def _coeff_comments(case_dir, args, pressure_var, n_elements, span, reference,
                      + reference.normalisation(sections.width))
     lines.append("coefficients are from pressure alone: no skin friction is included")
     return lines
+
+
+def _shear_comments(case_dir, args, n_elements, span, reference, mu, nu_t_max,
+                    has_pressure):
+    """The '#' block a wall-shear table carries.
+
+    The theta zero, the sense it increases in, and how each section's centre was
+    found are *conventions*, not data. A reader that has to guess them will guess
+    one of them wrong, so they are stated here rather than left to a docstring
+    nobody downstream reads.
+    """
+    q = reference.dynamic_pressure
+    lines = [
+        "FlexFlow field compute wall_shear -- viscous wall shear per surface element",
+        f"case: {case_dir.name}   body: {reference.body}   zone: {args.zone}",
+        "tau_w = mu_eff * (omega x n), exact at a no-slip wall: the velocity "
+        "vanishes on the surface, so only the wall-normal gradient survives",
+        f"mu: {mu:g}   rho: {reference.rho:g}   U_inf: {reference.u_inf:g}   "
+        f"q = 0.5*rho*U^2: {q:g}",
+        f"elements: {n_elements:,}   {span}",
+    ]
+    if nu_t_max is None:
+        lines.append("mu_eff = mu: the PLT carries no eddy viscosity")
+    elif nu_t_max == 0:
+        lines.append(f"mu_eff = mu + rho*eddy; eddy at the wall: max {nu_t_max:g} "
+                     "(so mu_eff = mu here, with no turbulence-model ambiguity)")
+    else:
+        lines.append(f"mu_eff = mu + rho*eddy; eddy at the wall: max {nu_t_max:g} "
+                     f"(so mu_eff reaches {mu + reference.rho * nu_t_max:g}, and the "
+                     "shear is model-dependent)")
+    lines += [
+        f"theta: 0 at the forward stagnation point ({axis_label_of(-reference.flow)}), "
+        f"increasing towards {reference.labels.get('lift')}, in (-180, 180] degrees",
+        f"span axis: {reference.labels.get('span')}   "
+        f"drag (flow): {reference.labels.get('flow')}   "
+        f"lift: {reference.labels.get('lift')}",
+        "section centre: the declared axis (domain.yml origin + station * axis) "
+        "plus the area-weighted mean element displacement around that ring, "
+        "interpolated to each element's own station",
+        "Cf = |tau_w| / q; tau_theta and tau_axial are signed components along the "
+        "azimuthal and span directions",
+    ]
+    if has_pressure:
+        lines.append("Cp = Pressure / q, with the free-stream reference taken as 0")
+    else:
+        lines.append("the PLT carries no Pressure, so Pressure and Cp are written 0")
+    return lines
+
+
+def axis_label_of(vector):
+    from .coefficients import axis_label
+    return axis_label(vector)
 
 
 def _sectional_comments(case_dir, reference, sections, timestep, n_elements):
@@ -180,7 +243,7 @@ def _orient(normal, centroid, area, pts, volume_conn, owners, logger, warned):
     return surface.orient_by_divergence(normal, centroid, area)
 
 
-INT_COLUMNS = ("timestep", "element", "elements", "section")
+INT_COLUMNS = ("timestep", "element", "elements", "section", "theta_bin")
 
 
 def _write_csv(path, header, rows, comments):
@@ -387,6 +450,179 @@ def _finish_coefficients(out_path, ext, totals, rows, entries, comments, multi,
         print(f"Wrote {len(totals)} timestep row(s) of whole-body Cd/Cl -> {out_path}")
 
 
+def _compute_separation(args, case_dir, logger):
+    """Reduce a wall_shear directory to separation angles, per section per step."""
+    import argparse
+
+    zone = getattr(args, "body", None) or getattr(args, "zone", None)
+    if not zone:
+        logger.error("--body is required: which body's wall_shear tables to reduce "
+                     "(--zone works too)")
+        sys.exit(1)
+    try:
+        reference = coefficients.resolve(case_dir, zone, args, logger)
+    except coefficients.ReferenceError as exc:
+        logger.error(str(exc)); sys.exit(1)
+
+    # Where wall_shear would have written, asked of the same function that put it
+    # there, so the two cannot drift apart.
+    source_name = _output_name(argparse.Namespace(output_file=None), "wall_shear",
+                               reference.body)
+    source = case_dir / source_name
+    try:
+        tables = sep.find_tables(source)
+    except sep.SeparationError as exc:
+        logger.error(str(exc)); sys.exit(1)
+
+    n_bins = getattr(args, "azimuthal", None) or 36
+    n_sections = getattr(args, "sectional", None) or 48
+    if n_bins < 2 or n_sections < 1:
+        logger.error("--azimuthal needs at least 2 bins and --sectional at least 1")
+        sys.exit(1)
+
+    out_path, ext = _resolve_output(
+        _output_name(args, "separation", reference.body), args.case, logger,
+        kinds=(".csv",))
+    if ext != "dir":
+        logger.error("separation writes a directory of tables, so --output takes a "
+                     "bare name, not a file")
+        sys.exit(1)
+
+    logger.info(f"reducing {len(tables)} table(s) from {source_name}/")
+    written, answers, q_seen = [], [], set()
+    sections = None
+    bar_on = progress_enabled(args, len(tables)) and len(tables) > 1
+    with step_bar(len(tables), "Reducing", enabled=bar_on) as bar:
+        for step, path in tables:
+            bar.step(f"step {step}")
+            try:
+                table, q_header = sep.read_table(path)
+            except sep.SeparationError as exc:
+                logger.error(str(exc)); sys.exit(1)
+            for needed in ("theta", "station", "tau_theta", "tau_axial", "area"):
+                if needed not in table:
+                    logger.error(f"{path.name} has no '{needed}' column, so it was "
+                                 "not written by `field compute wall_shear`")
+                    sys.exit(1)
+            if q_header is not None:
+                q_seen.add(round(q_header, 9))
+            if sections is None:
+                sections = _table_sections(table, reference, n_sections, logger)
+            rows, per_section = sep.reduce_step(table, sections, n_bins,
+                                                reference.dynamic_pressure)
+            sep.write_csv(out_path / f"azimuthal_{step}.csv", sep.AZIMUTHAL_COLUMNS,
+                          rows,
+                          _separation_comments(case_dir, reference, sections,
+                                               n_bins, step))
+            written.append(step)
+            answers += [[step] + row for row in per_section]
+            bar.advance()
+
+    # The tables record the q they were written with. If it no longer matches what
+    # the case declares, one of the two has moved since, and the Cf in these files
+    # is not the Cf those were made from.
+    q = reference.dynamic_pressure
+    if q_seen and round(q, 9) not in q_seen:
+        logger.warning(
+            f"the wall_shear tables were written with q = "
+            f"{', '.join(f'{v:g}' for v in sorted(q_seen))}, but domain.yml and the "
+            f".def now give q = {q:g}. Something has changed since; re-run "
+            "wall_shear so the two agree.")
+
+    sep.write_csv(out_path / "separation.csv", sep.SEPARATION_COLUMNS, answers,
+                  _separation_comments(case_dir, reference, sections, n_bins, None))
+    _print_separation(answers)
+    print(f"Wrote {len(written)} azimuthal table(s) x {n_sections} section(s) x "
+          f"{n_bins} bin(s) + separation.csv -> {out_path}/")
+
+
+def _table_sections(table, reference, n_sections, logger):
+    """Section every row of an element table, anchored to the body as elsewhere."""
+    station = table["station"]
+    width = reference.length / n_sections
+    root = reference.root
+    if root is None:
+        root = float(station.min())
+        logger.warning("the body declares no origin in domain.yml, so sections are "
+                       "anchored to the first element rather than to the body, and "
+                       "will not line up with another mesh of the same body.")
+    index = np.clip(((station - root) / width).astype(int), 0, n_sections - 1)
+    counts = np.bincount(index, minlength=n_sections)
+    if counts.min() == 0:
+        logger.warning(f"{int((counts == 0).sum())} of {n_sections} sections hold no "
+                       "elements")
+    logger.info(f"sections: {n_sections} x {width:g} along "
+                f"{reference.labels.get('span')}, "
+                f"{counts.min()}/{counts.mean():.1f}/{counts.max()} rows (min/mean/max)")
+    return {"index": index, "count": n_sections, "width": width}
+
+
+def _separation_comments(case_dir, reference, sections, n_bins, step):
+    """The '#' block a separation table carries, conventions and all."""
+    lines = [
+        "FlexFlow field compute separation -- where the flow leaves the surface",
+        f"case: {case_dir.name}   body: {reference.body}",
+        f"reduced from {reference.body}.wall_shear/elements_<step>.csv",
+        f"rho: {reference.rho:g}   U_inf: {reference.u_inf:g}   "
+        f"q = 0.5*rho*U^2: {reference.dynamic_pressure:g}",
+        f"sections: {sections['count']} x {sections['width']:g} along "
+        f"{reference.labels.get('span')}, anchored at the body's declared origin",
+        f"azimuthal bins: {n_bins} x {360.0 / n_bins:g} deg, theta = 0 at a bin centre",
+        "theta: 0 at the forward stagnation point, increasing towards "
+        f"{reference.labels.get('lift')}, in (-180, 180] degrees",
+        "Cf_theta, Cf_axial, Cp: area-weighted within each bin",
+    ]
+    if step is not None:
+        lines.append(f"timestep: {step}")
+    else:
+        lines += [
+            "theta_sep: the first sign change in Cf_theta *after* its peak, "
+            "interpolated between bins. The first zero going outward is the "
+            "stagnation point, which on a shedding body does not sit at theta = 0",
+            "theta_sep_pos/neg are nan where that side stays attached, which is an "
+            "answer rather than a failure",
+            "reversed_fraction: the area-weighted share of the section's perimeter "
+            "with Cf_theta < 0 -- one number per section that survives a crossing "
+            "too ambiguous to place",
+            "Cf_max: the largest |Cf_theta| in the section",
+        ]
+    return lines
+
+
+def _print_separation(answers):
+    """A per-section digest of the last timestep, so a run says what it found."""
+    from rich.console import Console
+    from rich.table import Table
+    from rich import box
+
+    if not answers:
+        return
+    console = Console()
+    last = max(row[0] for row in answers)
+    rows = [row for row in answers if row[0] == last]
+    table = Table(box=box.SIMPLE, show_header=True, header_style="bold yellow",
+                  title=f"separation at timestep {int(last)}", title_justify="left",
+                  title_style="bold cyan")
+    for name in ("section", "station", "theta_sep +", "theta_sep -", "reversed",
+                 "Cf_max"):
+        table.add_column(name, justify="right")
+    every = max(1, len(rows) // 12)
+    shown = rows[::every][:12]
+    for row in shown:
+        table.add_row(str(int(row[1])), f"{row[2]:.3f}",
+                      "--" if np.isnan(row[3]) else f"{row[3]:+.1f}",
+                      "--" if np.isnan(row[4]) else f"{row[4]:+.1f}",
+                      f"{row[5]:.3f}", f"{row[6]:.4f}")
+    console.print()
+    console.print(table)
+    if len(rows) > len(shown):
+        console.print(f"[dim]{len(rows)} sections; every {every} shown[/dim]")
+    attached = sum(1 for row in rows if np.isnan(row[3]) and np.isnan(row[4]))
+    if attached:
+        console.print(f"[dim]{attached} of {len(rows)} section(s) stay attached on "
+                      "both sides at this step[/dim]")
+
+
 def execute_compute(args):
     from .help_messages import print_compute_help
 
@@ -404,13 +640,24 @@ def execute_compute(args):
     if quantity in SURFACE_QUANTITIES and not getattr(args, "zone", None):
         logger.error("--zone is required (the surface zone to integrate over)")
         print(); print_compute_help(); sys.exit(1)
-    for flag in ("sectional", "direction", "flow"):
-        if quantity != "force_coeff" and getattr(args, flag, None) is not None:
-            logger.error(f"--{flag} shapes a coefficient, so it belongs to "
-                         f"`field compute force_coeff`, not '{quantity}'.")
+    for flag, owners in (("sectional", ("force_coeff", "separation")),
+                         ("direction", ("force_coeff", "wall_shear", "separation")),
+                         ("flow", ("force_coeff", "wall_shear", "separation")),
+                         ("azimuthal", ("separation",)),
+                         ("body", ("separation",))):
+        if quantity not in owners and getattr(args, flag, None) is not None:
+            logger.error(f"--{flag} belongs to "
+                         + " or ".join(f"`field compute {o}`" for o in owners)
+                         + f", not to '{quantity}'.")
             sys.exit(1)
 
     case_dir = Path(args.case)
+
+    if quantity in TABLE_QUANTITIES:
+        # Reads what wall_shear wrote, so it wants neither the PLTs nor a range.
+        _compute_separation(args, case_dir, logger)
+        return
+
     binary_dir = case_dir / "binary"
     if not binary_dir.exists():
         logger.error(f"Binary directory not found: {binary_dir}"); sys.exit(1)
@@ -431,6 +678,30 @@ def execute_compute(args):
 
     reference = sections = None
     n_sections = getattr(args, "sectional", None)
+    mu = nu_t_max = None
+    shear_has_pressure = False
+    shear_warned = []
+    if quantity == "wall_shear":
+        # Everything it needs is declared, so failing here costs nothing where
+        # failing after forty timesteps costs the lot.
+        try:
+            reference = coefficients.resolve(case_dir, args.zone, args, logger)
+        except coefficients.ReferenceError as exc:
+            logger.error(str(exc)); sys.exit(1)
+        from ....core.simflow_config import SimflowConfig
+        from ....core.def_config import DefConfig
+        try:
+            problem_for_def = SimflowConfig.find(case_dir).problem
+        except Exception:
+            problem_for_def = None
+        mu = DefConfig.find(case_dir, problem_for_def).viscosity()
+        if mu is None:
+            logger.error(
+                "the .def gives no viscosity: the chain elementGroup -> "
+                "elementProperty -> materialModel -> viscosityModel does not lead "
+                "to a number, and a wall shear is mu times a vorticity. Check it "
+                "with `def var`.")
+            sys.exit(1)
     if quantity == "force_coeff":
         # Resolved before a single PLT is opened: everything it needs is in
         # domain.yml and the .def, and failing here costs nothing, where failing
@@ -501,6 +772,37 @@ def execute_compute(args):
 
             face_p, force = surface.pressure_force(pdata[pressure_var], surf_conn, area, normal)
 
+            if quantity == "wall_shear":
+                try:
+                    out = shear.compute(pdata, surf_conn, centroid, area, normal,
+                                        reference, mu, logger, shear_warned)
+                except shear.WallShearError as exc:
+                    logger.error(str(exc)); sys.exit(1)
+                nu_t_max = out["nu_t_max"]
+                shear_has_pressure = out["has_pressure"]
+                q = reference.dynamic_pressure
+                block = np.column_stack([
+                    np.arange(len(surf_conn)), centroid, area, normal,
+                    out["omega"], out["tau"], out["tau_theta"], out["tau_axial"],
+                    out["magnitude"] / q, out["theta"], out["station"],
+                    out["pressure"], out["pressure"] / q])
+                totals.append([ts, len(surf_conn), area.sum(),
+                               float((out["magnitude"] * area).sum() / area.sum() / q),
+                               float((out["magnitude"] / q).max()),
+                               float(area[out["tau_theta"] < 0].sum() / area.sum())])
+                if ext == "dir":
+                    piece = out_path / f"elements_{ts}.csv"
+                    _write_csv(piece, SHEAR_COLUMNS, block,
+                               _shear_comments(case_dir, args, len(surf_conn),
+                                               f"timestep: {ts}", reference, mu,
+                                               nu_t_max, out["has_pressure"]))
+                    entries.append((ts, piece))
+                else:
+                    rows.append(np.column_stack([np.full(len(block), ts), block])
+                                if multi else block)
+                bar.advance()
+                continue
+
             if quantity == "force_coeff":
                 drag, lift, cd, cl = coefficients.total_coefficients(force, reference)
                 totals.append([ts, len(surf_conn), area.sum(),
@@ -566,6 +868,25 @@ def execute_compute(args):
 
     span = (f"timesteps: {steps[0] if len(steps) == 1 else f'{steps[0]}..{steps[-1]}'} "
             f"({len(totals)} written)")
+    if quantity == "wall_shear":
+        comments = _shear_comments(case_dir, args, int(totals[0][1]), span,
+                                   reference, mu, nu_t_max, shear_has_pressure)
+        for line in comments:
+            logger.info(line)
+        _print_totals(totals, multi, SHEAR_SUMMARY_COLUMNS)
+        if out_path is None:
+            return
+        if ext == "dir":
+            _write_csv(out_path / "summary.csv", SHEAR_SUMMARY_COLUMNS,
+                       np.asarray(totals), comments)
+            print(f"Wrote {len(entries)} element table(s) + summary.csv "
+                  f"-> {out_path}/")
+        else:
+            header = (["timestep"] if multi else []) + SHEAR_COLUMNS
+            _write_csv(out_path, header, np.vstack(rows), comments)
+            print(f"Wrote {sum(len(r) for r in rows):,} element row(s) -> {out_path}")
+        return
+
     if quantity == "force_coeff":
         # `rows` is only filled on the single-file path, so it is what says whether
         # the table being headed holds sections or one line per timestep.

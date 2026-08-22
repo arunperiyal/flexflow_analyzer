@@ -2,6 +2,44 @@
 
 ## Unreleased
 
+### ✨ `field compute wall_shear` / `separation`: where the flow leaves the surface
+
+- **`field compute wall_shear` *(new)*** — viscous wall shear on every surface
+  element, read straight out of the vorticity the solver already wrote. At a
+  no-slip wall the velocity vanishes on the surface, so every tangential
+  derivative of it does too and the stress collapses to an **identity**,
+  `tau_w = mu_eff * (omega x n)` — exact, not a reconstruction. `xVor/yVor/zVor`
+  are in the PLT, so nothing is differentiated at the one place an unstructured
+  mesh is worst conditioned, and nothing outside numpy is loaded to do it.
+  `mu` comes from the .def through the same chain as the density; `mu_eff` is
+  `mu + rho*eddy`, and every table records the largest eddy viscosity actually
+  seen at the wall, so "mu_eff = mu here" is a measurement rather than a hope.
+  Writes `<body>.wall_shear/elements_<step>.csv` with the same leading columns as
+  a force table, so one reader serves both.
+- **`field compute separation` *(new)*** — the separation angle per spanwise
+  section per timestep, plus a per-bin azimuthal table. A **reduction over what
+  wall_shear wrote**, opening no PLT: the expensive part is reading a 162 MB file
+  per step, and re-binning it at a different `--azimuthal`/`--sectional` costs
+  nothing.
+- **Two conventions, written into every header** because a reader that guesses
+  them will guess one wrong. `theta = 0` at the forward stagnation point,
+  increasing towards the lift direction, in (-180, 180]. And a section's centre is
+  the **declared** axis (domain.yml origin + station × axis) plus the mean
+  displacement around that ring — not the mean of the ring's own coordinates. On a
+  round body the two agree; on a grooved one the facets are not symmetric about
+  the axis, so the coordinate mean drifts with angle and reads as a separation
+  shift that is not there.
+- **The first zero is not separation.** `Cf_theta` vanishes at the forward
+  stagnation point too, and on a deflecting, shedding body that point is not at
+  `theta = 0` either. Each branch is walked outward from the front, its peak
+  found, and the first sign change taken *after* it — interpolated between bins,
+  since quantising puts a 10-degree staircase in a quantity whose interest is that
+  it moves a degree or two along the span. A side that never reverses is `nan`,
+  and `reversed_fraction` (area-weighted, so a grooved section's uneven facets
+  cannot vote twice) is one number per section that survives an ambiguous crossing.
+- **`DefConfig.viscosity()` *(new)***, sharing the material-chain walk with
+  `density()`.
+
 ### 🐛 Sections were anchored to the mesh, not to the body
 
 - `force_coeff --sectional` binned from the **first element centroid** rather than

@@ -19,6 +19,11 @@ Quantities derived from a surface zone's own elements (Tecplot-free).
     {Colors.YELLOW}force_coeff{Colors.RESET}           Cd and Cl for the body, and for each spanwise
                           section of it with --sectional. Same forces, divided
                           by a reference state taken from domain.yml and the .def
+    {Colors.YELLOW}wall_shear{Colors.RESET}            Viscous wall shear on every surface element, read
+                          straight out of the vorticity the solver wrote
+    {Colors.YELLOW}separation{Colors.RESET}            Where the flow leaves the surface, per spanwise
+                          section per timestep. A reduction over what
+                          wall_shear wrote -- no PLT is opened
     {Colors.YELLOW}lambda2{Colors.RESET}               Vortex criterion as a nodal field over the volume
                           (needs --output; writes a mesh, not a table)
 
@@ -42,6 +47,18 @@ Quantities derived from a surface zone's own elements (Tecplot-free).
                           along; lift is perpendicular to it and to the span.
                           {Colors.DIM}Default: the field's velocity in domain.yml{Colors.RESET}
                           Both take an axis ({Colors.YELLOW}x -x y -y z -z{Colors.RESET}) or a vector '[1, 0, 0]'.
+
+{Colors.BOLD}FOR separation:{Colors.RESET}
+    {Colors.YELLOW}--body NAME{Colors.RESET}           Whose {Colors.YELLOW}<body>.wall_shear/{Colors.RESET} tables to reduce. {Colors.YELLOW}--zone{Colors.RESET}
+                          works too; both resolve through domain.yml.
+    {Colors.YELLOW}--azimuthal N{Colors.RESET}         Bins around each section (default 36, i.e. 10 deg),
+                          with theta = 0 at a bin {Colors.BOLD}centre{Colors.RESET}. The bare mesh has 128
+                          facets a ring, so 36 gives ~3.5 a bin; 72 needs a
+                          finer surface than that to mean anything.
+    {Colors.YELLOW}--sectional N{Colors.RESET}         Spanwise sections (default 48). Use the same count
+                          as force_coeff and the two tables line up row for row.
+                          Takes no timestep range: it reduces every
+                          elements_<step>.csv it finds.
 
 {Colors.BOLD}OPTIONAL:{Colors.RESET}
     {Colors.YELLOW}--output [NAME]{Colors.RESET}       A bare NAME makes a directory under the case holding
@@ -130,6 +147,55 @@ Quantities derived from a surface zone's own elements (Tecplot-free).
     command that sets it, because a Cd normalised by a guessed diameter is wrong
     by exactly the factor nobody notices.
 
+{Colors.BOLD}WALL SHEAR, AND WHY IT NEEDS NO GRADIENT:{Colors.RESET}
+
+    At a no-slip wall the velocity vanishes on the surface, so every tangential
+    derivative of it vanishes too and the only surviving gradient is the one
+    normal to the wall. The stress collapses to an {Colors.BOLD}identity{Colors.RESET}:
+
+        tau_w = mu_eff * (omega x n)
+
+    which is exact, not a reconstruction. `xVor`, `yVor` and `zVor` are already
+    in the PLT, so nothing has to be differentiated at the one place an
+    unstructured mesh is worst conditioned -- and nothing outside numpy is loaded
+    to do it.
+
+    mu comes from the .def, through the same chain as the density. mu_eff is
+    mu + rho*eddy, and every table says what the largest eddy viscosity at the
+    wall actually was, so "mu_eff = mu here" is a measurement rather than a hope.
+
+{Colors.BOLD}THETA, AND WHERE A SECTION'S CENTRE IS:{Colors.RESET}
+
+    {Colors.YELLOW}theta = 0{Colors.RESET} at the forward stagnation point -- the upstream side, facing
+    the free stream -- increasing towards the lift direction, in (-180, 180].
+    So the two shear layers come out as a positive and a negative branch.
+
+    A section's centre is the {Colors.BOLD}declared{Colors.RESET} axis (domain.yml origin + station *
+    axis) plus the mean displacement around that ring, not the mean of the ring's
+    own coordinates. On a round body the two agree. On a grooved one the facets
+    are not symmetric about the axis, so the coordinate mean drifts off it by an
+    amount that varies with angle -- which reads as a separation shift that is not
+    there. The displacement field is smooth whatever the surface looks like.
+
+    Both conventions are written into every table's header, because a reader that
+    has to guess them will guess one of them wrong.
+
+{Colors.BOLD}FINDING THE SEPARATION ANGLE:{Colors.RESET}
+
+    Cf_theta is zero at the forward stagnation point as well as at separation, so
+    the first zero going outward is the {Colors.BOLD}wrong one{Colors.RESET}. Each branch is walked
+    outward from the front, its peak found, and the first sign change taken
+    {Colors.BOLD}after{Colors.RESET} that -- which also survives the stagnation point not sitting at
+    theta = 0, as it does not on a body that is deflecting and shedding.
+
+    The crossing is interpolated between bins: quantising it to the bin width
+    puts a 10-degree staircase in a quantity whose whole interest is that it moves
+    a degree or two along the span.
+
+    A side that never reverses is {Colors.YELLOW}nan{Colors.RESET}, which is an answer. Alongside it,
+    {Colors.YELLOW}reversed_fraction{Colors.RESET} -- the area-weighted share of the perimeter with
+    Cf_theta < 0 -- is one number per section that survives an ambiguous crossing.
+
 {Colors.BOLD}HOW NORMALS ARE ORIENTED:{Colors.RESET}
 
     A body is a hole in the volume mesh, so each surface element belongs to
@@ -165,6 +231,13 @@ Quantities derived from a surface zone's own elements (Tecplot-free).
 
   {Colors.BOLD}Whole-body Cd/Cl over time, nothing sectional:{Colors.RESET}
     flexflow field compute force_coeff BR0SG0U1P0 --zone cyl --t1 50 --t2 5000
+
+  {Colors.BOLD}Separation angle along the span:{Colors.RESET}
+    flexflow field compute wall_shear BR0SG0U1P0 --zone cyl --t1 50 --t2 5000 --freq 50
+      {Colors.DIM}# -> <case>/cyl.wall_shear/elements_50.csv .. + summary.csv{Colors.RESET}
+    flexflow field compute separation BR0SG0U1P0 --body cyl --sectional 48
+      {Colors.DIM}# -> <case>/cyl.separation/azimuthal_50.csv .. + separation.csv{Colors.RESET}
+    {Colors.DIM}(re-bin as often as you like: separation opens no PLT){Colors.RESET}
 
   {Colors.BOLD}Section across the flow instead of along the body:{Colors.RESET}
     flexflow field compute force_coeff BR0SG0U1P0 --zone cyl --timestep 100 \\

@@ -104,7 +104,8 @@ class FieldCommand(BaseCommand):
         compute_parser = field_subparsers.add_parser('compute', add_help=False,
                                                      help='Compute quantities on a surface zone')
         compute_parser.add_argument('quantity', nargs='?',
-                                    help='Quantity to compute (force, force_coeff, lambda2)')
+                                    help='Quantity to compute (force, force_coeff, '
+                                         'wall_shear, separation, lambda2)')
         compute_parser.add_argument('case', nargs='?', help='Case directory path')
         compute_parser.add_argument('-v', '--verbose', action='store_true',
                                     help='Enable verbose output')
@@ -124,8 +125,14 @@ class FieldCommand(BaseCommand):
                                          'for a single file. Left out it is '
                                          '<body>.forces / <body>.force_coeff in the case')
         compute_parser.add_argument('--sectional', type=int, metavar='N',
-                                    help='force_coeff: cut the body into N spanwise '
-                                         'sections and write Cd/Cl for each')
+                                    help='force_coeff / separation: cut the body into '
+                                         'N spanwise sections')
+        compute_parser.add_argument('--azimuthal', type=int, metavar='N',
+                                    help='separation: bins around the section '
+                                         '(default 36, i.e. 10 degrees)')
+        compute_parser.add_argument('--body', type=str, metavar='NAME',
+                                    help='separation: which body\'s wall_shear tables '
+                                         'to reduce (--zone works too)')
         compute_parser.add_argument('--direction', type=str, metavar='AXIS',
                                     help='force_coeff: axis the sections are cut along '
                                          "(default: the body's axis in domain.yml)")
