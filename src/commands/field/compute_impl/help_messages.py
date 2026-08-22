@@ -73,7 +73,10 @@ Quantities derived from a surface zone's own elements (Tecplot-free).
                           does not collide, and a case organises itself without
                           anyone having to choose a name. The body is the one
                           --zone names, through domain.yml where there is one.
-                          The totals per timestep are printed either way.
+                          A run reports the path it wrote and nothing else: the
+                          per-timestep totals are the rows of summary.csv, and
+                          printing them as well only invites them to be read off
+                          a screen instead of the file.
     {Colors.YELLOW}--pressure VAR{Colors.RESET}        Pressure variable name (default: Pressure)
     {Colors.YELLOW}--nen N{Colors.RESET}               Force nodes-per-element on the volume zone
     {Colors.YELLOW}--no-progress{Colors.RESET}         Do not draw the progress bar

@@ -128,7 +128,13 @@
   there is one, so a zone `cyl` belonging to a body called `riser_body` writes to
   `riser_body.forces`. `--output NAME` is unchanged.
   *(Behaviour change: `field compute force` used to write nothing without
-  `--output`. It now always writes; the totals still print either way.)*
+  `--output`. It now always writes.)*
+- **No table on screen.** A run reports the path it wrote and nothing else. Every
+  quantity writes a `summary.csv` holding exactly what the table held, so drawing
+  it as well only invited the numbers to be read off a terminal instead of the
+  file — and a run over forty timesteps scrolled the path out of view. `force_coeff`
+  keeps its one-line Cd/Cl digest; `separation` keeps the warning when a body's
+  sections reverse too often for `theta_sep` to mean anything.
 - **`parse_blocks` reads unquoted block labels.** `initField( velocity )` writes
   its label bare where most of the .def quotes it; reading only the quoted form
   skipped the block silently, which is how the free-stream velocity went missing.

@@ -343,28 +343,6 @@ def _resolve_output(name, case, logger, kinds=(".csv", ".vtu", ".vtk", ".pvd")):
     sys.exit(1)
 
 
-def _print_totals(totals, multi, columns=SUMMARY_COLUMNS):
-    """Show the integrated force per timestep -- the summary the rows add up to."""
-    from rich.console import Console
-    from rich.table import Table
-    from rich import box
-
-    console = Console()
-    table = Table(box=box.SIMPLE, show_header=True, header_style="bold yellow")
-    if multi:
-        table.add_column("timestep", justify="right")
-    for name in columns[1:]:
-        table.add_column(name, justify="right")
-    shown = totals[:20]
-    for row in shown:
-        cells = ([str(int(row[0]))] if multi else []) + [f"{int(row[1]):,}"] + \
-                [f"{v:.6g}" for v in row[2:]]
-        table.add_row(*cells)
-    console.print(table)
-    if len(totals) > len(shown):
-        console.print(f"[dim]... {len(totals) - len(shown)} more timestep(s)[/dim]")
-
-
 def _compute_lambda2(args, steps, binary_dir, problem, logger):
     """Write a mesh carrying lambda2, one file per timestep.
 
@@ -427,7 +405,6 @@ def _finish_coefficients(out_path, ext, totals, rows, entries, comments, multi,
     coefficient run is usually for -- and the per-section tables go beside it,
     one per timestep, when --sectional asked for them.
     """
-    _print_totals(totals, multi, COEFF_SUMMARY_COLUMNS)
     cd = np.asarray([row[-2] for row in totals], dtype=float)
     cl = np.asarray([row[-1] for row in totals], dtype=float)
     if len(cd) > 1:
@@ -538,7 +515,6 @@ def _compute_separation(args, case_dir, logger):
     sep.write_csv(out_path / "separation.csv", sep.SEPARATION_COLUMNS, answers,
                   _separation_comments(case_dir, reference, sections, n_bins, None,
                                        mu))
-    _print_separation(answers)
     print(f"Wrote {len(written)} azimuthal table(s) x {n_sections} section(s) x "
           f"{n_bins} bin(s) + separation.csv -> {out_path}/")
 
@@ -648,40 +624,6 @@ def _separation_comments(case_dir, reference, sections, n_bins, step, mu=None):
             "wherever it is higher",
         ]
     return lines
-
-
-def _print_separation(answers):
-    """A per-section digest of the last timestep, so a run says what it found."""
-    from rich.console import Console
-    from rich.table import Table
-    from rich import box
-
-    if not answers:
-        return
-    console = Console()
-    last = max(row[0] for row in answers)
-    rows = [row for row in answers if row[0] == last]
-    table = Table(box=box.SIMPLE, show_header=True, header_style="bold yellow",
-                  title=f"separation at timestep {int(last)}", title_justify="left",
-                  title_style="bold cyan")
-    for name in ("section", "station", "theta_sep +", "theta_sep -", "reversed",
-                 "Cf_max"):
-        table.add_column(name, justify="right")
-    every = max(1, len(rows) // 12)
-    shown = rows[::every][:12]
-    for row in shown:
-        table.add_row(str(int(row[1])), f"{row[2]:.3f}",
-                      "--" if np.isnan(row[3]) else f"{row[3]:+.1f}",
-                      "--" if np.isnan(row[4]) else f"{row[4]:+.1f}",
-                      f"{row[5]:.3f}", f"{row[6]:.4f}")
-    console.print()
-    console.print(table)
-    if len(rows) > len(shown):
-        console.print(f"[dim]{len(rows)} sections; every {every} shown[/dim]")
-    attached = sum(1 for row in rows if np.isnan(row[3]) and np.isnan(row[4]))
-    if attached:
-        console.print(f"[dim]{attached} of {len(rows)} section(s) stay attached on "
-                      "both sides at this step[/dim]")
 
 
 def execute_compute(args):
@@ -934,7 +876,6 @@ def execute_compute(args):
                                    reference, mu, nu_t_max, shear_has_pressure)
         for line in comments:
             logger.info(line)
-        _print_totals(totals, multi, SHEAR_SUMMARY_COLUMNS)
         if out_path is None:
             return
         if ext == "dir":
@@ -964,8 +905,6 @@ def execute_compute(args):
     comments = _comment_block(case_dir, args, pressure_var, int(totals[0][1]), span)
     for line in comments:
         logger.info(line)
-
-    _print_totals(totals, multi)
 
     if out_path is None:
         return

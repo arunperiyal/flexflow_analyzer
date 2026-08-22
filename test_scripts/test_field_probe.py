@@ -347,7 +347,9 @@ class TestComputeForce:
     def compute_args(case, **kw):
         defaults = dict(quantity="force", case=str(case), verbose=False, help=False,
                         zone="surf", timestep=None, t1=None, t2=None, freq=None,
-                        output_file=None, pressure="P", nen=None, no_progress=True)
+                        output_file=None, pressure="P", nen=None, no_progress=True,
+                        sectional=None, direction=None, flow=None, azimuthal=None,
+                        body=None)
         defaults.update(kw)
         return argparse.Namespace(**defaults)
 
@@ -452,10 +454,24 @@ class TestComputeForce:
         assert all(r["elements"] == "4" for r in rows)     # integers, not 4.0e+00
         assert all(float(r["Fz"]) == pytest.approx(2.5) for r in rows)
 
-    def test_prints_totals_without_an_output_file(self, case, capsys):
+    def test_writes_to_the_bodys_own_directory_without_an_output_file(self, case,
+                                                                       capsys):
+        """No --output is not "print only": it writes where the body says.
+
+        There is no domain.yml here, so the zone names the directory. The run
+        reports the path and nothing else -- the totals it used to print are the
+        rows of summary.csv, and printing them again only invited them to be
+        read off the screen instead of the file.
+        """
         execute_compute(self.compute_args(case, timestep=1000))
+        written = case / "surf.forces"
+        assert written.is_dir()
+        assert (written / "summary.csv").exists()
+        assert (written / "elements_1000.csv").exists()
+
         printed = capsys.readouterr().out
-        assert "Fz" in printed and "elements" in printed
+        assert str(written) in printed
+        assert "Fz" not in printed, "the totals table should no longer be drawn"
 
 
 class TestInterpolate:
