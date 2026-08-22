@@ -551,3 +551,111 @@ def test_each_table_says_what_it_was_divided_by(tmp_path):
     this = [ln for ln in lines if ln.startswith("this table:")]
     assert this and "D * L" in this[0]
     assert not any("sectional_<step>" in ln for ln in lines)
+
+
+# ---------------------------------------------------------------------------
+# Sections belong to the body, not to the mesh
+# ---------------------------------------------------------------------------
+
+def _helical_stations(n_sections=48, per_layer=252):
+    """The spanwise layer pattern of the helical-groove mesh, CH4SG3U1P1.
+
+    96 layers over a body of 12, two to each 0.25 slice, sitting at 1/12 and 2/12
+    of the way through it -- so the spacing alternates 0.0833 / 0.1667 rather than
+    being uniform. Reconstructed rather than shipped: the case is 17M elements and
+    lives outside this repo.
+    """
+    layers = np.sort(np.concatenate([(1 + 3 * np.arange(n_sections)) / 12.0,
+                                     (2 + 3 * np.arange(n_sections)) / 12.0]))
+    return np.repeat(layers, per_layer)
+
+
+def _uniform_stations(n_sections=48, per_layer=248):
+    """The layer pattern of the bare and straight-groove meshes: 0.125 + 0.25k.
+
+    One layer to a slice, landing exactly on a boundary under min(x) anchoring
+    just as the helical one does -- but 0.125 and 0.25 are powers of two, so
+    (x - x_min)/w is exactly integral and floor() is deterministic. Same
+    degeneracy, different arithmetic, and it survives by luck rather than design.
+    """
+    return np.repeat(0.125 + 0.25 * np.arange(n_sections), per_layer)
+
+
+def test_anchoring_at_the_origin_removes_the_degeneracy(case):
+    """Not "gets the right answer despite it" -- removes it.
+
+    Under min(x) anchoring every layer of all three meshes sits exactly on a slice
+    boundary, and only the binary representability of the coordinates decides
+    whether floor() lands consistently. Anchored at the declared origin, no layer
+    is on a boundary at all, so there is no tie for rounding to break.
+    """
+    reference = co.resolve(case, "cyl", _args(), LOG)
+    reference.length = 12.0
+    width = 12.0 / 48
+
+    for stations in (_uniform_stations(), _helical_stations(per_layer=1)):
+        layers = np.unique(stations)
+        on_edge = lambda root: int(np.sum(
+            np.abs((layers - root) / width - np.round((layers - root) / width)) < 1e-12))
+        assert on_edge(layers.min()) > 0, "the fixture should be degenerate as found"
+        assert on_edge(0.0) == 0, "anchored at the body, nothing sits on an edge"
+
+
+def test_the_exactly_representable_meshes_were_never_affected(case):
+    """Which is why this went unnoticed: the bare and straight cases are clean."""
+    reference = co.resolve(case, "cyl", _args(), LOG)
+    reference.length = 12.0
+    station = _uniform_stations()
+    centroid = np.column_stack([station, np.zeros_like(station),
+                                np.zeros_like(station)])
+    drifted = np.bincount(
+        np.clip(((station - station.min()) / (12.0 / 48)).astype(int), 0, 47),
+        minlength=48)
+    assert drifted.min() == drifted.max() == 248        # degenerate, but consistent
+    sections = co.build_sections(centroid, reference, 48, LOG)
+    assert sections.counts.min() == sections.counts.max() == 248
+
+
+def test_sections_are_anchored_to_the_body_not_its_first_element(case):
+    """Anchoring at min(centroid) puts section edges exactly on element layers.
+
+    On this mesh every other layer then lands on a boundary, and which side it
+    falls is decided by floating-point rounding -- so the misfilled sections are
+    not at the ends, and not even reproducible. Anchored at the declared origin,
+    a layer is in the slice its station is in, by construction.
+    """
+    reference = co.resolve(case, "cyl", _args(), LOG)
+    reference.length = 12.0
+    station = _helical_stations()
+    centroid = np.column_stack([station, np.zeros_like(station),
+                                np.zeros_like(station)])
+    sections = co.build_sections(centroid, reference, 48, LOG)
+    assert sections.counts.min() == sections.counts.max() == 252 * 2
+
+    # What anchoring to the mesh would have done with the same stations:
+    width = 12.0 / 48
+    drifted = np.bincount(
+        np.clip(((station - station.min()) / width).astype(int), 0, 47),
+        minlength=48)
+    misfilled = [i for i, v in enumerate(drifted) if v != 504]
+    assert misfilled, "the fixture no longer reproduces the bug it is guarding"
+    assert any(0 < i < 47 for i in misfilled), "and they are interior, not clipped ends"
+
+
+def test_a_body_without_an_origin_falls_back_and_says_so(case, capsys):
+    reference = co.resolve(case, "cyl", _args(), LOG)
+    reference.origin = None
+    station = _helical_stations(per_layer=1)
+    centroid = np.column_stack([station, np.zeros_like(station),
+                                np.zeros_like(station)])
+    co.build_sections(centroid, reference, 48, LOG)
+    assert "--origin" in capsys.readouterr().err
+
+
+def test_elements_outside_the_declared_extent_are_reported(case, capsys):
+    """domain.yml disagreeing with the mesh is worth a word, not a silent clip."""
+    reference = co.resolve(case, "cyl", _args(), LOG)
+    station = np.array([-1.0, 6.0, 13.0])
+    centroid = np.column_stack([station, np.zeros(3), np.zeros(3)])
+    co.build_sections(centroid, reference, 12, LOG)
+    assert "outside the body's declared extent" in capsys.readouterr().err

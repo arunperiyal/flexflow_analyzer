@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### 🐛 Sections were anchored to the mesh, not to the body
+
+- `force_coeff --sectional` binned from the **first element centroid** rather than
+  from the body's declared origin. That makes the slice edges a property of the
+  discretisation: on a mesh whose element layers do not begin half a slice in, 96
+  uniform layers land in slices of 1, 2 and 3 — measured at **252–756 elements
+  against a uniform 504**, with about half the elements in the wrong slice, which
+  reads as a spanwise variation and is not one. It also means two meshes of the
+  same body get different slices, so their tables cannot be compared. Sections are
+  now anchored at `domain.yml`'s origin, and a body that declares none says so.
+  Unchanged on a mesh that happens to start half a slice in, which is why it was
+  invisible on the bare cylinder.
+
 ### ✨ `field compute force_coeff`: Cd and Cl, normalised by what the case says
 
 - **`field compute force_coeff` *(new)*** — the same pressure force `force`

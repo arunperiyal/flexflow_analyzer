@@ -25,6 +25,7 @@ normalised by a guessed diameter is wrong by exactly the factor nobody notices.
 
 from dataclasses import dataclass, field as _field
 from pathlib import Path
+from typing import Optional
 
 import numpy as np
 
@@ -51,8 +52,14 @@ class Reference:
     u_inf: float
     diameter: float
     length: float
+    origin: Optional[np.ndarray] = None   # the body's root, where section 0 starts
     labels: dict = _field(default_factory=dict)
     sources: dict = _field(default_factory=dict)
+
+    @property
+    def root(self) -> Optional[float]:
+        """Where the body starts along its own span axis, or None if undeclared."""
+        return None if self.origin is None else float(self.origin @ self.span)
 
     @property
     def dynamic_pressure(self) -> float:
@@ -273,9 +280,21 @@ def resolve(case_dir, zone, args, logger):
             "--direction or --flow to separate them.")
     lift = lift / norm
 
+    # The body's root, so sections can be anchored to the body rather than to
+    # wherever its first element happens to sit. Optional: a domain.yml written
+    # before this, or by hand, may not carry one.
+    declared_origin = (body.get('geometry') or {}).get('origin')
+    origin = None
+    if (isinstance(declared_origin, list) and len(declared_origin) == 3
+            and all(isinstance(c, (int, float)) and not isinstance(c, bool)
+                    for c in declared_origin)):
+        origin = np.asarray(declared_origin, dtype=float)
+        sources['origin'] = "domain.yml"
+
     reference = Reference(
         body=name, span=span, flow=flow, lift=lift,
         rho=float(rho), u_inf=speed, diameter=2.0 * radius, length=length,
+        origin=origin,
         labels={'span': axis_label(span), 'flow': axis_label(flow),
                 'lift': axis_label(lift)},
         sources=sources,
@@ -316,7 +335,32 @@ def build_sections(centroid, reference, n_sections, logger):
     """
     station = centroid @ reference.span
     width = reference.length / n_sections
-    index = np.clip(((station - station.min()) / width).astype(int), 0, n_sections - 1)
+
+    # Anchored to the body's declared root, not to its first element. Those differ
+    # by wherever the mesh happens to start, and binning from the mesh makes the
+    # slice edges a property of the discretisation: on a mesh whose element layers
+    # do not begin half a slice in, it lands 96 uniform layers in slices of 1, 2
+    # and 3, which reads as a real spanwise variation and is not one. It also means
+    # two meshes of the same body get different slices, so their tables cannot be
+    # compared -- nor can these sections be lined up with anything else cut from
+    # the same domain.yml.
+    root = reference.root
+    if root is None:
+        root = float(station.min())
+        logger.warning("the body declares no origin in domain.yml, so sections are "
+                       "anchored to the first element rather than to the body. Set "
+                       "it with `case domain body --origin X,Y,Z` to make these "
+                       "slices comparable with another mesh of the same body.")
+
+    index = np.clip(((station - root) / width).astype(int), 0, n_sections - 1)
+    outside = int(((station < root - 1e-9)
+                   | (station > root + reference.length + 1e-9)).sum())
+    if outside:
+        logger.warning(
+            f"{outside:,} of {len(station):,} elements lie outside the body's "
+            f"declared extent ({root:g} .. {root + reference.length:g} along "
+            f"{reference.labels.get('span')}) and were pulled into the end slices. "
+            "domain.yml's origin or length disagrees with the mesh.")
     counts = np.bincount(index, minlength=n_sections)
     if counts.min() == 0:
         logger.warning(f"{int((counts == 0).sum())} of {n_sections} sections hold no "
