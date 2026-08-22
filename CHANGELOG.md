@@ -46,6 +46,18 @@
   test — as is `mu` on a shear table and anything reduced from one, carried
   through from the header that made those numbers rather than re-read from a
   .def that may have moved since.
+- **`theta_sep` is only a separation angle on a plain, settled section**, and the
+  tables now say so. The search assumes a profile reversing four times around the
+  perimeter — stagnation, two separations, rear. A groove breaks that, flipping the
+  shear locally without the layer leaving the surface, and so does an unsettled
+  field. Measured on the riser cases: bare 2/4/8 reversals (min/median/max),
+  straight-grooved 6/8/12, helical 6/10/14. With that many crossings the first one
+  after the peak is a groove, and `theta_sep` returns a plausible angle for the
+  wrong feature. Not thresholded into a `nan` — the ranges overlap, a bare section
+  reaching eight while a grooved one starts at six — so instead every row carries a
+  **`crossings`** count and a run whose sections mostly exceed four warns. On a
+  grooved body `reversed_fraction` is the number to read: it integrates the sign of
+  the shear rather than hunting one crossing.
 - **`DefConfig.viscosity()` *(new)***, sharing the material-chain walk with
   `density()`.
 

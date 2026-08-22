@@ -534,12 +534,46 @@ def _compute_separation(args, case_dir, logger):
             f".def now give q = {q:g}. Something has changed since; re-run "
             "wall_shear so the two agree.")
 
+    _warn_if_grooved(answers, logger)
     sep.write_csv(out_path / "separation.csv", sep.SEPARATION_COLUMNS, answers,
                   _separation_comments(case_dir, reference, sections, n_bins, None,
                                        mu))
     _print_separation(answers)
     print(f"Wrote {len(written)} azimuthal table(s) x {n_sections} section(s) x "
           f"{n_bins} bin(s) + separation.csv -> {out_path}/")
+
+
+def _warn_if_grooved(answers, logger):
+    """Say so when the sections reverse too often for theta_sep to mean anything.
+
+    A plain section reverses its azimuthal shear four times around the perimeter:
+    stagnation, the two separations, the rear. Every groove adds a local reversal
+    without the boundary layer having left the body, so "the first crossing after
+    the peak" then finds a groove rather than a separation -- and returns a
+    perfectly plausible angle for it, which is worse than returning nothing.
+
+    Not thresholded into a NaN, because the ranges overlap: a bare section reaches
+    eight on the measured cases while a grooved one starts at six. What separates
+    them is how many sections do it -- all of them, on a grooved body, against a
+    fifth of them on a bare one -- so that is what is reported.
+    """
+    if not answers:
+        return
+    crossings = np.array([row[-1] for row in answers], dtype=int)
+    over = crossings > sep.CLEAN_CROSSINGS
+    if over.mean() < 0.5:
+        return
+    logger.warning(
+        f"{int(over.sum())} of {len(crossings)} section-steps reverse more than "
+        f"{sep.CLEAN_CROSSINGS} times around the perimeter (median "
+        f"{int(np.median(crossings))}). A plain, settled section reverses "
+        f"{sep.CLEAN_CROSSINGS} times -- stagnation, the two separations, the rear. "
+        "The extras come from grooves, each adding a local flip without the layer "
+        "leaving the surface, or from a field that has not settled; either way "
+        "theta_sep has found one of those rather than a separation, and it will look "
+        "like a plausible angle. Read reversed_fraction instead -- it integrates the "
+        "sign of the shear rather than hunting one crossing, so it does not care how "
+        "many there are. The `crossings` column carries the count per row.")
 
 
 def _table_sections(table, reference, n_sections, logger):
@@ -603,6 +637,15 @@ def _separation_comments(case_dir, reference, sections, n_bins, step, mu=None):
             "with Cf_theta < 0 -- one number per section that survives a crossing "
             "too ambiguous to place",
             "Cf_max: the largest |Cf_theta| in the section",
+            f"crossings: how often Cf_theta reverses around the whole section. A "
+            f"plain one reverses {sep.CLEAN_CROSSINGS} times -- stagnation, the two "
+            "separations, the rear",
+            "theta_sep IS ONLY A SEPARATION ANGLE ON A PLAIN, SETTLED SECTION. A "
+            "groove adds a local reversal without the layer leaving the surface, and "
+            "so does a field that has not settled; the crossing after the peak is "
+            "then one of those, and it looks like a plausible angle. Check "
+            f"`crossings` against {sep.CLEAN_CROSSINGS} and prefer reversed_fraction "
+            "wherever it is higher",
         ]
     return lines
 

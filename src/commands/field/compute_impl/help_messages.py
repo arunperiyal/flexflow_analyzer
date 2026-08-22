@@ -196,6 +196,25 @@ Quantities derived from a surface zone's own elements (Tecplot-free).
     {Colors.YELLOW}reversed_fraction{Colors.RESET} -- the area-weighted share of the perimeter with
     Cf_theta < 0 -- is one number per section that survives an ambiguous crossing.
 
+{Colors.BOLD}WHEN theta_sep IS NOT A SEPARATION ANGLE:{Colors.RESET}
+
+    The search assumes a profile that reverses {Colors.BOLD}four times{Colors.RESET} around the
+    perimeter: stagnation, the two separations, the rear. A {Colors.BOLD}groove{Colors.RESET} breaks that
+    -- each one flips the shear locally without the boundary layer having left the
+    surface -- and so does a field that has not settled. Measured on the riser
+    cases at one step: bare 2/4/8 reversals (min/median/max), straight-grooved
+    6/8/12, helical 6/10/14.
+
+    With eight to fourteen crossings available, the first one after the peak is a
+    groove, and theta_sep returns {Colors.BOLD}a plausible angle for the wrong feature{Colors.RESET}.
+    It is not thresholded into a nan, because the ranges overlap -- a bare section
+    reaches eight while a grooved one starts at six. Instead every row carries a
+    {Colors.YELLOW}crossings{Colors.RESET} count, and a run whose sections mostly exceed four says so.
+
+    On a grooved body, read {Colors.YELLOW}reversed_fraction{Colors.RESET}: it integrates the sign of
+    the shear instead of hunting one crossing, so the number of reversals does not
+    matter to it.
+
 {Colors.BOLD}HOW NORMALS ARE ORIENTED:{Colors.RESET}
 
     A body is a hole in the volume mesh, so each surface element belongs to

@@ -280,3 +280,60 @@ def test_reversed_fraction_is_a_share_of_perimeter_area():
     _, per_section = sep.reduce_step(table, sections, 4, q=1.0)
     # 4 of 6 units of area are reversed, not 2 of 4 bins
     assert per_section[0][4] == pytest.approx(4.0 / 6.0)
+
+
+# ---------------------------------------------------------------------------
+# When theta_sep is not a separation angle
+# ---------------------------------------------------------------------------
+
+def test_a_plain_section_reverses_four_times():
+    """Stagnation, the two separations, the rear -- and nothing else."""
+    theta = np.arange(-180.0, 180.0, 5.0)
+    assert sep.sign_changes(_profile(theta, separation=100.0)) == sep.CLEAN_CROSSINGS
+
+
+def _with_grooves(theta, centres, separation=100.0, half_width=6.0):
+    """A clean profile with a local shear reversal at each groove."""
+    profile = _profile(theta, separation=separation)
+    for centre in centres:
+        profile[np.abs(theta - centre) < half_width] *= -1.0
+    return profile
+
+
+def test_a_groove_between_the_peak_and_separation_is_taken_for_separation():
+    """Which is the whole failure: the angle returned is plausible and wrong."""
+    theta = np.arange(-180.0, 180.0, 5.0)
+    grooved = _with_grooves(theta, (70.0, -70.0))
+    assert sep.sign_changes(grooved) > sep.CLEAN_CROSSINGS
+
+    found, _ = sep.separation_angles(theta, grooved)
+    assert not np.isnan(found), "it does not decline -- it answers, wrongly"
+    assert abs(found - 100.0) > 20.0
+    assert found < 100.0, "it stops at the groove, short of the real separation"
+
+
+def test_a_groove_inboard_of_the_peak_does_not_mislead_it():
+    """Only reversals between the peak and the separation are taken for it.
+
+    Worth pinning because it says what the crossing count does and does not
+    imply: a high count is a reason to distrust theta_sep, not proof it is wrong.
+    """
+    theta = np.arange(-180.0, 180.0, 5.0)
+    inboard = _with_grooves(theta, (35.0, -35.0))
+    assert sep.sign_changes(inboard) > sep.CLEAN_CROSSINGS
+    found, _ = sep.separation_angles(theta, inboard)
+    assert found == pytest.approx(100.0, abs=1.0)
+
+
+def test_the_ring_wraps_when_counting():
+    """The last bin is adjacent to the first; a reversal across the seam counts."""
+    assert sep.sign_changes(np.array([1.0, 1.0, -1.0, -1.0])) == 2
+    assert sep.sign_changes(np.array([1.0, 1.0, 1.0, -1.0])) == 2
+
+
+def test_a_bin_landing_on_zero_is_one_reversal_not_two():
+    assert sep.sign_changes(np.array([-1.0, 0.0, 1.0, 1.0])) == 2
+
+
+def test_an_attached_ring_never_reverses():
+    assert sep.sign_changes(np.array([1.0, 2.0, 3.0])) == 0

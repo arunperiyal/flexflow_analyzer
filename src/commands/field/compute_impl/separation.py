@@ -23,7 +23,17 @@ import numpy as np
 AZIMUTHAL_COLUMNS = ["section", "station", "theta_bin", "theta", "Cf_theta",
                      "Cf_axial", "Cp", "area", "elements"]
 SEPARATION_COLUMNS = ["timestep", "section", "station", "theta_sep_pos",
-                      "theta_sep_neg", "reversed_fraction", "Cf_max"]
+                      "theta_sep_neg", "reversed_fraction", "Cf_max", "crossings"]
+
+# A section of a plain cylinder reverses its azimuthal shear four times around the
+# perimeter: the forward stagnation point, the two separations, and the rear. Every
+# groove adds its own local reversal without the boundary layer having left the
+# body, so a grooved section shows six to thirteen -- and "the first crossing after
+# the peak" then picks a groove-scale flip rather than a separation. The count is
+# written into every row so a reader can tell which is which; it is not thresholded
+# here, because the bare and grooved ranges overlap and no single number separates
+# them.
+CLEAN_CROSSINGS = 4
 
 STEP = re.compile(r"elements_(\d+)\.csv$")
 
@@ -120,6 +130,20 @@ def _crossing(theta, value):
     return float(theta[i - 1] + fraction * (theta[i] - theta[i - 1]))
 
 
+def sign_changes(cf_theta):
+    """How many times the azimuthal shear reverses around the whole section.
+
+    The ring is periodic, so the wrap from the last bin to the first counts. Bins
+    that are exactly zero carry the previous sign rather than counting twice --
+    a bin can land on the crossing itself, and that is one reversal, not two.
+    """
+    signs = np.sign(cf_theta)
+    signs = signs[signs != 0]
+    if len(signs) < 2:
+        return 0
+    return int(np.count_nonzero(signs != np.roll(signs, 1)))
+
+
 def separation_angles(theta, cf_theta):
     """(theta_sep_pos, theta_sep_neg) for one section, in degrees.
 
@@ -184,7 +208,8 @@ def reduce_step(table, sections, n_bins, q):
         pos, neg = separation_angles(angles, shear)
         reversed_area = weight[cells][shear < 0].sum() / weight[cells].sum()
         per_section.append([s, station[cells] @ weight[cells] / weight[cells].sum(),
-                            pos, neg, reversed_area, float(np.abs(shear).max())])
+                            pos, neg, reversed_area, float(np.abs(shear).max()),
+                            sign_changes(shear[np.argsort(angles)])])
     return azimuthal, per_section
 
 
@@ -193,7 +218,8 @@ def write_csv(path, header, rows, comments):
     lines = [f"# {line}" for line in comments] + [",".join(header)]
     for row in rows:
         lines.append(",".join(
-            str(int(v)) if name in ("section", "theta_bin", "elements", "timestep")
+            str(int(v)) if name in ("section", "theta_bin", "elements", "timestep",
+                                    "crossings")
             else f"{v:.8e}" for name, v in zip(header, row)))
     Path(path).write_text("\n".join(lines) + "\n")
 
