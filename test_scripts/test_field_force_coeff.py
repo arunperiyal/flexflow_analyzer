@@ -394,7 +394,8 @@ def _declared(case, radius=0.5, velocity=(0, 0, 1)):
 
 def _compute_args(case, **overrides):
     defaults = dict(quantity="force", case=str(case), zone="cyl", sectional=None,
-                    direction=None, flow=None, timestep=100, t1=None, t2=None,
+                    direction=None, flow=None, azimuthal=None, body=None,
+                    timestep=100, t1=None, t2=None,
                     freq=None, output_file=None, pressure=None, nen=None,
                     no_progress=True, verbose=False, help=False)
     defaults.update(overrides)
@@ -659,3 +660,59 @@ def test_elements_outside_the_declared_extent_are_reported(case, capsys):
     centroid = np.column_stack([station, np.zeros(3), np.zeros(3)])
     co.build_sections(centroid, reference, 12, LOG)
     assert "outside the body's declared extent" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
+# The reference state a downstream reader depends on
+# ---------------------------------------------------------------------------
+
+# Parsed out of the '#' block by the MATLAB readers in the study tree, as
+# `name: value`. They tolerate the block being split between a per-step table and
+# a sibling summary.csv, but not a name that has been spelled differently -- and a
+# missing one comes back NaN and scales a result by it rather than failing. So the
+# spellings are a contract, and this is where it is written down.
+REFERENCE_NAMES = ("rho", "U_inf", "diameter", "length",
+                   "span axis", "drag (flow)", "lift")
+
+
+def _reference_names_in(path):
+    return {name for name in REFERENCE_NAMES
+            for line in _header(path) if line.startswith(f"{name}:")
+            or f"   {name}:" in line}
+
+
+@needs_example
+def test_every_table_states_the_whole_reference_state(tmp_path):
+    """Each table names all seven, so no reader has to find a sibling to be sure.
+
+    cyl.separation/ is the case that forces it: there is no summary.csv in it to
+    hold a block in common, because separation.csv is an answer rather than a
+    header.
+    """
+    case = _lean_case(tmp_path / "BR0SG0U1P0", steps=(100, 300))
+    _declared(case)
+    _run(case, quantity="wall_shear", timestep=None, t1=100, t2=300)
+    _run(case, quantity="separation", body="cyl", sectional=8, azimuthal=36,
+         timestep=None)
+
+    produced = [case / "cyl.wall_shear" / "elements_100.csv",
+                case / "cyl.wall_shear" / "summary.csv",
+                case / "cyl.separation" / "azimuthal_100.csv",
+                case / "cyl.separation" / "separation.csv",
+                case / "cyl.force_coeff" / "summary.csv"]
+    _run(case, quantity="force_coeff", timestep=None, t1=100, t2=300)
+    for path in produced:
+        assert path.exists(), path
+        missing = set(REFERENCE_NAMES) - _reference_names_in(path)
+        assert not missing, f"{path.name} does not state {sorted(missing)}"
+
+
+@needs_example
+def test_a_per_step_table_stays_shorter_than_the_summary(tmp_path):
+    """Stating the reference state everywhere must not undo the header split."""
+    case = _lean_case(tmp_path / "BR0SG0U1P0", steps=(100, 300))
+    _declared(case)
+    _run(case, quantity="force_coeff", sectional=8, timestep=None, t1=100, t2=300)
+    written = case / "cyl.force_coeff"
+    assert len(_header(written / "sectional_100.csv")) < \
+        len(_header(written / "summary.csv"))

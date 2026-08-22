@@ -125,6 +125,10 @@ def _shear_comments(case_dir, args, n_elements, span, reference, mu, nu_t_max,
         "vanishes on the surface, so only the wall-normal gradient survives",
         f"mu: {mu:g}   rho: {reference.rho:g}   U_inf: {reference.u_inf:g}   "
         f"q = 0.5*rho*U^2: {q:g}",
+        # The reference lengths belong here even though a shear does not divide by
+        # them: a reader picking up one of these tables should not have to open a
+        # force table to find out what body it is looking at.
+        reference.describe()[1],
         f"elements: {n_elements:,}   {span}",
     ]
     if nu_t_max is None:
@@ -563,8 +567,10 @@ def _separation_comments(case_dir, reference, sections, n_bins, step):
         "FlexFlow field compute separation -- where the flow leaves the surface",
         f"case: {case_dir.name}   body: {reference.body}",
         f"reduced from {reference.body}.wall_shear/elements_<step>.csv",
-        f"rho: {reference.rho:g}   U_inf: {reference.u_inf:g}   "
-        f"q = 0.5*rho*U^2: {reference.dynamic_pressure:g}",
+        # In full, in every one of these: this directory has no summary.csv to
+        # hold a block in common -- separation.csv is an answer, not a header --
+        # so each table states the whole reference state or none of it does.
+        *reference.describe(),
         f"sections: {sections['count']} x {sections['width']:g} along "
         f"{reference.labels.get('span')}, anchored at the body's declared origin",
         f"azimuthal bins: {n_bins} x {360.0 / n_bins:g} deg, theta = 0 at a bin centre",

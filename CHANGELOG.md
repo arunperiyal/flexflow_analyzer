@@ -37,6 +37,13 @@
   it moves a degree or two along the span. A side that never reverses is `nan`,
   and `reversed_fraction` (area-weighted, so a grooved section's uneven facets
   cannot vote twice) is one number per section that survives an ambiguous crossing.
+- **Every table states the whole reference state** — `rho`, `U_inf`, `diameter`,
+  `length` and the three axes — rather than relying on a sibling `summary.csv`.
+  `cyl.separation/` forces it: there is no `summary.csv` there to hold a block in
+  common, because `separation.csv` is an answer rather than a header. A reader
+  that parses these names out of the `#` block would otherwise get `NaN` for a
+  quantity it then scales by, which fails silently. The spellings are pinned by a
+  test.
 - **`DefConfig.viscosity()` *(new)***, sharing the material-chain walk with
   `density()`.
 
