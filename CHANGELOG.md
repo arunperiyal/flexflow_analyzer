@@ -43,7 +43,9 @@
   common, because `separation.csv` is an answer rather than a header. A reader
   that parses these names out of the `#` block would otherwise get `NaN` for a
   quantity it then scales by, which fails silently. The spellings are pinned by a
-  test.
+  test — as is `mu` on a shear table and anything reduced from one, carried
+  through from the header that made those numbers rather than re-read from a
+  .def that may have moved since.
 - **`DefConfig.viscosity()` *(new)***, sharing the material-chain walk with
   `density()`.
 

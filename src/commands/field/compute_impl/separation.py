@@ -49,17 +49,27 @@ def find_tables(directory):
     return sorted(found)
 
 
+# What a table's own header says it was made with. Read back rather than
+# re-derived: these are the numbers that went into the rows below, and the .def
+# may have moved since.
+HEADER_VALUES = {
+    "q": re.compile(r"q = 0\.5\*rho\*U\^2:\s*([-\d.eE+]+)"),
+    "mu": re.compile(r"(?:^|\s)mu:\s*([-\d.eE+]+)"),
+}
+
+
 def read_table(path):
-    """(columns, rows) from one element table, and the q its header recorded."""
-    q = None
+    """(columns, rows) from one element table, and what its header recorded."""
+    meta = {}
     rows = []
     header = None
     with open(path, newline="") as handle:
         for line in handle:
             if line.startswith("#"):
-                match = re.search(r"q = 0\.5\*rho\*U\^2:\s*([-\d.eE+]+)", line)
-                if match:
-                    q = float(match.group(1))
+                for name, pattern in HEADER_VALUES.items():
+                    match = pattern.search(line)
+                    if match and name not in meta:
+                        meta[name] = float(match.group(1))
                 continue
             fields = line.rstrip("\n").split(",")
             if header is None:
@@ -69,7 +79,7 @@ def read_table(path):
     if header is None or not rows:
         raise SeparationError(f"{path.name} holds no rows")
     table = np.array(rows, dtype=float)
-    return {name: table[:, i] for i, name in enumerate(header)}, q
+    return {name: table[:, i] for i, name in enumerate(header)}, meta
 
 
 def bin_azimuth(theta, n_bins):

@@ -672,11 +672,15 @@ def test_elements_outside_the_declared_extent_are_reported(case, capsys):
 # missing one comes back NaN and scales a result by it rather than failing. So the
 # spellings are a contract, and this is where it is written down.
 REFERENCE_NAMES = ("rho", "U_inf", "diameter", "length",
-                   "span axis", "drag (flow)", "lift")
+                   "span axis", "drag (flow)", "lift", "body")
+# A shear table and anything reduced from one also state the viscosity that made
+# them (tau_w = mu * (omega x n)) and where theta is measured from. Neither is
+# arithmetic anyone downstream redoes, but both are how the number was arrived at.
+SHEAR_NAMES = REFERENCE_NAMES + ("mu", "theta")
 
 
-def _reference_names_in(path):
-    return {name for name in REFERENCE_NAMES
+def _reference_names_in(path, names=None):
+    return {name for name in (names or REFERENCE_NAMES)
             for line in _header(path) if line.startswith(f"{name}:")
             or f"   {name}:" in line}
 
@@ -695,16 +699,37 @@ def test_every_table_states_the_whole_reference_state(tmp_path):
     _run(case, quantity="separation", body="cyl", sectional=8, azimuthal=36,
          timestep=None)
 
-    produced = [case / "cyl.wall_shear" / "elements_100.csv",
-                case / "cyl.wall_shear" / "summary.csv",
-                case / "cyl.separation" / "azimuthal_100.csv",
-                case / "cyl.separation" / "separation.csv",
-                case / "cyl.force_coeff" / "summary.csv"]
     _run(case, quantity="force_coeff", timestep=None, t1=100, t2=300)
-    for path in produced:
+    produced = [
+        (case / "cyl.wall_shear" / "elements_100.csv", SHEAR_NAMES),
+        (case / "cyl.wall_shear" / "summary.csv", SHEAR_NAMES),
+        (case / "cyl.separation" / "azimuthal_100.csv", SHEAR_NAMES),
+        (case / "cyl.separation" / "separation.csv", SHEAR_NAMES),
+        (case / "cyl.force_coeff" / "summary.csv", REFERENCE_NAMES),
+    ]
+    for path, names in produced:
         assert path.exists(), path
-        missing = set(REFERENCE_NAMES) - _reference_names_in(path)
+        missing = set(names) - _reference_names_in(path, names)
         assert not missing, f"{path.name} does not state {sorted(missing)}"
+
+
+@needs_example
+def test_mu_is_the_one_the_shear_was_made_with(tmp_path):
+    """Carried from the wall_shear header, not re-read from the .def.
+
+    A separation table is a reduction of a shear that mu scaled. If the case has
+    moved since, the value that made these numbers is the one worth recording --
+    and it is the one already written into the tables being reduced.
+    """
+    case = _lean_case(tmp_path / "BR0SG0U1P0")
+    _declared(case)
+    _run(case, quantity="wall_shear")
+    shear = case / "cyl.wall_shear" / "elements_100.csv"
+    shear.write_text(shear.read_text().replace("mu: 1 ", "mu: 7 ", 1))
+    _run(case, quantity="separation", body="cyl", sectional=4, timestep=None)
+    stated = [ln for ln in _header(case / "cyl.separation" / "separation.csv")
+              if ln.startswith("mu:")]
+    assert stated and stated[0].startswith("mu: 7"), stated
 
 
 @needs_example

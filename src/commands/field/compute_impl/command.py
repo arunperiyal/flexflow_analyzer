@@ -500,9 +500,10 @@ def _compute_separation(args, case_dir, logger):
         for step, path in tables:
             bar.step(f"step {step}")
             try:
-                table, q_header = sep.read_table(path)
+                table, meta = sep.read_table(path)
             except sep.SeparationError as exc:
                 logger.error(str(exc)); sys.exit(1)
+            q_header, mu = meta.get("q"), meta.get("mu")
             for needed in ("theta", "station", "tau_theta", "tau_axial", "area"):
                 if needed not in table:
                     logger.error(f"{path.name} has no '{needed}' column, so it was "
@@ -517,7 +518,7 @@ def _compute_separation(args, case_dir, logger):
             sep.write_csv(out_path / f"azimuthal_{step}.csv", sep.AZIMUTHAL_COLUMNS,
                           rows,
                           _separation_comments(case_dir, reference, sections,
-                                               n_bins, step))
+                                               n_bins, step, mu))
             written.append(step)
             answers += [[step] + row for row in per_section]
             bar.advance()
@@ -534,7 +535,8 @@ def _compute_separation(args, case_dir, logger):
             "wall_shear so the two agree.")
 
     sep.write_csv(out_path / "separation.csv", sep.SEPARATION_COLUMNS, answers,
-                  _separation_comments(case_dir, reference, sections, n_bins, None))
+                  _separation_comments(case_dir, reference, sections, n_bins, None,
+                                       mu))
     _print_separation(answers)
     print(f"Wrote {len(written)} azimuthal table(s) x {n_sections} section(s) x "
           f"{n_bins} bin(s) + separation.csv -> {out_path}/")
@@ -561,8 +563,13 @@ def _table_sections(table, reference, n_sections, logger):
     return {"index": index, "count": n_sections, "width": width}
 
 
-def _separation_comments(case_dir, reference, sections, n_bins, step):
-    """The '#' block a separation table carries, conventions and all."""
+def _separation_comments(case_dir, reference, sections, n_bins, step, mu=None):
+    """The '#' block a separation table carries, conventions and all.
+
+    `mu` is carried through from the wall_shear header rather than re-read from
+    the .def: tau_w = mu * (omega x n) is how these numbers were made, and the
+    value that made them is the one worth recording, whatever the case says now.
+    """
     lines = [
         "FlexFlow field compute separation -- where the flow leaves the surface",
         f"case: {case_dir.name}   body: {reference.body}",
@@ -571,6 +578,11 @@ def _separation_comments(case_dir, reference, sections, n_bins, step):
         # hold a block in common -- separation.csv is an answer, not a header --
         # so each table states the whole reference state or none of it does.
         *reference.describe(),
+    ]
+    if mu is not None:
+        lines.append(f"mu: {mu:g}   (tau_w = mu * (omega x n), from the wall_shear "
+                     "tables these were reduced from)")
+    lines += [
         f"sections: {sections['count']} x {sections['width']:g} along "
         f"{reference.labels.get('span')}, anchored at the body's declared origin",
         f"azimuthal bins: {n_bins} x {360.0 / n_bins:g} deg, theta = 0 at a bin centre",
