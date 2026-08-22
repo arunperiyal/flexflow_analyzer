@@ -49,27 +49,69 @@ OUTPUT_SUFFIX = {"force": "forces", "force_coeff": "force_coeff"}
 DIR_SUFFIXES = tuple(f".{v}" for v in OUTPUT_SUFFIX.values())
 
 
-def _comment_block(case_dir, args, pressure_var, n_elements, span, reference=None):
-    """The '#' header every table this command writes carries.
-
-    With a `reference`, the coefficient's whole basis goes in too -- every number
-    it was divided by and where that number came from. A Cd is meaningless
-    without them, and a file that carries them can be checked years later.
-    """
+def _comment_block(case_dir, args, pressure_var, n_elements, span):
+    """The '#' header every element table carries."""
     quantity = getattr(args, "quantity", "force")
-    lines = [
+    return [
         f"FlexFlow field compute {quantity} -- pressure force per surface element",
         f"case: {case_dir.name}   zone: {args.zone}   pressure: {pressure_var}",
         "force: -p n dA, pressure only (no viscous skin friction)",
         "normal: unit, pointing out of the body (oriented by the adjacent volume cell)",
         f"elements: {n_elements:,}   {span}",
     ]
-    if reference is not None:
-        lines += [f"body: {reference.body}"] + reference.describe() + [
-            "Cd = Fd / (q * D * dx) per section, / (q * D * L) for the whole body",
-            "coefficients are from pressure alone: no skin friction is included",
-        ]
+
+
+def _coeff_comments(case_dir, args, pressure_var, n_elements, span, reference,
+                    sections=None, per_section=False, companion_files=False):
+    """The full '#' block for a coefficient run: every number a Cd was divided by.
+
+    It goes on summary.csv, which is the one file the whole run produces, rather
+    than being repeated at the top of every per-timestep table. The reference
+    state is a property of the run, not of a timestep, and saying it forty times
+    over does not make it forty times as true.
+    """
+    lines = [
+        "FlexFlow field compute force_coeff -- pressure force coefficients",
+        f"case: {case_dir.name}   body: {reference.body}   zone: {args.zone}   "
+        f"pressure: {pressure_var}",
+        "force: -p n dA, pressure only (no viscous skin friction)",
+        "normal: unit, pointing out of the body (oriented by the adjacent volume cell)",
+        f"elements: {n_elements:,}   {span}",
+    ] + reference.describe()
+    if sections is not None:
+        lines.append(f"sections: {sections.count} x {sections.width:g} along "
+                     f"{reference.labels.get('span')}, cut once from the first "
+                     "timestep and kept, so a section holds the same facets "
+                     "throughout")
+    # What *this* table was divided by, which is not the same question as what
+    # the run computed: a single --output NAME.csv holds the per-section rows, and
+    # heading it with the whole-body D*L would be wrong by a factor of L/dx.
+    lines.append("this table: " + reference.normalisation(
+        sections.width if (per_section and sections is not None) else None))
+    if companion_files and sections is not None:
+        # Only when such files exist: naming them in a run that wrote none invites
+        # a reader to go looking for tables that were never written.
+        lines.append("sectional_<step>.csv beside it: "
+                     + reference.normalisation(sections.width))
+    lines.append("coefficients are from pressure alone: no skin friction is included")
     return lines
+
+
+def _sectional_comments(case_dir, reference, sections, timestep, n_elements):
+    """The short '#' block a per-timestep sectional table carries.
+
+    Four lines: which run and which step, and the one thing needed to read the
+    numbers below without opening anything else -- what they were divided by. The
+    rest of the reference state is in summary.csv beside it.
+    """
+    return [
+        "FlexFlow field compute force_coeff -- sectional coefficients",
+        f"case: {case_dir.name}   body: {reference.body}   timestep: {timestep}   "
+        f"sections: {sections.count}   elements: {n_elements:,}",
+        reference.normalisation(sections.width)
+        + f"   drag {reference.labels.get('flow')}, lift {reference.labels.get('lift')}",
+        "the rest of the reference state is in summary.csv",
+    ]
 
 
 def _zone_via_domain(case_dir, plt, name):
@@ -176,19 +218,36 @@ def _write_pvd(path, entries):
     Path(path).write_text("\n".join(lines) + "\n")
 
 
-def _output_name(args, quantity, default_body):
-    """What --output asked for, or None for "nothing".
+def _output_name(args, quantity, body):
+    """Where this run writes: what --output asked for, or the default for the body.
 
-    `--output NAME` is NAME. A bare `--output` -- and, for force_coeff, no
-    --output at all, since its tables *are* the result -- is the default
-    directory for this quantity and body: `cyl.forces`, `cyl.force_coeff`.
+    `--output NAME` is NAME. Anything else -- a bare `--output`, or none at all --
+    is `<body>.forces` / `<body>.force_coeff` in the case directory. A run always
+    writes: the tables are the point of it, and naming them after the body is what
+    lets one case hold several without their outputs colliding.
     """
     raw = getattr(args, "output_file", None)
-    if raw is None and quantity != "force_coeff":
-        return None
     if isinstance(raw, str) and raw:
         return raw
-    return f"{default_body}.{OUTPUT_SUFFIX.get(quantity, quantity)}"
+    return f"{body}.{OUTPUT_SUFFIX.get(quantity, quantity)}"
+
+
+def _body_name(case_dir, zone, reference):
+    """The name an output directory is built on: 'cyl' -> cyl.forces.
+
+    force_coeff has resolved the body in full by now; force has not, and needs
+    nothing from it but the name, so domain.yml is read for that alone. A case
+    without one falls back to the zone, which is what the directory would have
+    been called anyway.
+    """
+    if reference is not None:
+        return reference.body
+    try:
+        from ....core.domain import DomainConfig
+        entry = DomainConfig.find(case_dir).entry(zone)
+    except Exception:
+        entry = None
+    return (entry or {}).get("name") or zone or "zone"
 
 
 def _resolve_output(name, case, logger, kinds=(".csv", ".vtu", ".vtk", ".pvd")):
@@ -294,7 +353,7 @@ def _compute_lambda2(args, steps, binary_dir, problem, logger):
 
 
 def _finish_coefficients(out_path, ext, totals, rows, entries, comments, multi,
-                         n_sections, reference, logger):
+                         sections, reference, logger):
     """Report and write what force_coeff produced.
 
     The whole-body series always goes to summary.csv -- it is the thing a
@@ -316,8 +375,8 @@ def _finish_coefficients(out_path, ext, totals, rows, entries, comments, multi,
     if ext == "dir":
         _write_csv(out_path / "summary.csv", COEFF_SUMMARY_COLUMNS,
                    np.asarray(totals), comments)
-        print(f"Wrote {len(entries)} sectional table(s) x {n_sections} section(s) "
-              f"+ summary.csv -> {out_path}/")
+        print(f"Wrote {len(entries)} sectional table(s) x {sections.count} "
+              f"section(s) + summary.csv -> {out_path}/")
         return
     if rows:
         header = (["timestep"] if multi else []) + SECTIONAL_COLUMNS
@@ -385,9 +444,9 @@ def execute_compute(args):
                          f"{n_sections})")
             sys.exit(1)
 
-    default_body = reference.body if reference else (args.zone or "zone")
     out_path, ext = _resolve_output(
-        _output_name(args, quantity, default_body), args.case, logger,
+        _output_name(args, quantity, _body_name(case_dir, args.zone, reference)),
+        args.case, logger,
         kinds=(".csv",) if quantity == "force_coeff" else
               (".csv", ".vtu", ".vtk", ".pvd"))
     if quantity == "force_coeff" and ext == "dir" and n_sections is None:
@@ -462,9 +521,8 @@ def execute_compute(args):
                     if ext == "dir":
                         piece = out_path / f"sectional_{ts}.csv"
                         _write_csv(piece, SECTIONAL_COLUMNS, block,
-                                   _comment_block(case_dir, args, pressure_var,
-                                                  len(surf_conn), f"timestep: {ts}",
-                                                  reference))
+                                   _sectional_comments(case_dir, reference, sections,
+                                                       ts, len(surf_conn)))
                         entries.append((ts, piece))
                     else:
                         rows.append(np.column_stack([np.full(len(block), ts), block])
@@ -508,15 +566,22 @@ def execute_compute(args):
 
     span = (f"timesteps: {steps[0] if len(steps) == 1 else f'{steps[0]}..{steps[-1]}'} "
             f"({len(totals)} written)")
-    comments = _comment_block(case_dir, args, pressure_var, int(totals[0][1]), span,
-                              reference)
+    if quantity == "force_coeff":
+        # `rows` is only filled on the single-file path, so it is what says whether
+        # the table being headed holds sections or one line per timestep.
+        comments = _coeff_comments(case_dir, args, pressure_var, int(totals[0][1]),
+                                   span, reference, sections,
+                                   per_section=bool(rows),
+                                   companion_files=(ext == "dir"))
+        for line in comments:
+            logger.info(line)
+        _finish_coefficients(out_path, ext, totals, rows, entries, comments, multi,
+                             sections, reference, logger)
+        return
+
+    comments = _comment_block(case_dir, args, pressure_var, int(totals[0][1]), span)
     for line in comments:
         logger.info(line)
-
-    if quantity == "force_coeff":
-        _finish_coefficients(out_path, ext, totals, rows, entries, comments, multi,
-                             n_sections, reference, logger)
-        return
 
     _print_totals(totals, multi)
 

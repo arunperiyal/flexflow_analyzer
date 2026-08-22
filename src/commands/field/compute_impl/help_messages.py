@@ -50,12 +50,13 @@ Quantities derived from a surface zone's own elements (Tecplot-free).
                           for a single file: .csv (one combined table), and for
                           force also .vtu/.vtk (surface mesh carrying the values
                           as cell data) or .pvd (a mesh series).
-                          Given with {Colors.BOLD}no NAME{Colors.RESET} it is {Colors.YELLOW}<body>.forces{Colors.RESET} /
-                          {Colors.YELLOW}<body>.force_coeff{Colors.RESET} in the case directory -- one place
-                          per body, so a case with several does not collide.
-                          force_coeff writes there by default, since its tables
-                          are the result; force without --output prints the
-                          totals per timestep and writes nothing.
+                          {Colors.BOLD}Left out entirely{Colors.RESET} -- or given with no NAME -- it is
+                          {Colors.YELLOW}<body>.forces{Colors.RESET} / {Colors.YELLOW}<body>.force_coeff{Colors.RESET} in the case
+                          directory. One place per body, so a case with several
+                          does not collide, and a case organises itself without
+                          anyone having to choose a name. The body is the one
+                          --zone names, through domain.yml where there is one.
+                          The totals per timestep are printed either way.
     {Colors.YELLOW}--pressure VAR{Colors.RESET}        Pressure variable name (default: Pressure)
     {Colors.YELLOW}--nen N{Colors.RESET}               Force nodes-per-element on the volume zone
     {Colors.YELLOW}--no-progress{Colors.RESET}         Do not draw the progress bar
@@ -90,6 +91,11 @@ Quantities derived from a surface zone's own elements (Tecplot-free).
     {Colors.BOLD}summary.csv{Colors.RESET}, one row per timestep, is the whole body:
     timestep, elements, area, Fx, Fy, Fz, Fd, Fl, Cd, Cl -- normalised by D*L.
 
+    It also carries the run's {Colors.BOLD}'#' header{Colors.RESET}: rho, U, q, D, L, the three axes
+    and what each table divides by, all as {Colors.BOLD}values{Colors.RESET}. The per-timestep
+    tables do not repeat it -- the reference state belongs to the run, not to a
+    timestep -- but each carries the one line needed to read its own numbers.
+
 {Colors.BOLD}WHERE A COEFFICIENT'S NUMBERS COME FROM:{Colors.RESET}
 
     Cd = Fd / (0.5 rho U^2 A) needs four things the PLT does not hold. None of
@@ -111,8 +117,14 @@ Quantities derived from a surface zone's own elements (Tecplot-free).
     Which body is decided by --zone, resolved through domain.yml -- by name,
     geotag or plttag, so any of the three finds it.
 
-    Every one of those, and where it came from, is written into the '#' header of
-    each table. A Cd without them cannot be checked; with them it can, years later.
+    Every one of those is written into summary.csv's '#' header as a {Colors.BOLD}value{Colors.RESET} --
+    `rho: 1000`, not `rho: from domain.yml`. The two are different claims: a
+    domain.yml can be edited afterwards, and a header pointing at one says nothing
+    about the numbers underneath it. Which file each was read from is reported by
+    {Colors.YELLOW}-v{Colors.RESET} instead, where it is a question about this run rather than about
+    the table.
+
+    A Cd without those numbers cannot be checked; with them it can, years later.
 
     Nothing is defaulted. A missing radius or velocity is an error naming the
     command that sets it, because a Cd normalised by a guessed diameter is wrong
@@ -127,10 +139,11 @@ Quantities derived from a surface zone's own elements (Tecplot-free).
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
 
-  {Colors.BOLD}Totals on screen, nothing written:{Colors.RESET}
-    flexflow field compute force BR0SG0U1P0 --zone cyl --timestep 100
+  {Colors.BOLD}One element table per timestep, named after the body:{Colors.RESET}
+    flexflow field compute force BR0SG0U1P0 --zone cyl --t1 50 --t2 5000 --freq 50
+      # -> <case>/cyl.forces/elements_50.csv .. + summary.csv
 
-  {Colors.BOLD}A run split into one file per timestep:{Colors.RESET}
+  {Colors.BOLD}Somewhere else instead:{Colors.RESET}
     flexflow field compute force BR0SG0U1P0 --zone cyl --t1 50 --t2 5000 --freq 50 \\
       --output loads          # -> <case>/loads/elements_50.csv .. + summary.csv
 

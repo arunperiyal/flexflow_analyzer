@@ -69,7 +69,7 @@ field info <case>          # Show PLT info (zones, variables, mesh audit)
 # Field data (PLT)
 field extract <case> --variables U,V,W --zone FIELD --output out.csv
 field extract <case> --probe 1,2,3    # Sample a point over time
-field compute force <case> --zone cyl # Per-element pressure force
+field compute force <case> --zone cyl # Per-element force -> <case>/cyl.forces/
 field compute force_coeff <case> --zone cyl --sectional 48   # Cd/Cl, per section
 field convert <case> --output mesh.vtu
 field check <file>         # Validate a produced .vtu/.pvd

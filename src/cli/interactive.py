@@ -372,7 +372,7 @@ class FlexFlowCompleter(Completer):
             '--t1':        'Start step (alone: that step; with --t2: range)',
             '--t2':        'End step of a range',
             '--freq':      'With --t1/--t2: keep steps that are multiples of FREQ',
-            '--output':    'Bare NAME -> <body>.forces / <body>.force_coeff; or .csv / .vtu / .pvd',
+            '--output':    'Where to write; default <body>.forces / <body>.force_coeff',
             '--sectional': 'force_coeff: cut the body into N spanwise sections',
             '--direction': "force_coeff: axis the sections are cut along (default: the body's)",
             '--flow':      'force_coeff: free-stream direction (default: from the .def)',

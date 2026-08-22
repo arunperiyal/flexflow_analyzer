@@ -26,6 +26,15 @@
   flow the body ends up in — right often enough to be trusted, wrong quietly enough
   to matter.
 
+- **Headers carry values, and the common block sits in `summary.csv`.** Each table
+  states what a Cd was divided by as a number — `rho: 1000`, `q = 0.5*rho*U^2: 500`
+  — rather than naming the file it was read from, since a `domain.yml` can be
+  edited afterwards and a pointer to one says nothing about the numbers beneath
+  it. The full reference block goes on `summary.csv`, which the run produces once;
+  a `sectional_<step>.csv` carries four lines instead of twelve — which run, which
+  step, and the single line needed to read its own rows. Each table names the area
+  *it* used, so a one-file `--output NAME.csv` of sections says `D * dx` rather
+  than the whole-body `D * L`. Where each number was read from is reported by `-v`.
   `--direction` and `--flow` override the two directions (`--flow` re-aims drag;
   U stays the declared magnitude); nothing else is overridable and **nothing is
   defaulted**. A body with no radius, or a field with no velocity, is an error
@@ -39,11 +48,15 @@
 - **`--zone` now resolves through `domain.yml`** for every `field compute`
   quantity: a body has three names and only the plttag is what a PLT calls it, so
   a name that is not a zone is looked up as a body before being called missing.
-- **Output directories are named after the body**: `--output` given with **no
-  name** is `<body>.forces` / `<body>.force_coeff` in the case directory, and
-  `force_coeff` writes there by default since its tables are the result. One
-  place per body, so a case with several does not collide. `--output NAME` is
-  unchanged, and `force` without `--output` still just prints totals.
+- **Output directories are named after the body**: with no `--output` (or one
+  given with no name), a run writes to `<body>.forces` / `<body>.force_coeff` in
+  the case directory. One place per body, so a case holding several does not have
+  their tables collide, and a case organises itself without anyone inventing a
+  name. The body is the one `--zone` names, resolved through `domain.yml` where
+  there is one, so a zone `cyl` belonging to a body called `riser_body` writes to
+  `riser_body.forces`. `--output NAME` is unchanged.
+  *(Behaviour change: `field compute force` used to write nothing without
+  `--output`. It now always writes; the totals still print either way.)*
 - **`parse_blocks` reads unquoted block labels.** `initField( velocity )` writes
   its label bare where most of the .def quotes it; reading only the quoted form
   skipped the block silently, which is how the free-stream velocity went missing.

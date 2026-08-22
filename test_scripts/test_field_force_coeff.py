@@ -149,11 +149,27 @@ def test_reference_is_assembled_from_domain_and_def(case):
     assert ref.labels == {"span": "+x", "flow": "+z", "lift": "+y"}
 
 
-def test_the_reference_says_where_every_number_came_from(case):
+def test_the_reference_describes_itself_in_values(case):
+    """What a Cd was divided by, spelled out -- not the files it was read from."""
     text = " ".join(co.resolve(case, "cyl", _args(), LOG).describe())
-    for expected in ("rho: 1000", "U_inf: 2", "diameter: 1", "length: 12",
-                     "riser.def densityModel", "domain.yml velocity"):
+    for expected in ("rho: 1000", "U_inf: 2", "q = 0.5*rho*U^2: 2000",
+                     "diameter: 1", "length: 12", "span axis: +x"):
         assert expected in text
+    assert "domain.yml" not in text and ".def" not in text
+
+
+def test_where_each_number_came_from_is_still_available(case):
+    """Not in the tables, but there for whoever asks with -v."""
+    sources = co.resolve(case, "cyl", _args(), LOG).sources
+    assert "riser.def densityModel" in sources["rho"]
+    assert "domain.yml" in sources["U_inf"]
+
+
+def test_normalisation_names_the_area_the_table_used(case):
+    ref = co.resolve(case, "cyl", _args(), LOG)
+    assert "D * L = 1 * 12" in ref.normalisation()
+    assert "D * dx = 1 * 0.25" in ref.normalisation(0.25)
+    assert "q = 2000" in ref.normalisation()
 
 
 def test_flags_override_the_derived_directions(case):
@@ -331,27 +347,21 @@ def test_a_finer_sectioning_than_the_mesh_is_reported(case, capsys):
 
 
 # ---------------------------------------------------------------------------
-# Against the case's own reference implementation
+# Against the real case
+#
+# BR0SG0U1P0 is 1.5 GB, most of it five 162 MB PLT files, so copying it per test
+# is not on. A run only ever *reads* a PLT, so those are symlinked and the rest --
+# all of it text, and 24 KB of it -- is copied, which the run may then write over.
 # ---------------------------------------------------------------------------
 
-def _read_csv(path):
-    """(header, rows) from a table, ignoring its '#' provenance block."""
-    lines = [ln for ln in path.read_text().splitlines() if not ln.startswith("#")]
-    header = lines[0].split(",")
-    return header, np.array([[float(v) for v in ln.split(",")] for ln in lines[1:]])
-
-
 EXAMPLE = Path("examples/BR0SG0U1P0")
+HAS_EXAMPLE = (EXAMPLE / "binary" / "riser.100.plt").exists()
+needs_example = pytest.mark.skipif(not HAS_EXAMPLE,
+                                   reason="needs the BR0SG0U1P0 example case")
 
 
 def _lean_case(destination, steps=(100,)):
-    """The example case with only what a compute run reads, PLTs symlinked.
-
-    BR0SG0U1P0 is 1.5 GB, most of it five 162 MB PLT files, so copying it whole
-    per test fills a tmpfs and costs seconds a time. A run only ever *reads* a
-    PLT, so those are symlinked; the rest is text, and 24 KB of it, which the run
-    may then write over.
-    """
+    """The example case with only what a compute run reads, PLTs symlinked."""
     import shutil
 
     destination.mkdir(parents=True, exist_ok=True)
@@ -370,31 +380,55 @@ def _lean_case(destination, steps=(100,)):
     return destination
 
 
-@pytest.mark.skipif(not (EXAMPLE / "binary" / "riser.100.plt").exists(),
-                    reason="needs the BR0SG0U1P0 example case")
+def _declared(case, radius=0.5, velocity=(0, 0, 1)):
+    """`case domain --init`, plus the two things the case itself does not state."""
+    from src.commands.case.domain_impl.command import init_case
+
+    init_case(case)
+    domain = DomainConfig.find(case)
+    domain.set_body("cyl", "geometry.radius", radius)
+    domain.set_field("velocity", list(velocity))
+    domain.save()
+    return domain
+
+
+def _compute_args(case, **overrides):
+    defaults = dict(quantity="force", case=str(case), zone="cyl", sectional=None,
+                    direction=None, flow=None, timestep=100, t1=None, t2=None,
+                    freq=None, output_file=None, pressure=None, nen=None,
+                    no_progress=True, verbose=False, help=False)
+    defaults.update(overrides)
+    return argparse.Namespace(**defaults)
+
+
+def _run(case, **overrides):
+    from src.commands.field.compute_impl.command import execute_compute
+    execute_compute(_compute_args(case, **overrides))
+
+
+def _read_csv(path):
+    """(header, rows) from a table, ignoring its '#' provenance block."""
+    lines = [ln for ln in path.read_text().splitlines() if not ln.startswith("#")]
+    header = lines[0].split(",")
+    return header, np.array([[float(v) for v in ln.split(",")] for ln in lines[1:]])
+
+
+def _header(path):
+    return [ln[2:] for ln in path.read_text().splitlines() if ln.startswith("# ")]
+
+
+@needs_example
 def test_matches_the_cases_own_reference_implementation(tmp_path):
     """The shipped sectional_Cd_Cl_<step>.csv were produced by binary/main.py.
 
-    That script hard-codes the same reference state this derives (rho 1000,
-    U 1, D 1, L 12, 48 sections along X, drag along Z) and has been used on this
-    case, so agreeing with it to rounding is the real check that the sectioning,
-    the axes, the sign of lift and the reference areas are all right.
+    That script hard-codes the same reference state this derives (rho 1000, U 1,
+    D 1, L 12, 48 sections along X, drag along Z) and has been used on this case,
+    so agreeing with it to rounding is the real check that the sectioning, the
+    axes, the sign of lift and the reference areas are all right.
     """
-    from src.commands.case.domain_impl.command import init_case
-    from src.commands.field.compute_impl.command import execute_compute
-
     case = _lean_case(tmp_path / "BR0SG0U1P0", steps=(100, 300, 500))
-    init_case(case)
-    domain = DomainConfig.find(case)
-    domain.set_body("cyl", "geometry.radius", 0.5)     # D = 1, as binary/config.py
-    domain.set_field("velocity", [0, 0, 1])            # U_INF = 1, DRAG_AXIS = Z
-    domain.save()
-
-    execute_compute(argparse.Namespace(
-        quantity="force_coeff", case=str(case), zone="cyl", sectional=48,
-        direction=None, flow=None, timestep=None, t1=100, t2=500, freq=None,
-        output_file=None, pressure=None, nen=None, no_progress=True,
-        verbose=False, help=False))
+    _declared(case)
+    _run(case, quantity="force_coeff", sectional=48, timestep=None, t1=100, t2=500)
 
     produced = case / "cyl.force_coeff"
     assert produced.is_dir()
@@ -408,3 +442,112 @@ def test_matches_the_cases_own_reference_implementation(tmp_path):
             np.testing.assert_allclose(got[:, column[ours]], want[:, theirs],
                                        rtol=1e-6, atol=1e-8)
     assert (produced / "summary.csv").exists()
+
+
+# ---------------------------------------------------------------------------
+# Where a run writes when nobody says
+# ---------------------------------------------------------------------------
+
+@needs_example
+@pytest.mark.parametrize("quantity,suffix", [("force", "forces"),
+                                             ("force_coeff", "force_coeff")])
+def test_output_defaults_to_a_directory_named_for_the_body(tmp_path, quantity, suffix):
+    """A run always writes, and names the directory after the body it is about.
+
+    One place per body, so a case holding several does not have their tables
+    collide, and nobody has to invent a name for the ordinary case.
+    """
+    case = _lean_case(tmp_path / "BR0SG0U1P0")
+    _declared(case)
+    _run(case, quantity=quantity)
+    written = case / f"cyl.{suffix}"
+    assert written.is_dir() and (written / "summary.csv").exists()
+
+
+@needs_example
+def test_the_directory_takes_the_bodys_name_not_the_zones(tmp_path):
+    """--zone names a PLT zone; the directory is named for the body it belongs to."""
+    case = _lean_case(tmp_path / "BR0SG0U1P0")
+    domain = _declared(case)
+    domain.set_body("cyl", "name", "riser_body")      # plttag stays 'cyl'
+    domain.save()
+    _run(case)
+    assert (case / "riser_body.forces").is_dir()
+    assert not (case / "cyl.forces").exists()
+
+
+@needs_example
+def test_a_case_without_a_domain_falls_back_to_the_zone(tmp_path):
+    """force needs no domain.yml, so the zone names the directory when there is none."""
+    case = _lean_case(tmp_path / "BR0SG0U1P0")
+    _run(case)
+    assert (case / "cyl.forces").is_dir()
+
+
+@needs_example
+def test_output_still_wins_over_the_default(tmp_path):
+    case = _lean_case(tmp_path / "BR0SG0U1P0")
+    _run(case, output_file="loads")
+    assert (case / "loads").is_dir() and not (case / "cyl.forces").exists()
+    _run(case, output_file="one.csv")
+    assert (case / "one.csv").is_file()
+
+
+# ---------------------------------------------------------------------------
+# What the '#' headers say
+# ---------------------------------------------------------------------------
+
+@needs_example
+def test_headers_carry_values_not_the_files_they_came_from(tmp_path):
+    """A table records what a Cd was divided by, not where the number was read.
+
+    The two are different claims: a domain.yml can be edited afterwards, and a
+    header pointing at one says nothing about the numbers below it.
+    """
+    case = _lean_case(tmp_path / "BR0SG0U1P0", steps=(100, 200, 300))
+    _declared(case)
+    _run(case, quantity="force_coeff", sectional=48, timestep=None, t1=100, t2=300)
+
+    summary = _header(case / "cyl.force_coeff" / "summary.csv")
+    assert not any("domain.yml" in line or ".def" in line for line in summary)
+    joined = " ".join(summary)
+    for value in ("rho: 1000", "U_inf: 1", "q = 0.5*rho*U^2: 500", "diameter: 1",
+                  "length: 12", "span axis: +x", "drag (flow): +z"):
+        assert value in joined, value
+
+
+@needs_example
+def test_the_common_block_is_in_summary_not_repeated_per_timestep(tmp_path):
+    """The reference state belongs to the run, so it is stated once."""
+    case = _lean_case(tmp_path / "BR0SG0U1P0", steps=(100, 200, 300))
+    _declared(case)
+    _run(case, quantity="force_coeff", sectional=4, timestep=None, t1=100, t2=300)
+
+    written = case / "cyl.force_coeff"
+    summary = _header(written / "summary.csv")
+    sectional = _header(written / "sectional_100.csv")
+
+    assert len(sectional) < len(summary)
+    assert not any(line.startswith("rho:") for line in sectional)
+    assert any("summary.csv" in line for line in sectional)
+    # ...but enough to read the numbers below without opening anything else.
+    assert any("q = 500" in line for line in sectional)
+    assert any("timestep: 100" in line for line in sectional)
+
+
+@needs_example
+def test_each_table_says_what_it_was_divided_by(tmp_path):
+    """A single --output NAME.csv holds sections, so it is D*dx, not D*L."""
+    case = _lean_case(tmp_path / "BR0SG0U1P0")
+    _declared(case)
+
+    _run(case, quantity="force_coeff", sectional=6, output_file="sections.csv")
+    this = [ln for ln in _header(case / "sections.csv") if ln.startswith("this table:")]
+    assert this and "D * dx" in this[0]
+
+    # Without --sectional the same file holds one row per timestep: D * L.
+    _run(case, quantity="force_coeff", output_file="whole.csv")
+    lines = _header(case / "whole.csv")
+    this = [ln for ln in lines if ln.startswith("this table:")]
+    assert this and "D * L" in this[0]
+    assert not any("sectional_<step>" in ln for ln in lines)

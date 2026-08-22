@@ -59,7 +59,13 @@ class Reference:
         return 0.5 * self.rho * self.u_inf ** 2
 
     def describe(self) -> list:
-        """The reference state as '#' header lines, each saying where it came from."""
+        """The reference state as '#' header lines: every number, spelled out.
+
+        Values, not the files they were read from. Someone opening the table in
+        five years wants to know a Cd was divided by 500, not that the 500 came
+        from a domain.yml that may since have been edited -- and the two are not
+        the same claim.
+        """
         return [
             f"rho: {self.rho:g}   U_inf: {self.u_inf:g}   "
             f"q = 0.5*rho*U^2: {self.dynamic_pressure:g}",
@@ -68,8 +74,19 @@ class Reference:
             f"span axis: {self.labels.get('span')}   "
             f"drag (flow): {self.labels.get('flow')}   "
             f"lift: {self.labels.get('lift')}",
-            "sources: " + "; ".join(f"{k} = {v}" for k, v in self.sources.items()),
         ]
+
+    def normalisation(self, width=None) -> str:
+        """One line naming what a coefficient in this table was divided by.
+
+        A per-timestep table carries this instead of the whole block: enough to
+        read the numbers in it without opening anything else, and short enough
+        not to bury the four lines that are actually about that timestep.
+        """
+        area = (f"D * dx = {self.diameter:g} * {width:g}" if width is not None
+                else f"D * L = {self.diameter:g} * {self.length:g}")
+        return (f"Cd = Fd / (q * {area}), Cl likewise, with "
+                f"q = {self.dynamic_pressure:g}")
 
 
 def axis_vector(value, what):
@@ -266,6 +283,11 @@ def resolve(case_dir, zone, args, logger):
     logger.info(f"reference: rho={reference.rho:g} U={reference.u_inf:g} "
                 f"D={reference.diameter:g} L={reference.length:g} "
                 f"span={reference.labels['span']} flow={reference.labels['flow']}")
+    # Where each number came from is worth saying once, to whoever asked for -v.
+    # It does not go in the tables: those record what a Cd was divided by, and a
+    # file that has since been edited is not an answer to that question.
+    logger.info("read from: " + "; ".join(f"{k} = {v}"
+                                          for k, v in reference.sources.items()))
     return reference
 
 

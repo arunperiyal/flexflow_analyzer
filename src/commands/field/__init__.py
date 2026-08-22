@@ -121,9 +121,8 @@ class FieldCommand(BaseCommand):
                                     nargs='?', const=True, default=None, metavar='NAME',
                                     help='Bare NAME -> a directory of per-timestep element '
                                          'tables + summary.csv; or .csv / .vtu/.vtk / .pvd '
-                                         'for a single file. Given with no NAME it is '
-                                         '<body>.forces / <body>.force_coeff in the case; '
-                                         'omitted, force prints totals only')
+                                         'for a single file. Left out it is '
+                                         '<body>.forces / <body>.force_coeff in the case')
         compute_parser.add_argument('--sectional', type=int, metavar='N',
                                     help='force_coeff: cut the body into N spanwise '
                                          'sections and write Cd/Cl for each')
