@@ -1,13 +1,18 @@
-"""Tests for `field render iso` and `field render slice`.
+"""Tests for `field render iso`, `field render slice` and `field render colorbar`.
 
-`field render` carries two modes on one parser, which is what makes it worth
+`field render` carries three modes on one parser, which is what makes it worth
 testing: argparse cannot tell that `--values` is meaningless to a slice, that a
 missing mode word has bound the case to `mode`, or that `--output cut.vtp` means
 "do not render anything at all". All three are decided in the impl, and all
 three are here.
 
+colorbar is the odd one out -- it takes no case, .vtu or camera at all, and its
+range is required rather than auto-taken from a surface that does not exist --
+so its own flag-rejection and config-validation get a class of their own.
+
 The geometry maths (plane placement, normal parsing) is tested against
-`src/plt/render.py` directly, since that is where it lives.
+`src/plt/render.py` directly, since that is where it lives; render_colorbar's
+own legend maths (discrete bands, log-scale ticks) is there too.
 """
 
 import argparse
@@ -101,6 +106,96 @@ class TestModeOnlyFlags:
         """--color/--zone/--nen belong to neither mode alone."""
         for mode in ("iso", "slice"):
             render_cmd._check_mode_flags(args(mode=mode, color="W", nen=8), mode, _Logger())
+
+
+# One representative, non-empty value per flag `colorbar` has no use for --
+# case/vtu/camera all mean "here is a surface to render", and colorbar renders
+# none. Parametrized off the module's own tuple, so a flag added there without
+# a matching test value fails loudly here instead of silently going unchecked.
+_COLORBAR_IRRELEVANT_VALUES = {
+    "vtu": "m.vtu", "case": "someCase", "zone": "cyl", "body": "cyl",
+    "camera": "cam.yml", "pick_camera": "cam.yml", "nen": 8, "no_vtp": True,
+    "timestep": 100, "t1": 0.0, "t2": 1.0, "freq": 5,
+}
+
+
+class TestColorbarMode:
+    """colorbar renders no surface: no case/.vtu/camera, and a required range."""
+
+    def test_irrelevant_flags_are_rejected(self):
+        assert set(_COLORBAR_IRRELEVANT_VALUES) == set(render_cmd.COLORBAR_IRRELEVANT)
+
+    @pytest.mark.parametrize("flag", render_cmd.COLORBAR_IRRELEVANT)
+    def test_rejected(self, capsys, flag):
+        # args()'s own default is vtu="m.vtu" (every other mode needs one);
+        # clear it unless vtu is the very flag under test, or every other
+        # case in this parametrization would be rejected for --vtu instead.
+        overrides = {"mode": "colorbar", flag: _COLORBAR_IRRELEVANT_VALUES[flag]}
+        overrides.setdefault("vtu", None)
+        with pytest.raises(SystemExit) as exc:
+            render_cmd.execute_render(args(**overrides))
+        assert exc.value.code == 1
+        err = capsys.readouterr().err
+        label = "<case>" if flag == "case" else f"--{flag.replace('_', '-')}"
+        assert label in err
+        assert "field render colorbar" in err
+
+    @pytest.mark.parametrize("flag, value", [("values", [20.0]), ("normal", "z")])
+    def test_iso_slice_only_flags_are_also_rejected(self, capsys, flag, value):
+        """Caught earlier, by the same MODE_ONLY check iso/slice use on each other."""
+        with pytest.raises(SystemExit) as exc:
+            render_cmd.execute_render(args(mode="colorbar", vtu=None,
+                                           **{flag: value}))
+        assert exc.value.code == 1
+        assert f"--{flag}" in capsys.readouterr().err
+
+    def test_needs_output(self, capsys):
+        with pytest.raises(SystemExit) as exc:
+            render_cmd.execute_render(args(mode="colorbar", vtu=None,
+                                           color_range=[0.0, 1.0]))
+        assert exc.value.code == 1
+        assert "--output" in capsys.readouterr().err
+
+    @pytest.mark.parametrize("bad", ["legend.png", "legend", "legend.vtp"])
+    def test_output_must_be_pdf_or_svg(self, capsys, bad, tmp_path):
+        with pytest.raises(SystemExit) as exc:
+            render_cmd.execute_render(args(mode="colorbar", vtu=None,
+                                           color_range=[0.0, 1.0],
+                                           output=str(tmp_path / bad)))
+        assert exc.value.code == 1
+        assert ".pdf or .svg" in capsys.readouterr().err
+
+    def test_requires_a_range(self, capsys, tmp_path):
+        """Unlike iso/slice, null is an error here -- there is no surface to auto-range from."""
+        with pytest.raises(SystemExit) as exc:
+            render_cmd.execute_render(args(mode="colorbar", vtu=None,
+                                           output=str(tmp_path / "legend.pdf")))
+        assert exc.value.code == 1
+        assert "color.range is null" in capsys.readouterr().err
+
+    @pytest.mark.parametrize("ext", ["pdf", "svg"])
+    def test_writes_the_file(self, tmp_path, ext):
+        out = tmp_path / f"legend.{ext}"
+        render_cmd.execute_render(args(mode="colorbar", vtu=None, color="Pressure",
+                                       color_range=[-1.0, 1.0], output=str(out)))
+        assert out.exists() and out.stat().st_size > 0
+
+    def test_config_file_drives_it_end_to_end(self, tmp_path):
+        """--write-template, then --config off what it wrote -- the documented workflow."""
+        template_path = tmp_path / "bar.yml"
+        render_cmd.execute_render(args(mode="colorbar", vtu=None,
+                                       write_template=str(template_path)))
+        assert "range:" in template_path.read_text()
+
+        out = tmp_path / "legend.pdf"
+        render_cmd.execute_render(args(mode="colorbar", vtu=None,
+                                       config=str(template_path), output=str(out)))
+        assert out.exists() and out.stat().st_size > 0
+
+    def test_write_template_help_and_dispatch_know_the_mode(self, capsys):
+        """`-h` on colorbar shows its own help, not the generic mode listing."""
+        render_cmd.execute_render(args(mode="colorbar", vtu=None, help=True))
+        assert "field render colorbar" in capsys.readouterr().out.lower()
 
 
 class TestOutputResolution:
@@ -444,6 +539,64 @@ class TestRenderConfig:
                render._plane_origins(mesh, np.array([0.0, 0.0, 1.0]), 3)]
         assert got == pytest.approx([0.75, 1.5, 2.25])
         assert all(0 < z < 3 for z in got)
+
+    def test_colorbar_mode_defaults_to_a_transparent_legend(self):
+        """A legend in a report page wants no white box; a full scene keeps one."""
+        assert render.default_config("colorbar")["image"]["transparent"] is True
+        assert render.default_config("iso")["image"]["transparent"] is False
+        assert render.default_config("slice")["image"]["transparent"] is False
+
+    def test_orientation_defaults_vertical(self):
+        assert render.DEFAULTS["color"]["orientation"] == "vertical"
+
+
+class TestColorbarRender:
+    """render_colorbar draws a legend with no surface -- render.py's own tests."""
+
+    def test_null_range_raises(self):
+        cfg = render.default_config("colorbar")
+        with pytest.raises(ValueError, match="color.range is null"):
+            render.render_colorbar(cfg, "unused.pdf")
+
+    @pytest.mark.parametrize("ext", ["pdf", "svg"])
+    @pytest.mark.parametrize("orientation", ["vertical", "horizontal"])
+    @pytest.mark.parametrize("levels", [None, 8])
+    @pytest.mark.parametrize("log_scale", [False, True])
+    def test_renders_across_the_option_matrix(self, tmp_path, ext, orientation,
+                                              levels, log_scale):
+        """Every combination a config can set, rendered without raising.
+
+        Discrete bands and a log scale interact in the tick placement (geomspace
+        vs linspace) -- the one branch worth sweeping rather than trusting by
+        inspection.
+        """
+        cfg = render.default_config("colorbar")
+        cfg["color"]["range"] = [0.1, 100.0] if log_scale else [-1.0, 1.0]
+        cfg["color"]["orientation"] = orientation
+        cfg["color"]["levels"] = levels
+        cfg["color"]["log_scale"] = log_scale
+        cfg["color"]["title"] = "Pressure"
+        out = tmp_path / f"legend.{ext}"
+        render.render_colorbar(cfg, str(out))
+        assert out.exists() and out.stat().st_size > 0
+
+    def test_opaque_background_is_honoured(self, tmp_path):
+        cfg = render.default_config("colorbar")
+        cfg["color"]["range"] = [0.0, 1.0]
+        cfg["image"]["transparent"] = False
+        cfg["image"]["background"] = "white"
+        out = tmp_path / "legend.pdf"
+        render.render_colorbar(cfg, str(out))
+        assert out.exists() and out.stat().st_size > 0
+
+    def test_small_rainbow_preset_resolves(self, tmp_path):
+        """The custom Tecplot-matching colormap, not just matplotlib's own names."""
+        cfg = render.default_config("colorbar")
+        cfg["color"]["range"] = [0.0, 1.0]
+        cfg["color"]["preset"] = "Small Rainbow"     # the ParaView/Tecplot name
+        out = tmp_path / "legend.pdf"
+        render.render_colorbar(cfg, str(out))
+        assert out.exists() and out.stat().st_size > 0
 
 
 class _Camera:

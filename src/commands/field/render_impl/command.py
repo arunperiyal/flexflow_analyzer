@@ -23,7 +23,12 @@ from ..locate import problem_name, find_plt, zone_index, resolve_steps
 from .templates import TEMPLATES
 
 
-MODES = ("iso", "slice")
+MODES = ("iso", "slice", "colorbar")
+
+# Flags that mean rendering a surface: none of them apply to `colorbar`, which
+# reads only the color: block and takes no case, .vtu or camera at all.
+COLORBAR_IRRELEVANT = ("vtu", "case", "zone", "body", "camera", "pick_camera",
+                       "nen", "no_vtp", "timestep", "t1", "t2", "freq")
 
 # Flags that mean something in one mode only. Passing one to the other mode is
 # an error rather than a silent no-op: `field render slice --values 20` is
@@ -116,6 +121,81 @@ def _check_range(pair, logger):
         logger.error(f"--color-range needs MIN below MAX, got {lo} and {hi}")
         sys.exit(1)
     return [lo, hi]
+
+
+def _resolve_colorbar_output(args, logger):
+    """--output for `colorbar`: one file, named directly -- not a directory
+    of camera views, so it does not go through _resolve_output/_output_dir."""
+    raw = getattr(args, "output", None)
+    if not raw:
+        logger.error("`field render colorbar` needs --output NAME.pdf (or .svg)")
+        sys.exit(1)
+    ext = os.path.splitext(raw)[1].lower()
+    if ext not in (".pdf", ".svg"):
+        logger.error(f"--output must end in .pdf or .svg for a colorbar, got "
+                     f"'{raw}' -- a legend is one file, not a NAME/ of camera "
+                     f"views like iso/slice write")
+        sys.exit(1)
+    parent = os.path.dirname(raw)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    return raw
+
+
+def _render_colorbar(args, logger):
+    """`field render colorbar`: a standalone legend, no case or .vtu at all."""
+    for flag in COLORBAR_IRRELEVANT:
+        # Identity, not `not in (None, False)`: that membership test uses ==,
+        # and 0.0 == False in Python -- so a genuine `--t1 0` would silently
+        # pass as "not given" instead of being rejected.
+        value = getattr(args, flag, None)
+        if value is None or value is False:
+            continue
+        label = "<case>" if flag == "case" else f"--{flag.replace('_', '-')}"
+        logger.error(f"{label} renders a surface; `field render colorbar` "
+                     f"draws only the legend described by color: in "
+                     f"--config, so it takes no case, .vtu or camera")
+        sys.exit(1)
+
+    args.color_range = _check_range(getattr(args, "color_range", None), logger)
+    cfg = render.default_config("colorbar")
+    user_cfg = {}
+    if getattr(args, "config", None):
+        import yaml
+        path = args.config
+        if not Path(path).exists():
+            logger.error(f"config file not found: {path}\n"
+                         f"        write a starting point with "
+                         f"`field render colorbar --write-template {path}`")
+            sys.exit(1)
+        try:
+            with open(path) as f:
+                user_cfg = yaml.safe_load(f) or {}
+        except yaml.YAMLError as e:
+            logger.error(f"--config {path}: {e}")
+            sys.exit(1)
+        if not isinstance(user_cfg, dict):
+            logger.error(f"--config {path}: expected a mapping of sections "
+                         f"(color:, image:), got {type(user_cfg).__name__}")
+            sys.exit(1)
+        cfg = render.deep_merge(cfg, user_cfg)
+
+    if getattr(args, "color", None):
+        cfg["color"]["variable"] = args.color
+    if args.color_range:
+        cfg["color"]["range"] = args.color_range
+    _check_config(cfg, logger)
+
+    out_path = _resolve_colorbar_output(args, logger)
+    try:
+        render.render_colorbar(cfg, out_path, log=logger.info)
+    except ImportError:
+        logger.error("matplotlib is required for `field render colorbar`. "
+                     "Install with: pip install matplotlib")
+        sys.exit(1)
+    except ValueError as e:
+        logger.error(str(e))
+        sys.exit(1)
 
 
 def _resolve_steps(args, cfg, mode, logger):
@@ -388,9 +468,10 @@ def _pick_camera(args, cfg, mode, steps, binary_dir, problem, path, logger):
 
 def execute_render(args):
     from .help_messages import (print_render_help, print_iso_help,
-                                print_slice_help)
+                                print_slice_help, print_colorbar_help)
 
-    mode_help = {"iso": print_iso_help, "slice": print_slice_help}
+    mode_help = {"iso": print_iso_help, "slice": print_slice_help,
+                "colorbar": print_colorbar_help}
     mode = getattr(args, "mode", None)
 
     if getattr(args, "help", False):
@@ -420,6 +501,10 @@ def execute_render(args):
         with open(args.write_template, "w") as f:
             f.write(TEMPLATES[mode])
         logger.success(f"wrote {mode} config template -> {args.write_template}")
+        return
+
+    if mode == "colorbar":
+        _render_colorbar(args, logger)
         return
 
     # `*` means every case in the .cases registry, as it does for `case out`,

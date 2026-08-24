@@ -12,6 +12,10 @@ map, the cameras, the screenshots) is shared, so the pipeline is written once as
 _prepare -> <surface> -> render_surface and the two entry points below just pick
 the middle.
 
+A third entry point, render_colorbar, renders no surface at all: it draws the
+`color:` block's scale on its own, as a standalone legend for a figure that
+would rather not carry one baked in. It needs matplotlib only, not pyvista.
+
 Config schema (dict; missing keys fall back to DEFAULTS):
     input    : vtu
     output   : prefix, save_vtp, html
@@ -20,7 +24,7 @@ Config schema (dict; missing keys fall back to DEFAULTS):
     slice    : normal, origin, count              (slice mode)
     color    : variable, preset (matplotlib cmap or ParaView preset name),
                range [min,max], levels, log_scale, title, show_scalar_bar,
-               text_color
+               text_color, orientation (vertical/horizontal -- colorbar mode)
     domain   : xmin/xmax/ymin/ymax/zmin/zmax   (box crop before contouring)
     threshold: variable, min, max
     surface  : opacity, show_edges
@@ -94,7 +98,9 @@ DEFAULTS = {
     # Tecplot and ParaView band a contour legend. null = continuous.
     "color":   {"variable": "U", "preset": "coolwarm", "range": None,
                 "levels": None, "log_scale": False, "title": None,
-                "show_scalar_bar": True, "text_color": [0.0, 0.0, 0.0]},
+                "show_scalar_bar": True, "text_color": [0.0, 0.0, 0.0],
+                # colorbar mode only: which way the standalone legend runs.
+                "orientation": "vertical"},
     "domain":  {"xmin": None, "xmax": None, "ymin": None, "ymax": None,
                 "zmin": None, "zmax": None},
     "threshold": {"variable": None, "min": None, "max": None},
@@ -173,6 +179,11 @@ def default_config(mode="iso"):
     if mode == "slice":
         cfg["output"]["prefix"] = "slice"
         cfg["views"] = copy.deepcopy(SLICE_VIEWS)
+    elif mode == "colorbar":
+        # A legend strip sitting in a LaTeX figure wants no white box around
+        # it; a full scene defaults the other way, which is why this is a
+        # per-mode override rather than a change to DEFAULTS itself.
+        cfg["image"]["transparent"] = True
     return cfg
 
 
@@ -1084,3 +1095,79 @@ def render_iso(cfg, log=print, warn=None, state=None):
 def render_slice(cfg, log=print, warn=None, state=None):
     """Render cut-plane PNGs from a .vtu. Returns the list of written files."""
     return _render(cfg, "slice", log, warn, state)
+
+
+def render_colorbar(cfg, path, log=print):
+    """Save a standalone legend for cfg['color'] -- no surface, no scene.
+
+    For a report figure: `field render slice`/`iso` can drop their baked-in
+    scalar bar (color.show_scalar_bar: false) and this draws the same scale
+    on its own, as vector PDF/SVG -- real text and lines rather than a raster
+    crop off a screenshot, so it sits at whatever size a LaTeX figure wants
+    without going soft. The two pieces are guaranteed to match because they
+    read the same color: block; that is also why a range is required rather
+    than taken from a surface -- there is no surface here to take one from.
+
+    Needs matplotlib only, not pyvista, so it renders even where the 3-D path
+    cannot (no OSMesa/OpenGL, or pyvista not installed at all).
+    """
+    import numpy as np
+    import matplotlib
+    matplotlib.use("Agg")
+    from matplotlib import pyplot as plt
+    from matplotlib.colors import LogNorm, Normalize
+
+    color = cfg["color"]
+    crange = color.get("range")
+    if not crange:
+        raise ValueError(
+            "color.range is null -- a standalone legend has no surface to take "
+            "a scale from. Set color.range in the config, or pass --color-range "
+            "MIN MAX.")
+    vmin, vmax = crange
+
+    register_colormaps()          # small_rainbow, as elsewhere
+    cmap = plt.get_cmap(to_cmap(color.get("preset", "coolwarm")))
+    levels = color.get("levels")
+    if levels:
+        # Matches render_surface's n_colors=int(levels): the same map,
+        # quantised to that many bands, the way a Tecplot legend is banded.
+        cmap = cmap.resampled(int(levels))
+
+    log_scale = bool(color.get("log_scale"))
+    norm = (LogNorm(vmin=vmin, vmax=vmax) if log_scale
+           else Normalize(vmin=vmin, vmax=vmax))
+
+    vertical = color.get("orientation", "vertical") != "horizontal"
+    text_color = to_rgb(color.get("text_color", [0.0, 0.0, 0.0]))
+    fig = plt.figure(figsize=(1.6, 4.2) if vertical else (4.8, 1.3))
+    # Nearly the whole figure is the bar itself: there is no scene to frame,
+    # so nothing else earns the margin a normal axes would leave for one.
+    rect = [0.38, 0.06, 0.24, 0.88] if vertical else [0.08, 0.5, 0.88, 0.28]
+    ax = fig.add_axes(rect)
+
+    sm = plt.cm.ScalarMappable(norm=norm, cmap=cmap)
+    cb = fig.colorbar(sm, cax=ax,
+                      orientation="vertical" if vertical else "horizontal")
+    cb.set_label(color.get("title") or color.get("variable") or "", color=text_color)
+    cb.ax.tick_params(colors=text_color)
+    cb.outline.set_edgecolor(text_color)
+    if levels:
+        # One tick per band boundary -- render_surface asks pyvista for the
+        # same n_labels = levels + 1, so the two legends read alike.
+        ticks = (np.geomspace(vmin, vmax, int(levels) + 1) if log_scale
+                else np.linspace(vmin, vmax, int(levels) + 1))
+        cb.set_ticks(ticks)
+
+    transparent = bool(cfg.get("image", {}).get("transparent", True))
+    if not transparent:
+        fig.patch.set_facecolor(to_rgb(cfg.get("image", {}).get("background",
+                                                                 [1.0, 1.0, 1.0])))
+    # bbox_inches="tight" rather than tuning `rect` by hand: the rotated
+    # ylabel and long tick labels (a wide log-scale range, a negative title)
+    # extend past the axes rect above by different amounts each time, and a
+    # fixed margin either clips them or wastes space. Tight cropping to what
+    # was actually drawn gets both right regardless of the numbers in range.
+    fig.savefig(path, transparent=transparent, bbox_inches="tight", pad_inches=0.05)
+    plt.close(fig)
+    log("saved %s" % path)

@@ -170,9 +170,9 @@ class FieldCommand(BaseCommand):
 
         # field render <mode> (images via pyvista: iso, slice)
         render_parser = field_subparsers.add_parser('render', add_help=False,
-                                                    help='Render images (iso, slice)')
+                                                    help='Render images (iso, slice, colorbar)')
         render_parser.add_argument('mode', nargs='?',
-                                   help='What to render (iso, slice)')
+                                   help='What to render (iso, slice, colorbar)')
         render_parser.add_argument('case', nargs='?',
                                    help='Case directory path, or * for every '
                                         'case in the .cases registry')
