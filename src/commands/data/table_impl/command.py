@@ -17,7 +17,12 @@ from .. import shared
 
 
 def execute_table(args):
-    """Execute `data table`."""
+    """Execute `data table`.
+
+    --var is parsed once, here, rather than once per case, for the same reason
+    `data stats` does: a missing --var is a mistake about the command, not
+    about any particular case in a `*` batch.
+    """
     from .help_messages import print_table_help, print_table_examples
 
     if getattr(args, "help", False):
@@ -31,18 +36,25 @@ def execute_table(args):
         shared.no_case(args, logger, print_table_help, ('var', 't1', 't2', 'node', 'output', 'head', 'tail', 'group'))
         return
 
-    case_dir = shared.resolve_case(args.case, logger)
-    kinds = shared.which_kinds(args)
-    metas = shared.scan_kinds(case_dir, kinds, logger)
-    if not metas:
-        logger.error(f"No othd/oisd data found under {case_dir}")
-        sys.exit(1)
-
     requested = shared.split_vars(getattr(args, "var", None))
     if not requested:
         logger.error("--var says which variable to tabulate; there is no useful "
                      "default among a dozen of them.\n"
                      "        `data show` lists what this case has.")
+        sys.exit(1)
+
+    def run_one(case_dir, case_args):
+        _run_table(case_dir, case_args, logger, requested)
+
+    shared.for_each_case(args, logger, run_one)
+
+
+def _run_table(case_dir, args, logger, requested):
+    """`data table` for one case: everything that needs that case's own data."""
+    kinds = shared.which_kinds(args)
+    metas = shared.scan_kinds(case_dir, kinds, logger)
+    if not metas:
+        logger.error(f"No othd/oisd data found under {case_dir}")
         sys.exit(1)
 
     # A name belongs to whichever kind declares it, so the kind need not be

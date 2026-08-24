@@ -93,7 +93,14 @@ def execute_preview(args):
         shared.no_case(args, logger, print_preview_help, ('othd', 'oisd'))
         return
 
-    case_dir = shared.resolve_case(args.case, logger)
+    def run_one(case_dir, case_args):
+        _run_preview(case_dir, case_args, logger)
+
+    shared.for_each_case(args, logger, run_one)
+
+
+def _run_preview(case_dir, args, logger):
+    """`data show` for one case."""
     kinds = shared.which_kinds(args)
     metas = shared.scan_kinds(case_dir, kinds, logger)
 

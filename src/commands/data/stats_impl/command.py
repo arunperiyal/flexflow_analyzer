@@ -188,7 +188,13 @@ def _runners_up(found):
 
 
 def execute_statistics(args):
-    """Execute `data stats`."""
+    """Execute `data stats`.
+
+    --func/--var are parsed once, here, rather than once per case: a typo in
+    --func is a mistake about the command, not about any particular case, and
+    reporting it once (before touching any case's data) beats reporting it
+    identically for every case in a `*` batch.
+    """
     from .help_messages import print_statistics_help, print_statistics_examples
 
     if getattr(args, "help", False):
@@ -201,8 +207,6 @@ def execute_statistics(args):
     if not getattr(args, "case", None):
         shared.no_case(args, logger, print_statistics_help, ('var', 'func', 't1', 't2', 'node', 'output', 'group'))
         return
-
-    case_dir = shared.resolve_case(args.case, logger)
 
     funcs = shared.split_vars(getattr(args, "func", None))
     if not funcs:
@@ -218,16 +222,24 @@ def execute_statistics(args):
         sys.exit(1)
     funcs = [f.lower() for f in funcs]
 
-    kinds = shared.which_kinds(args)
-    metas = shared.scan_kinds(case_dir, kinds, logger)
-    if not metas:
-        logger.error(f"No othd/oisd data found under {case_dir}")
-        sys.exit(1)
-
     requested = shared.split_vars(getattr(args, "var", None))
     if not requested:
         logger.error("--var says which variable to summarise.\n"
                      "        `data show` lists what this case has.")
+        sys.exit(1)
+
+    def run_one(case_dir, case_args):
+        _run_statistics(case_dir, case_args, logger, funcs, requested)
+
+    shared.for_each_case(args, logger, run_one)
+
+
+def _run_statistics(case_dir, args, logger, funcs, requested):
+    """`data stats` for one case: everything that needs that case's own data."""
+    kinds = shared.which_kinds(args)
+    metas = shared.scan_kinds(case_dir, kinds, logger)
+    if not metas:
+        logger.error(f"No othd/oisd data found under {case_dir}")
         sys.exit(1)
 
     matched = {k: [r for r in requested if shared.known_name(m, r)]
