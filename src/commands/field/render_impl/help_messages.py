@@ -95,20 +95,26 @@ Given a case, the PLT is auto-converted to a cached .vtu first.
     flexflow field render <mode> [<case>] [options]
 
 {Colors.BOLD}MODES:{Colors.RESET}
-    {Colors.YELLOW}iso{Colors.RESET}     An isosurface of a scalar -- Q-criterion for vortex tubes,
-              coloured by another variable
-    {Colors.YELLOW}slice{Colors.RESET}   A cut plane through the volume, or a series of them
-              evenly spaced along a normal
+    {Colors.YELLOW}iso{Colors.RESET}       An isosurface of a scalar -- Q-criterion for vortex tubes,
+                coloured by another variable
+    {Colors.YELLOW}slice{Colors.RESET}     A cut plane through the volume, or a series of them
+                evenly spaced along a normal
+    {Colors.YELLOW}colorbar{Colors.RESET}  A standalone legend for one of the above, as vector PDF/SVG --
+                for a figure whose baked-in scalar bar was turned off
+                ({Colors.YELLOW}color.show_scalar_bar: false{Colors.RESET}) and needs one placed separately
+                in a report
 
-    {Colors.DIM}Both share the input, colouring, camera and output options; they differ
-    only in the surface they cut out of the volume. Run a mode with -h for its
-    own help.{Colors.RESET}
+    {Colors.DIM}iso and slice share the input, colouring, camera and output options; they
+    differ only in the surface they cut out of the volume. colorbar takes no
+    case or .vtu at all -- it draws only the color: block. Run a mode with -h
+    for its own help.{Colors.RESET}
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
     flexflow field render iso myCase --timestep 100 --values 20 --color W
     flexflow field render slice myCase --normal z --color Pressure
     flexflow field render iso myCase --t1 100 --t2 500 --color-range -1 1
     flexflow field render slice myCase --normal x --output cut.vtp
+    flexflow field render colorbar --color Pressure --color-range -1 1 --output legend.pdf
 
 {Colors.BOLD}OUTPUT:{Colors.RESET}
     {Colors.DIM}Always a directory under the case -- <case>/render_<mode>/ by default, or
@@ -257,4 +263,57 @@ want out of a run. Or cut a series of planes along one normal.
       file per plane.
     - An oblique --normal (a vector rather than an axis) works, but keeps the
       configured camera: there is no named direction to aim at.{Colors.RESET}
+""")
+
+
+def print_colorbar_help():
+    print(f"""
+{Colors.BOLD}{Colors.CYAN}FlexFlow Field Render Colorbar{Colors.RESET}
+
+Save a standalone legend, matching a slice/iso figure whose own scalar bar was
+turned off ({Colors.YELLOW}color.show_scalar_bar: false{Colors.RESET} there). Vector PDF or SVG, so it
+drops into a LaTeX {Colors.YELLOW}\\includegraphics{Colors.RESET} at any size, in place of screenshotting
+a bar and rebuilding the figure in Inkscape.
+
+Reads only the {Colors.YELLOW}color:{Colors.RESET} block -- no case, .vtu or camera. Unlike iso/slice,
+{Colors.YELLOW}color.range{Colors.RESET} is {Colors.BOLD}not{Colors.RESET} taken from the data: there is no surface here to take it
+from, so it must be given.
+
+{Colors.BOLD}USAGE:{Colors.RESET}
+    flexflow field render colorbar --config FILE --output NAME.pdf
+
+{Colors.BOLD}OPTIONS:{Colors.RESET}
+    {Colors.YELLOW}--config FILE{Colors.RESET}          YAML config -- the color: block (preset, range, levels,
+                           log_scale, title, orientation, text_color) and,
+                           optionally, image: (transparent, background)
+    {Colors.YELLOW}--color NAME{Colors.RESET}           Overrides color.variable -- used as the label when
+                           color.title is null
+    {Colors.YELLOW}--color-range MIN MAX{Colors.RESET}  Overrides color.range (required one way or the other)
+    {Colors.YELLOW}--output NAME.pdf{Colors.RESET}      Where to save it. {Colors.YELLOW}.svg{Colors.RESET} also works; nothing else does --
+                           a legend is one file, not a NAME/ of camera views
+    {Colors.YELLOW}--write-template PATH{Colors.RESET}  Write this mode's YAML config template and exit
+    {Colors.YELLOW}--verbose, -v{Colors.RESET}          Verbose output
+    {Colors.YELLOW}--help, -h{Colors.RESET}             Show this help message
+
+{Colors.BOLD}EXAMPLES:{Colors.RESET}
+
+  {Colors.BOLD}Write a template, fill in the scale that matches a figure, render it:{Colors.RESET}
+    flexflow field render colorbar --write-template bar.yml
+    flexflow field render colorbar --config bar.yml --output legend.pdf
+
+  {Colors.BOLD}Straight from the CLI, no config file:{Colors.RESET}
+    flexflow field render colorbar --color Pressure --color-range -200 200 \\
+            --output legend.pdf
+
+{Colors.BOLD}MATCHING A FIGURE:{Colors.RESET}
+    {Colors.DIM}The colorbar and the figure it belongs to are two separate renders, so
+    nothing keeps them in sync automatically -- give them the same preset,
+    range and levels by hand (or share one --config's color: block between a
+    slice/iso run and a colorbar run, overriding only what differs).{Colors.RESET}
+
+{Colors.BOLD}NOTES:{Colors.RESET}
+    {Colors.DIM}- Needs matplotlib only, not pyvista -- it renders even on a box with no
+      OSMesa/OpenGL, or where pyvista is not installed at all.
+    - image.transparent defaults to true here (unlike iso/slice): a legend
+      sitting in a report page rarely wants a white box drawn around it.{Colors.RESET}
 """)

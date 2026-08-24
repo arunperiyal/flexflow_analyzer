@@ -292,4 +292,34 @@ views:
   # - {name: saved, camera_file: mystate.pvsm}  # or a ParaView Save State frame
 """
 
-TEMPLATES = {"iso": ISO_TEMPLATE, "slice": SLICE_TEMPLATE}
+COLORBAR_TEMPLATE = """\
+# flexflow field render colorbar -- configuration
+#
+# A standalone legend, matching a slice/iso figure whose own scalar bar was
+# turned off (color.show_scalar_bar: false there). Written as vector PDF or
+# SVG -- picked by --output's extension -- so it drops into a LaTeX
+# \\includegraphics at whatever size the figure wants, with real text rather
+# than a raster crop off a screenshot.
+#
+# Needs no case, .vtu or camera: this section is the whole config. Unlike
+# iso/slice, range is NOT taken from the data -- there is no surface here to
+# take it from -- so it must be set, either here or with --color-range.
+
+color:
+  variable: U                    # only used as the label when title is null
+  title: null                    # the legend's label; default is the variable
+  preset: coolwarm                # must match the figure this legend is for
+  range: [0.0, 1.0]               # [min, max] -- required; null is an error here
+  levels: null                    # N discrete bands, as the figure was banded;
+                                  # null = a continuous ramp
+  log_scale: false
+  orientation: vertical           # or horizontal -- which way the bar runs
+  text_color: black
+
+image:
+  transparent: true               # false draws image.background behind it,
+                                  # for a report page that is not itself white
+  background: white
+"""
+
+TEMPLATES = {"iso": ISO_TEMPLATE, "slice": SLICE_TEMPLATE, "colorbar": COLORBAR_TEMPLATE}
