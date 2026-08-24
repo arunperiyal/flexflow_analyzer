@@ -7,6 +7,7 @@ that in one place is what lets `data table --var vel_y` and `data stats --var
 vel_y` mean the same selection rather than two similar ones.
 """
 
+import copy
 import glob
 import os
 import re
@@ -104,6 +105,65 @@ def resolve_case(case_arg, logger):
         logger.error(f"Case directory not found: {case_dir}")
         sys.exit(1)
     return case_dir
+
+
+def for_each_case(args, logger, run_one):
+    """Run `run_one(case_dir, args)` for args.case, or once per case in the
+    .cases registry when args.case is '*' -- as `field render *` and
+    `case out *` do.
+
+    `run_one` does the actual work for one case and reports its own failure by
+    raising SystemExit, exactly as it would for a single case. In single-case
+    mode that propagates unchanged; in wildcard mode it is caught so one bad
+    case is reported and stepped over rather than stopping the batch, and a
+    tally is printed at the end.
+
+    A --output path is namespaced per case (stats.csv -> stats_CS4SG1U1.csv)
+    so a batch does not have every case silently overwrite the last one's file
+    -- `data show` has no --output and is unaffected.
+    """
+    from ..case_iteration import is_wildcard_case, load_cases_from_directory
+
+    if not is_wildcard_case(getattr(args, "case", None)):
+        run_one(resolve_case(args.case, logger), args)
+        return
+
+    cases = load_cases_from_directory(Path.cwd())
+    if not cases:
+        logger.error(f"`*` reads every case in the .cases registry, and there "
+                     f"is none in {Path.cwd()}.\n"
+                     f"        Build one with `case add`, or name a case "
+                     f"directly.")
+        sys.exit(1)
+
+    output = getattr(args, "output", None)
+    done, skipped = [], []
+    for i, entry in enumerate(cases, 1):
+        name = entry.get("name", "?")
+        path = Path(entry.get("path", ""))
+        print(f"\n{'=' * 70}\n  [{i}/{len(cases)}] {name}\n{'=' * 70}", flush=True)
+        if not path.is_dir():
+            logger.warning(f"case directory not found: {path} -- skipping")
+            skipped.append((name, "no such directory"))
+            continue
+        case_args = copy.copy(args)
+        if output:
+            stem, ext = os.path.splitext(output)
+            case_args.output = f"{stem}_{name}{ext}"
+        try:
+            run_one(path, case_args)
+            done.append(name)
+        except SystemExit:
+            # The error is already on screen; the only decision left here is
+            # to carry on to the next case.
+            skipped.append((name, "see the error above"))
+
+    print(f"\n{'=' * 70}")
+    print(f"read {len(done)}/{len(cases)} case{'' if len(cases) == 1 else 's'}")
+    for name, why in skipped:
+        logger.warning(f"  skipped {name}: {why}")
+    if not done:
+        sys.exit(1)
 
 
 def find_files(case_dir, kind):
