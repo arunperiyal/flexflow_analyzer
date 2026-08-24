@@ -1,0 +1,219 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1340" height="702" viewBox="0 0 1340 702" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
+<defs>
+<filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#0f172a" flood-opacity="0.16"/></filter>
+<clipPath id="pk"><rect x="430" y="168" width="486" height="288"/></clipPath>
+</defs>
+<rect x="0" y="0" width="1340" height="702" rx="0" fill="#f1f5f9" stroke="none" stroke-width="1"/>
+<text x="40" y="40" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="21" font-weight="700" fill="#0f172a" text-anchor="start">FlexFlow Manager &#8212; web UI layout</text>
+<text x="40" y="60" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="13" font-weight="400" fill="#64748b" text-anchor="start">Figure 2 &#183; Plot &#8594; New: the probe set and the node picker</text>
+<rect x="40" y="78" width="900" height="520" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5" filter="url(#shadow)"/>
+<path d="M 40 86 a8,8 0 0 1 8,-8 h 884 a8,8 0 0 1 8,8 v 26 h -900 z" fill="#f8fafc"/>
+<line x1="40" y1="112" x2="940" y2="112" stroke="#e2e8f0"/>
+<text x="60" y="101" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="13.5" font-weight="700" fill="#0f172a" text-anchor="start">New Plot</text>
+<text x="920" y="101" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="15" font-weight="400" fill="#94a3b8" text-anchor="end">&#215;</text>
+<text x="64" y="148" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10" font-weight="700" fill="#94a3b8" text-anchor="start" letter-spacing="1.1">MODE</text>
+<circle cx="71" cy="166" r="6.5" fill="none" stroke="#cbd5e1" stroke-width="1.4"/>
+<text x="86" y="170" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12" font-weight="400" fill="#64748b" text-anchor="start">Single node</text>
+<circle cx="214" cy="166" r="6.5" fill="#ffffff" stroke="#2563eb" stroke-width="1.6"/>
+<circle cx="214" cy="166" r="3.2" fill="#2563eb"/>
+<text x="229" y="170" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12" font-weight="600" fill="#334155" text-anchor="start">Multi node</text>
+<text x="64" y="202" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10" font-weight="700" fill="#94a3b8" text-anchor="start" letter-spacing="1.1">CASE</text>
+<rect x="64" y="209" width="316" height="28" rx="4" fill="#ffffff" stroke="#cbd5e1" stroke-width="1"/>
+<text x="76" y="227.0" font-family="'DejaVu Sans Mono',Menlo,Consolas,monospace" font-size="11.5" font-weight="400" fill="#334155" text-anchor="start">CS4SG1U1</text>
+<path d="M 358 220.0 l 5 5.5 l 5 -5.5" fill="none" stroke="#94a3b8" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="64" y="258" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10" font-weight="700" fill="#94a3b8" text-anchor="start" letter-spacing="1.1">PROBE SET</text>
+<text x="380" y="258" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="9.5" font-weight="400" fill="#cbd5e1" text-anchor="end">2 maps in this case</text>
+<rect x="64" y="265" width="316" height="28" rx="4" fill="#ffffff" stroke="#cbd5e1" stroke-width="1"/>
+<text x="76" y="283.0" font-family="'DejaVu Sans Mono',Menlo,Consolas,monospace" font-size="11.5" font-weight="400" fill="#334155" text-anchor="start">othd.riser_probe.map</text>
+<path d="M 358 276.0 l 5 5.5 l 5 -5.5" fill="none" stroke="#94a3b8" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="64" y="302" font-family="'DejaVu Sans Mono',Menlo,Consolas,monospace" font-size="10" font-weight="400" fill="#94a3b8" text-anchor="start">probe: line &#183; closed: no &#183; 49 rows &#183; othId 0</text>
+<path d="M 65 313.5 l 3 3.5 l 6 -7" stroke="#16a34a" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="80" y="317" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10" font-weight="400" fill="#16a34a" text-anchor="start">othId 0 is present in the othd</text>
+<path d="M 65 328.5 l 3 3.5 l 6 -7" stroke="#16a34a" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="80" y="332" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10" font-weight="400" fill="#16a34a" text-anchor="start">body cyl (beam) &#183; axis +z &#183; length 50 m</text>
+<text x="64" y="356" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10" font-weight="700" fill="#94a3b8" text-anchor="start" letter-spacing="1.1">SELECTED</text>
+<text x="138" y="356" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10" font-weight="700" fill="#2563eb" text-anchor="start">3</text>
+<text x="380" y="356" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10" font-weight="400" fill="#94a3b8" text-anchor="end">clear</text>
+<rect x="64" y="364" width="316" height="74" rx="4" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1"/>
+<circle cx="78" cy="378" r="4" fill="#dc2626"/>
+<text x="90" y="382" font-family="'DejaVu Sans Mono',Menlo,Consolas,monospace" font-size="10.5" font-weight="700" fill="#334155" text-anchor="start">row 12</text>
+<text x="138" y="382" font-family="'DejaVu Sans Mono',Menlo,Consolas,monospace" font-size="10.5" font-weight="400" fill="#64748b" text-anchor="start">node 1043</text>
+<text x="214" y="382" font-family="'DejaVu Sans Mono',Menlo,Consolas,monospace" font-size="10" font-weight="400" fill="#94a3b8" text-anchor="start">(0.00, 0.00, 12.50)</text>
+<text x="366" y="382" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12" font-weight="400" fill="#cbd5e1" text-anchor="middle">&#215;</text>
+<circle cx="78" cy="399" r="4" fill="#f59e0b"/>
+<text x="90" y="403" font-family="'DejaVu Sans Mono',Menlo,Consolas,monospace" font-size="10.5" font-weight="700" fill="#334155" text-anchor="start">row 18</text>
+<text x="138" y="403" font-family="'DejaVu Sans Mono',Menlo,Consolas,monospace" font-size="10.5" font-weight="400" fill="#64748b" text-anchor="start">node 1049</text>
+<text x="214" y="403" font-family="'DejaVu Sans Mono',Menlo,Consolas,monospace" font-size="10" font-weight="400" fill="#94a3b8" text-anchor="start">(0.00, 0.00, 18.75)</text>
+<text x="366" y="403" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12" font-weight="400" fill="#cbd5e1" text-anchor="middle">&#215;</text>
+<circle cx="78" cy="420" r="4" fill="#7c3aed"/>
+<text x="90" y="424" font-family="'DejaVu Sans Mono',Menlo,Consolas,monospace" font-size="10.5" font-weight="700" fill="#334155" text-anchor="start">row 24</text>
+<text x="138" y="424" font-family="'DejaVu Sans Mono',Menlo,Consolas,monospace" font-size="10.5" font-weight="400" fill="#64748b" text-anchor="start">node 1055</text>
+<text x="214" y="424" font-family="'DejaVu Sans Mono',Menlo,Consolas,monospace" font-size="10" font-weight="400" fill="#94a3b8" text-anchor="start">(0.00, 0.00, 25.00)</text>
+<text x="366" y="424" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12" font-weight="400" fill="#cbd5e1" text-anchor="middle">&#215;</text>
+<text x="64" y="458" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10" font-weight="700" fill="#94a3b8" text-anchor="start" letter-spacing="1.1">GO TO COORDINATE</text>
+<rect x="64" y="465" width="214" height="28" rx="4" fill="#ffffff" stroke="#cbd5e1" stroke-width="1"/>
+<text x="76" y="483.0" font-family="'DejaVu Sans Mono',Menlo,Consolas,monospace" font-size="11.5" font-weight="400" fill="#334155" text-anchor="start">0, 0, 12.5</text>
+<rect x="288" y="465" width="92" height="28" rx="4" fill="#ffffff" stroke="#cbd5e1" stroke-width="1"/>
+<text x="334" y="484" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="600" fill="#475569" text-anchor="middle">Snap</text>
+<text x="64" y="502" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10" font-weight="400" fill="#94a3b8" text-anchor="start">snaps to the nearest row and shows the distance</text>
+<text x="430" y="126" font-family="'DejaVu Sans Mono',Menlo,Consolas,monospace" font-size="11" font-weight="700" fill="#334155" text-anchor="start">othd.riser_probe.map</text>
+<text x="758" y="130" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10" font-weight="700" fill="#94a3b8" text-anchor="end" letter-spacing="1.1">VIEW</text>
+<rect x="766" y="116" width="150" height="26" rx="4" fill="#ffffff" stroke="#cbd5e1" stroke-width="1"/>
+<text x="778" y="133.0" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="400" fill="#334155" text-anchor="start">s along +z</text>
+<path d="M 894 126.0 l 5 5.5 l 5 -5.5" fill="none" stroke="#94a3b8" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="430" y="156" font-family="'DejaVu Sans Mono',Menlo,Consolas,monospace" font-size="10" font-weight="400" fill="#94a3b8" text-anchor="start">probe: line &#183; body cyl &#183; s from the beam origin, along its axis</text>
+<rect x="430" y="168" width="486" height="288" rx="0" fill="#ffffff" stroke="#e2e8f0" stroke-width="1"/>
+<line x1="490.8" y1="168" x2="490.8" y2="456" stroke="#f8fafc"/>
+<line x1="551.5" y1="168" x2="551.5" y2="456" stroke="#f8fafc"/>
+<line x1="612.2" y1="168" x2="612.2" y2="456" stroke="#f8fafc"/>
+<line x1="673.0" y1="168" x2="673.0" y2="456" stroke="#f8fafc"/>
+<line x1="733.8" y1="168" x2="733.8" y2="456" stroke="#f8fafc"/>
+<line x1="794.5" y1="168" x2="794.5" y2="456" stroke="#f8fafc"/>
+<line x1="855.2" y1="168" x2="855.2" y2="456" stroke="#f8fafc"/>
+<line x1="430" y1="216.0" x2="916" y2="216.0" stroke="#f8fafc"/>
+<line x1="430" y1="264.0" x2="916" y2="264.0" stroke="#f8fafc"/>
+<line x1="430" y1="312.0" x2="916" y2="312.0" stroke="#f8fafc"/>
+<line x1="430" y1="360.0" x2="916" y2="360.0" stroke="#f8fafc"/>
+<line x1="430" y1="408.0" x2="916" y2="408.0" stroke="#f8fafc"/>
+<polyline points="526.0,432.0 529.3,427.0 534.7,422.0 541.2,417.0 548.6,412.0 556.6,407.0 565.1,402.0 573.9,397.0 582.8,392.0 591.9,387.0 600.9,382.0 609.7,377.0 618.3,372.0 626.6,367.0 634.5,362.0 641.8,357.0 648.6,352.0 654.8,347.0 660.3,342.0 665.0,337.0 668.9,332.0 672.0,327.0 674.2,322.0 675.6,317.0 676.0,312.0 675.6,307.0 674.2,302.0 672.0,297.0 668.9,292.0 665.0,287.0 660.3,282.0 654.8,277.0 648.6,272.0 641.8,267.0 634.5,262.0 626.6,257.0 618.3,252.0 609.7,247.0 600.9,242.0 591.9,237.0 582.8,232.0 573.9,227.0 565.1,222.0 556.6,217.0 548.6,212.0 541.2,207.0 534.7,202.0 529.3,197.0 526.0,192.0" fill="none" stroke="#cbd5e1" stroke-width="1.4"/>
+<circle cx="526.0" cy="432.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<circle cx="529.3" cy="427.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<circle cx="534.7" cy="422.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<circle cx="541.2" cy="417.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<circle cx="548.6" cy="412.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<circle cx="556.6" cy="407.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<circle cx="565.1" cy="402.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<circle cx="573.9" cy="397.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<circle cx="582.8" cy="392.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<circle cx="591.9" cy="387.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<circle cx="600.9" cy="382.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<circle cx="609.7" cy="377.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<circle cx="618.3" cy="372.0" r="6" fill="#dc2626" stroke="#ffffff" stroke-width="1.6"/>
+<circle cx="626.6" cy="367.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<circle cx="634.5" cy="362.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<circle cx="641.8" cy="357.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<circle cx="648.6" cy="352.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<circle cx="654.8" cy="347.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<circle cx="660.3" cy="342.0" r="6" fill="#f59e0b" stroke="#ffffff" stroke-width="1.6"/>
+<circle cx="665.0" cy="337.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<circle cx="668.9" cy="332.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<circle cx="672.0" cy="327.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<circle cx="674.2" cy="322.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<circle cx="675.6" cy="317.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<circle cx="676.0" cy="312.0" r="6" fill="#7c3aed" stroke="#ffffff" stroke-width="1.6"/>
+<circle cx="675.6" cy="307.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<circle cx="674.2" cy="302.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<circle cx="672.0" cy="297.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<circle cx="668.9" cy="292.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<circle cx="665.0" cy="287.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<circle cx="660.3" cy="282.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<circle cx="654.8" cy="277.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<circle cx="648.6" cy="272.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<circle cx="641.8" cy="267.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<circle cx="634.5" cy="262.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<circle cx="626.6" cy="257.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<circle cx="618.3" cy="252.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<circle cx="609.7" cy="247.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<circle cx="600.9" cy="242.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<circle cx="591.9" cy="237.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<circle cx="582.8" cy="232.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<circle cx="573.9" cy="227.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<circle cx="565.1" cy="222.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<circle cx="556.6" cy="217.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<circle cx="548.6" cy="212.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<circle cx="541.2" cy="207.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<circle cx="534.7" cy="202.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<circle cx="529.3" cy="197.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<circle cx="526.0" cy="192.0" r="3.1" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<rect x="598.3358310008687" y="294.0" width="97.66416899913133" height="96.0" rx="3" fill="#2563eb" stroke="#2563eb" stroke-width="1.2" fill-opacity="0.07" stroke-dasharray="5 3"/>
+<rect x="674.2618859515687" y="312.0" width="158" height="46" rx="4" fill="#0f172a" stroke="none" stroke-width="1" opacity="0.92"/>
+<text x="684.2618859515687" y="329.0" font-family="'DejaVu Sans Mono',Menlo,Consolas,monospace" font-size="10.5" font-weight="400" fill="#e2e8f0" text-anchor="start">row 18 &#183; node 1049</text>
+<text x="684.2618859515687" y="345.0" font-family="'DejaVu Sans Mono',Menlo,Consolas,monospace" font-size="10.5" font-weight="400" fill="#fbbf24" text-anchor="start">z = 18.75 m</text>
+<text x="430.0" y="474" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10.5" font-weight="400" fill="#94a3b8" text-anchor="middle">-10</text>
+<text x="551.5" y="474" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10.5" font-weight="400" fill="#94a3b8" text-anchor="middle">0</text>
+<text x="673.0" y="474" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10.5" font-weight="400" fill="#94a3b8" text-anchor="middle">10</text>
+<text x="794.5" y="474" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10.5" font-weight="400" fill="#94a3b8" text-anchor="middle">20</text>
+<text x="916.0" y="474" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10.5" font-weight="400" fill="#94a3b8" text-anchor="middle">30</text>
+<text x="673.0" y="492" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="11" font-weight="600" fill="#64748b" text-anchor="middle">x  [m]</text>
+<text x="916" y="492" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10.5" font-weight="400" fill="#94a3b8" text-anchor="end">click &#183; box &#183; lasso</text>
+<text x="420" y="172.0" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10.5" font-weight="400" fill="#94a3b8" text-anchor="end">50</text>
+<text x="420" y="244.0" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10.5" font-weight="400" fill="#94a3b8" text-anchor="end">37.5</text>
+<text x="420" y="316.0" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10.5" font-weight="400" fill="#94a3b8" text-anchor="end">25</text>
+<text x="420" y="388.0" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10.5" font-weight="400" fill="#94a3b8" text-anchor="end">12.5</text>
+<text x="420" y="460.0" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10.5" font-weight="400" fill="#94a3b8" text-anchor="end">0</text>
+<text x="398" y="312.0" font-size="11" font-weight="600" fill="#64748b" text-anchor="middle" transform="rotate(-90 398 312.0)">z  [m]</text>
+<line x1="40" y1="524" x2="940" y2="524" stroke="#e2e8f0"/>
+<rect x="40" y="524" width="900" height="74" rx="0" fill="#f8fafc" stroke="none" stroke-width="1"/>
+<path d="M 40 590 v -66 h 900 v 66 a8,8 0 0 1 -8,8 h -884 a8,8 0 0 1 -8,-8 z" fill="#f8fafc"/>
+<line x1="40" y1="524" x2="940" y2="524" stroke="#e2e8f0"/>
+<text x="64" y="546" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10" font-weight="700" fill="#94a3b8" text-anchor="start" letter-spacing="1.1">SHOW</text>
+<rect x="64" y="556" width="12" height="12" rx="3" fill="#ffffff" stroke="#cbd5e1" stroke-width="1"/>
+<text x="82" y="566" font-family="'DejaVu Sans Mono',Menlo,Consolas,monospace" font-size="10.5" font-weight="400" fill="#94a3b8" text-anchor="start">aleDisp_x</text>
+<rect x="172" y="556" width="12" height="12" rx="3" fill="#dc2626" stroke="none" stroke-width="1"/>
+<path d="M 175 562.6 l 2.6 2.8 l 5.2 -6" stroke="#ffffff" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="190" y="566" font-family="'DejaVu Sans Mono',Menlo,Consolas,monospace" font-size="10.5" font-weight="400" fill="#334155" text-anchor="start">aleDisp_y</text>
+<rect x="280" y="556" width="12" height="12" rx="3" fill="#ffffff" stroke="#cbd5e1" stroke-width="1"/>
+<text x="298" y="566" font-family="'DejaVu Sans Mono',Menlo,Consolas,monospace" font-size="10.5" font-weight="400" fill="#94a3b8" text-anchor="start">aleDisp_z</text>
+<rect x="388" y="556" width="12" height="12" rx="3" fill="#ffffff" stroke="#cbd5e1" stroke-width="1"/>
+<text x="406" y="566" font-family="'DejaVu Sans Mono',Menlo,Consolas,monospace" font-size="10.5" font-weight="400" fill="#94a3b8" text-anchor="start">vel_y</text>
+<text x="64" y="586" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10" font-weight="400" fill="#94a3b8" text-anchor="start">discovered from the file by series.scan(), not hard-coded</text>
+<text x="510" y="546" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10" font-weight="700" fill="#94a3b8" text-anchor="start" letter-spacing="1.1">PLOT INTO</text>
+<rect x="510" y="554" width="148" height="26" rx="4" fill="#ffffff" stroke="#cbd5e1" stroke-width="1"/>
+<text x="522" y="571.0" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="400" fill="#334155" text-anchor="start">Panel 1</text>
+<path d="M 636 564.0 l 5 5.5 l 5 -5.5" fill="none" stroke="#94a3b8" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="754" y="552" width="76" height="30" rx="5" fill="#ffffff" stroke="#cbd5e1" stroke-width="1"/>
+<text x="792" y="572" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="600" fill="#475569" text-anchor="middle">Cancel</text>
+<rect x="840" y="552" width="78" height="30" rx="5" fill="#2563eb" stroke="none" stroke-width="1"/>
+<text x="879" y="572" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="700" fill="#ffffff" text-anchor="middle">Create</text>
+<circle cx="997" cy="96" r="11" fill="#2563eb" stroke="#ffffff" stroke-width="2"/>
+<text x="997" y="100.5" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#ffffff" text-anchor="middle">1</text>
+<text x="1016" y="100" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="13.5" font-weight="700" fill="#0f172a" text-anchor="start">Probe set = a .map file</text>
+<text x="1016" y="118" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12" font-weight="400" fill="#64748b" text-anchor="start">The dropdown lists othd.*.map in the case.</text>
+<text x="1016" y="133" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12" font-weight="400" fill="#64748b" text-anchor="start">Its header gives the probe type, whether the</text>
+<text x="1016" y="148" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12" font-weight="400" fill="#64748b" text-anchor="start">curve closes, the row count and the othId.</text>
+<text x="1016" y="163" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12" font-weight="400" fill="#64748b" text-anchor="start">The othId is predicted from the .def, so it is</text>
+<text x="1016" y="178" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12" font-weight="400" fill="#64748b" text-anchor="start">checked against the othd&#8217;s real groups.</text>
+<circle cx="997" cy="213" r="11" fill="#2563eb" stroke="#ffffff" stroke-width="2"/>
+<text x="997" y="217.5" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#ffffff" text-anchor="middle">2</text>
+<text x="1016" y="217" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="13.5" font-weight="700" fill="#0f172a" text-anchor="start">The map decides the layout</text>
+<text x="1016" y="235" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12" font-weight="400" fill="#64748b" text-anchor="start">line &#8594; along the axis    helix &#8594; unrolled</text>
+<text x="1016" y="250" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12" font-weight="400" fill="#64748b" text-anchor="start">surface &#8594; the two varying coordinates</text>
+<text x="1016" y="265" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12" font-weight="400" fill="#64748b" text-anchor="start">cloud &#8594; same, with no joining line</text>
+<text x="1016" y="280" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12" font-weight="400" fill="#64748b" text-anchor="start">Coordinates alone cannot tell these apart,</text>
+<text x="1016" y="295" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12" font-weight="400" fill="#64748b" text-anchor="start">which is why the map declares the type.</text>
+<circle cx="997" cy="330" r="11" fill="#2563eb" stroke="#ffffff" stroke-width="2"/>
+<text x="997" y="334.5" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#ffffff" text-anchor="middle">3</text>
+<text x="1016" y="334" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="13.5" font-weight="700" fill="#0f172a" text-anchor="start">domain.yml refines it</text>
+<text x="1016" y="352" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12" font-weight="400" fill="#64748b" text-anchor="start">bodies[].outputs[].block is the same name</text>
+<text x="1016" y="367" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12" font-weight="400" fill="#64748b" text-anchor="start">the map is built on, so a probe set resolves</text>
+<text x="1016" y="382" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12" font-weight="400" fill="#64748b" text-anchor="start">to its body: axis, origin, length, radius.</text>
+<text x="1016" y="397" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12" font-weight="400" fill="#64748b" text-anchor="start">That turns a generic projection into arc</text>
+<text x="1016" y="412" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12" font-weight="400" fill="#64748b" text-anchor="start">length along the beam. Without it the</text>
+<text x="1016" y="427" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12" font-weight="400" fill="#64748b" text-anchor="start">picker still works, on x/y/z axes.</text>
+<circle cx="997" cy="462" r="11" fill="#2563eb" stroke="#ffffff" stroke-width="2"/>
+<text x="997" y="466.5" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#ffffff" text-anchor="middle">4</text>
+<text x="1016" y="466" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="13.5" font-weight="700" fill="#0f172a" text-anchor="start">row is not node</text>
+<text x="1016" y="484" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12" font-weight="400" fill="#64748b" text-anchor="start">The othd stores records positionally, so the</text>
+<text x="1016" y="499" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12" font-weight="400" fill="#64748b" text-anchor="start">reader indexes by row. The map carries the</text>
+<text x="1016" y="514" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12" font-weight="400" fill="#64748b" text-anchor="start">solver node id and the undeformed x,y,z.</text>
+<text x="1016" y="529" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12" font-weight="400" fill="#64748b" text-anchor="start">Both are shown so neither is mistaken for</text>
+<text x="1016" y="544" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12" font-weight="400" fill="#64748b" text-anchor="start">the other.</text>
+<circle cx="997" cy="579" r="11" fill="#2563eb" stroke="#ffffff" stroke-width="2"/>
+<text x="997" y="583.5" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#ffffff" text-anchor="middle">5</text>
+<text x="1016" y="583" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="13.5" font-weight="700" fill="#0f172a" text-anchor="start">Selecting</text>
+<text x="1016" y="601" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12" font-weight="400" fill="#64748b" text-anchor="start">Click a marker, or drag a box or lasso for a</text>
+<text x="1016" y="616" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12" font-weight="400" fill="#64748b" text-anchor="start">span of rows. Typing a coordinate snaps to</text>
+<text x="1016" y="631" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12" font-weight="400" fill="#64748b" text-anchor="start">the nearest row and reports the distance,</text>
+<text x="1016" y="646" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12" font-weight="400" fill="#64748b" text-anchor="start">so a bad guess is visible rather than silent.</text>
+<circle cx="374" cy="279" r="11" fill="#2563eb" stroke="#ffffff" stroke-width="2"/>
+<text x="374" y="283.5" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#ffffff" text-anchor="middle">1</text>
+<circle cx="898" cy="186" r="11" fill="#2563eb" stroke="#ffffff" stroke-width="2"/>
+<text x="898" y="190.5" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#ffffff" text-anchor="middle">2</text>
+<circle cx="374" cy="332" r="11" fill="#0ea5e9" stroke="#ffffff" stroke-width="2"/>
+<text x="374" y="336.5" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#ffffff" text-anchor="middle">3</text>
+<circle cx="374" cy="392" r="11" fill="#2563eb" stroke="#ffffff" stroke-width="2"/>
+<text x="374" y="396.5" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#ffffff" text-anchor="middle">4</text>
+<circle cx="448" cy="438" r="11" fill="#2563eb" stroke="#ffffff" stroke-width="2"/>
+<text x="448" y="442.5" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#ffffff" text-anchor="middle">5</text>
+<text x="40" y="680" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="400" fill="#94a3b8" text-anchor="start">Undeformed coordinates: the map states them, and the othd displacement is added for the moved position.</text>
+</svg>
