@@ -501,6 +501,7 @@ def _load_body(cfg, log=print):
     if not vtu:
         return None
     body = pv.read(vtu)
+    body = _apply_domain_clip(body, cfg["domain"])
     log("body: %d points, %d cells" % (body.n_points, body.n_cells))
     return body
 

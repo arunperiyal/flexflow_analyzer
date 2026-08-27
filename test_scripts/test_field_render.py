@@ -402,6 +402,22 @@ class TestBody:
         empty.n_points = 0
         assert render._union_bounds(surf, empty) == (0.0, 1.0, 0.0, 2.0, 0.0, 3.0)
 
+    def test_load_body_is_cropped_to_the_domain(self, tmp_path):
+        """A body sticking out past the domain crop must be cut with it, or it
+        pokes out of a picture whose isosurface was cropped to that box."""
+        import pyvista as pv
+
+        box = pv.Box(bounds=(-5.0, 5.0, -1.0, 1.0, -1.0, 1.0))
+        vtu = tmp_path / "body.vtu"
+        box.cast_to_unstructured_grid().save(vtu)
+
+        cfg = render.default_config("iso")
+        cfg["body"]["vtu"] = str(vtu)
+        cfg["domain"]["xmin"] = 0.0
+
+        body = render._load_body(cfg, log=lambda *a: None)
+        assert body.bounds[0] >= -1e-9
+
 
 class TestColours:
     """0-1 fractions, always floats: pyvista reads an int triple as 0-255."""
