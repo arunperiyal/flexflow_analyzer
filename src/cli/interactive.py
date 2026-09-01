@@ -477,7 +477,7 @@ class FlexFlowCompleter(Completer):
         },
         ('run', 'sq'):       {
             '--all':    'Show all users jobs',
-            '--watch':  'Live queue monitoring (refresh every 10s)',
+            '--watch':  'Live queue monitoring (refresh every N seconds, default 10)',
             '--by-dir': 'Group jobs by parent directory',
             '--sort':   'Sort by column (jobid,name,state,time,nodes,partition,cpus,memory,submitted,reason,dependency)',
             '--out':    'With job_id, print tail of StdOut file',

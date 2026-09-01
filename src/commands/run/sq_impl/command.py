@@ -41,7 +41,10 @@ def execute_sq(args):
         print("Error: --out requires <job_id> (usage: run sq <job_id> --out)")
         return
 
-    if hasattr(args, 'watch') and args.watch:
+    if getattr(args, 'watch', None) is not None:
+        if args.watch <= 0:
+            print("Error: --watch interval must be a positive number of seconds")
+            return
         watch_queue(args)
     else:
         show_queue(args)
@@ -464,9 +467,10 @@ def watch_queue(args):
     show_all = getattr(args, 'all', False)
     group_by_dir = getattr(args, 'by_dir', False)
     sort_by = getattr(args, 'sort', None)
+    interval = args.watch
 
     console.print()
-    console.print('[bold cyan]Watch Mode[/bold cyan] - Press Ctrl+C to exit')
+    console.print(f'[bold cyan]Watch Mode[/bold cyan] - refreshing every {interval:g}s - Press Ctrl+C to exit')
     console.print()
 
     try:
@@ -475,17 +479,17 @@ def watch_queue(args):
             jobs = sort_jobs(jobs, sort_by)
             if not jobs:
                 return create_queue_table(jobs)
-            
+
             if group_by_dir:
                 jobs = enrich_jobs_with_workdir(jobs)
                 return create_grouped_queue_renderable(jobs)
             else:
                 return create_queue_table(jobs)
 
-        with Live(console=console, refresh_per_second=0.1) as live:
+        with Live(console=console, refresh_per_second=1 / interval) as live:
             while True:
                 live.update(get_live_table())
-                time.sleep(10)
+                time.sleep(interval)
     except KeyboardInterrupt:
         console.print()
         console.print('[yellow]Watch mode stopped[/yellow]')
@@ -655,7 +659,7 @@ def show_sq_help():
 {Colors.BOLD}{Colors.CYAN}run sq — SLURM Job Queue{Colors.RESET}
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    run sq [<job_id>] [--all] [--by-dir] [--watch] [--sort <column>] [--out] [-n <lines>]
+    run sq [<job_id>] [--all] [--by-dir] [--watch [<seconds>]] [--sort <column>] [--out] [-n <lines>]
 
 {Colors.BOLD}ARGUMENTS:{Colors.RESET}
     {Colors.YELLOW}<job_id>{Colors.RESET}    Show detailed info for a single job (scontrol + sstat)
@@ -663,7 +667,7 @@ def show_sq_help():
 {Colors.BOLD}OPTIONS:{Colors.RESET}
     {Colors.YELLOW}--all{Colors.RESET}       Show all users' jobs (default: yours only)
     {Colors.YELLOW}--by-dir{Colors.RESET}    Group jobs by parent directory (removes case name from path)
-    {Colors.YELLOW}--watch{Colors.RESET}     Refresh every 10 seconds (Ctrl+C to stop)
+    {Colors.YELLOW}--watch{Colors.RESET} [<seconds>]  Refresh every <seconds> (default: 10; Ctrl+C to stop)
     {Colors.YELLOW}--sort{Colors.RESET}      Sort by queue column ({sort_columns})
     {Colors.YELLOW}--out{Colors.RESET}       With <job_id>, show tail of StdOut file
     {Colors.YELLOW}-n, --lines{Colors.RESET} Number of StdOut lines with --out (default: 20)

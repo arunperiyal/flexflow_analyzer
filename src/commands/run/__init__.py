@@ -107,7 +107,8 @@ class RunCommand(BaseCommand):
         sq_parser.add_argument('job_id', nargs='?', help='Show detail for a specific job ID')
         sq_parser.add_argument('--all', action='store_true', help='Show all users jobs')
         sq_parser.add_argument('--by-dir', action='store_true', help='Group jobs by their work directory')
-        sq_parser.add_argument('--watch', action='store_true', help='Watch mode (refresh every 10s)')
+        sq_parser.add_argument('--watch', nargs='?', const=10, type=float, metavar='SECONDS',
+                               help='Watch mode, refreshing every SECONDS (default: 10)')
         sq_parser.add_argument(
             '--sort',
             type=str,
