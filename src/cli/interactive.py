@@ -11,6 +11,7 @@ import shlex
 import subprocess
 import io
 import signal
+import threading
 import time
 from datetime import datetime
 from contextlib import contextmanager
@@ -1134,6 +1135,11 @@ class InteractiveShell:
         self._pipe_mode: bool = False  # Flag indicating if currently in pipe execution mode
         self._captured_output: Optional[io.StringIO] = None  # Buffer for captured output
 
+        # web start/stop: the werkzeug server and its thread, when running
+        self._web_server = None
+        self._web_server_thread = None
+        self._web_server_url: Optional[str] = None
+
         # Store app instance for command execution
         if app is None:
             from src.cli.app import FlexFlowApp
@@ -1553,6 +1559,12 @@ class InteractiveShell:
                     self.console.print("[dim]Use: unuse [case|problem|rundir|node|time|t1|t2|remote|var|zone|freq|all][/dim]")
             return True
 
+        # Start/stop the web UI in this process. Not an argparse command:
+        # FlexFlowApp.run() ignores argv and always starts this shell, so
+        # there is nowhere for `web` to live except here.
+        if cmd == 'web':
+            return self._handle_web_command(parts[1:])
+
         # Show the working directory. The contexts moved to `use list`, which
         # is where someone setting them is already looking.
         if cmd == 'pwd':
@@ -1765,6 +1777,79 @@ class InteractiveShell:
 
         return False
 
+    def _handle_web_command(self, args: List[str]) -> bool:
+        """`web start [--root PATH] [--port N]` / `web stop`: the web UI, in this process."""
+        if not args or args[0] in ('--help', '-h', 'help'):
+            self.console.print("[yellow]Usage:[/yellow] web start [--root PATH] [--port N]  |  web stop")
+            self.console.print("[dim]Starts the Flask web UI on a background thread inside this shell.[/dim]")
+            return True
+
+        sub = args[0].lower()
+
+        if sub == 'start':
+            if self._web_server is not None:
+                self.console.print(f"[yellow]Web UI already running at {self._web_server_url}[/yellow]")
+                return True
+
+            root = str(self._current_dir)
+            port = 8080
+            rest = args[1:]
+            i = 0
+            while i < len(rest):
+                if rest[i] == '--root' and i + 1 < len(rest):
+                    root, i = rest[i + 1], i + 2
+                elif rest[i] == '--port' and i + 1 < len(rest):
+                    try:
+                        port = int(rest[i + 1])
+                    except ValueError:
+                        self.console.print(f"[red]Invalid --port: {rest[i + 1]}[/red]")
+                        return True
+                    i += 2
+                else:
+                    self.console.print(f"[yellow]Unknown option:[/yellow] {rest[i]}")
+                    return True
+
+            workspace_root = Path(root).expanduser().resolve()
+            if not workspace_root.is_dir():
+                self.console.print(f"[red]Not a directory: {workspace_root}[/red]")
+                return True
+
+            try:
+                from werkzeug.serving import make_server
+                from src.web.server import create_app
+                web_app = create_app(workspace_root)
+                server = make_server('127.0.0.1', port, web_app)
+            except OSError as exc:
+                self.console.print(f"[red]Could not start the web UI:[/red] {exc}")
+                return True
+
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            self._web_server = server
+            self._web_server_thread = thread
+            self._web_server_url = f"http://127.0.0.1:{port}"
+            self.console.print(f"[green]Web UI running at {self._web_server_url}[/green]  "
+                               f"(workspace: [cyan]{workspace_root}[/cyan])")
+            self.console.print("[dim]No authentication -- reach it over `ssh -L` from elsewhere. "
+                               "`web stop` shuts it down.[/dim]")
+            return True
+
+        if sub == 'stop':
+            if self._web_server is None:
+                self.console.print("[yellow]Web UI is not running.[/yellow]")
+                return True
+            self._web_server.shutdown()
+            self._web_server_thread.join(timeout=5)
+            self._web_server = None
+            self._web_server_thread = None
+            self._web_server_url = None
+            self.console.print("[green]Web UI stopped.[/green]")
+            return True
+
+        self.console.print(f"[yellow]Unknown web subcommand:[/yellow] {sub}")
+        self.console.print("[dim]Usage: web start [--root PATH] [--port N]  |  web stop[/dim]")
+        return True
+
     def _show_quota(self) -> None:
         """Show disk quota for /home and /scratch using lfs quota."""
         import subprocess
@@ -1900,6 +1985,8 @@ class InteractiveShell:
             ("set timeout 20", "Set auto-exit timeout in minutes (default: 15)"),
             ("pwd", "Show current directory and contexts"),
             ("quota", "Show disk quota for /home and /scratch"),
+            ("web start [--root PATH] [--port N]", "Start the web UI on a background thread"),
+            ("web stop", "Stop the web UI"),
         ]
 
         for cmd, desc in shell_commands:

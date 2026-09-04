@@ -17,6 +17,7 @@ pyvista>=0.43.0           # Isosurface rendering (field iso); pulls in vtk
 #                                   # of it, so it stays out of the default install
 prompt_toolkit>=3.0.43    # Interactive shell with autocompletion and history
 paramiko>=3.0.0           # SSH/SFTP for remote file transfer
+Flask>=3.1.0              # Web UI (src/web) -- python main.py --ui
 
 # NOTE: the binary PLT reader (src/plt/fxplt.py) is pure numpy -- no Tecplot
 # license / pytecplot needed, and it works on Python 3.13+.

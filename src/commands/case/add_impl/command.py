@@ -29,11 +29,7 @@ def execute_add(args):
     console.print(f"[bold cyan]Scanning:[/bold cyan] {scan_dir}")
     console.print()
 
-    # Collect immediate children that contain simflow.config
-    found = []
-    for child in sorted(scan_dir.iterdir()):
-        if child.is_dir() and (child / 'simflow.config').exists():
-            found.append(child)
+    found = scan_for_cases(scan_dir)
 
     if not found:
         console.print("[yellow]No case directories found (no simflow.config in immediate children).[/yellow]")
@@ -82,17 +78,30 @@ def execute_add(args):
         console.print()
         return
 
-    # Write .cases (full refresh)
-    cases_path = scan_dir / _CASES_FILE
-    entries = [{'name': p.name, 'path': str(p)} for p in selected]
-    with open(cases_path, 'w') as f:
-        json.dump(entries, f, indent=2)
+    cases_path = write_cases_file(scan_dir, selected)
 
     console.print()
     console.print(f"[green]✓[/green] Wrote [bold]{len(selected)}[/bold] case(s) to [cyan]{cases_path}[/cyan]")
     if excluded:
         console.print(f"[dim]  Excluded {len(excluded)} case(s).[/dim]")
     console.print()
+
+
+def scan_for_cases(directory: Path) -> list:
+    """Return the immediate children of *directory* that contain simflow.config."""
+    return [
+        child for child in sorted(directory.iterdir())
+        if child.is_dir() and (child / 'simflow.config').exists()
+    ]
+
+
+def write_cases_file(directory: Path, cases: list) -> Path:
+    """Write *cases* (a list of Paths) to directory/.cases, replacing it. Returns the path."""
+    cases_path = directory / _CASES_FILE
+    entries = [{'name': p.name, 'path': str(p)} for p in cases]
+    with open(cases_path, 'w') as f:
+        json.dump(entries, f, indent=2)
+    return cases_path
 
 
 def load_cases_file(directory: Path) -> list:
