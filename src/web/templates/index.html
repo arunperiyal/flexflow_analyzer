@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>FlexFlow</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+<body>
+<div id="app" data-root="{{ root }}">
+
+  <header id="menubar">
+    <span class="brand">FlexFlow</span>
+    <div class="menu">
+      <div class="menu-item" data-menu="case">Case
+        <div class="menu-dropdown" id="menu-case">
+          <div class="menu-option" id="case-add">Add&hellip;</div>
+          <div class="menu-option" id="case-delete">Delete&hellip;</div>
+        </div>
+      </div>
+      <div class="menu-item" data-menu="plot">Plot
+        <div class="menu-dropdown" id="menu-plot">
+          <div class="menu-option" id="plot-new">New&hellip;</div>
+          <div class="menu-option" id="plot-layout">Layout&hellip;</div>
+          <div class="menu-option" id="plot-clear">Clear panel&hellip;</div>
+          <div class="menu-option" id="plot-export">Export PNG (300 dpi)</div>
+        </div>
+      </div>
+      <div class="menu-item disabled" title="Later phase">Data</div>
+      <div class="menu-item disabled" title="Later phase">Field</div>
+      <div class="menu-item disabled" title="Later phase">View</div>
+      <div class="menu-item disabled" title="Later phase">Help</div>
+    </div>
+    <span class="root-path">{{ root }}</span>
+  </header>
+
+  <div id="body">
+    <aside id="sidebar">
+      <div class="sidebar-section">
+        <div class="sidebar-heading">CASES</div>
+        <ul id="case-list"><li class="empty">No cases yet — Case &rarr; Add&hellip;</li></ul>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-heading">PANELS</div>
+        <div id="panel-tree"><div class="empty">Plot &rarr; New arrives here</div></div>
+      </div>
+    </aside>
+
+    <main id="plotarea">
+      <div class="plot-placeholder">
+        Add a case, then Plot &rarr; New will build a panelled plot here.
+      </div>
+    </main>
+  </div>
+
+  <footer id="command-window">
+    <div class="command-header">
+      <span>COMMAND WINDOW</span>
+      <span class="command-header-note">read-only &middot; auto-scroll</span>
+    </div>
+    <div id="command-log"></div>
+  </footer>
+
+  <div id="dialog-backdrop" hidden>
+    <div id="dialog"></div>
+  </div>
+
+</div>
+<script src="{{ url_for('static', filename='vendor/plotly-basic.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/log.js') }}"></script>
+<script src="{{ url_for('static', filename='js/menu.js') }}"></script>
+<script src="{{ url_for('static', filename='js/picker.js') }}"></script>
+<script src="{{ url_for('static', filename='js/panels.js') }}"></script>
+<script src="{{ url_for('static', filename='js/plot.js') }}"></script>
+<script src="{{ url_for('static', filename='js/layout.js') }}"></script>
+<script src="{{ url_for('static', filename='js/newplot.js') }}"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
