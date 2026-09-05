@@ -96,3 +96,40 @@ def test_export_mixed_time_and_spatial_panels(client):
     res = client.post('/api/export', json={'panels': panels})
     assert res.status_code == 200
     assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
+
+
+# -- style sidebar settings, carried through to the matplotlib render -------
+
+def test_export_honors_global_style(client):
+    style = {
+        'fontFamily': 'DejaVu Sans', 'labelFontSize': 14, 'legendFontSize': 8,
+        'title': 'Riser response', 'showLegend': True, 'showGrid': False,
+    }
+    res = client.post('/api/export', json={'panels': _panels(), 'style': style})
+    assert res.status_code == 200
+    assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
+
+
+def test_export_honors_panel_xlim_ylim_and_ticks(client):
+    panels = _panels()
+    panels[0]['style'] = {'xlim': [0, 50], 'ylim': [-1, 1], 'xtick': 10, 'ytick': 0.5}
+    res = client.post('/api/export', json={'panels': panels})
+    assert res.status_code == 200
+    assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
+
+
+def test_export_ignores_a_negative_tick_step_instead_of_crashing(client):
+    # MultipleLocator raises ValueError for a non-positive base; a `truthy`
+    # check alone lets a negative value through (only 0 is falsy in Python).
+    panels = _panels()
+    panels[0]['style'] = {'xtick': -5, 'ytick': -1}
+    res = client.post('/api/export', json={'panels': panels})
+    assert res.status_code == 200
+    assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
+
+
+def test_export_with_no_style_key_at_all_still_works(client):
+    # The pre-style-sidebar request shape -- no `style` field in the body.
+    res = client.post('/api/export', json={'panels': _panels()})
+    assert res.status_code == 200
+    assert res.data[:8] == b'\x89PNG\r\n\x1a\n'

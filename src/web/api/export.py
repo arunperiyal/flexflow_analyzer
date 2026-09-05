@@ -15,6 +15,7 @@ import io
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from matplotlib.ticker import MultipleLocator
 from flask import Blueprint, current_app, jsonify, request, send_file
 
 from ..services import registry
@@ -30,45 +31,67 @@ def export_png():
     data = request.get_json(silent=True) or {}
     panels = data.get('panels') or []
     link_x = bool(data.get('linkX'))
+    style = data.get('style') or {}
 
     if not panels:
         return jsonify({'error': 'no panels to export'}), 400
 
-    fig, axes = plt.subplots(len(panels), 1, figsize=(9, 2.6 * len(panels)),
-                             sharex=link_x, squeeze=False)
+    # rc_context scopes the font override to this figure, rather than
+    # mutating matplotlib's global rcParams for every concurrent request.
+    with plt.rc_context({'font.family': style['fontFamily']} if style.get('fontFamily') else {}):
+        fig, axes = plt.subplots(len(panels), 1, figsize=(9, 2.6 * len(panels)),
+                                 sharex=link_x, squeeze=False)
 
-    for ax, panel in zip(axes[:, 0], panels):
-        if panel.get('kind') == 'spatial':
-            # Not yet supported: a spatial trace has no single `row`
-            # (get_node_displacements(row) is the time-domain shape this
-            # export follows), so it needs its own /spatial-backed reduction
-            # here rather than being force-fit into the same code path.
-            ax.text(0.5, 0.5, 'spatial panels are not yet exported',
-                   ha='center', va='center', fontsize=8, color='#94a3b8', transform=ax.transAxes)
-            ax.set_title(panel.get('title') or '', fontsize=9)
-            ax.tick_params(labelsize=7)
-            continue
+        for ax, panel in zip(axes[:, 0], panels):
+            pstyle = panel.get('style') or {}
 
-        plotted = 0
-        for trace in panel.get('traces') or []:
-            values, times = _trace_values(root, trace)
-            if values is None:
+            if panel.get('kind') == 'spatial':
+                # Not yet supported: a spatial trace has no single `row`
+                # (get_node_displacements(row) is the time-domain shape this
+                # export follows), so it needs its own /spatial-backed
+                # reduction here rather than being force-fit into the same
+                # code path.
+                ax.text(0.5, 0.5, 'spatial panels are not yet exported',
+                       ha='center', va='center', fontsize=8, color='#94a3b8', transform=ax.transAxes)
+                ax.set_title(panel.get('title') or '', fontsize=9)
+                ax.tick_params(labelsize=7)
                 continue
-            ax.plot(times, values, linewidth=1.0, color=trace.get('color'),
-                    label=f"{trace.get('case')} r{trace.get('row')} {trace.get('col')}")
-            plotted += 1
-        ax.set_title(panel.get('title') or '', fontsize=9)
-        ax.tick_params(labelsize=7)
-        if plotted:
-            ax.legend(fontsize=6, loc='upper right')
 
-    axes[-1, 0].set_xlabel('time [s]', fontsize=8)
-    fig.tight_layout()
+            plotted = 0
+            for trace in panel.get('traces') or []:
+                values, times = _trace_values(root, trace)
+                if values is None:
+                    continue
+                ax.plot(times, values, linewidth=1.0, color=trace.get('color'),
+                        label=f"{trace.get('case')} r{trace.get('row')} {trace.get('col')}")
+                plotted += 1
+            ax.set_title(panel.get('title') or '', fontsize=style.get('labelFontSize') or 9)
+            ax.tick_params(labelsize=7)
+            ax.grid(style.get('showGrid', True))
+            # A static PNG has no colored panel-tree to cross-reference
+            # trace colors against (unlike the browser view), so unlike
+            # there, a legend is shown by default here.
+            if plotted and style.get('showLegend', True):
+                ax.legend(fontsize=style.get('legendFontSize') or 6, loc='upper right')
 
-    buf = io.BytesIO()
-    fig.savefig(buf, dpi=300, bbox_inches='tight', format='png')
-    plt.close(fig)
-    buf.seek(0)
+            if pstyle.get('xlim'):
+                ax.set_xlim(pstyle['xlim'])
+            if pstyle.get('ylim'):
+                ax.set_ylim(pstyle['ylim'])
+            if pstyle.get('xtick', 0) > 0:
+                ax.xaxis.set_major_locator(MultipleLocator(pstyle['xtick']))
+            if pstyle.get('ytick', 0) > 0:
+                ax.yaxis.set_major_locator(MultipleLocator(pstyle['ytick']))
+
+        axes[-1, 0].set_xlabel('time [s]', fontsize=style.get('labelFontSize') or 8)
+        if style.get('title'):
+            fig.suptitle(style['title'], fontsize=(style.get('labelFontSize') or 9) + 2)
+        fig.tight_layout()
+
+        buf = io.BytesIO()
+        fig.savefig(buf, dpi=300, bbox_inches='tight', format='png')
+        plt.close(fig)
+        buf.seek(0)
 
     current_app.logbuf.write(f"export: {len(panels)} panel(s) -> flexflow_plot.png (300 dpi)")
     return send_file(buf, mimetype='image/png', as_attachment=True,
