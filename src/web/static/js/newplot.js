@@ -152,7 +152,7 @@ const NewPlot = (() => {
       detail.innerHTML = `
         <label>Point</label>
         <div class="empty">Single row &mdash; row ${row ? row.row : '?'}${row && row.node != null ? ` (node ${row.node})` : ''}</div>
-        ${renderVariablesHtml(group)}
+        ${renderVariablesHtml(group, false)}
       `;
       wireVariablesAndAdd(group);
       updateAddButton();
@@ -178,7 +178,7 @@ const NewPlot = (() => {
         </div>
         <div id="np-snap-result" class="empty"></div>
       </div>
-      ${renderVariablesHtml(group)}
+      ${renderVariablesHtml(group, true)}
     `;
 
     document.getElementById('np-view').addEventListener('change', (e) => loadView(e.target.value));
@@ -251,7 +251,17 @@ const NewPlot = (() => {
     updateAddButton();
   }
 
-  function renderVariablesHtml(group) {
+  // Plot kind chooses the x-axis: 'time' (a node's value over time, the
+  // usual case) or 'spatial' (one statistic/snapshot per node, plotted
+  // against position along the probe -- e.g. RMS displacement per node,
+  // to see where along the structure the response is largest). A single
+  // row (a point probe) has no "position" axis worth plotting, so spatial
+  // is only offered when allowSpatial is true.
+  const STATS = [
+    ['rms', 'RMS'], ['mean', 'Mean'], ['peak_abs', 'Peak absolute'], ['peak_to_peak', 'Peak-to-peak'],
+  ];
+
+  function renderVariablesHtml(group, allowSpatial) {
     if (!group) return '<div class="error">No time-history group found for this case.</div>';
     const header = currentMapData.header;
     const mismatch = (header.oth_id !== null && header.oth_id !== group.othId)
@@ -261,25 +271,86 @@ const NewPlot = (() => {
     const cols = group.columns
       .map(c => `<label class="var-check"><input type="checkbox" class="np-column" value="${c}"> ${c}</label>`)
       .join('');
-    const existingPanels = PlotWorkspace.state().panels
-      .map(p => `<option value="${p.id}">${p.title} (overlay)</option>`)
-      .join('');
+    const kindRow = allowSpatial ? `
+      <label>Plot kind</label>
+      <div class="plot-kind-row">
+        <label class="var-check"><input type="radio" name="np-kind" value="time" checked> Time series</label>
+        <label class="var-check"><input type="radio" name="np-kind" value="spatial"> Spatial (per-node)</label>
+      </div>
+    ` : '';
     return `
       ${mismatch}
+      ${kindRow}
       <label>Variables (othId ${group.othId})</label>
       <div class="var-list">${cols}</div>
+      <div id="np-spatial-options"></div>
       <label for="np-panel">Panel</label>
-      <select id="np-panel">
-        <option value="">Auto &mdash; new panel per case, shared panel per row</option>
-        <option value="__new__">New panel</option>
-        ${existingPanels}
-      </select>
+      <select id="np-panel"></select>
       <div class="btn-row"><button id="np-add" class="primary" disabled>Add to plot</button></div>
     `;
   }
 
+  function currentKind() {
+    const checked = document.querySelector('input[name="np-kind"]:checked');
+    return checked ? checked.value : 'time';
+  }
+
+  function renderPanelOptions(kind) {
+    const select = document.getElementById('np-panel');
+    if (!select) return;
+    const matching = PlotWorkspace.state().panels.filter(p => (p.kind === 'spatial') === (kind === 'spatial'));
+    const options = matching.map(p => `<option value="${p.id}">${p.title} (overlay)</option>`).join('');
+    select.innerHTML = kind === 'spatial'
+      ? `<option value="">Auto &mdash; one panel per case</option><option value="__new__">New panel</option>${options}`
+      : `<option value="">Auto &mdash; new panel per case, shared panel per row</option>` +
+        `<option value="__new__">New panel</option>${options}`;
+  }
+
+  function renderSpatialOptions() {
+    const box = document.getElementById('np-spatial-options');
+    if (!box) return;
+    if (currentKind() !== 'spatial') { box.innerHTML = ''; return; }
+
+    const stats = STATS.map(([id, label]) =>
+      `<label class="var-check"><input type="checkbox" class="np-stat" value="${id}"> ${label}</label>`
+    ).join('');
+
+    box.innerHTML = `
+      <label>Time frame</label>
+      <div class="plot-kind-row">
+        <label class="var-check"><input type="radio" name="np-frame" value="single" checked> Single time</label>
+        <label class="var-check"><input type="radio" name="np-frame" value="multi"> Multi time (statistic)</label>
+      </div>
+      <div id="np-frame-options"></div>
+    `;
+    document.querySelectorAll('input[name="np-frame"]').forEach(r => r.addEventListener('change', renderFrameOptions));
+    renderFrameOptions();
+
+    function renderFrameOptions() {
+      const frameBox = document.getElementById('np-frame-options');
+      const frame = document.querySelector('input[name="np-frame"]:checked').value;
+      frameBox.innerHTML = frame === 'single'
+        ? `<div class="coord-inputs"><input type="text" id="np-time" placeholder="time"></div>`
+        : `<div class="coord-inputs">
+             <input type="text" id="np-t1" placeholder="t1 (blank = start)">
+             <input type="text" id="np-t2" placeholder="t2 (blank = end)">
+           </div>
+           <div class="var-list">${stats}</div>`;
+      frameBox.querySelectorAll('input').forEach(el => el.addEventListener('input', updateAddButton));
+      frameBox.querySelectorAll('input[type=checkbox]').forEach(el => el.addEventListener('change', updateAddButton));
+      updateAddButton();
+    }
+  }
+
   function wireVariablesAndAdd(group) {
     document.querySelectorAll('.np-column').forEach(cb => cb.addEventListener('change', updateAddButton));
+    document.querySelectorAll('input[name="np-kind"]').forEach(r => r.addEventListener('change', () => {
+      renderPanelOptions(currentKind());
+      renderSpatialOptions();
+      updateAddButton();
+    }));
+    renderPanelOptions(currentKind());
+    renderSpatialOptions();
     const addBtn = document.getElementById('np-add');
     if (addBtn) addBtn.addEventListener('click', () => addToPlot(group));
   }
@@ -288,7 +359,28 @@ const NewPlot = (() => {
     const addBtn = document.getElementById('np-add');
     if (!addBtn) return;
     const anyColumn = document.querySelectorAll('.np-column:checked').length > 0;
-    addBtn.disabled = !(selectedRows.size && anyColumn);
+    let ready = selectedRows.size && anyColumn;
+
+    if (currentKind() === 'spatial') {
+      const frame = document.querySelector('input[name="np-frame"]:checked');
+      if (!frame || frame.value === 'single') {
+        const time = document.getElementById('np-time');
+        ready = ready && !!time && time.value.trim() !== '' && !Number.isNaN(parseFloat(time.value));
+      } else {
+        const anyStat = document.querySelectorAll('.np-stat:checked').length > 0;
+        ready = ready && anyStat;
+      }
+    }
+    addBtn.disabled = !ready;
+  }
+
+  function spatialPointsForSelection() {
+    const proj = currentMapData.projection;
+    return Array.from(selectedRows).map(row => {
+      const idx = currentMapData.rows.findIndex(r => r.row === row);
+      const node = idx >= 0 && currentMapData.rows[idx].node != null ? currentMapData.rows[idx].node : null;
+      return { row, x: proj.pts[idx][0], node };
+    });
   }
 
   function addToPlot(group) {
@@ -296,13 +388,39 @@ const NewPlot = (() => {
     if (!columns.length || !selectedRows.size || !group) return;
 
     const panelChoice = document.getElementById('np-panel').value;   // '' | '__new__' | a panel id
-    const nodeOf = (row) => {
-      const r = currentMapData.rows.find(rr => rr.row === row);
-      return r && r.node != null ? r.node : null;
-    };
-    for (const column of columns) {
-      PlotWorkspace.addTraces(currentCaseName, group.othId, Array.from(selectedRows), nodeOf, column, panelChoice);
+
+    if (currentKind() === 'spatial') {
+      const points = spatialPointsForSelection();
+      const axLabel = currentMapData.projection.ax;
+      const frame = document.querySelector('input[name="np-frame"]:checked').value;
+
+      for (const column of columns) {
+        if (frame === 'single') {
+          const time = parseFloat(document.getElementById('np-time').value);
+          PlotWorkspace.addSpatialTrace(currentCaseName, group.othId, points, column, 'snapshot',
+            { time, axLabel }, panelChoice);
+        } else {
+          const t1raw = document.getElementById('np-t1').value.trim();
+          const t2raw = document.getElementById('np-t2').value.trim();
+          const t1 = t1raw === '' ? null : parseFloat(t1raw);
+          const t2 = t2raw === '' ? null : parseFloat(t2raw);
+          const stats = Array.from(document.querySelectorAll('.np-stat:checked')).map(cb => cb.value);
+          for (const stat of stats) {
+            PlotWorkspace.addSpatialTrace(currentCaseName, group.othId, points, column, 'stat',
+              { stat, t1, t2, axLabel }, panelChoice);
+          }
+        }
+      }
+    } else {
+      const nodeOf = (row) => {
+        const r = currentMapData.rows.find(rr => rr.row === row);
+        return r && r.node != null ? r.node : null;
+      };
+      for (const column of columns) {
+        PlotWorkspace.addTraces(currentCaseName, group.othId, Array.from(selectedRows), nodeOf, column, panelChoice);
+      }
     }
+
     CommandLog.prompt(`plot new · map ${currentMapFile} · rows ${Array.from(selectedRows).join(',')}`);
     refreshWorkspace();
     Menu.closeDialog();

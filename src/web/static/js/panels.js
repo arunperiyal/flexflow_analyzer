@@ -40,7 +40,10 @@ const PlotWorkspace = (() => {
   // by accident. Overridable per row (targetPanelId in addTraces) --
   // deliberately overlaying two cases is a choice, not a default.
   function panelFor(caseName) {
-    let panel = ws.panels.find(p => p.traces.some(t => t.case === caseName));
+    // Excludes spatial panels: they share the "same case -> same panel"
+    // instinct, but a time trace and a spatial trace can never share an
+    // x-axis, so auto-routing must not merge them just because the case matches.
+    let panel = ws.panels.find(p => p.kind !== 'spatial' && p.traces.some(t => t.case === caseName));
     if (!panel) {
       panel = { id: `p${nextPanelId++}`, title: caseName, traces: [] };
       ws.panels.push(panel);
@@ -70,6 +73,43 @@ const PlotWorkspace = (() => {
                           col: column, color: nextColor() });
     }
     save();
+  }
+
+  // Spatial traces plot one number per node against its position along the
+  // probe -- the opposite axis choice from addTraces, which plots one
+  // node's value against time. A trace here holds every selected node as
+  // `points` ([{row, x, node}], sorted by x so a connecting line reads
+  // sensibly) rather than being one node's own trace, since the whole
+  // point is comparing across nodes. `x` is captured once at add-time from
+  // the picker's own projection -- a property of the map, not of history,
+  // so there is nothing to refetch later.
+  function panelForSpatial(caseName) {
+    let panel = ws.panels.find(p => p.kind === 'spatial' && p.traces.some(t => t.case === caseName));
+    if (!panel) {
+      panel = { id: `p${nextPanelId++}`, title: `${caseName} (spatial)`, kind: 'spatial', traces: [] };
+      ws.panels.push(panel);
+    }
+    return panel;
+  }
+
+  function addSpatialTrace(caseName, group, points, column, mode, opts, targetPanelId) {
+    let panel;
+    if (targetPanelId === '__new__') {
+      panel = { id: `p${nextPanelId++}`, title: `${caseName} (spatial)`, kind: 'spatial', traces: [] };
+      ws.panels.push(panel);
+    } else if (targetPanelId) {
+      panel = ws.panels.find(p => p.id === targetPanelId);
+    }
+    if (!panel) panel = panelForSpatial(caseName);
+
+    panel.traces.push({
+      case: caseName, group, col: column, mode,
+      time: opts.time, stat: opts.stat, t1: opts.t1, t2: opts.t2, axLabel: opts.axLabel,
+      points: [...points].sort((a, b) => a.x - b.x),
+      color: nextColor(),
+    });
+    save();
+    return panel;
   }
 
   function removeTrace(panelId, index) {
@@ -128,7 +168,7 @@ const PlotWorkspace = (() => {
   function state() { return ws; }
 
   return {
-    state, addTraces, removeTrace, removePanel, clearPanel, renamePanel,
+    state, addTraces, addSpatialTrace, removeTrace, removePanel, clearPanel, renamePanel,
     setYLock, movePanel, setColumns, setLinkX,
   };
 })();
@@ -157,6 +197,10 @@ const PanelTree = (() => {
       title.title = 'Double-click to rename';
       title.addEventListener('dblclick', () => startRename(header, title, panel));
 
+      const kindTag = document.createElement('span');
+      kindTag.className = 'panel-kind-tag';
+      kindTag.textContent = panel.kind === 'spatial' ? 'spatial' : '';
+
       const lock = document.createElement('span');
       lock.className = 'panel-lock' + (panel.yLock ? ' active' : '');
       lock.textContent = panel.yLock ? 'locked' : 'lock';
@@ -182,6 +226,7 @@ const PanelTree = (() => {
       close.addEventListener('click', () => { PlotWorkspace.removePanel(panel.id); refreshWorkspace(); });
 
       header.appendChild(title);
+      if (kindTag.textContent) header.appendChild(kindTag);
       header.appendChild(lock);
       header.appendChild(close);
       node.appendChild(header);
@@ -194,7 +239,7 @@ const PanelTree = (() => {
         swatch.style.background = t.color;
         const label = document.createElement('span');
         label.className = 'trace-label';
-        label.textContent = `${t.case} r${t.row} ${t.col}`;
+        label.textContent = traceLabel(t);
         const del = document.createElement('span');
         del.className = 'trace-remove';
         del.textContent = '×';
@@ -216,6 +261,14 @@ const PanelTree = (() => {
       PlotWorkspace.setLinkX(e.target.checked);
       PlotArea.render();
     });
+  }
+
+  function traceLabel(t) {
+    if (!t.points) return `${t.case} r${t.row} ${t.col}`;   // time trace
+    const n = t.points.length;
+    const range = t.t1 == null && t.t2 == null ? '' : ` [${t.t1 ?? 'start'}, ${t.t2 ?? 'end'}]`;
+    const what = t.mode === 'snapshot' ? `@t=${t.time}` : `${t.stat}${range}`;
+    return `${t.case} ${t.col} ${what} (${n} node${n === 1 ? '' : 's'})`;
   }
 
   function startRename(header, titleEl, panel) {

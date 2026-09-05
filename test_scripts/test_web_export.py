@@ -68,3 +68,31 @@ def test_export_renders_multiple_panels(client):
     res = client.post('/api/export', json={'panels': panels})
     assert res.status_code == 200
     assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
+
+
+def test_export_does_not_crash_on_a_spatial_panel(client):
+    # A spatial trace has no `row` (it carries `points` instead) -- naively
+    # reusing the time-domain _trace_values() path on it used to misindex
+    # the array (row=None shifted `comp` onto the node axis) and raise
+    # inside matplotlib's plot() rather than being skipped cleanly.
+    panels = [{
+        'id': 'p1', 'title': 'spatial rms', 'kind': 'spatial',
+        'traces': [{
+            'case': 'BR0SG0U1P0', 'group': 0, 'col': 'aleDisp_y', 'mode': 'stat', 'stat': 'rms',
+            'points': [{'row': 0, 'x': 0.0}, {'row': 12, 'x': 1.0}], 'color': '#000',
+        }],
+    }]
+    res = client.post('/api/export', json={'panels': panels})
+    assert res.status_code == 200
+    assert res.mimetype == 'image/png'
+
+
+def test_export_mixed_time_and_spatial_panels(client):
+    panels = _panels() + [{
+        'id': 'p2', 'title': 'spatial', 'kind': 'spatial',
+        'traces': [{'case': 'BR0SG0U1P0', 'group': 0, 'col': 'aleDisp_y', 'mode': 'snapshot',
+                    'time': 1.0, 'points': [{'row': 0, 'x': 0.0}], 'color': '#000'}],
+    }]
+    res = client.post('/api/export', json={'panels': panels})
+    assert res.status_code == 200
+    assert res.data[:8] == b'\x89PNG\r\n\x1a\n'

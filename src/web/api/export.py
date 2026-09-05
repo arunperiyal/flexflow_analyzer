@@ -38,6 +38,17 @@ def export_png():
                              sharex=link_x, squeeze=False)
 
     for ax, panel in zip(axes[:, 0], panels):
+        if panel.get('kind') == 'spatial':
+            # Not yet supported: a spatial trace has no single `row`
+            # (get_node_displacements(row) is the time-domain shape this
+            # export follows), so it needs its own /spatial-backed reduction
+            # here rather than being force-fit into the same code path.
+            ax.text(0.5, 0.5, 'spatial panels are not yet exported',
+                   ha='center', va='center', fontsize=8, color='#94a3b8', transform=ax.transAxes)
+            ax.set_title(panel.get('title') or '', fontsize=9)
+            ax.tick_params(labelsize=7)
+            continue
+
         plotted = 0
         for trace in panel.get('traces') or []:
             values, times = _trace_values(root, trace)

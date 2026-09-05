@@ -220,6 +220,7 @@ body {
 #np-picker { border: 1px solid #e2e8f0; border-radius: 4px; margin: 8px 0; }
 .view-row { display: flex; align-items: center; gap: 12px; }
 .view-row select { flex: 1; }
+.plot-kind-row { display: flex; gap: 16px; margin-bottom: 8px; }
 .var-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
@@ -286,6 +287,17 @@ body {
 }
 .panel-lock:hover { color: #334155; }
 .panel-lock.active { color: #2563eb; font-weight: 700; }
+
+.panel-kind-tag {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #7c3aed;
+  background: #f3e8ff;
+  border-radius: 3px;
+  padding: 1px 5px;
+  white-space: nowrap;
+}
 
 /* Layout dialog */
 .layout-row { display: flex; align-items: center; gap: 10px; }
