@@ -5,16 +5,28 @@ const PlotWorkspace = (() => {
   const STORAGE_KEY = 'flexflow.workspace';
   const COLORS = ['#dc2626', '#f59e0b', '#7c3aed', '#059669', '#2563eb', '#db2777', '#0891b2', '#65a30d'];
 
+  // Global style defaults: unset numeric/text fields (null/'') mean "let
+  // Plotly pick", so an old saved workspace with no `style` block at all
+  // renders exactly as it did before this existed.
+  function defaultGlobalStyle() {
+    return {
+      fontFamily: '', labelFontSize: null, legendFontSize: null,
+      title: '', showLegend: false, legendPosition: 'top-right', showGrid: true,
+    };
+  }
+
   function load() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
         parsed.layout = parsed.layout || { columns: 1 };
+        parsed.style = { ...defaultGlobalStyle(), ...(parsed.style || {}) };
+        for (const p of parsed.panels) p.style = p.style || {};
         return parsed;
       }
     } catch (e) { /* private mode, cleared storage, etc. */ }
-    return { linkX: true, panels: [], layout: { columns: 1 } };
+    return { linkX: true, panels: [], layout: { columns: 1 }, style: defaultGlobalStyle() };
   }
 
   let ws = load();
@@ -45,7 +57,7 @@ const PlotWorkspace = (() => {
     // x-axis, so auto-routing must not merge them just because the case matches.
     let panel = ws.panels.find(p => p.kind !== 'spatial' && p.traces.some(t => t.case === caseName));
     if (!panel) {
-      panel = { id: `p${nextPanelId++}`, title: caseName, traces: [] };
+      panel = { id: `p${nextPanelId++}`, title: caseName, traces: [], style: {} };
       ws.panels.push(panel);
     }
     return panel;
@@ -57,7 +69,7 @@ const PlotWorkspace = (() => {
   function addTraces(caseName, group, rows, nodeOf, column, targetPanelId) {
     let panel;
     if (targetPanelId === '__new__') {
-      panel = { id: `p${nextPanelId++}`, title: caseName, traces: [] };
+      panel = { id: `p${nextPanelId++}`, title: caseName, traces: [], style: {} };
       ws.panels.push(panel);
     } else if (targetPanelId) {
       panel = ws.panels.find(p => p.id === targetPanelId);
@@ -72,6 +84,7 @@ const PlotWorkspace = (() => {
       panel.traces.push({ case: caseName, group, row, node: nodeOf ? nodeOf(row) : null,
                           col: column, color: nextColor() });
     }
+    if (!ws.activePanelId) ws.activePanelId = panel.id;
     save();
   }
 
@@ -86,7 +99,7 @@ const PlotWorkspace = (() => {
   function panelForSpatial(caseName) {
     let panel = ws.panels.find(p => p.kind === 'spatial' && p.traces.some(t => t.case === caseName));
     if (!panel) {
-      panel = { id: `p${nextPanelId++}`, title: `${caseName} (spatial)`, kind: 'spatial', traces: [] };
+      panel = { id: `p${nextPanelId++}`, title: `${caseName} (spatial)`, kind: 'spatial', traces: [], style: {} };
       ws.panels.push(panel);
     }
     return panel;
@@ -95,7 +108,7 @@ const PlotWorkspace = (() => {
   function addSpatialTrace(caseName, group, points, column, mode, opts, targetPanelId) {
     let panel;
     if (targetPanelId === '__new__') {
-      panel = { id: `p${nextPanelId++}`, title: `${caseName} (spatial)`, kind: 'spatial', traces: [] };
+      panel = { id: `p${nextPanelId++}`, title: `${caseName} (spatial)`, kind: 'spatial', traces: [], style: {} };
       ws.panels.push(panel);
     } else if (targetPanelId) {
       panel = ws.panels.find(p => p.id === targetPanelId);
@@ -108,6 +121,7 @@ const PlotWorkspace = (() => {
       points: [...points].sort((a, b) => a.x - b.x),
       color: nextColor(),
     });
+    if (!ws.activePanelId) ws.activePanelId = panel.id;
     save();
     return panel;
   }
@@ -116,12 +130,20 @@ const PlotWorkspace = (() => {
     const panel = ws.panels.find(p => p.id === panelId);
     if (!panel) return;
     panel.traces.splice(index, 1);
-    if (!panel.traces.length) ws.panels = ws.panels.filter(p => p.id !== panelId);
+    if (!panel.traces.length) {
+      ws.panels = ws.panels.filter(p => p.id !== panelId);
+      if (ws.activePanelId === panelId) {
+        ws.activePanelId = ws.panels.length ? ws.panels[0].id : null;
+      }
+    }
     save();
   }
 
   function removePanel(panelId) {
     ws.panels = ws.panels.filter(p => p.id !== panelId);
+    if (ws.activePanelId === panelId) {
+      ws.activePanelId = ws.panels.length ? ws.panels[0].id : null;
+    }
     save();
   }
 
@@ -139,10 +161,27 @@ const PlotWorkspace = (() => {
     save();
   }
 
-  function setYLock(panelId, range) {
+  function setPanelStyle(panelId, patch) {
     const panel = ws.panels.find(p => p.id === panelId);
     if (!panel) return;
-    panel.yLock = range;   // [min, max], or null to unlock
+    panel.style = { ...(panel.style || {}), ...patch };
+    save();
+  }
+
+  // The panel-tree's quick "lock" toggle is a shortcut for the style
+  // sidebar's own Y limits field -- both read/write panel.style.ylim, so
+  // locking from the tree and typing exact numbers in the sidebar agree.
+  function setYLock(panelId, range) {
+    setPanelStyle(panelId, { ylim: range });   // range: [min, max], or null to unlock
+  }
+
+  function setGlobalStyle(patch) {
+    ws.style = { ...ws.style, ...patch };
+    save();
+  }
+
+  function setActivePanel(id) {
+    ws.activePanelId = id;
     save();
   }
 
@@ -169,7 +208,7 @@ const PlotWorkspace = (() => {
 
   return {
     state, addTraces, addSpatialTrace, removeTrace, removePanel, clearPanel, renamePanel,
-    setYLock, movePanel, setColumns, setLinkX,
+    setYLock, movePanel, setColumns, setLinkX, setPanelStyle, setGlobalStyle, setActivePanel,
   };
 })();
 
@@ -186,7 +225,7 @@ const PanelTree = (() => {
 
     for (const panel of ws.panels) {
       const node = document.createElement('div');
-      node.className = 'panel-node';
+      node.className = 'panel-node' + (panel.id === ws.activePanelId ? ' active-for-style' : '');
 
       const header = document.createElement('div');
       header.className = 'panel-node-header';
@@ -194,21 +233,23 @@ const PanelTree = (() => {
       const title = document.createElement('span');
       title.className = 'panel-title';
       title.textContent = panel.title;
-      title.title = 'Double-click to rename';
+      title.title = 'Click to select for Style -- double-click to rename';
+      title.addEventListener('click', () => { PlotWorkspace.setActivePanel(panel.id); refreshWorkspace(); });
       title.addEventListener('dblclick', () => startRename(header, title, panel));
 
       const kindTag = document.createElement('span');
       kindTag.className = 'panel-kind-tag';
       kindTag.textContent = panel.kind === 'spatial' ? 'spatial' : '';
 
+      const yLim = panel.style && panel.style.ylim;
       const lock = document.createElement('span');
-      lock.className = 'panel-lock' + (panel.yLock ? ' active' : '');
-      lock.textContent = panel.yLock ? 'locked' : 'lock';
-      lock.title = panel.yLock
+      lock.className = 'panel-lock' + (yLim ? ' active' : '');
+      lock.textContent = yLim ? 'locked' : 'lock';
+      lock.title = yLim
         ? 'Y-axis locked to its range when locked -- click to unlock'
         : 'Lock the y-axis to its current range';
       lock.addEventListener('click', () => {
-        if (panel.yLock) {
+        if (yLim) {
           PlotWorkspace.setYLock(panel.id, null);
           refreshWorkspace();
         } else {
@@ -298,4 +339,5 @@ const PanelTree = (() => {
 function refreshWorkspace() {
   PanelTree.render();
   PlotArea.render();
+  StyleSidebar.render();
 }
