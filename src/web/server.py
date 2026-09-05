@@ -17,6 +17,7 @@ from .api.history import bp as history_bp
 from .api.jobs import bp as jobs_bp
 from .api.log import bp as log_bp
 from .api.maps import bp as maps_bp
+from .api.spatial import bp as spatial_bp
 from .services.logbuf import LogBuffer
 
 _LOOPBACK_HOSTS = {'127.0.0.1', 'localhost', '::1'}
@@ -33,6 +34,7 @@ def create_app(root: Path) -> Flask:
     app.register_blueprint(log_bp)
     app.register_blueprint(jobs_bp)
     app.register_blueprint(export_bp)
+    app.register_blueprint(spatial_bp)
 
     @app.get('/')
     def index():
