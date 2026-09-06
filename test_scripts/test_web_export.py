@@ -155,6 +155,39 @@ def test_export_honors_per_trace_line_style_marker_and_color(client):
     assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
 
 
+def test_export_honors_global_marker_size_and_step(client):
+    panels = _panels()
+    panels[0]['traces'][0]['marker'] = 'circle'
+    res = client.post('/api/export', json={
+        'panels': panels, 'style': {'markerSize': 10, 'markerStep': 25},
+    })
+    assert res.status_code == 200
+    assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
+
+
+def test_plot_kwargs_maps_marker_size_and_step_onto_matplotlib_names():
+    from src.web.api.export import _plot_kwargs
+
+    trace = {'marker': 'circle'}
+    kwargs = _plot_kwargs(trace, {'markerSize': 10, 'markerStep': 25})
+    assert kwargs['markersize'] == 10
+    assert kwargs['markevery'] == 25
+
+    # No marker on the trace at all -- size/step are moot, no markevery/markersize leak in.
+    kwargs_no_marker = _plot_kwargs({}, {'markerSize': 10, 'markerStep': 25})
+    assert 'markevery' not in kwargs_no_marker
+    assert 'markersize' not in kwargs_no_marker
+
+    # A marker with no global override falls back to the existing default.
+    kwargs_default = _plot_kwargs({'marker': 'circle'}, {})
+    assert kwargs_default['markersize'] == 4
+    assert 'markevery' not in kwargs_default
+
+    # step of 1 (or unset) means "every point" -- matches Plotly's step<=1 no-op, not markevery=1.
+    kwargs_step1 = _plot_kwargs({'marker': 'circle'}, {'markerStep': 1})
+    assert 'markevery' not in kwargs_step1
+
+
 def test_export_font_family_takes_the_first_name_from_a_css_stack(client):
     # The style sidebar's font dropdown sends CSS font-family syntax
     # (e.g. '"Times New Roman", Times, serif'); matplotlib's rcParams

@@ -12,6 +12,7 @@ const PlotWorkspace = (() => {
     return {
       fontFamily: '', labelFontSize: null, legendFontSize: null, tickFontSize: null,
       title: '', showLegend: false, legendPosition: 'top-right', showGrid: true,
+      markerSize: null, markerStep: null,
     };
   }
 

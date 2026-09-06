@@ -40,12 +40,14 @@ def _matplotlib_font(css_family):
     return first or None
 
 
-def _plot_kwargs(trace):
+def _plot_kwargs(trace, style):
     kwargs = {'linewidth': 1.0, 'linestyle': _LINESTYLES.get(trace.get('lineStyle'), '-')}
     marker = trace.get('marker')
     if marker and marker != 'none':
         kwargs['marker'] = _MARKERS.get(marker, 'o')
-        kwargs['markersize'] = 4
+        kwargs['markersize'] = style.get('markerSize') or 4
+        if style.get('markerStep', 0) > 1:
+            kwargs['markevery'] = int(style['markerStep'])
     return kwargs
 
 
@@ -89,7 +91,7 @@ def export_png():
                     continue
                 ax.plot(times, values, color=trace.get('color'),
                         label=f"{trace.get('case')} r{trace.get('row')} {trace.get('col')}",
-                        **_plot_kwargs(trace))
+                        **_plot_kwargs(trace, style))
                 plotted += 1
             ax.set_title(panel.get('title') or '', fontsize=style.get('labelFontSize') or 9)
             ax.tick_params(labelsize=style.get('tickFontSize') or 7)
