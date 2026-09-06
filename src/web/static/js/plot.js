@@ -64,15 +64,17 @@ const PlotArea = (() => {
   // data range, and simply dropped rather than handed to Plotly.
   const MAX_TICKS = 200;
 
-  // Global label size, gridlines, and a panel's own tick step / axis limits
-  // -- shared by both the time and spatial branches below so they stay in
-  // sync rather than duplicating this per branch. `dataRange` is the
-  // actual plotted extent, used only as a fallback when there is no
-  // explicit `lim` to check the tick step against.
-  function applyAxisStyle(axisLayout, style, tickStep, lim, dataRange) {
+  // Global label size, tick label size, gridlines, and a panel's own tick
+  // step / axis limits / flip -- shared by both the time and spatial
+  // branches below so they stay in sync rather than duplicating this per
+  // branch. `dataRange` is the actual plotted extent, used only as a
+  // fallback when there is no explicit `lim` to check the tick step
+  // against or to flip.
+  function applyAxisStyle(axisLayout, style, tickStep, lim, dataRange, flip) {
     if (style.labelFontSize && axisLayout.title) {
       axisLayout.title = { text: axisLayout.title, font: { size: style.labelFontSize } };
     }
+    if (style.tickFontSize) axisLayout.tickfont = { size: style.tickFontSize };
     axisLayout.showgrid = style.showGrid !== false;
 
     const range = lim || dataRange;
@@ -86,8 +88,40 @@ const PlotArea = (() => {
     }
     if (lim) {
       axisLayout.autorange = false;
-      axisLayout.range = lim;
+      axisLayout.range = flip ? [lim[1], lim[0]] : lim;
+    } else if (flip) {
+      axisLayout.autorange = 'reversed';
     }
+  }
+
+  // '' (unset) means "the sensible default for this trace kind": no marker
+  // for a time trace, a circle for a spatial one (matches behavior before
+  // markers were configurable). 'none' is an explicit request to hide it,
+  // distinct from leaving the field blank.
+  function markerSymbolFor(t, isSpatial) {
+    if (t.marker === 'none') return null;
+    if (t.marker) return t.marker;
+    return isSpatial ? 'circle' : null;
+  }
+
+  // Plotly's cleanData chokes on an explicit `undefined` value for a key
+  // like `line.dash` or a trace's `marker` (found by actually setting a
+  // trace's line style: "Cannot use 'in' operator to search for 'line' in
+  // undefined", from Plotly assuming a *present* key has a real object,
+  // not JS's `{k: undefined}` where the key exists but the value doesn't).
+  // So the key must be left off entirely, not set to undefined -- these
+  // build that instead of inlining it, since it is easy to get wrong twice.
+  function lineFor(t) {
+    const line = { color: t.color, width: 1.4 };
+    if (t.lineStyle) line.dash = t.lineStyle;
+    return line;
+  }
+
+  // No `marker` key at all when there is no symbol -- see the note above
+  // lineFor: assigning `marker: undefined` on the trace itself hits the
+  // exact same Plotly bug, one level up.
+  function addMarker(trace, t, symbol, size) {
+    if (symbol) trace.marker = { color: t.color, size, symbol };
   }
 
   // A manual reduce, not Math.min(...values) -- a panel's combined series
@@ -171,24 +205,29 @@ const PlotArea = (() => {
       if (isSpatial) {
         panel.traces.forEach(t => {
           const byRow = spatialResults.get(t) || new Map();
-          traces.push({
+          const symbol = markerSymbolFor(t, true);
+          const trace = {
             x: t.points.map(p => p.x), y: t.points.map(p => byRow.get(p.row)),
-            xaxis: xref, yaxis: yref, mode: 'lines+markers', type: 'scatter',
+            xaxis: xref, yaxis: yref, mode: symbol ? 'lines+markers' : 'lines', type: 'scatter',
             name: spatialTraceName(t),
-            line: { color: t.color, width: 1.4 },
-            marker: { color: t.color, size: 5 },
-          });
+            line: lineFor(t),
+          };
+          addMarker(trace, t, symbol, 5);
+          traces.push(trace);
         });
       } else {
         panel.traces.forEach(t => {
           const data = results.get(groupKey(t));
           const s = data && data.series.find(s => s.row === t.row && s.column === t.col);
-          traces.push({
+          const symbol = markerSymbolFor(t, false);
+          const trace = {
             x: data ? data.times : [], y: s ? s.values : [],
-            xaxis: xref, yaxis: yref, mode: 'lines', type: 'scatter',
+            xaxis: xref, yaxis: yref, mode: symbol ? 'lines+markers' : 'lines', type: 'scatter',
             name: `${t.case} r${t.row} ${t.col}`,
-            line: { color: t.color, width: 1.4 },
-          });
+            line: lineFor(t),
+          };
+          addMarker(trace, t, symbol, 6);
+          traces.push(trace);
         });
       }
 
@@ -215,8 +254,8 @@ const PlotArea = (() => {
       const panelTraces = traces.slice(tracesStart);
       const xRange = extent(panelTraces.flatMap(tr => tr.x));
       const yRange = extent(panelTraces.flatMap(tr => tr.y));
-      applyAxisStyle(layout[xKey], style, pStyle.xtick, pStyle.xlim, xRange);
-      applyAxisStyle(layout[yKey], style, pStyle.ytick, pStyle.ylim, yRange);
+      applyAxisStyle(layout[xKey], style, pStyle.xtick, pStyle.xlim, xRange, pStyle.flipX);
+      applyAxisStyle(layout[yKey], style, pStyle.ytick, pStyle.ylim, yRange, pStyle.flipY);
     });
 
     Plotly.newPlot('plotly-panels', traces, layout, { displaylogo: false, responsive: true });

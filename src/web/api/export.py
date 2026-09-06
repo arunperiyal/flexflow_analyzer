@@ -24,6 +24,30 @@ from ..services.loader import loader
 
 bp = Blueprint('export', __name__, url_prefix='/api/export')
 
+# Plotly's line.dash / marker.symbol names, mapped to matplotlib's own
+# (unmapped values are left as matplotlib defaults: solid line, no marker).
+_LINESTYLES = {'dash': '--', 'dot': ':', 'dashdot': '-.'}
+_MARKERS = {'circle': 'o', 'square': 's', 'diamond': 'D', 'cross': '+', 'x': 'x', 'triangle-up': '^'}
+
+
+def _matplotlib_font(css_family):
+    """The first name in a CSS font-family stack (e.g. the style sidebar's
+    '"Times New Roman", Times, serif'), unquoted -- matplotlib's
+    rcParams['font.family'] takes a bare name, not CSS list syntax."""
+    if not css_family:
+        return None
+    first = css_family.split(',')[0].strip().strip('"').strip("'")
+    return first or None
+
+
+def _plot_kwargs(trace):
+    kwargs = {'linewidth': 1.0, 'linestyle': _LINESTYLES.get(trace.get('lineStyle'), '-')}
+    marker = trace.get('marker')
+    if marker and marker != 'none':
+        kwargs['marker'] = _MARKERS.get(marker, 'o')
+        kwargs['markersize'] = 4
+    return kwargs
+
 
 @bp.post('')
 def export_png():
@@ -38,7 +62,8 @@ def export_png():
 
     # rc_context scopes the font override to this figure, rather than
     # mutating matplotlib's global rcParams for every concurrent request.
-    with plt.rc_context({'font.family': style['fontFamily']} if style.get('fontFamily') else {}):
+    font_name = _matplotlib_font(style.get('fontFamily'))
+    with plt.rc_context({'font.family': font_name} if font_name else {}):
         fig, axes = plt.subplots(len(panels), 1, figsize=(9, 2.6 * len(panels)),
                                  sharex=link_x, squeeze=False)
 
@@ -62,11 +87,12 @@ def export_png():
                 values, times = _trace_values(root, trace)
                 if values is None:
                     continue
-                ax.plot(times, values, linewidth=1.0, color=trace.get('color'),
-                        label=f"{trace.get('case')} r{trace.get('row')} {trace.get('col')}")
+                ax.plot(times, values, color=trace.get('color'),
+                        label=f"{trace.get('case')} r{trace.get('row')} {trace.get('col')}",
+                        **_plot_kwargs(trace))
                 plotted += 1
             ax.set_title(panel.get('title') or '', fontsize=style.get('labelFontSize') or 9)
-            ax.tick_params(labelsize=7)
+            ax.tick_params(labelsize=style.get('tickFontSize') or 7)
             ax.grid(style.get('showGrid', True))
             # A static PNG has no colored panel-tree to cross-reference
             # trace colors against (unlike the browser view), so unlike
@@ -82,6 +108,13 @@ def export_png():
                 ax.xaxis.set_major_locator(MultipleLocator(pstyle['xtick']))
             if pstyle.get('ytick', 0) > 0:
                 ax.yaxis.set_major_locator(MultipleLocator(pstyle['ytick']))
+            # After the explicit limits: invert_*axis() flips whatever the
+            # current limits are, so it would be undone by a set_xlim/
+            # set_ylim call made afterward.
+            if pstyle.get('flipX'):
+                ax.invert_xaxis()
+            if pstyle.get('flipY'):
+                ax.invert_yaxis()
 
         axes[-1, 0].set_xlabel('time [s]', fontsize=style.get('labelFontSize') or 8)
         if style.get('title'):
