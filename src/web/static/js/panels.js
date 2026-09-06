@@ -16,18 +16,38 @@ const PlotWorkspace = (() => {
     };
   }
 
+  // width/height: null means "auto" (Plotly's own responsive sizing) -- set
+  // by Layout -> New/Edit, not required to have a value.
+  function defaultLayout() {
+    return { rows: 1, columns: 1, width: null, height: null };
+  }
+
   function load() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
-        parsed.layout = parsed.layout || { columns: 1 };
+        const oldLayout = parsed.layout || {};
+        // Pre-pane-grid workspaces only ever recorded `columns`; `rows` was
+        // implicit (however many the panel count needed). Backfilling it
+        // from the panel count keeps an old workspace's grid the same
+        // shape it already had, rather than clipping it to one row.
+        parsed.layout = {
+          ...defaultLayout(),
+          columns: oldLayout.columns || 1,
+          rows: oldLayout.rows || Math.max(1, Math.ceil(parsed.panels.length / (oldLayout.columns || 1))),
+          width: oldLayout.width ?? null,
+          height: oldLayout.height ?? null,
+        };
         parsed.style = { ...defaultGlobalStyle(), ...(parsed.style || {}) };
-        for (const p of parsed.panels) p.style = p.style || {};
+        for (const p of parsed.panels) {
+          p.style = p.style || {};
+          if (!('pane' in p)) p.pane = null;
+        }
         return parsed;
       }
     } catch (e) { /* private mode, cleared storage, etc. */ }
-    return { linkX: true, panels: [], layout: { columns: 1 }, style: defaultGlobalStyle() };
+    return { linkX: true, panels: [], layout: defaultLayout(), style: defaultGlobalStyle() };
   }
 
   let ws = load();
@@ -52,13 +72,13 @@ const PlotWorkspace = (() => {
   // panel is made, which is what keeps two cases from landing on one panel
   // by accident. Overridable per row (targetPanelId in addTraces) --
   // deliberately overlaying two cases is a choice, not a default.
-  function panelFor(caseName) {
+  function panelFor(caseName, pane) {
     // Excludes spatial panels: they share the "same case -> same panel"
     // instinct, but a time trace and a spatial trace can never share an
     // x-axis, so auto-routing must not merge them just because the case matches.
     let panel = ws.panels.find(p => p.kind !== 'spatial' && p.traces.some(t => t.case === caseName));
     if (!panel) {
-      panel = { id: `p${nextPanelId++}`, title: caseName, traces: [], style: {} };
+      panel = { id: `p${nextPanelId++}`, title: caseName, traces: [], style: {}, pane: pane ?? null };
       ws.panels.push(panel);
     }
     return panel;
@@ -67,15 +87,18 @@ const PlotWorkspace = (() => {
   // targetPanelId: omit/falsy for the routing default above; '__new__' to
   // force a fresh panel even if one already holds this case; an existing
   // panel id to overlay onto it regardless of which case(s) it already holds.
-  function addTraces(caseName, group, rows, nodeOf, column, targetPanelId) {
+  // pane ({row, col}): where a *newly created* panel should sit in the
+  // grid; ignored when overlaying onto an existing panel, which already
+  // has one.
+  function addTraces(caseName, group, rows, nodeOf, column, targetPanelId, pane) {
     let panel;
     if (targetPanelId === '__new__') {
-      panel = { id: `p${nextPanelId++}`, title: caseName, traces: [], style: {} };
+      panel = { id: `p${nextPanelId++}`, title: caseName, traces: [], style: {}, pane: pane ?? null };
       ws.panels.push(panel);
     } else if (targetPanelId) {
       panel = ws.panels.find(p => p.id === targetPanelId);
     }
-    if (!panel) panel = panelFor(caseName);
+    if (!panel) panel = panelFor(caseName, pane);
 
     for (const row of rows) {
       const already = panel.traces.some(
@@ -97,24 +120,24 @@ const PlotWorkspace = (() => {
   // point is comparing across nodes. `x` is captured once at add-time from
   // the picker's own projection -- a property of the map, not of history,
   // so there is nothing to refetch later.
-  function panelForSpatial(caseName) {
+  function panelForSpatial(caseName, pane) {
     let panel = ws.panels.find(p => p.kind === 'spatial' && p.traces.some(t => t.case === caseName));
     if (!panel) {
-      panel = { id: `p${nextPanelId++}`, title: `${caseName} (spatial)`, kind: 'spatial', traces: [], style: {} };
+      panel = { id: `p${nextPanelId++}`, title: `${caseName} (spatial)`, kind: 'spatial', traces: [], style: {}, pane: pane ?? null };
       ws.panels.push(panel);
     }
     return panel;
   }
 
-  function addSpatialTrace(caseName, group, points, column, mode, opts, targetPanelId) {
+  function addSpatialTrace(caseName, group, points, column, mode, opts, targetPanelId, pane) {
     let panel;
     if (targetPanelId === '__new__') {
-      panel = { id: `p${nextPanelId++}`, title: `${caseName} (spatial)`, kind: 'spatial', traces: [], style: {} };
+      panel = { id: `p${nextPanelId++}`, title: `${caseName} (spatial)`, kind: 'spatial', traces: [], style: {}, pane: pane ?? null };
       ws.panels.push(panel);
     } else if (targetPanelId) {
       panel = ws.panels.find(p => p.id === targetPanelId);
     }
-    if (!panel) panel = panelForSpatial(caseName);
+    if (!panel) panel = panelForSpatial(caseName, pane);
 
     panel.traces.push({
       case: caseName, group, col: column, mode,
@@ -195,17 +218,30 @@ const PlotWorkspace = (() => {
     save();
   }
 
-  function movePanel(panelId, direction) {
-    const idx = ws.panels.findIndex(p => p.id === panelId);
-    if (idx === -1) return;
-    const swapWith = direction === 'up' ? idx - 1 : idx + 1;
-    if (swapWith < 0 || swapWith >= ws.panels.length) return;
-    [ws.panels[idx], ws.panels[swapWith]] = [ws.panels[swapWith], ws.panels[idx]];
+  // Layout -> New: replaces the grid outright. Every panel's pane is
+  // cleared rather than left pointing at a cell that may no longer exist
+  // (or may now mean something else) in the new grid -- panels themselves
+  // are untouched, they just fall back to auto-placement (see
+  // PlotArea.resolvePanes) until re-assigned.
+  function setLayout(spec) {
+    ws.layout = { ...defaultLayout(), ...spec };
+    for (const p of ws.panels) p.pane = null;
     save();
   }
 
-  function setColumns(n) {
-    ws.layout.columns = n;
+  // Layout -> Edit: resizes the grid in place. A panel's existing pane is
+  // left alone -- if it's now out of the shrunk grid's bounds,
+  // resolvePanes() falls back to auto-placement for that panel same as an
+  // unassigned one, rather than this needing to hunt down and clear it.
+  function updateLayout(patch) {
+    ws.layout = { ...ws.layout, ...patch };
+    save();
+  }
+
+  function setPanelPane(panelId, pane) {
+    const panel = ws.panels.find(p => p.id === panelId);
+    if (!panel) return;
+    panel.pane = pane;
     save();
   }
 
@@ -218,8 +254,8 @@ const PlotWorkspace = (() => {
 
   return {
     state, addTraces, addSpatialTrace, removeTrace, removePanel, clearPanel, renamePanel,
-    setYLock, movePanel, setColumns, setLinkX, setPanelStyle, setGlobalStyle, setActivePanel,
-    setTraceStyle,
+    setYLock, setLayout, updateLayout, setPanelPane, setLinkX, setPanelStyle, setGlobalStyle,
+    setActivePanel, setTraceStyle,
   };
 })();
 
@@ -264,8 +300,7 @@ const PanelTree = (() => {
           PlotWorkspace.setYLock(panel.id, null);
           refreshWorkspace();
         } else {
-          const idx = ws.panels.indexOf(panel);
-          const range = PlotArea.currentYRange(idx, !!(panel.style && panel.style.swapAxes));
+          const range = PlotArea.currentYRange(panel.id, !!(panel.style && panel.style.swapAxes));
           PlotWorkspace.setYLock(panel.id, range);
           refreshWorkspace();
         }

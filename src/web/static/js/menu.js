@@ -146,15 +146,22 @@ const Menu = (() => {
       closeAll();
       NewPlot.open();
     });
-    document.getElementById('plot-layout').addEventListener('click', () => {
-      closeAll();
-      Layout.open();
-    });
     document.getElementById('plot-clear').addEventListener('click', () => {
       closeAll();
       Layout.openClear();
     });
-    document.getElementById('plot-export').addEventListener('click', () => {
+  }
+
+  function wireLayoutMenu() {
+    document.getElementById('layout-new').addEventListener('click', () => {
+      closeAll();
+      Layout.openNew();
+    });
+    document.getElementById('layout-edit').addEventListener('click', () => {
+      closeAll();
+      Layout.openEdit();
+    });
+    document.getElementById('layout-export').addEventListener('click', () => {
       closeAll();
       Export.run();
     });
@@ -165,6 +172,7 @@ const Menu = (() => {
     wireAddDialog(root);
     wireDeleteDialog();
     wirePlotMenu();
+    wireLayoutMenu();
   }
 
   return { init, openDialog, closeDialog };

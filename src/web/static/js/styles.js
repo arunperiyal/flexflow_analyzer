@@ -271,10 +271,9 @@ const StyleSidebar = (() => {
         PlotArea.render();
       });
     }
-    const idx = PlotWorkspace.state().panels.indexOf(panel);
     const isSwapped = () => !!(panel.style && panel.style.swapAxes);
-    wireTick('xtick', 'style-xtick', 'xlim', () => PlotArea.currentXRange(idx, isSwapped()));
-    wireTick('ytick', 'style-ytick', 'ylim', () => PlotArea.currentYRange(idx, isSwapped()));
+    wireTick('xtick', 'style-xtick', 'xlim', () => PlotArea.currentXRange(panel.id, isSwapped()));
+    wireTick('ytick', 'style-ytick', 'ylim', () => PlotArea.currentYRange(panel.id, isSwapped()));
 
     document.getElementById('style-xlabel').addEventListener('change', (e) => {
       PlotWorkspace.setPanelStyle(panel.id, { xlabel: e.target.value.trim() });

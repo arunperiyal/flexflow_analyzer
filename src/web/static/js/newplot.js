@@ -6,12 +6,14 @@ const NewPlot = (() => {
   let currentCaseMeta = null;
   let currentCaseName = null;
   let currentMapFile = null;
+  let selectedPane = null;   // {row, col}, or null for auto-placement
 
   async function open() {
     selectedRows = new Set();
     currentMapData = null;
     currentCaseMeta = null;
     currentMapFile = null;
+    selectedPane = null;
 
     const cases = await App.fetchCases();
     const options = cases
@@ -286,8 +288,56 @@ const NewPlot = (() => {
       <div id="np-spatial-options"></div>
       <label for="np-panel">Panel</label>
       <select id="np-panel"></select>
+      <div id="np-pane-section"></div>
       <div class="btn-row"><button id="np-add" class="primary" disabled>Add to plot</button></div>
     `;
+  }
+
+  // Where a *new* panel lands in the current Layout grid -- moot when
+  // overlaying onto an existing panel, which already has its own pane;
+  // applies whenever "Panel" ends up creating a fresh one, whether that
+  // was an explicit choice or the Auto routing default's outcome, so it's
+  // always shown rather than only for one specific Panel selection.
+  function renderPaneOptions() {
+    const box = document.getElementById('np-pane-section');
+    if (!box) return;
+    const ws = PlotWorkspace.state();
+    const { rows, columns, paneOf } = PlotArea.resolvePanes(ws);
+    const occupantAt = new Map();
+    ws.panels.forEach(p => {
+      const cell = paneOf.get(p.id);
+      if (cell) occupantAt.set(`${cell.row},${cell.col}`, p.title);
+    });
+
+    let gridHtml = '';
+    for (let r = 0; r < rows; r++) {
+      gridHtml += '<div class="pane-grid-row">';
+      for (let c = 0; c < columns; c++) {
+        const occupant = occupantAt.get(`${r},${c}`);
+        const isSelected = selectedPane && selectedPane.row === r && selectedPane.col === c;
+        const classes = ['pane-cell'];
+        if (occupant) classes.push('occupied');
+        if (isSelected) classes.push('selected');
+        gridHtml += `<button type="button" class="${classes.join(' ')}" data-row="${r}" data-col="${c}"` +
+                    `${occupant ? ` disabled title="${occupant}"` : ''}></button>`;
+      }
+      gridHtml += '</div>';
+    }
+
+    box.innerHTML = `
+      <label>Pane for a new panel -- ${selectedPane ? `row ${selectedPane.row + 1}, col ${selectedPane.col + 1}` : 'Auto'}</label>
+      <div class="pane-grid">${gridHtml}</div>
+    `;
+    box.querySelectorAll('.pane-cell:not(.occupied)').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const row = Number(btn.dataset.row);
+        const col = Number(btn.dataset.col);
+        selectedPane = (selectedPane && selectedPane.row === row && selectedPane.col === col)
+          ? null   // clicking the already-selected cell again reverts to Auto
+          : { row, col };
+        renderPaneOptions();
+      });
+    });
   }
 
   function currentKind() {
@@ -351,6 +401,7 @@ const NewPlot = (() => {
     }));
     renderPanelOptions(currentKind());
     renderSpatialOptions();
+    renderPaneOptions();
     const addBtn = document.getElementById('np-add');
     if (addBtn) addBtn.addEventListener('click', () => addToPlot(group));
   }
@@ -398,7 +449,7 @@ const NewPlot = (() => {
         if (frame === 'single') {
           const time = parseFloat(document.getElementById('np-time').value);
           PlotWorkspace.addSpatialTrace(currentCaseName, group.othId, points, column, 'snapshot',
-            { time, axLabel }, panelChoice);
+            { time, axLabel }, panelChoice, selectedPane);
         } else {
           const t1raw = document.getElementById('np-t1').value.trim();
           const t2raw = document.getElementById('np-t2').value.trim();
@@ -407,7 +458,7 @@ const NewPlot = (() => {
           const stats = Array.from(document.querySelectorAll('.np-stat:checked')).map(cb => cb.value);
           for (const stat of stats) {
             PlotWorkspace.addSpatialTrace(currentCaseName, group.othId, points, column, 'stat',
-              { stat, t1, t2, axLabel }, panelChoice);
+              { stat, t1, t2, axLabel }, panelChoice, selectedPane);
           }
         }
       }
@@ -417,7 +468,7 @@ const NewPlot = (() => {
         return r && r.node != null ? r.node : null;
       };
       for (const column of columns) {
-        PlotWorkspace.addTraces(currentCaseName, group.othId, Array.from(selectedRows), nodeOf, column, panelChoice);
+        PlotWorkspace.addTraces(currentCaseName, group.othId, Array.from(selectedRows), nodeOf, column, panelChoice, selectedPane);
       }
     }
 
