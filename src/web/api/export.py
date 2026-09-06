@@ -69,7 +69,7 @@ def export_png():
         fig, axes = plt.subplots(len(panels), 1, figsize=(9, 2.6 * len(panels)),
                                  sharex=link_x, squeeze=False)
 
-        for ax, panel in zip(axes[:, 0], panels):
+        for i, (ax, panel) in enumerate(zip(axes[:, 0], panels)):
             pstyle = panel.get('style') or {}
 
             if panel.get('kind') == 'spatial':
@@ -110,15 +110,20 @@ def export_png():
                 ax.xaxis.set_major_locator(MultipleLocator(pstyle['xtick']))
             if pstyle.get('ytick', 0) > 0:
                 ax.yaxis.set_major_locator(MultipleLocator(pstyle['ytick']))
-            # After the explicit limits: invert_*axis() flips whatever the
-            # current limits are, so it would be undone by a set_xlim/
-            # set_ylim call made afterward.
-            if pstyle.get('flipX'):
-                ax.invert_xaxis()
-            if pstyle.get('flipY'):
-                ax.invert_yaxis()
+            if pstyle.get('xtickangle') is not None:
+                ax.tick_params(axis='x', labelrotation=pstyle['xtickangle'])
+            if pstyle.get('ytickangle') is not None:
+                ax.tick_params(axis='y', labelrotation=pstyle['ytickangle'])
 
-        axes[-1, 0].set_xlabel('time [s]', fontsize=style.get('labelFontSize') or 8)
+            # An explicit label wins regardless of position; otherwise only
+            # the bottom axes gets 'time [s]' (the rest share it via sharex).
+            if pstyle.get('xlabel'):
+                ax.set_xlabel(pstyle['xlabel'], fontsize=style.get('labelFontSize') or 8)
+            elif i == len(panels) - 1:
+                ax.set_xlabel('time [s]', fontsize=style.get('labelFontSize') or 8)
+            if pstyle.get('ylabel'):
+                ax.set_ylabel(pstyle['ylabel'], fontsize=style.get('labelFontSize') or 9)
+
         if style.get('title'):
             fig.suptitle(style['title'], fontsize=(style.get('labelFontSize') or 9) + 2)
         fig.tight_layout()
