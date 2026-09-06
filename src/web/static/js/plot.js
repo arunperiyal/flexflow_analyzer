@@ -170,6 +170,60 @@ const PlotArea = (() => {
     return lo <= hi ? [lo, hi] : null;
   }
 
+  // Assigns every panel a (row, col) cell: a valid, non-conflicting
+  // panel.pane wins its cell; anything else (unset, out of bounds, or a
+  // second panel claiming an already-taken cell) falls back to the next
+  // free cell in row-major order, growing the grid downward rather than
+  // dropping the panel. Returns {rows, columns, paneOf}, paneOf mapping
+  // panel id -> {row, col}.
+  function resolvePanes(ws) {
+    const columns = Math.max(1, ws.layout.columns || 1);
+    let rows = Math.max(1, ws.layout.rows || 1);
+    const occupied = new Set();
+    const paneOf = new Map();
+
+    ws.panels.forEach(panel => {
+      const p = panel.pane;
+      if (p && Number.isInteger(p.row) && Number.isInteger(p.col) &&
+          p.row >= 0 && p.col >= 0 && p.col < columns) {
+        const key = `${p.row},${p.col}`;
+        if (!occupied.has(key)) {
+          occupied.add(key);
+          paneOf.set(panel.id, { row: p.row, col: p.col });
+          if (p.row >= rows) rows = p.row + 1;
+        }
+      }
+    });
+
+    let searchRow = 0, searchCol = 0;
+    function nextFreeCell() {
+      while (occupied.has(`${searchRow},${searchCol}`)) {
+        searchCol += 1;
+        if (searchCol >= columns) { searchCol = 0; searchRow += 1; }
+      }
+      occupied.add(`${searchRow},${searchCol}`);
+      return { row: searchRow, col: searchCol };
+    }
+    ws.panels.forEach(panel => {
+      if (!paneOf.has(panel.id)) {
+        const cell = nextFreeCell();
+        paneOf.set(panel.id, cell);
+        if (cell.row >= rows) rows = cell.row + 1;
+      }
+    });
+
+    return { rows, columns, paneOf };
+  }
+
+  // Plotly numbers grid subplots row-major from 1 (xaxis/yaxis, then
+  // xaxis2/yaxis2, ...) -- this is that number for whichever cell a panel
+  // resolved into.
+  function axisNumber(resolved, panelId) {
+    const cell = resolved.paneOf.get(panelId);
+    if (!cell) return 1;
+    return cell.row * resolved.columns + cell.col + 1;
+  }
+
   async function render() {
     const ws = PlotWorkspace.state();
     if (!ws.panels.length) {
@@ -221,14 +275,26 @@ const PlotArea = (() => {
     if (style.latex && !window.MathJax) {
       ensureMathJax().then(() => render()).catch(err => console.warn(err.message));
     }
-    const columns = (ws.layout && ws.layout.columns) || 1;
-    const rows = Math.ceil(ws.panels.length / columns);
+    const resolved = resolvePanes(ws);
+    const { rows, columns } = resolved;
+    // Only the bottom-most panel in each column needs the shared 'time'
+    // label -- linked x-axes make repeating it above pure noise. Replaces
+    // the old "last panel in the (single) stacked column" check, which
+    // relied on array order matching visual order; with explicit panes
+    // the two can differ.
+    const maxRowByCol = new Map();
+    ws.panels.forEach(panel => {
+      const cell = resolved.paneOf.get(panel.id);
+      if ((maxRowByCol.get(cell.col) ?? -1) < cell.row) maxRowByCol.set(cell.col, cell.row);
+    });
+
     const traces = [];
     const layout = {
       grid: { rows, columns, pattern: 'independent', roworder: 'top to bottom' },
       margin: { t: style.title ? 44 : 24, r: 20, b: 40, l: 60 },
       showlegend: !!style.showLegend,
-      height: Math.max(240, rows * 220),
+      width: ws.layout.width || undefined,
+      height: ws.layout.height || Math.max(240, rows * 220),
       paper_bgcolor: '#ffffff',
       plot_bgcolor: '#ffffff',
     };
@@ -244,8 +310,8 @@ const PlotArea = (() => {
     // below, then assigned to xKey/yKey (or the reverse) at the end,
     // rather than threading a swap flag through every line that touches
     // an axis.
-    ws.panels.forEach((panel, pIdx) => {
-      const n = pIdx + 1;
+    ws.panels.forEach(panel => {
+      const n = axisNumber(resolved, panel.id);
       const xref = n === 1 ? 'x' : `x${n}`;
       const yref = n === 1 ? 'y' : `y${n}`;
       const isSpatial = panel.kind === 'spatial';
@@ -297,12 +363,14 @@ const PlotArea = (() => {
         logicalXConfig = { title: pStyle.xlabel || axLabel };
         logicalYConfig = { title: pStyle.ylabel || panel.title };
       } else {
-        // A grid with several columns shows every column's own bottom axis;
-        // a single stacked column only labels its last one -- unless the
-        // panel has its own explicit label, which is shown regardless of
-        // position (an explicit choice overrides that de-duplication).
+        // Only the bottom-most panel in its column shows the shared 'time'
+        // label -- unless the panel has its own explicit label, shown
+        // regardless of position (an explicit choice overrides that
+        // de-duplication).
+        const cell = resolved.paneOf.get(panel.id);
+        const isBottomOfColumn = cell.row === maxRowByCol.get(cell.col);
         logicalXConfig = {
-          title: pStyle.xlabel || ((columns > 1 || pIdx === ws.panels.length - 1) ? 'time [s]' : ''),
+          title: pStyle.xlabel || (isBottomOfColumn ? 'time [s]' : ''),
           // Plotly's `matches` only links same-letter axes (x-to-x), so a
           // swapped panel -- whose logical time axis now sits on physical
           // y -- can't participate; linking is skipped for it rather than
@@ -329,26 +397,26 @@ const PlotArea = (() => {
   // the panel-tree's quick lock button) mean -- when a panel is swapped,
   // that data is actually drawn on Plotly's *other* physical axis, so
   // reading gd.layout.yaxis for "logical Y" on a swapped panel would
-  // silently hand back the wrong (logical X's) range.
-  function currentYRange(index, swap) {
+  // silently hand back the wrong (logical X's) range. Keyed by panel id,
+  // not array/render order -- with explicit panes the two can differ, so
+  // the axis number has to be re-resolved the same way render() did it.
+  function currentYRange(panelId, swap) {
+    return axisRange(panelId, swap ? 'x' : 'y');
+  }
+
+  function currentXRange(panelId, swap) {
+    return axisRange(panelId, swap ? 'y' : 'x');
+  }
+
+  function axisRange(panelId, letter) {
     const gd = document.getElementById('plotly-panels');
     if (!gd || !gd.layout) return null;
-    const n = index + 1;
-    const letter = swap ? 'x' : 'y';
+    const n = axisNumber(resolvePanes(PlotWorkspace.state()), panelId);
     const axis = gd.layout[n === 1 ? `${letter}axis` : `${letter}axis${n}`];
     return axis && axis.range ? [axis.range[0], axis.range[1]] : null;
   }
 
-  function currentXRange(index, swap) {
-    const gd = document.getElementById('plotly-panels');
-    if (!gd || !gd.layout) return null;
-    const n = index + 1;
-    const letter = swap ? 'y' : 'x';
-    const axis = gd.layout[n === 1 ? `${letter}axis` : `${letter}axis${n}`];
-    return axis && axis.range ? [axis.range[0], axis.range[1]] : null;
-  }
-
-  return { render, placeholder, currentYRange, currentXRange, ensureMathJax };
+  return { render, placeholder, currentYRange, currentXRange, ensureMathJax, resolvePanes };
 })();
 
 // Plot -> Export PNG (300 dpi): POSTs the workspace, matplotlib renders it
@@ -363,7 +431,7 @@ const Export = (() => {
     CommandLog.prompt('plot export --dpi 300');
     const res = await fetch('/api/export', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ panels: ws.panels, linkX: ws.linkX, style: ws.style }),
+      body: JSON.stringify({ panels: ws.panels, linkX: ws.linkX, style: ws.style, layout: ws.layout }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: 'export failed' }));

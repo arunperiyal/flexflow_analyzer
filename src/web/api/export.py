@@ -40,6 +40,46 @@ def _matplotlib_font(css_family):
     return first or None
 
 
+def _resolve_panes(panels, layout):
+    """Python port of plot.js's resolvePanes: honors valid, non-conflicting
+    explicit panel['pane'] assignments, then falls back unassigned/conflicting
+    panels to the next free cell in row-major order, growing rows as needed."""
+    columns = max(1, int(layout.get('columns') or 1))
+    rows = max(1, int(layout.get('rows') or 1))
+    occupied = set()
+    pane_of = {}
+
+    for panel in panels:
+        p = panel.get('pane')
+        if (p and isinstance(p.get('row'), int) and isinstance(p.get('col'), int)
+                and p['row'] >= 0 and 0 <= p['col'] < columns):
+            key = (p['row'], p['col'])
+            if key not in occupied:
+                occupied.add(key)
+                pane_of[panel['id']] = key
+                rows = max(rows, p['row'] + 1)
+
+    search = [0, 0]
+
+    def next_free_cell():
+        while (search[0], search[1]) in occupied:
+            search[1] += 1
+            if search[1] >= columns:
+                search[1] = 0
+                search[0] += 1
+        cell = (search[0], search[1])
+        occupied.add(cell)
+        return cell
+
+    for panel in panels:
+        if panel['id'] not in pane_of:
+            cell = next_free_cell()
+            pane_of[panel['id']] = cell
+            rows = max(rows, cell[0] + 1)
+
+    return rows, columns, pane_of
+
+
 def _plot_kwargs(trace, style):
     kwargs = {'linewidth': 1.0, 'linestyle': _LINESTYLES.get(trace.get('lineStyle'), '-')}
     marker = trace.get('marker')
@@ -58,18 +98,40 @@ def export_png():
     panels = data.get('panels') or []
     link_x = bool(data.get('linkX'))
     style = data.get('style') or {}
+    layout = data.get('layout') or {}
 
     if not panels:
         return jsonify({'error': 'no panels to export'}), 400
+
+    rows, columns, pane_of = _resolve_panes(panels, layout)
+    max_row_by_col = {}
+    for (r, c) in pane_of.values():
+        if c not in max_row_by_col or r > max_row_by_col[c]:
+            max_row_by_col[c] = r
+
+    width_px, height_px = layout.get('width'), layout.get('height')
+    figsize = (
+        width_px / 100 if width_px else max(6, 4.5 * columns),
+        height_px / 100 if height_px else max(2.6, 2.6 * rows),
+    )
 
     # rc_context scopes the font override to this figure, rather than
     # mutating matplotlib's global rcParams for every concurrent request.
     font_name = _matplotlib_font(style.get('fontFamily'))
     with plt.rc_context({'font.family': font_name} if font_name else {}):
-        fig, axes = plt.subplots(len(panels), 1, figsize=(9, 2.6 * len(panels)),
+        fig, axes = plt.subplots(rows, columns, figsize=figsize,
                                  sharex=link_x, squeeze=False)
 
-        for i, (ax, panel) in enumerate(zip(axes[:, 0], panels)):
+        used_cells = set(pane_of.values())
+        for r in range(rows):
+            for c in range(columns):
+                if (r, c) not in used_cells:
+                    axes[r, c].axis('off')
+
+        for panel in panels:
+            row, col = pane_of[panel['id']]
+            ax = axes[row, col]
+            is_bottom = row == max_row_by_col.get(col)
             pstyle = panel.get('style') or {}
 
             if panel.get('kind') == 'spatial':
@@ -129,10 +191,10 @@ def export_png():
                 ax.tick_params(axis=y_tick_axis, labelrotation=pstyle['ytickangle'])
 
             # An explicit label wins regardless of position; otherwise only
-            # the bottom axes gets 'time [s]' (the rest share it via sharex).
+            # the bottom-of-column axes gets 'time [s]'.
             if pstyle.get('xlabel'):
                 set_xlabel(pstyle['xlabel'], fontsize=style.get('labelFontSize') or 8)
-            elif i == len(panels) - 1:
+            elif is_bottom:
                 set_xlabel('time [s]', fontsize=style.get('labelFontSize') or 8)
             if pstyle.get('ylabel'):
                 set_ylabel(pstyle['ylabel'], fontsize=style.get('labelFontSize') or 9)

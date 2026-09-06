@@ -270,3 +270,69 @@ def test_export_renders_dollar_wrapped_text_via_matplotlibs_own_mathtext(client)
     })
     assert res.status_code == 200
     assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
+
+
+# -- Layout grid / pane assignment ------------------------------------------
+
+def test_resolve_panes_honors_explicit_non_conflicting_panes():
+    from src.web.api.export import _resolve_panes
+
+    panels = [
+        {'id': 'p1', 'pane': {'row': 1, 'col': 0}},
+        {'id': 'p2', 'pane': {'row': 0, 'col': 1}},
+    ]
+    rows, columns, pane_of = _resolve_panes(panels, {'rows': 2, 'columns': 2})
+    assert (rows, columns) == (2, 2)
+    assert pane_of == {'p1': (1, 0), 'p2': (0, 1)}
+
+
+def test_resolve_panes_falls_back_conflicting_panes_to_next_free_cell():
+    from src.web.api.export import _resolve_panes
+
+    panels = [
+        {'id': 'p1', 'pane': {'row': 0, 'col': 0}},
+        {'id': 'p2', 'pane': {'row': 0, 'col': 0}},  # conflicts with p1
+        {'id': 'p3', 'pane': None},                  # unassigned
+    ]
+    rows, columns, pane_of = _resolve_panes(panels, {'rows': 1, 'columns': 2})
+    assert pane_of['p1'] == (0, 0)
+    # p2 and p3 both land on free cells, never re-using (0, 0).
+    assert pane_of['p2'] != (0, 0)
+    assert pane_of['p3'] != (0, 0)
+    assert pane_of['p2'] != pane_of['p3']
+
+
+def test_resolve_panes_grows_rows_downward_when_the_grid_is_full():
+    from src.web.api.export import _resolve_panes
+
+    panels = [{'id': f'p{i}'} for i in range(3)]
+    rows, columns, pane_of = _resolve_panes(panels, {'rows': 1, 'columns': 2})
+    assert columns == 2
+    assert rows == 2
+    assert len(set(pane_of.values())) == 3
+
+
+def test_export_honors_an_explicit_grid_layout(client):
+    panels = _panels() + [{'id': 'p2', 'title': 'second', 'traces': _panels()[0]['traces'],
+                           'pane': {'row': 0, 'col': 1}}]
+    panels[0]['pane'] = {'row': 0, 'col': 0}
+    res = client.post('/api/export', json={
+        'panels': panels, 'layout': {'rows': 1, 'columns': 2, 'width': 900, 'height': 400},
+    })
+    assert res.status_code == 200
+    assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
+
+
+def test_export_bottom_of_column_label_in_a_two_column_grid(client):
+    # Column 0 has one panel (its own bottom); column 1 has two panels
+    # stacked -- only the row-1 one should be the "bottom of its column".
+    panels = [
+        {'id': 'p1', 'title': 'a', 'traces': _panels()[0]['traces'], 'pane': {'row': 0, 'col': 0}},
+        {'id': 'p2', 'title': 'b', 'traces': _panels()[0]['traces'], 'pane': {'row': 0, 'col': 1}},
+        {'id': 'p3', 'title': 'c', 'traces': _panels()[0]['traces'], 'pane': {'row': 1, 'col': 1}},
+    ]
+    res = client.post('/api/export', json={
+        'panels': panels, 'layout': {'rows': 2, 'columns': 2},
+    })
+    assert res.status_code == 200
+    assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
