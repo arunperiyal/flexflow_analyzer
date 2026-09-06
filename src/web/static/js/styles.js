@@ -4,6 +4,36 @@
 // tree, or from the dropdown here.
 const StyleSidebar = (() => {
   const MAX_TICKS = 200;   // a runaway dtick (e.g. 0.1 over a 230 s axis) can hang Plotly's render
+  const COLLAPSE_KEY = 'flexflow.styleSidebar.collapsed';
+
+  // Purely a UI preference (which sections are open), not plot data -- kept
+  // out of the workspace object and in its own localStorage entry instead.
+  function loadCollapsed() {
+    try {
+      const raw = localStorage.getItem(COLLAPSE_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (e) { /* private mode, cleared storage, etc. */ }
+    return {};
+  }
+  let collapsed = loadCollapsed();
+
+  function toggleGroup(name) {
+    collapsed[name] = !collapsed[name];
+    try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify(collapsed)); } catch (e) { /* ignore */ }
+    render();
+  }
+
+  function group(name, heading, bodyHtml) {
+    const isCollapsed = !!collapsed[name];
+    return `
+      <div class="style-group">
+        <div class="style-group-heading" data-group="${name}">
+          <span class="style-group-arrow">${isCollapsed ? '&#9656;' : '&#9662;'}</span> ${heading}
+        </div>
+        <div class="style-group-body" ${isCollapsed ? 'hidden' : ''}>${bodyHtml}</div>
+      </div>
+    `;
+  }
 
   const FONTS = [
     ['', 'Default'],
@@ -51,89 +81,87 @@ const StyleSidebar = (() => {
       .map(p => `<option value="${p.id}" ${p.id === panel.id ? 'selected' : ''}>${p.title}</option>`)
       .join('');
 
-    box.innerHTML = `
-      <div class="style-group">
-        <div class="style-group-heading">Global</div>
-        <div class="style-row">
-          <label for="style-font-family">Font</label>
-          <select id="style-font-family">${options(FONTS, g.fontFamily)}</select>
-        </div>
-        <div class="style-row">
-          <label for="style-label-size">Label size</label>
-          <input type="number" id="style-label-size" value="${g.labelFontSize ?? ''}" placeholder="auto" min="6" max="36">
-        </div>
-        <div class="style-row">
-          <label for="style-tick-size">Tick size</label>
-          <input type="number" id="style-tick-size" value="${g.tickFontSize ?? ''}" placeholder="auto" min="6" max="36">
-        </div>
-        <div class="style-row">
-          <label for="style-legend-size">Legend size</label>
-          <input type="number" id="style-legend-size" value="${g.legendFontSize ?? ''}" placeholder="auto" min="6" max="36">
-        </div>
-        <div class="style-row">
-          <label for="style-marker-size">Marker size</label>
-          <input type="number" id="style-marker-size" value="${g.markerSize ?? ''}" placeholder="auto" min="1" max="30">
-        </div>
-        <div class="style-row">
-          <label for="style-marker-step">Marker step</label>
-          <input type="number" id="style-marker-step" value="${g.markerStep ?? ''}" placeholder="every point" min="1" step="1">
-        </div>
-        <div class="style-row">
-          <label for="style-title">Title</label>
-          <input type="text" id="style-title" value="${g.title || ''}" placeholder="none">
-        </div>
-        <label class="style-row checkbox">
-          <input type="checkbox" id="style-show-legend" ${g.showLegend ? 'checked' : ''}> Show legend
-        </label>
-        <div class="style-row">
-          <label for="style-legend-pos">Legend position</label>
-          <select id="style-legend-pos">
-            <option value="top-right" ${g.legendPosition === 'top-right' ? 'selected' : ''}>Top right</option>
-            <option value="top" ${g.legendPosition === 'top' ? 'selected' : ''}>Top</option>
-            <option value="bottom" ${g.legendPosition === 'bottom' ? 'selected' : ''}>Bottom</option>
-          </select>
-        </div>
-        <label class="style-row checkbox">
-          <input type="checkbox" id="style-show-grid" ${g.showGrid !== false ? 'checked' : ''}> Show gridlines
-        </label>
+    const globalBody = `
+      <div class="style-row">
+        <label for="style-font-family">Font</label>
+        <select id="style-font-family">${options(FONTS, g.fontFamily)}</select>
       </div>
-
-      <div class="style-group">
-        <div class="style-group-heading">Panel</div>
-        <select id="style-panel-select" class="style-panel-select">${panelOptions}</select>
-
-        <label>X limits</label>
-        <div class="style-limit-row">
-          <input type="number" id="style-xlim-min" placeholder="min" value="${s.xlim ? s.xlim[0] : ''}">
-          <input type="number" id="style-xlim-max" placeholder="max" value="${s.xlim ? s.xlim[1] : ''}">
-        </div>
-        <label>Y limits</label>
-        <div class="style-limit-row">
-          <input type="number" id="style-ylim-min" placeholder="min" value="${s.ylim ? s.ylim[0] : ''}">
-          <input type="number" id="style-ylim-max" placeholder="max" value="${s.ylim ? s.ylim[1] : ''}">
-        </div>
-        <div class="style-row">
-          <label for="style-xtick">X tick step</label>
-          <input type="number" id="style-xtick" placeholder="auto" value="${s.xtick ?? ''}">
-        </div>
-        <div class="style-row">
-          <label for="style-ytick">Y tick step</label>
-          <input type="number" id="style-ytick" placeholder="auto" value="${s.ytick ?? ''}">
-        </div>
-        <label class="style-row checkbox">
-          <input type="checkbox" id="style-flip-x" ${s.flipX ? 'checked' : ''}> Flip X axis
-        </label>
-        <label class="style-row checkbox">
-          <input type="checkbox" id="style-flip-y" ${s.flipY ? 'checked' : ''}> Flip Y axis
-        </label>
+      <div class="style-row">
+        <label for="style-label-size">Label size</label>
+        <input type="number" id="style-label-size" value="${g.labelFontSize ?? ''}" placeholder="auto" min="6" max="36">
       </div>
-
-      <div class="style-group">
-        <div class="style-group-heading">Traces</div>
-        ${tracesHtml(panel)}
+      <div class="style-row">
+        <label for="style-tick-size">Tick size</label>
+        <input type="number" id="style-tick-size" value="${g.tickFontSize ?? ''}" placeholder="auto" min="6" max="36">
       </div>
+      <div class="style-row">
+        <label for="style-legend-size">Legend size</label>
+        <input type="number" id="style-legend-size" value="${g.legendFontSize ?? ''}" placeholder="auto" min="6" max="36">
+      </div>
+      <div class="style-row">
+        <label for="style-marker-size">Marker size</label>
+        <input type="number" id="style-marker-size" value="${g.markerSize ?? ''}" placeholder="auto" min="1" max="30">
+      </div>
+      <div class="style-row">
+        <label for="style-marker-step">Marker step</label>
+        <input type="number" id="style-marker-step" value="${g.markerStep ?? ''}" placeholder="every point" min="1" step="1">
+      </div>
+      <div class="style-row">
+        <label for="style-title">Title</label>
+        <input type="text" id="style-title" value="${g.title || ''}" placeholder="none">
+      </div>
+      <label class="style-row checkbox">
+        <input type="checkbox" id="style-show-legend" ${g.showLegend ? 'checked' : ''}> Show legend
+      </label>
+      <div class="style-row">
+        <label for="style-legend-pos">Legend position</label>
+        <select id="style-legend-pos">
+          <option value="top-right" ${g.legendPosition === 'top-right' ? 'selected' : ''}>Top right</option>
+          <option value="top" ${g.legendPosition === 'top' ? 'selected' : ''}>Top</option>
+          <option value="bottom" ${g.legendPosition === 'bottom' ? 'selected' : ''}>Bottom</option>
+        </select>
+      </div>
+      <label class="style-row checkbox">
+        <input type="checkbox" id="style-show-grid" ${g.showGrid !== false ? 'checked' : ''}> Show gridlines
+      </label>
     `;
 
+    const panelBody = `
+      <select id="style-panel-select" class="style-panel-select">${panelOptions}</select>
+
+      <label>X limits</label>
+      <div class="style-limit-row">
+        <input type="number" id="style-xlim-min" placeholder="min" value="${s.xlim ? s.xlim[0] : ''}">
+        <input type="number" id="style-xlim-max" placeholder="max" value="${s.xlim ? s.xlim[1] : ''}">
+      </div>
+      <label>Y limits</label>
+      <div class="style-limit-row">
+        <input type="number" id="style-ylim-min" placeholder="min" value="${s.ylim ? s.ylim[0] : ''}">
+        <input type="number" id="style-ylim-max" placeholder="max" value="${s.ylim ? s.ylim[1] : ''}">
+      </div>
+      <div class="style-row">
+        <label for="style-xtick">X tick step</label>
+        <input type="number" id="style-xtick" placeholder="auto" value="${s.xtick ?? ''}">
+      </div>
+      <div class="style-row">
+        <label for="style-ytick">Y tick step</label>
+        <input type="number" id="style-ytick" placeholder="auto" value="${s.ytick ?? ''}">
+      </div>
+      <label class="style-row checkbox">
+        <input type="checkbox" id="style-flip-x" ${s.flipX ? 'checked' : ''}> Flip X axis
+      </label>
+      <label class="style-row checkbox">
+        <input type="checkbox" id="style-flip-y" ${s.flipY ? 'checked' : ''}> Flip Y axis
+      </label>
+    `;
+
+    box.innerHTML = group('global', 'Global', globalBody)
+      + group('panel', 'Panel', panelBody)
+      + group('traces', 'Traces', tracesHtml(panel));
+
+    document.querySelectorAll('.style-group-heading').forEach(el => {
+      el.addEventListener('click', () => toggleGroup(el.dataset.group));
+    });
     wire(panel);
   }
 
