@@ -124,6 +124,9 @@ const StyleSidebar = (() => {
       <label class="style-row checkbox">
         <input type="checkbox" id="style-show-grid" ${g.showGrid !== false ? 'checked' : ''}> Show gridlines
       </label>
+      <label class="style-row checkbox">
+        <input type="checkbox" id="style-latex" ${g.latex ? 'checked' : ''}> LaTeX text ($...$)
+      </label>
     `;
 
     const panelBody = `
@@ -163,6 +166,9 @@ const StyleSidebar = (() => {
         <label for="style-ytickangle">Y tick angle</label>
         <input type="number" id="style-ytickangle" placeholder="auto" value="${s.ytickangle ?? ''}" min="-90" max="90">
       </div>
+      <label class="style-row checkbox">
+        <input type="checkbox" id="style-swap-axes" ${s.swapAxes ? 'checked' : ''}> Swap X/Y axes
+      </label>
     `;
 
     box.innerHTML = group('global', 'Global', globalBody)
@@ -206,6 +212,10 @@ const StyleSidebar = (() => {
     document.getElementById('style-show-legend').addEventListener('change', (e) => global({ showLegend: e.target.checked }));
     document.getElementById('style-legend-pos').addEventListener('change', (e) => global({ legendPosition: e.target.value }));
     document.getElementById('style-show-grid').addEventListener('change', (e) => global({ showGrid: e.target.checked }));
+    // PlotArea.render() itself notices style.latex and loads MathJax if
+    // needed (also covers a page reload restoring latex:true, which never
+    // fires this change event at all), so this just flips the flag.
+    document.getElementById('style-latex').addEventListener('change', (e) => global({ latex: e.target.checked }));
 
     document.getElementById('style-panel-select').addEventListener('change', (e) => {
       PlotWorkspace.setActivePanel(e.target.value);
@@ -262,8 +272,9 @@ const StyleSidebar = (() => {
       });
     }
     const idx = PlotWorkspace.state().panels.indexOf(panel);
-    wireTick('xtick', 'style-xtick', 'xlim', () => PlotArea.currentXRange(idx));
-    wireTick('ytick', 'style-ytick', 'ylim', () => PlotArea.currentYRange(idx));
+    const isSwapped = () => !!(panel.style && panel.style.swapAxes);
+    wireTick('xtick', 'style-xtick', 'xlim', () => PlotArea.currentXRange(idx, isSwapped()));
+    wireTick('ytick', 'style-ytick', 'ylim', () => PlotArea.currentYRange(idx, isSwapped()));
 
     document.getElementById('style-xlabel').addEventListener('change', (e) => {
       PlotWorkspace.setPanelStyle(panel.id, { xlabel: e.target.value.trim() });
@@ -279,6 +290,10 @@ const StyleSidebar = (() => {
     });
     document.getElementById('style-ytickangle').addEventListener('change', (e) => {
       PlotWorkspace.setPanelStyle(panel.id, { ytickangle: numberOrNull(e.target.value) });
+      PlotArea.render();
+    });
+    document.getElementById('style-swap-axes').addEventListener('change', (e) => {
+      PlotWorkspace.setPanelStyle(panel.id, { swapAxes: e.target.checked });
       PlotArea.render();
     });
 

@@ -84,12 +84,20 @@ def export_png():
                 ax.tick_params(labelsize=7)
                 continue
 
+            # Swap X/Y rotates the panel 90 degrees: pstyle's x*/y* fields
+            # always describe the same logical quantity (time on X, the
+            # plotted value on Y) regardless of swap -- swap only decides
+            # which physical matplotlib axis (ax.xaxis vs ax.yaxis) each
+            # one lands on, mirroring plot.js's logicalX/logicalY split.
+            swap = bool(pstyle.get('swapAxes'))
+
             plotted = 0
             for trace in panel.get('traces') or []:
                 values, times = _trace_values(root, trace)
                 if values is None:
                     continue
-                ax.plot(times, values, color=trace.get('color'),
+                first, second = (values, times) if swap else (times, values)
+                ax.plot(first, second, color=trace.get('color'),
                         label=f"{trace.get('case')} r{trace.get('row')} {trace.get('col')}",
                         **_plot_kwargs(trace, style))
                 plotted += 1
@@ -102,27 +110,32 @@ def export_png():
             if plotted and style.get('showLegend', True):
                 ax.legend(fontsize=style.get('legendFontSize') or 6, loc='upper right')
 
+            x_axis, y_axis = (ax.yaxis, ax.xaxis) if swap else (ax.xaxis, ax.yaxis)
+            set_xlim, set_ylim = (ax.set_ylim, ax.set_xlim) if swap else (ax.set_xlim, ax.set_ylim)
+            set_xlabel, set_ylabel = (ax.set_ylabel, ax.set_xlabel) if swap else (ax.set_xlabel, ax.set_ylabel)
+            x_tick_axis, y_tick_axis = ('y', 'x') if swap else ('x', 'y')
+
             if pstyle.get('xlim'):
-                ax.set_xlim(pstyle['xlim'])
+                set_xlim(pstyle['xlim'])
             if pstyle.get('ylim'):
-                ax.set_ylim(pstyle['ylim'])
+                set_ylim(pstyle['ylim'])
             if pstyle.get('xtick', 0) > 0:
-                ax.xaxis.set_major_locator(MultipleLocator(pstyle['xtick']))
+                x_axis.set_major_locator(MultipleLocator(pstyle['xtick']))
             if pstyle.get('ytick', 0) > 0:
-                ax.yaxis.set_major_locator(MultipleLocator(pstyle['ytick']))
+                y_axis.set_major_locator(MultipleLocator(pstyle['ytick']))
             if pstyle.get('xtickangle') is not None:
-                ax.tick_params(axis='x', labelrotation=pstyle['xtickangle'])
+                ax.tick_params(axis=x_tick_axis, labelrotation=pstyle['xtickangle'])
             if pstyle.get('ytickangle') is not None:
-                ax.tick_params(axis='y', labelrotation=pstyle['ytickangle'])
+                ax.tick_params(axis=y_tick_axis, labelrotation=pstyle['ytickangle'])
 
             # An explicit label wins regardless of position; otherwise only
             # the bottom axes gets 'time [s]' (the rest share it via sharex).
             if pstyle.get('xlabel'):
-                ax.set_xlabel(pstyle['xlabel'], fontsize=style.get('labelFontSize') or 8)
+                set_xlabel(pstyle['xlabel'], fontsize=style.get('labelFontSize') or 8)
             elif i == len(panels) - 1:
-                ax.set_xlabel('time [s]', fontsize=style.get('labelFontSize') or 8)
+                set_xlabel('time [s]', fontsize=style.get('labelFontSize') or 8)
             if pstyle.get('ylabel'):
-                ax.set_ylabel(pstyle['ylabel'], fontsize=style.get('labelFontSize') or 9)
+                set_ylabel(pstyle['ylabel'], fontsize=style.get('labelFontSize') or 9)
 
         if style.get('title'):
             fig.suptitle(style['title'], fontsize=(style.get('labelFontSize') or 9) + 2)

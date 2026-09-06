@@ -219,3 +219,54 @@ def test_export_font_family_takes_the_first_name_from_a_css_stack(client):
     })
     assert res.status_code == 200
     assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
+
+
+# -- swap X/Y ------------------------------------------------------------
+
+def test_export_swap_axes_with_all_style_fields_set(client):
+    # xlim/ylim/xtick/ytick/xlabel/ylabel/tickangle all still describe the
+    # logical X/Y quantity when swapped -- this exercises every one of
+    # them landing on the *other* physical matplotlib axis without raising.
+    panels = _panels()
+    panels[0]['style'] = {
+        'swapAxes': True,
+        'xlim': [0, 50], 'ylim': [-1, 1],
+        'xtick': 10, 'ytick': 0.5,
+        'xtickangle': 45, 'ytickangle': -30,
+        'xlabel': 'Time [s]', 'ylabel': 'Displacement [m]',
+    }
+    res = client.post('/api/export', json={'panels': panels})
+    assert res.status_code == 200
+    assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
+
+
+def test_export_swap_axes_with_no_other_overrides(client):
+    panels = _panels()
+    panels[0]['style'] = {'swapAxes': True}
+    res = client.post('/api/export', json={'panels': panels})
+    assert res.status_code == 200
+    assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
+
+
+def test_export_swap_axes_on_the_last_panel_still_gets_a_default_label(client):
+    # The default 'time [s]' label normally lands on the bottom axes' x
+    # label; swapped, it should land on that axes' y label instead, not
+    # silently disappear.
+    panels = _panels()
+    panels[0]['style'] = {'swapAxes': True}
+    res = client.post('/api/export', json={'panels': panels})
+    assert res.status_code == 200
+
+
+# -- LaTeX -----------------------------------------------------------------
+
+def test_export_renders_dollar_wrapped_text_via_matplotlibs_own_mathtext(client):
+    # No server-side flag needed for this: matplotlib auto-typesets $...$
+    # text with its own mathtext engine regardless of any setting, unlike
+    # Plotly which needs MathJax loaded first. This just confirms passing
+    # such text through doesn't raise.
+    res = client.post('/api/export', json={
+        'panels': _panels(), 'style': {'title': r'$\alpha$ vs $\beta$'},
+    })
+    assert res.status_code == 200
+    assert res.data[:8] == b'\x89PNG\r\n\x1a\n'

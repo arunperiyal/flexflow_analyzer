@@ -1,6 +1,26 @@
 // Renders the plot workspace: one Plotly figure, panels as stacked subplots
 // sharing an x-axis when linked (§5 of the plan).
 const PlotArea = (() => {
+  // Lazy-loaded only when the LaTeX checkbox is turned on. Unlike the
+  // single-file Plotly bundles, MathJax needs its own config/extension/
+  // font-data tree alongside MathJax.js (self-hosted, trimmed to the SVG
+  // output path only -- no CDN, per this app's air-gapped-compute-node
+  // posture). Plotly has no "enable LaTeX" flag of its own: it checks for
+  // window.MathJax at draw time and typesets any $...$ text automatically
+  // once present, so loading the script is the whole integration.
+  let mathJaxPromise = null;
+  function ensureMathJax() {
+    if (mathJaxPromise) return mathJaxPromise;
+    mathJaxPromise = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = '/static/vendor/mathjax/MathJax.js?config=TeX-MML-AM_SVG';
+      script.onload = resolve;
+      script.onerror = () => { mathJaxPromise = null; reject(new Error('could not load MathJax')); };
+      document.head.appendChild(script);
+    });
+    return mathJaxPromise;
+  }
+
   function groupKey(t) { return `${t.case}\u0000${t.group}`; }
 
   async function fetchHistory(caseName, group, rows, columns) {
@@ -193,6 +213,14 @@ const PlotArea = (() => {
     document.getElementById('plotarea').innerHTML = '<div id="plotly-panels" style="width:100%"></div>';
 
     const style = ws.style || {};
+    // Covers every path that can end up rendering with latex:true, not
+    // just the checkbox's own change handler -- a page reload restores
+    // ws.style.latex from localStorage without ever firing that event, so
+    // relying on the checkbox alone silently left MathJax never loaded
+    // (found by actually reloading with it already on).
+    if (style.latex && !window.MathJax) {
+      ensureMathJax().then(() => render()).catch(err => console.warn(err.message));
+    }
     const columns = (ws.layout && ws.layout.columns) || 1;
     const rows = Math.ceil(ws.panels.length / columns);
     const traces = [];
@@ -208,24 +236,36 @@ const PlotArea = (() => {
     if (style.title) layout.title = { text: style.title };
     if (style.showLegend) layout.legend = legendLayout(style);
 
+    // "Swap X/Y" rotates a panel 90 degrees: the style sidebar's X/Y fields
+    // (label, limits, tick step, tick angle) always describe the same
+    // logical quantity (time or position on X, the plotted value on Y)
+    // regardless of swap -- swapping only decides which physical Plotly
+    // axis that quantity ends up drawn on. Built as logicalX/logicalY
+    // below, then assigned to xKey/yKey (or the reverse) at the end,
+    // rather than threading a swap flag through every line that touches
+    // an axis.
     ws.panels.forEach((panel, pIdx) => {
       const n = pIdx + 1;
       const xref = n === 1 ? 'x' : `x${n}`;
       const yref = n === 1 ? 'y' : `y${n}`;
       const isSpatial = panel.kind === 'spatial';
+      const pStyle = panel.style || {};
+      const swap = !!pStyle.swapAxes;
       const tracesStart = traces.length;
 
       if (isSpatial) {
         panel.traces.forEach(t => {
           const byRow = spatialResults.get(t) || new Map();
           const symbol = markerSymbolFor(t, true);
+          const logicalX = t.points.map(p => p.x);
+          const logicalY = t.points.map(p => byRow.get(p.row));
           const trace = {
-            x: t.points.map(p => p.x), y: t.points.map(p => byRow.get(p.row)),
+            x: swap ? logicalY : logicalX, y: swap ? logicalX : logicalY,
             xaxis: xref, yaxis: yref, mode: symbol ? 'lines+markers' : 'lines', type: 'scatter',
             name: spatialTraceName(t),
             line: lineFor(t),
           };
-          addMarker(trace, t, symbol, 5, style, trace.x.length);
+          addMarker(trace, t, symbol, 5, style, logicalX.length);
           traces.push(trace);
         });
       } else {
@@ -233,66 +273,82 @@ const PlotArea = (() => {
           const data = results.get(groupKey(t));
           const s = data && data.series.find(s => s.row === t.row && s.column === t.col);
           const symbol = markerSymbolFor(t, false);
+          const logicalX = data ? data.times : [];
+          const logicalY = s ? s.values : [];
           const trace = {
-            x: data ? data.times : [], y: s ? s.values : [],
+            x: swap ? logicalY : logicalX, y: swap ? logicalX : logicalY,
             xaxis: xref, yaxis: yref, mode: symbol ? 'lines+markers' : 'lines', type: 'scatter',
             name: `${t.case} r${t.row} ${t.col}`,
             line: lineFor(t),
           };
-          addMarker(trace, t, symbol, 6, style, trace.x.length);
+          addMarker(trace, t, symbol, 6, style, logicalX.length);
           traces.push(trace);
         });
       }
 
       const xKey = n === 1 ? 'xaxis' : `xaxis${n}`;
       const yKey = n === 1 ? 'yaxis' : `yaxis${n}`;
-      const pStyle = panel.style || {};
 
+      let logicalXConfig, logicalYConfig;
       if (isSpatial) {
         // Its own coordinate, not time -- never shares an axis with a time
         // panel (ws.linkX doesn't apply here).
         const axLabel = (panel.traces[0] && panel.traces[0].axLabel) || 'position';
-        layout[xKey] = { title: pStyle.xlabel || axLabel };
-        layout[yKey] = { title: pStyle.ylabel || panel.title };
+        logicalXConfig = { title: pStyle.xlabel || axLabel };
+        logicalYConfig = { title: pStyle.ylabel || panel.title };
       } else {
         // A grid with several columns shows every column's own bottom axis;
         // a single stacked column only labels its last one -- unless the
         // panel has its own explicit label, which is shown regardless of
         // position (an explicit choice overrides that de-duplication).
-        layout[xKey] = {
+        logicalXConfig = {
           title: pStyle.xlabel || ((columns > 1 || pIdx === ws.panels.length - 1) ? 'time [s]' : ''),
-          matches: ws.linkX ? 'x' : undefined,
+          // Plotly's `matches` only links same-letter axes (x-to-x), so a
+          // swapped panel -- whose logical time axis now sits on physical
+          // y -- can't participate; linking is skipped for it rather than
+          // silently doing nothing or erroring.
+          matches: (ws.linkX && !swap) ? 'x' : undefined,
         };
-        layout[yKey] = { title: pStyle.ylabel || panel.title };
+        logicalYConfig = { title: pStyle.ylabel || panel.title };
       }
 
       const panelTraces = traces.slice(tracesStart);
-      const xRange = extent(panelTraces.flatMap(tr => tr.x));
-      const yRange = extent(panelTraces.flatMap(tr => tr.y));
-      applyAxisStyle(layout[xKey], style, pStyle.xtick, pStyle.xlim, xRange, pStyle.xtickangle);
-      applyAxisStyle(layout[yKey], style, pStyle.ytick, pStyle.ylim, yRange, pStyle.ytickangle);
+      const logicalXRange = extent(panelTraces.flatMap(tr => (swap ? tr.y : tr.x)));
+      const logicalYRange = extent(panelTraces.flatMap(tr => (swap ? tr.x : tr.y)));
+      applyAxisStyle(logicalXConfig, style, pStyle.xtick, pStyle.xlim, logicalXRange, pStyle.xtickangle);
+      applyAxisStyle(logicalYConfig, style, pStyle.ytick, pStyle.ylim, logicalYRange, pStyle.ytickangle);
+
+      layout[xKey] = swap ? logicalYConfig : logicalXConfig;
+      layout[yKey] = swap ? logicalXConfig : logicalYConfig;
     });
 
     Plotly.newPlot('plotly-panels', traces, layout, { displaylogo: false, responsive: true });
   }
 
-  function currentYRange(index) {
+  // The logical Y/X range, i.e. what the style sidebar's Y/X fields (and
+  // the panel-tree's quick lock button) mean -- when a panel is swapped,
+  // that data is actually drawn on Plotly's *other* physical axis, so
+  // reading gd.layout.yaxis for "logical Y" on a swapped panel would
+  // silently hand back the wrong (logical X's) range.
+  function currentYRange(index, swap) {
     const gd = document.getElementById('plotly-panels');
     if (!gd || !gd.layout) return null;
     const n = index + 1;
-    const axis = gd.layout[n === 1 ? 'yaxis' : `yaxis${n}`];
+    const letter = swap ? 'x' : 'y';
+    const axis = gd.layout[n === 1 ? `${letter}axis` : `${letter}axis${n}`];
     return axis && axis.range ? [axis.range[0], axis.range[1]] : null;
   }
 
-  function currentXRange(index) {
+  function currentXRange(index, swap) {
     const gd = document.getElementById('plotly-panels');
     if (!gd || !gd.layout) return null;
     const n = index + 1;
-    const axis = gd.layout[n === 1 ? 'xaxis' : `xaxis${n}`];
+    const letter = swap ? 'y' : 'x';
+    const axis = gd.layout[n === 1 ? `${letter}axis` : `${letter}axis${n}`];
     return axis && axis.range ? [axis.range[0], axis.range[1]] : null;
   }
 
-  return { render, placeholder, currentYRange, currentXRange };
+  return { render, placeholder, currentYRange, currentXRange, ensureMathJax };
 })();
 
 // Plot -> Export PNG (300 dpi): POSTs the workspace, matplotlib renders it

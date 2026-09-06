@@ -12,7 +12,7 @@ const PlotWorkspace = (() => {
     return {
       fontFamily: '', labelFontSize: null, legendFontSize: null, tickFontSize: null,
       title: '', showLegend: false, legendPosition: 'top-right', showGrid: true,
-      markerSize: null, markerStep: null,
+      markerSize: null, markerStep: null, latex: false,
     };
   }
 
@@ -265,7 +265,7 @@ const PanelTree = (() => {
           refreshWorkspace();
         } else {
           const idx = ws.panels.indexOf(panel);
-          const range = PlotArea.currentYRange(idx);
+          const range = PlotArea.currentYRange(idx, !!(panel.style && panel.style.swapAxes));
           PlotWorkspace.setYLock(panel.id, range);
           refreshWorkspace();
         }
