@@ -5,8 +5,34 @@
 const StyleSidebar = (() => {
   const MAX_TICKS = 200;   // a runaway dtick (e.g. 0.1 over a 230 s axis) can hang Plotly's render
 
+  const FONTS = [
+    ['', 'Default'],
+    ['Arial, sans-serif', 'Arial'],
+    ['Helvetica, Arial, sans-serif', 'Helvetica'],
+    ['Georgia, serif', 'Georgia'],
+    ['"Times New Roman", Times, serif', 'Times New Roman'],
+    ['"Courier New", Courier, monospace', 'Courier New'],
+    ['Verdana, sans-serif', 'Verdana'],
+    ['"Trebuchet MS", sans-serif', 'Trebuchet MS'],
+    ['"Segoe UI", Roboto, sans-serif', 'Segoe UI'],
+    ['"DejaVu Sans Mono", monospace', 'Monospace'],
+  ];
+  const LINE_STYLES = [
+    ['', 'Solid'], ['dash', 'Dashed'], ['dot', 'Dotted'], ['dashdot', 'Dash-dot'],
+  ];
+  const MARKERS = [
+    ['', 'Default'], ['none', 'None'], ['circle', 'Circle'], ['square', 'Square'],
+    ['diamond', 'Diamond'], ['cross', 'Cross'], ['x', 'X'], ['triangle-up', 'Triangle'],
+  ];
+
   function activePanel(ws) {
     return ws.panels.find(p => p.id === ws.activePanelId) || ws.panels[0];
+  }
+
+  function options(pairs, current) {
+    return pairs.map(([value, label]) =>
+      `<option value="${value}" ${value === (current || '') ? 'selected' : ''}>${label}</option>`
+    ).join('');
   }
 
   function render() {
@@ -30,11 +56,15 @@ const StyleSidebar = (() => {
         <div class="style-group-heading">Global</div>
         <div class="style-row">
           <label for="style-font-family">Font</label>
-          <input type="text" id="style-font-family" value="${g.fontFamily || ''}" placeholder="default">
+          <select id="style-font-family">${options(FONTS, g.fontFamily)}</select>
         </div>
         <div class="style-row">
           <label for="style-label-size">Label size</label>
           <input type="number" id="style-label-size" value="${g.labelFontSize ?? ''}" placeholder="auto" min="6" max="36">
+        </div>
+        <div class="style-row">
+          <label for="style-tick-size">Tick size</label>
+          <input type="number" id="style-tick-size" value="${g.tickFontSize ?? ''}" placeholder="auto" min="6" max="36">
         </div>
         <div class="style-row">
           <label for="style-legend-size">Legend size</label>
@@ -82,18 +112,44 @@ const StyleSidebar = (() => {
           <label for="style-ytick">Y tick step</label>
           <input type="number" id="style-ytick" placeholder="auto" value="${s.ytick ?? ''}">
         </div>
+        <label class="style-row checkbox">
+          <input type="checkbox" id="style-flip-x" ${s.flipX ? 'checked' : ''}> Flip X axis
+        </label>
+        <label class="style-row checkbox">
+          <input type="checkbox" id="style-flip-y" ${s.flipY ? 'checked' : ''}> Flip Y axis
+        </label>
+      </div>
+
+      <div class="style-group">
+        <div class="style-group-heading">Traces</div>
+        ${tracesHtml(panel)}
       </div>
     `;
 
     wire(panel);
   }
 
+  function tracesHtml(panel) {
+    if (!panel.traces.length) return '<div class="empty">No traces in this panel</div>';
+    return panel.traces.map((t, idx) => `
+      <div class="trace-style-block">
+        <div class="trace-style-label" title="${PanelTree.traceLabel(t)}">${PanelTree.traceLabel(t)}</div>
+        <div class="trace-style-row">
+          <input type="color" class="trace-style-color" data-idx="${idx}" value="${t.color || '#000000'}">
+          <select class="trace-style-line" data-idx="${idx}">${options(LINE_STYLES, t.lineStyle)}</select>
+          <select class="trace-style-marker" data-idx="${idx}">${options(MARKERS, t.marker)}</select>
+        </div>
+      </div>
+    `).join('');
+  }
+
   function wire(panel) {
     const global = (patch) => { PlotWorkspace.setGlobalStyle(patch); PlotArea.render(); };
     const numberOrNull = (v) => (v.trim() === '' ? null : parseFloat(v));
 
-    document.getElementById('style-font-family').addEventListener('change', (e) => global({ fontFamily: e.target.value.trim() }));
+    document.getElementById('style-font-family').addEventListener('change', (e) => global({ fontFamily: e.target.value }));
     document.getElementById('style-label-size').addEventListener('change', (e) => global({ labelFontSize: numberOrNull(e.target.value) }));
+    document.getElementById('style-tick-size').addEventListener('change', (e) => global({ tickFontSize: numberOrNull(e.target.value) }));
     document.getElementById('style-legend-size').addEventListener('change', (e) => global({ legendFontSize: numberOrNull(e.target.value) }));
     document.getElementById('style-title').addEventListener('change', (e) => global({ title: e.target.value.trim() }));
     document.getElementById('style-show-legend').addEventListener('change', (e) => global({ showLegend: e.target.checked }));
@@ -157,6 +213,32 @@ const StyleSidebar = (() => {
     const idx = PlotWorkspace.state().panels.indexOf(panel);
     wireTick('xtick', 'style-xtick', 'xlim', () => PlotArea.currentXRange(idx));
     wireTick('ytick', 'style-ytick', 'ylim', () => PlotArea.currentYRange(idx));
+
+    document.getElementById('style-flip-x').addEventListener('change', (e) => {
+      PlotWorkspace.setPanelStyle(panel.id, { flipX: e.target.checked });
+      PlotArea.render();
+    });
+    document.getElementById('style-flip-y').addEventListener('change', (e) => {
+      PlotWorkspace.setPanelStyle(panel.id, { flipY: e.target.checked });
+      PlotArea.render();
+    });
+
+    // 'change' (fires once, on commit), not 'input' -- PlotArea.render() is
+    // a network round-trip, and 'input' fires continuously while dragging
+    // inside the native color picker.
+    document.querySelectorAll('.trace-style-color').forEach(el => el.addEventListener('change', (e) => {
+      PlotWorkspace.setTraceStyle(panel.id, Number(e.target.dataset.idx), { color: e.target.value });
+      PlotArea.render();
+      PanelTree.render();   // the trace-row swatch mirrors this trace's color
+    }));
+    document.querySelectorAll('.trace-style-line').forEach(el => el.addEventListener('change', (e) => {
+      PlotWorkspace.setTraceStyle(panel.id, Number(e.target.dataset.idx), { lineStyle: e.target.value });
+      PlotArea.render();
+    }));
+    document.querySelectorAll('.trace-style-marker').forEach(el => el.addEventListener('change', (e) => {
+      PlotWorkspace.setTraceStyle(panel.id, Number(e.target.dataset.idx), { marker: e.target.value });
+      PlotArea.render();
+    }));
   }
 
   return { render };

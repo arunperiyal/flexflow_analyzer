@@ -133,3 +133,40 @@ def test_export_with_no_style_key_at_all_still_works(client):
     res = client.post('/api/export', json={'panels': _panels()})
     assert res.status_code == 200
     assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
+
+
+def test_export_honors_tick_font_size_and_axis_flip(client):
+    panels = _panels()
+    panels[0]['style'] = {'flipX': True, 'flipY': True}
+    res = client.post('/api/export', json={'panels': panels, 'style': {'tickFontSize': 12}})
+    assert res.status_code == 200
+    assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
+
+
+def test_export_honors_per_trace_line_style_marker_and_color(client):
+    panels = _panels()
+    panels[0]['traces'][0]['lineStyle'] = 'dashdot'
+    panels[0]['traces'][0]['marker'] = 'triangle-up'
+    panels[0]['traces'][0]['color'] = '#123456'
+    panels[0]['traces'][1]['lineStyle'] = 'dot'
+    panels[0]['traces'][1]['marker'] = 'none'
+    res = client.post('/api/export', json={'panels': panels})
+    assert res.status_code == 200
+    assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
+
+
+def test_export_font_family_takes_the_first_name_from_a_css_stack(client):
+    # The style sidebar's font dropdown sends CSS font-family syntax
+    # (e.g. '"Times New Roman", Times, serif'); matplotlib's rcParams
+    # wants a bare name, not that list syntax.
+    from src.web.api.export import _matplotlib_font
+    assert _matplotlib_font('"Times New Roman", Times, serif') == 'Times New Roman'
+    assert _matplotlib_font('Arial, sans-serif') == 'Arial'
+    assert _matplotlib_font('') is None
+    assert _matplotlib_font(None) is None
+
+    res = client.post('/api/export', json={
+        'panels': _panels(), 'style': {'fontFamily': '"Times New Roman", Times, serif'},
+    })
+    assert res.status_code == 200
+    assert res.data[:8] == b'\x89PNG\r\n\x1a\n'

@@ -10,7 +10,7 @@ const PlotWorkspace = (() => {
   // renders exactly as it did before this existed.
   function defaultGlobalStyle() {
     return {
-      fontFamily: '', labelFontSize: null, legendFontSize: null,
+      fontFamily: '', labelFontSize: null, legendFontSize: null, tickFontSize: null,
       title: '', showLegend: false, legendPosition: 'top-right', showGrid: true,
     };
   }
@@ -180,6 +180,15 @@ const PlotWorkspace = (() => {
     save();
   }
 
+  // Per-trace overrides (color, line style, marker) -- distinct from panel
+  // style since these describe one line, not the axes it is drawn on.
+  function setTraceStyle(panelId, traceIndex, patch) {
+    const panel = ws.panels.find(p => p.id === panelId);
+    if (!panel || !panel.traces[traceIndex]) return;
+    panel.traces[traceIndex] = { ...panel.traces[traceIndex], ...patch };
+    save();
+  }
+
   function setActivePanel(id) {
     ws.activePanelId = id;
     save();
@@ -209,6 +218,7 @@ const PlotWorkspace = (() => {
   return {
     state, addTraces, addSpatialTrace, removeTrace, removePanel, clearPanel, renamePanel,
     setYLock, movePanel, setColumns, setLinkX, setPanelStyle, setGlobalStyle, setActivePanel,
+    setTraceStyle,
   };
 })();
 
@@ -333,7 +343,7 @@ const PanelTree = (() => {
     });
   }
 
-  return { render };
+  return { render, traceLabel };
 })();
 
 function refreshWorkspace() {
