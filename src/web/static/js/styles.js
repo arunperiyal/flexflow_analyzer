@@ -71,6 +71,14 @@ const StyleSidebar = (() => {
           <input type="number" id="style-legend-size" value="${g.legendFontSize ?? ''}" placeholder="auto" min="6" max="36">
         </div>
         <div class="style-row">
+          <label for="style-marker-size">Marker size</label>
+          <input type="number" id="style-marker-size" value="${g.markerSize ?? ''}" placeholder="auto" min="1" max="30">
+        </div>
+        <div class="style-row">
+          <label for="style-marker-step">Marker step</label>
+          <input type="number" id="style-marker-step" value="${g.markerStep ?? ''}" placeholder="every point" min="1" step="1">
+        </div>
+        <div class="style-row">
           <label for="style-title">Title</label>
           <input type="text" id="style-title" value="${g.title || ''}" placeholder="none">
         </div>
@@ -151,6 +159,11 @@ const StyleSidebar = (() => {
     document.getElementById('style-label-size').addEventListener('change', (e) => global({ labelFontSize: numberOrNull(e.target.value) }));
     document.getElementById('style-tick-size').addEventListener('change', (e) => global({ tickFontSize: numberOrNull(e.target.value) }));
     document.getElementById('style-legend-size').addEventListener('change', (e) => global({ legendFontSize: numberOrNull(e.target.value) }));
+    document.getElementById('style-marker-size').addEventListener('change', (e) => global({ markerSize: numberOrNull(e.target.value) }));
+    document.getElementById('style-marker-step').addEventListener('change', (e) => {
+      const v = e.target.value.trim();
+      global({ markerStep: v === '' ? null : Math.max(1, Math.round(parseFloat(v))) });
+    });
     document.getElementById('style-title').addEventListener('change', (e) => global({ title: e.target.value.trim() }));
     document.getElementById('style-show-legend').addEventListener('change', (e) => global({ showLegend: e.target.checked }));
     document.getElementById('style-legend-pos').addEventListener('change', (e) => global({ legendPosition: e.target.value }));

@@ -119,9 +119,23 @@ const PlotArea = (() => {
 
   // No `marker` key at all when there is no symbol -- see the note above
   // lineFor: assigning `marker: undefined` on the trace itself hits the
-  // exact same Plotly bug, one level up.
-  function addMarker(trace, t, symbol, size) {
-    if (symbol) trace.marker = { color: t.color, size, symbol };
+  // exact same Plotly bug, one level up. `style.markerSize` overrides the
+  // per-kind default (5 for a spatial trace, 6 for a time one) globally.
+  function addMarker(trace, t, symbol, defaultSize, style, pointCount) {
+    if (!symbol) return;
+    const size = style.markerSize > 0 ? style.markerSize : defaultSize;
+    const step = style.markerStep > 1 ? Math.round(style.markerStep) : 1;
+    trace.marker = { color: t.color, symbol, size: step > 1 ? stepSizes(pointCount, size, step) : size };
+  }
+
+  // Plotly has no built-in "show a marker every N points" for a
+  // lines+markers trace; the usual trick is a per-point size array -- the
+  // real size every `step`th point, 0 elsewhere -- so the line itself
+  // stays fully drawn through every point and only the marker glyphs thin
+  // out (dense time series can be thousands of points wide, where a
+  // marker on every one is just visual noise).
+  function stepSizes(pointCount, size, step) {
+    return Array.from({ length: pointCount }, (_, i) => (i % step === 0 ? size : 0));
   }
 
   // A manual reduce, not Math.min(...values) -- a panel's combined series
@@ -212,7 +226,7 @@ const PlotArea = (() => {
             name: spatialTraceName(t),
             line: lineFor(t),
           };
-          addMarker(trace, t, symbol, 5);
+          addMarker(trace, t, symbol, 5, style, trace.x.length);
           traces.push(trace);
         });
       } else {
@@ -226,7 +240,7 @@ const PlotArea = (() => {
             name: `${t.case} r${t.row} ${t.col}`,
             line: lineFor(t),
           };
-          addMarker(trace, t, symbol, 6);
+          addMarker(trace, t, symbol, 6, style, trace.x.length);
           traces.push(trace);
         });
       }
