@@ -129,6 +129,14 @@ const StyleSidebar = (() => {
     const panelBody = `
       <select id="style-panel-select" class="style-panel-select">${panelOptions}</select>
 
+      <div class="style-row">
+        <label for="style-xlabel">X label</label>
+        <input type="text" id="style-xlabel" placeholder="auto" value="${s.xlabel || ''}">
+      </div>
+      <div class="style-row">
+        <label for="style-ylabel">Y label</label>
+        <input type="text" id="style-ylabel" placeholder="auto" value="${s.ylabel || ''}">
+      </div>
       <label>X limits</label>
       <div class="style-limit-row">
         <input type="number" id="style-xlim-min" placeholder="min" value="${s.xlim ? s.xlim[0] : ''}">
@@ -147,12 +155,14 @@ const StyleSidebar = (() => {
         <label for="style-ytick">Y tick step</label>
         <input type="number" id="style-ytick" placeholder="auto" value="${s.ytick ?? ''}">
       </div>
-      <label class="style-row checkbox">
-        <input type="checkbox" id="style-flip-x" ${s.flipX ? 'checked' : ''}> Flip X axis
-      </label>
-      <label class="style-row checkbox">
-        <input type="checkbox" id="style-flip-y" ${s.flipY ? 'checked' : ''}> Flip Y axis
-      </label>
+      <div class="style-row">
+        <label for="style-xtickangle">X tick angle</label>
+        <input type="number" id="style-xtickangle" placeholder="auto" value="${s.xtickangle ?? ''}" min="-90" max="90">
+      </div>
+      <div class="style-row">
+        <label for="style-ytickangle">Y tick angle</label>
+        <input type="number" id="style-ytickangle" placeholder="auto" value="${s.ytickangle ?? ''}" min="-90" max="90">
+      </div>
     `;
 
     box.innerHTML = group('global', 'Global', globalBody)
@@ -255,12 +265,20 @@ const StyleSidebar = (() => {
     wireTick('xtick', 'style-xtick', 'xlim', () => PlotArea.currentXRange(idx));
     wireTick('ytick', 'style-ytick', 'ylim', () => PlotArea.currentYRange(idx));
 
-    document.getElementById('style-flip-x').addEventListener('change', (e) => {
-      PlotWorkspace.setPanelStyle(panel.id, { flipX: e.target.checked });
+    document.getElementById('style-xlabel').addEventListener('change', (e) => {
+      PlotWorkspace.setPanelStyle(panel.id, { xlabel: e.target.value.trim() });
       PlotArea.render();
     });
-    document.getElementById('style-flip-y').addEventListener('change', (e) => {
-      PlotWorkspace.setPanelStyle(panel.id, { flipY: e.target.checked });
+    document.getElementById('style-ylabel').addEventListener('change', (e) => {
+      PlotWorkspace.setPanelStyle(panel.id, { ylabel: e.target.value.trim() });
+      PlotArea.render();
+    });
+    document.getElementById('style-xtickangle').addEventListener('change', (e) => {
+      PlotWorkspace.setPanelStyle(panel.id, { xtickangle: numberOrNull(e.target.value) });
+      PlotArea.render();
+    });
+    document.getElementById('style-ytickangle').addEventListener('change', (e) => {
+      PlotWorkspace.setPanelStyle(panel.id, { ytickangle: numberOrNull(e.target.value) });
       PlotArea.render();
     });
 

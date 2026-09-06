@@ -65,16 +65,17 @@ const PlotArea = (() => {
   const MAX_TICKS = 200;
 
   // Global label size, tick label size, gridlines, and a panel's own tick
-  // step / axis limits / flip -- shared by both the time and spatial
-  // branches below so they stay in sync rather than duplicating this per
-  // branch. `dataRange` is the actual plotted extent, used only as a
-  // fallback when there is no explicit `lim` to check the tick step
-  // against or to flip.
-  function applyAxisStyle(axisLayout, style, tickStep, lim, dataRange, flip) {
+  // step / axis limits / tick-label rotation -- shared by both the time and
+  // spatial branches below so they stay in sync rather than duplicating
+  // this per branch. `dataRange` is the actual plotted extent, used only
+  // as a fallback when there is no explicit `lim` to check the tick step
+  // against.
+  function applyAxisStyle(axisLayout, style, tickStep, lim, dataRange, tickAngle) {
     if (style.labelFontSize && axisLayout.title) {
       axisLayout.title = { text: axisLayout.title, font: { size: style.labelFontSize } };
     }
     if (style.tickFontSize) axisLayout.tickfont = { size: style.tickFontSize };
+    if (tickAngle) axisLayout.tickangle = tickAngle;
     axisLayout.showgrid = style.showGrid !== false;
 
     const range = lim || dataRange;
@@ -88,9 +89,7 @@ const PlotArea = (() => {
     }
     if (lim) {
       axisLayout.autorange = false;
-      axisLayout.range = flip ? [lim[1], lim[0]] : lim;
-    } else if (flip) {
-      axisLayout.autorange = 'reversed';
+      axisLayout.range = lim;
     }
   }
 
@@ -253,23 +252,25 @@ const PlotArea = (() => {
         // Its own coordinate, not time -- never shares an axis with a time
         // panel (ws.linkX doesn't apply here).
         const axLabel = (panel.traces[0] && panel.traces[0].axLabel) || 'position';
-        layout[xKey] = { title: axLabel };
-        layout[yKey] = { title: panel.title };
+        layout[xKey] = { title: pStyle.xlabel || axLabel };
+        layout[yKey] = { title: pStyle.ylabel || panel.title };
       } else {
         // A grid with several columns shows every column's own bottom axis;
-        // a single stacked column only labels its last one.
+        // a single stacked column only labels its last one -- unless the
+        // panel has its own explicit label, which is shown regardless of
+        // position (an explicit choice overrides that de-duplication).
         layout[xKey] = {
-          title: (columns > 1 || pIdx === ws.panels.length - 1) ? 'time [s]' : '',
+          title: pStyle.xlabel || ((columns > 1 || pIdx === ws.panels.length - 1) ? 'time [s]' : ''),
           matches: ws.linkX ? 'x' : undefined,
         };
-        layout[yKey] = { title: panel.title };
+        layout[yKey] = { title: pStyle.ylabel || panel.title };
       }
 
       const panelTraces = traces.slice(tracesStart);
       const xRange = extent(panelTraces.flatMap(tr => tr.x));
       const yRange = extent(panelTraces.flatMap(tr => tr.y));
-      applyAxisStyle(layout[xKey], style, pStyle.xtick, pStyle.xlim, xRange, pStyle.flipX);
-      applyAxisStyle(layout[yKey], style, pStyle.ytick, pStyle.ylim, yRange, pStyle.flipY);
+      applyAxisStyle(layout[xKey], style, pStyle.xtick, pStyle.xlim, xRange, pStyle.xtickangle);
+      applyAxisStyle(layout[yKey], style, pStyle.ytick, pStyle.ylim, yRange, pStyle.ytickangle);
     });
 
     Plotly.newPlot('plotly-panels', traces, layout, { displaylogo: false, responsive: true });

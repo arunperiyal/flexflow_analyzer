@@ -135,10 +135,26 @@ def test_export_with_no_style_key_at_all_still_works(client):
     assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
 
 
-def test_export_honors_tick_font_size_and_axis_flip(client):
+def test_export_honors_tick_font_size(client):
+    res = client.post('/api/export', json={'panels': _panels(), 'style': {'tickFontSize': 12}})
+    assert res.status_code == 200
+    assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
+
+
+def test_export_honors_panel_xlabel_ylabel_and_tick_angle(client):
     panels = _panels()
-    panels[0]['style'] = {'flipX': True, 'flipY': True}
-    res = client.post('/api/export', json={'panels': panels, 'style': {'tickFontSize': 12}})
+    panels[0]['style'] = {'xlabel': 'Time [s]', 'ylabel': 'Displacement [m]', 'xtickangle': 45, 'ytickangle': -30}
+    res = client.post('/api/export', json={'panels': panels})
+    assert res.status_code == 200
+    assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
+
+
+def test_export_xlabel_on_a_non_last_panel_still_shows(client):
+    # The bottom axes gets the default 'time [s]' label; any other panel
+    # only gets a label if it explicitly asks for one.
+    panels = _panels() + [{'id': 'p2', 'title': 'second', 'traces': _panels()[0]['traces'],
+                           'style': {'xlabel': 'Custom x'}}]
+    res = client.post('/api/export', json={'panels': panels})
     assert res.status_code == 200
     assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
 
