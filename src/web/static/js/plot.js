@@ -265,6 +265,33 @@ const PlotArea = (() => {
     return { rows, columns, paneOf };
   }
 
+  // Which x-axis-link group (if any) each panel belongs to, keyed by
+  // pane position (whichever slot the panel currently resolved into) --
+  // a group definition survives a panel being replaced/re-added into the
+  // same pane. `ws.linkGroups === null` means "auto": every non-spatial,
+  // non-swapped panel in one implicit group -- what the old blanket
+  // "Link x-axes" checkbox did. Returns Map<panelId, groupKey> (no entry
+  // at all for a panel in no group).
+  function resolveLinkGroups(ws, resolved) {
+    const eligible = panel => panel.kind !== 'spatial' && !(panel.style && panel.style.swapAxes);
+    const map = new Map();
+
+    if (ws.linkGroups == null) {
+      ws.panels.forEach(panel => { if (eligible(panel)) map.set(panel.id, 'auto'); });
+      return map;
+    }
+
+    ws.linkGroups.forEach((paneKeys, groupIdx) => {
+      const keySet = new Set(paneKeys.map(p => `${p.row},${p.col}`));
+      ws.panels.forEach(panel => {
+        if (!eligible(panel)) return;
+        const slot = resolved.paneOf.get(panel.id);
+        if (slot && keySet.has(`${slot.row},${slot.col}`)) map.set(panel.id, groupIdx);
+      });
+    });
+    return map;
+  }
+
   // A uniform grid-with-gap layout (like a CSS grid with `gap`): every
   // column/row is the same size, a slot's fractional [x0, x1] / [y0, y1]
   // domain simply spans `colSpan`/`rowSpan` units plus the gaps between
@@ -389,16 +416,16 @@ const PlotArea = (() => {
     if (style.title) layout.title = { text: style.title };
     if (style.showLegend) layout.legend = legendLayout(style);
 
-    // Link X-axes ties every (non-spatial, non-swapped) panel's time axis
-    // to one shared reference -- the first such panel's, not blindly 'x':
-    // panel index 0 can just as easily be a spatial panel (position, not
-    // time), and `matches`-ing a time axis to a spatial one is nonsense
-    // that visibly corrupts the render (a linked axis's ticks end up drawn
-    // over the wrong subplot).
-    let firstTimeXRef = null;
+    // Which x-axis-link group (if any) each panel belongs to -- see
+    // resolveLinkGroups. Every panel in the same group matches the
+    // group's first member's x-axis; a panel in no group gets its own,
+    // independent one.
+    const linkGroupOf = resolveLinkGroups(ws, resolved);
+    const firstXRefByGroup = new Map();
     ws.panels.forEach((panel, idx) => {
-      if (firstTimeXRef || panel.kind === 'spatial' || (panel.style && panel.style.swapAxes)) return;
-      firstTimeXRef = idx === 0 ? 'x' : `x${idx + 1}`;
+      const g = linkGroupOf.get(panel.id);
+      if (g === undefined || firstXRefByGroup.has(g)) return;
+      firstXRefByGroup.set(g, idx === 0 ? 'x' : `x${idx + 1}`);
     });
 
     // "Swap X/Y" rotates a panel 90 degrees: the style sidebar's X/Y fields
@@ -456,8 +483,9 @@ const PlotArea = (() => {
 
       let logicalXConfig, logicalYConfig;
       if (isSpatial) {
-        // Its own coordinate, not time -- never shares an axis with a time
-        // panel (ws.linkX doesn't apply here).
+        // Its own coordinate, not time -- resolveLinkGroups already
+        // excludes spatial panels, so it never shares an axis with a
+        // time panel.
         const axLabel = (panel.traces[0] && panel.traces[0].axLabel) || 'position';
         logicalXConfig = { title: pStyle.xlabel || axLabel };
         logicalYConfig = { title: pStyle.ylabel || panel.title };
@@ -468,15 +496,15 @@ const PlotArea = (() => {
         // de-duplication).
         const slot = resolved.paneOf.get(panel.id);
         const isBottomOfColumn = (slot.row + slot.rowSpan - 1) === maxRowByCol.get(slot.col);
+        const groupRef = firstXRefByGroup.get(linkGroupOf.get(panel.id));
         logicalXConfig = {
           title: pStyle.xlabel || (isBottomOfColumn ? 'time [s]' : ''),
           // Plotly's `matches` only links same-letter axes (x-to-x), so a
           // swapped panel -- whose logical time axis now sits on physical
-          // y -- can't participate; linking is skipped for it rather than
-          // silently doing nothing or erroring. A panel never matches its
-          // own axis either (firstTimeXRef === xref for whichever panel it
-          // points at).
-          matches: (ws.linkX && !swap && firstTimeXRef && xref !== firstTimeXRef) ? firstTimeXRef : undefined,
+          // y -- can't participate; resolveLinkGroups already excludes it.
+          // A panel never matches its own axis either (groupRef === xref
+          // for whichever panel it points at).
+          matches: (groupRef && xref !== groupRef) ? groupRef : undefined,
         };
         logicalYConfig = { title: pStyle.ylabel || panel.title };
       }
@@ -554,7 +582,7 @@ const PlotArea = (() => {
 
   return {
     render, placeholder, currentYRange, currentXRange, ensureMathJax,
-    resolvePanes, gridSlots, clampAreas,
+    resolvePanes, gridSlots, clampAreas, resolveLinkGroups,
   };
 })();
 
@@ -570,7 +598,7 @@ const Export = (() => {
     CommandLog.prompt('plot export --dpi 300');
     const res = await fetch('/api/export', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ panels: ws.panels, linkX: ws.linkX, style: ws.style, layout: ws.layout }),
+      body: JSON.stringify({ panels: ws.panels, linkGroups: ws.linkGroups, style: ws.style, layout: ws.layout }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: 'export failed' }));

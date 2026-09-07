@@ -1,6 +1,6 @@
-// Workspace state (panels, traces, linkX) in localStorage, and the sidebar
-// panel tree that renders it (§5 of the plan). The server holds no
-// per-session state -- this is the whole of it.
+// Workspace state (panels, traces, x-axis link groups) in localStorage,
+// and the sidebar panel tree that renders it (§5 of the plan). The server
+// holds no per-session state -- this is the whole of it.
 const PlotWorkspace = (() => {
   const STORAGE_KEY = 'flexflow.workspace';
   const COLORS = ['#dc2626', '#f59e0b', '#7c3aed', '#059669', '#2563eb', '#db2777', '#0891b2', '#65a30d'];
@@ -59,10 +59,19 @@ const PlotWorkspace = (() => {
         }
       }
     }
+    // linkGroups: array of pane-key arrays ({row, col} top-left of a
+    // slot) -- panes in the same inner array share one x-axis; a pane in
+    // no group has its own independent one. null means "auto": every
+    // non-spatial, non-swapped panel in one implicit group, which is
+    // what the old boolean linkX:true meant -- so a pre-groups workspace
+    // (no linkGroups field) backfills to null unless it had linkX:false,
+    // which becomes an explicit empty list (link nothing).
+    const linkGroups = Array.isArray(raw.linkGroups) ? raw.linkGroups : (raw.linkX === false ? [] : null);
+
     return {
       id: raw.id || fallbackId,
       name: raw.name || fallbackName,
-      linkX: raw.linkX !== undefined ? raw.linkX : true,
+      linkGroups,
       panels,
       layout,
       style: { ...defaultGlobalStyle(), ...(raw.style || {}) },
@@ -73,7 +82,7 @@ const PlotWorkspace = (() => {
 
   function defaultLayoutEntry(id, name, gridSpec) {
     return {
-      id, name, linkX: true, panels: [],
+      id, name, linkGroups: null, panels: [],
       layout: { ...defaultLayout(), ...(gridSpec || {}) },
       style: defaultGlobalStyle(), activePanelId: null, caseStyles: {},
     };
@@ -327,9 +336,18 @@ const PlotWorkspace = (() => {
   // existing pane is left alone -- if it's now out of the shrunk grid's
   // bounds, resolvePanes() falls back to auto-placement for that panel
   // same as an unassigned one, rather than this needing to hunt it down.
+  // A shrunk grid can also strand an x-axis link group's pane references
+  // out of bounds -- those are dropped the same way PlotArea.clampAreas
+  // drops an out-of-bounds merge, and a group left with under 2 panes
+  // (nothing left to share an axis with) is dropped entirely.
   function updateLayout(patch) {
     const L = active();
     L.layout = { ...L.layout, ...patch };
+    if (Array.isArray(L.linkGroups)) {
+      L.linkGroups = L.linkGroups
+        .map(group => group.filter(p => p.row < L.layout.rows && p.col < L.layout.columns))
+        .filter(group => group.length >= 2);
+    }
     save();
   }
 
@@ -340,8 +358,11 @@ const PlotWorkspace = (() => {
     save();
   }
 
-  function setLinkX(v) {
-    active().linkX = v;
+  // null: auto (every non-spatial, non-swapped panel shares one x-axis).
+  // []: nothing shared. [[...panes], [...panes]]: custom groups -- see
+  // normalizeLayoutEntry for the exact shape.
+  function setLinkGroups(groups) {
+    active().linkGroups = groups;
     save();
   }
 
@@ -349,7 +370,7 @@ const PlotWorkspace = (() => {
 
   // -- Layout tabs -----------------------------------------------------
   // Each entry is its own independent workspace (panels, grid, style,
-  // linkX) -- see normalizeLayoutEntry above.
+  // linkGroups) -- see normalizeLayoutEntry above.
 
   function listLayouts() {
     return ws.layouts.map(l => ({ id: l.id, name: l.name }));
@@ -400,7 +421,7 @@ const PlotWorkspace = (() => {
 
   return {
     state, addTraces, addSpatialTrace, removeTrace, removePanel, clearPanel, renamePanel,
-    setYLock, updateLayout, setPanelPane, setLinkX, setPanelStyle, setGlobalStyle, setCaseStyle,
+    setYLock, updateLayout, setPanelPane, setLinkGroups, setPanelStyle, setGlobalStyle, setCaseStyle,
     setActivePanel, setTraceStyle,
     listLayouts, activeLayoutId, setActiveLayout, createLayout, renameLayout, deleteLayout,
   };
@@ -487,14 +508,10 @@ const PanelTree = (() => {
       container.appendChild(node);
     }
 
-    const linkRow = document.createElement('label');
-    linkRow.className = 'link-x-row';
-    linkRow.innerHTML = `<input type="checkbox" id="link-x-toggle" ${ws.linkX ? 'checked' : ''}> Link x-axes`;
-    container.appendChild(linkRow);
-    document.getElementById('link-x-toggle').addEventListener('change', (e) => {
-      PlotWorkspace.setLinkX(e.target.checked);
-      PlotArea.render();
-    });
+    const linkHint = document.createElement('div');
+    linkHint.className = 'link-x-hint';
+    linkHint.textContent = 'Layout → Edit sets which panes share an x-axis.';
+    container.appendChild(linkHint);
   }
 
   function traceLabel(t) {

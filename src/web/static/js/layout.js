@@ -30,8 +30,17 @@ const Layout = (() => {
       columns: initial.columns,
       areas: (initial.areas || []).map(a => ({ ...a })),
       selection: null,   // {row, col, rowSpan, colSpan} -- a drag rectangle, or an existing area picked for splitting
+      // null: auto (every non-spatial, non-swapped panel shares one
+      // x-axis -- the old default). []: nothing shared. [[...],[...]]:
+      // custom groups, each an array of {row, col} pane keys. A brand
+      // new layout (mode 'new') always starts at the default -- there's
+      // no previous custom grouping of a tab that doesn't exist yet.
+      linkGroups: mode === 'edit'
+        ? (Array.isArray(ws.linkGroups) ? ws.linkGroups.map(g => g.map(p => ({ ...p }))) : ws.linkGroups)
+        : null,
     };
     let dragAnchor = null;
+    let pendingLink = new Set();   // pane keys ("row,col") being composed into a new x-axis-link group
 
     // New creates a whole new, empty layout tab (see
     // PlotWorkspace.createLayout) -- nothing existing to reset. Edit
@@ -70,6 +79,12 @@ const Layout = (() => {
         <button id="layout-merge" disabled>Merge selected</button>
         <button id="layout-split" disabled>Split</button>
       </div>
+      <label>Click panes to share one x-axis between them, then Link X -- a pane in no group keeps its own.</label>
+      <div id="layout-link-grid"></div>
+      <div class="btn-row-left">
+        <button id="layout-link-commit" disabled>Link X selected</button>
+      </div>
+      <div id="layout-link-groups-list"></div>
       <div class="btn-row">
         <button id="layout-cancel">Cancel</button>
         <button id="layout-submit" class="primary">${actionLabel}</button>
@@ -124,6 +139,69 @@ const Layout = (() => {
       gridBox.style.gridTemplateRows = `repeat(${state.rows}, 34px)`;
       gridBox.style.gridTemplateColumns = `repeat(${state.columns}, 40px)`;
       updateSelectionOverlay();
+    }
+
+    // Cycles through a small palette rather than growing it -- past a
+    // handful of simultaneous x-axis-link groups, distinguishing colors
+    // is a losing battle anyway, and the pane numbers still disambiguate.
+    const LINK_COLOR_COUNT = 6;
+    let linkPaneNumberOf = new Map();   // set fresh by each renderLinkGrid()
+
+    function groupIndexAt(row, col) {
+      if (!Array.isArray(state.linkGroups)) return -1;
+      return state.linkGroups.findIndex(g => g.some(p => p.row === row && p.col === col));
+    }
+
+    function renderLinkGrid() {
+      const linkBox = document.getElementById('layout-link-grid');
+      const { slots } = PlotArea.gridSlots({ layout: { rows: state.rows, columns: state.columns, areas: state.areas } });
+      linkPaneNumberOf = new Map(slots.map((s, i) => [`${s.row},${s.col}`, i + 1]));
+
+      linkBox.innerHTML = slots.map(slot => {
+        const key = `${slot.row},${slot.col}`;
+        const gIdx = groupIndexAt(slot.row, slot.col);
+        const classes = ['layout-link-cell'];
+        if (gIdx >= 0) classes.push(`layout-link-group-${gIdx % LINK_COLOR_COUNT}`);
+        if (pendingLink.has(key)) classes.push('pending');
+        return `<button type="button" class="${classes.join(' ')}" data-row="${slot.row}" data-col="${slot.col}"
+          style="grid-row:${slot.row + 1} / span ${slot.rowSpan}; grid-column:${slot.col + 1} / span ${slot.colSpan};"
+          >${linkPaneNumberOf.get(key)}</button>`;
+      }).join('');
+      linkBox.style.gridTemplateRows = `repeat(${state.rows}, 30px)`;
+      linkBox.style.gridTemplateColumns = `repeat(${state.columns}, 36px)`;
+
+      linkBox.querySelectorAll('.layout-link-cell').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const key = `${btn.dataset.row},${btn.dataset.col}`;
+          if (pendingLink.has(key)) pendingLink.delete(key);
+          else pendingLink.add(key);
+          renderLinkGrid();
+        });
+      });
+
+      document.getElementById('layout-link-commit').disabled = pendingLink.size < 2;
+      renderLinkGroupChips();
+    }
+
+    function renderLinkGroupChips() {
+      const listBox = document.getElementById('layout-link-groups-list');
+      if (!Array.isArray(state.linkGroups) || !state.linkGroups.length) {
+        listBox.innerHTML = state.linkGroups === null
+          ? '<div class="empty">Every panel currently shares one x-axis (default) -- select panes above and Link X to customize.</div>'
+          : '<div class="empty">No panes currently share an x-axis.</div>';
+        return;
+      }
+      listBox.innerHTML = state.linkGroups.map((g, i) => {
+        const nums = g.map(p => linkPaneNumberOf.get(`${p.row},${p.col}`)).filter(n => n).sort((a, b) => a - b).join(', ');
+        return `<div class="layout-link-chip layout-link-group-${i % LINK_COLOR_COUNT}">Group ${i + 1}: pane${g.length > 1 ? 's' : ''} ${nums}
+          <span class="layout-link-chip-remove" data-group="${i}" title="Unlink this group">&times;</span></div>`;
+      }).join('');
+      listBox.querySelectorAll('.layout-link-chip-remove').forEach(el => {
+        el.addEventListener('click', () => {
+          state.linkGroups.splice(Number(el.dataset.group), 1);
+          renderLinkGrid();
+        });
+      });
     }
 
     function updateSelectionOverlay() {
@@ -200,12 +278,36 @@ const Layout = (() => {
       renderGridStructure();
     });
 
+    document.getElementById('layout-link-commit').addEventListener('click', () => {
+      if (pendingLink.size < 2) return;
+      if (!Array.isArray(state.linkGroups)) state.linkGroups = [];
+      // A pane already in another group moves into this new one rather
+      // than belonging to two at once; a group that drops below 2
+      // members after losing them is dropped entirely.
+      state.linkGroups = state.linkGroups
+        .map(g => g.filter(p => !pendingLink.has(`${p.row},${p.col}`)))
+        .filter(g => g.length >= 2);
+      state.linkGroups.push(Array.from(pendingLink, key => {
+        const [row, col] = key.split(',').map(Number);
+        return { row, col };
+      }));
+      pendingLink = new Set();
+      renderLinkGrid();
+    });
+
     function onDimsChange() {
       state.rows = Math.max(1, Math.min(12, parseInt(document.getElementById('layout-rows').value, 10) || 1));
       state.columns = Math.max(1, Math.min(12, parseInt(document.getElementById('layout-columns').value, 10) || 1));
       state.areas = PlotArea.clampAreas(state.areas, state.rows, state.columns);
+      if (Array.isArray(state.linkGroups)) {
+        state.linkGroups = state.linkGroups
+          .map(g => g.filter(p => p.row < state.rows && p.col < state.columns))
+          .filter(g => g.length >= 2);
+      }
+      pendingLink = new Set();
       setSelection(null);
       renderGridStructure();
+      renderLinkGrid();
     }
     document.getElementById('layout-rows').addEventListener('change', onDimsChange);
     document.getElementById('layout-columns').addEventListener('change', onDimsChange);
@@ -230,12 +332,14 @@ const Layout = (() => {
       } else {
         PlotWorkspace.updateLayout(spec);
       }
+      PlotWorkspace.setLinkGroups(state.linkGroups);
       cleanup();
       refreshWorkspace();
       Menu.closeDialog();
     });
 
     renderGridStructure();
+    renderLinkGrid();
   }
 
   function openNew() { openForm('new'); }
@@ -276,8 +380,9 @@ const Layout = (() => {
 
   // The tab strip at the top of the page: one tab per layout, a "+" to
   // create another. Each layout is an independent workspace (panels,
-  // grid, style, linkX) -- switching tabs swaps out everything below the
-  // strip, which is why refreshWorkspace() re-renders this first.
+  // grid, style, x-axis link groups) -- switching tabs swaps out
+  // everything below the strip, which is why refreshWorkspace() re-renders
+  // this first.
   function renderTabs() {
     const container = document.getElementById('layout-tabs');
     if (!container) return;

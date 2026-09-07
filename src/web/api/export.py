@@ -107,6 +107,33 @@ def _resolve_panes(panels, layout):
     return rows, columns, pane_of
 
 
+def _resolve_link_groups(panels, pane_of, link_groups):
+    """Python port of plot.js's resolveLinkGroups: which x-axis-link group
+    (if any) each panel belongs to, keyed by pane position. None means
+    "auto" -- every non-spatial, non-swapped panel in one implicit group,
+    same as the old blanket "Link x-axes" checkbox. Returns {panel id:
+    group key}, with no entry at all for a panel in no group."""
+    def eligible(panel):
+        return panel.get('kind') != 'spatial' and not (panel.get('style') or {}).get('swapAxes')
+
+    group_of = {}
+    if link_groups is None:
+        for panel in panels:
+            if eligible(panel):
+                group_of[panel['id']] = 'auto'
+        return group_of
+
+    for group_idx, pane_keys in enumerate(link_groups or []):
+        key_set = {(p['row'], p['col']) for p in pane_keys}
+        for panel in panels:
+            if not eligible(panel):
+                continue
+            slot = pane_of.get(panel['id'])
+            if slot and (slot['row'], slot['col']) in key_set:
+                group_of[panel['id']] = group_idx
+    return group_of
+
+
 def _plot_kwargs(trace, style):
     kwargs = {'linewidth': 1.0, 'linestyle': _LINESTYLES.get(trace.get('lineStyle'), '-')}
     marker = trace.get('marker')
@@ -123,7 +150,7 @@ def export_png():
     root = current_app.config['WORKSPACE_ROOT']
     data = request.get_json(silent=True) or {}
     panels = data.get('panels') or []
-    link_x = bool(data.get('linkX'))
+    link_groups = data.get('linkGroups')
     style = data.get('style') or {}
     layout = data.get('layout') or {}
 
@@ -131,8 +158,18 @@ def export_png():
         return jsonify({'error': 'no panels to export'}), 400
 
     rows, columns, pane_of = _resolve_panes(panels, layout)
+    group_of = _resolve_link_groups(panels, pane_of, link_groups)
+
+    # Only a non-spatial panel contests the "bottom of column" slot that
+    # grants the shared 'time [s]' label -- a spatial panel plots
+    # position, not time, and already always gets its own label below, so
+    # one sitting at the bottom of a column must not steal that slot away
+    # from the time panels above it and leave them all with no label.
     max_row_by_col = {}
-    for slot in pane_of.values():
+    for panel in panels:
+        if panel.get('kind') == 'spatial':
+            continue
+        slot = pane_of[panel['id']]
         bottom = slot['row'] + slot['rowSpan'] - 1
         for c in range(slot['col'], slot['col'] + slot['colSpan']):
             if c not in max_row_by_col or bottom > max_row_by_col[c]:
@@ -154,16 +191,17 @@ def export_png():
         # a merged pane just slices a bigger block instead of needing any
         # special-casing here.
         gs = GridSpec(rows, columns, figure=fig)
-        first_ax = None
+        first_ax_by_group = {}
 
         for panel in panels:
             slot = pane_of[panel['id']]
+            group = group_of.get(panel['id'])
             ax = fig.add_subplot(
                 gs[slot['row']:slot['row'] + slot['rowSpan'], slot['col']:slot['col'] + slot['colSpan']],
-                sharex=first_ax if link_x else None,
+                sharex=first_ax_by_group.get(group) if group is not None else None,
             )
-            if first_ax is None:
-                first_ax = ax
+            if group is not None and group not in first_ax_by_group:
+                first_ax_by_group[group] = ax
             is_bottom = (slot['row'] + slot['rowSpan'] - 1) == max_row_by_col.get(slot['col'])
             pstyle = panel.get('style') or {}
 
