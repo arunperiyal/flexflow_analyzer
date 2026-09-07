@@ -18,6 +18,7 @@ import io
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from matplotlib import font_manager
 from matplotlib.ticker import MultipleLocator
 from flask import Blueprint, current_app, jsonify, request, send_file
 
@@ -33,15 +34,56 @@ bp = Blueprint('export', __name__, url_prefix='/api/export')
 _LINESTYLES = {'dash': '--', 'dot': ':', 'dashdot': '-.'}
 _MARKERS = {'circle': 'o', 'square': 's', 'diamond': 'D', 'cross': '+', 'x': 'x', 'triangle-up': '^'}
 
+# The Style sidebar's font choices (styles.js's FONTS) are named for their
+# Windows/macOS originals, which usually aren't installed on a Linux export
+# host -- lowercased request name -> a metric-compatible (or close) open
+# substitute that IS commonly installed there (checked against the actual
+# font list before use, in _matplotlib_font, rather than assumed present).
+_FONT_SUBSTITUTES = {
+    'times new roman': 'Liberation Serif',
+    'arial': 'Liberation Sans',
+    'helvetica': 'Nimbus Sans',
+    'courier new': 'Liberation Mono',
+}
+
 
 def _matplotlib_font(css_family):
-    """The first name in a CSS font-family stack (e.g. the style sidebar's
-    '"Times New Roman", Times, serif'), unquoted -- matplotlib's
-    rcParams['font.family'] takes a bare name, not CSS list syntax."""
+    """A CSS font-family stack (e.g. the style sidebar's '"Times New
+    Roman", Times, serif') -> a font name matplotlib can actually render,
+    or None to leave its default (DejaVu Sans) alone.
+
+    matplotlib's fontfinder does not error on a missing family -- it just
+    silently substitutes DejaVu Sans and prints a warning to stderr
+    (invisible from here, since this runs server-side), which is what made
+    'Times New Roman' quietly render as a plain sans font with no visible
+    error. So the requested name is checked against matplotlib's own
+    installed-font list first; if it's missing, a known open substitute is
+    tried; and only then does this fall back to the CSS stack's own
+    generic keyword (serif/sans-serif/monospace, always its last entry),
+    which matplotlib always understands, rather than handing it a specific
+    name it's just going to drop silently.
+    """
     if not css_family:
         return None
-    first = css_family.split(',')[0].strip().strip('"').strip("'")
-    return first or None
+    tokens = [t.strip().strip('"').strip("'") for t in css_family.split(',')]
+    tokens = [t for t in tokens if t]
+    if not tokens:
+        return None
+
+    installed = {f.name for f in font_manager.fontManager.ttflist}
+    requested = tokens[0]
+    if requested in installed:
+        return requested
+
+    substitute = _FONT_SUBSTITUTES.get(requested.lower())
+    if substitute and substitute in installed:
+        return substitute
+
+    generic = tokens[-1].lower()
+    if generic in ('serif', 'sans-serif', 'monospace', 'cursive', 'fantasy'):
+        return generic
+
+    return requested   # nothing matched -- matplotlib's own fallback/warning takes it from here
 
 
 def _pane_rect(panel, layout):
