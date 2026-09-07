@@ -65,21 +65,12 @@ const StyleSidebar = (() => {
     ).join('');
   }
 
+  const numberOrNull = (v) => (v.trim() === '' ? null : parseFloat(v));
+
   function render() {
     const ws = PlotWorkspace.state();
     const box = document.getElementById('style-body');
-
-    if (!ws.panels.length) {
-      box.innerHTML = '<div class="empty">Plot &rarr; New arrives here</div>';
-      return;
-    }
-
-    const panel = activePanel(ws);
     const g = ws.style || {};
-    const s = panel.style || {};
-    const panelOptions = ws.panels
-      .map(p => `<option value="${p.id}" ${p.id === panel.id ? 'selected' : ''}>${p.title}</option>`)
-      .join('');
 
     const globalBody = `
       <div class="style-row">
@@ -127,7 +118,42 @@ const StyleSidebar = (() => {
       <label class="style-row checkbox">
         <input type="checkbox" id="style-latex" ${g.latex ? 'checked' : ''}> LaTeX text ($...$)
       </label>
+      <label class="style-row checkbox">
+        <input type="checkbox" id="style-panel-border" ${g.showPanelBorder ? 'checked' : ''}> Box around each panel
+      </label>
+      <div class="style-row">
+        <label for="style-panel-gap">Panel spacing (%)</label>
+        <input type="number" id="style-panel-gap" value="${g.panelGapPct ?? ''}" placeholder="auto" min="0" max="50">
+      </div>
+      <label>Margins (px)</label>
+      <div class="style-limit-row">
+        <input type="number" id="style-margin-top" placeholder="top" min="0" value="${g.marginTop ?? ''}">
+        <input type="number" id="style-margin-right" placeholder="right" min="0" value="${g.marginRight ?? ''}">
+      </div>
+      <div class="style-limit-row">
+        <input type="number" id="style-margin-bottom" placeholder="bottom" min="0" value="${g.marginBottom ?? ''}">
+        <input type="number" id="style-margin-left" placeholder="left" min="0" value="${g.marginLeft ?? ''}">
+      </div>
     `;
+
+    // Global figure style (spacing/margins/box included) is meaningful
+    // before any panel exists -- a fresh layout tab shouldn't hide it all
+    // behind an empty-state placeholder just because nothing has been
+    // plotted into it yet.
+    if (!ws.panels.length) {
+      box.innerHTML = group('global', 'Global', globalBody);
+      document.querySelectorAll('.style-group-heading').forEach(el => {
+        el.addEventListener('click', () => toggleGroup(el.dataset.group));
+      });
+      wireGlobal();
+      return;
+    }
+
+    const panel = activePanel(ws);
+    const s = panel.style || {};
+    const panelOptions = ws.panels
+      .map(p => `<option value="${p.id}" ${p.id === panel.id ? 'selected' : ''}>${p.title}</option>`)
+      .join('');
 
     const panelBody = `
       <select id="style-panel-select" class="style-panel-select">${panelOptions}</select>
@@ -179,6 +205,7 @@ const StyleSidebar = (() => {
     document.querySelectorAll('.style-group-heading').forEach(el => {
       el.addEventListener('click', () => toggleGroup(el.dataset.group));
     });
+    wireGlobal();
     wire(panel);
   }
 
@@ -215,9 +242,11 @@ const StyleSidebar = (() => {
     `).join('');
   }
 
-  function wire(panel) {
+  // Global-only controls -- wired independently of wire(panel) since the
+  // Global group renders (and needs its listeners attached) even when
+  // there are no panels yet to make a "panel" argument meaningful for.
+  function wireGlobal() {
     const global = (patch) => { PlotWorkspace.setGlobalStyle(patch); PlotArea.render(); };
-    const numberOrNull = (v) => (v.trim() === '' ? null : parseFloat(v));
 
     document.getElementById('style-font-family').addEventListener('change', (e) => global({ fontFamily: e.target.value }));
     document.getElementById('style-label-size').addEventListener('change', (e) => global({ labelFontSize: numberOrNull(e.target.value) }));
@@ -236,7 +265,15 @@ const StyleSidebar = (() => {
     // needed (also covers a page reload restoring latex:true, which never
     // fires this change event at all), so this just flips the flag.
     document.getElementById('style-latex').addEventListener('change', (e) => global({ latex: e.target.checked }));
+    document.getElementById('style-panel-border').addEventListener('change', (e) => global({ showPanelBorder: e.target.checked }));
+    document.getElementById('style-panel-gap').addEventListener('change', (e) => global({ panelGapPct: numberOrNull(e.target.value) }));
+    document.getElementById('style-margin-top').addEventListener('change', (e) => global({ marginTop: numberOrNull(e.target.value) }));
+    document.getElementById('style-margin-right').addEventListener('change', (e) => global({ marginRight: numberOrNull(e.target.value) }));
+    document.getElementById('style-margin-bottom').addEventListener('change', (e) => global({ marginBottom: numberOrNull(e.target.value) }));
+    document.getElementById('style-margin-left').addEventListener('change', (e) => global({ marginLeft: numberOrNull(e.target.value) }));
+  }
 
+  function wire(panel) {
     document.getElementById('style-panel-select').addEventListener('change', (e) => {
       PlotWorkspace.setActivePanel(e.target.value);
       refreshWorkspace();

@@ -13,6 +13,8 @@ const PlotWorkspace = (() => {
       fontFamily: '', labelFontSize: null, legendFontSize: null, tickFontSize: null,
       title: '', showLegend: false, legendPosition: 'top-right', showGrid: true,
       markerSize: null, markerStep: null, latex: false,
+      showPanelBorder: false, panelGapPct: null,
+      marginTop: null, marginRight: null, marginBottom: null, marginLeft: null,
     };
   }
 
