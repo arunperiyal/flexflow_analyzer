@@ -33,15 +33,14 @@ const Layout = (() => {
     };
     let dragAnchor = null;
 
+    // New creates a whole new, empty layout tab (see
+    // PlotWorkspace.createLayout) -- nothing existing to reset. Edit
+    // resizes the active tab's grid in place and leaves existing panes
+    // alone; only one that no longer fits the resized grid falls back to
+    // auto-placement (PlotArea.resolvePanes), so no blanket note is needed
+    // here either.
     const heading = mode === 'edit' ? 'Layout &rarr; Edit' : 'Layout &rarr; New';
     const actionLabel = mode === 'edit' ? 'Save' : 'Create';
-    // A brand new grid clears every panel's pane (see
-    // PlotWorkspace.setLayout) -- panels/traces aren't touched, they just
-    // fall back to auto-placement, so this is a note, not a confirm()
-    // gate: nothing is actually destroyed.
-    const resetNote = (mode === 'new' && ws.panels.length)
-      ? `<div class="empty">This resets every panel's pane -- they fall back to auto-placement in the new grid.</div>`
-      : '';
 
     Menu.openDialog(`
       <h2>${heading}</h2>
@@ -71,7 +70,6 @@ const Layout = (() => {
         <button id="layout-merge" disabled>Merge selected</button>
         <button id="layout-split" disabled>Split</button>
       </div>
-      ${resetNote}
       <div class="btn-row">
         <button id="layout-cancel">Cancel</button>
         <button id="layout-submit" class="primary">${actionLabel}</button>
@@ -228,7 +226,7 @@ const Layout = (() => {
       const spec = { rows: state.rows, columns: state.columns, width, height, areas: state.areas };
 
       if (mode === 'new') {
-        PlotWorkspace.setLayout(spec);
+        PlotWorkspace.createLayout(spec);
       } else {
         PlotWorkspace.updateLayout(spec);
       }
@@ -276,5 +274,80 @@ const Layout = (() => {
     });
   }
 
-  return { openNew, openEdit, openClear };
+  // The tab strip at the top of the page: one tab per layout, a "+" to
+  // create another. Each layout is an independent workspace (panels,
+  // grid, style, linkX) -- switching tabs swaps out everything below the
+  // strip, which is why refreshWorkspace() re-renders this first.
+  function renderTabs() {
+    const container = document.getElementById('layout-tabs');
+    if (!container) return;
+    const layouts = PlotWorkspace.listLayouts();
+    const activeId = PlotWorkspace.activeLayoutId();
+    container.innerHTML = '';
+
+    for (const l of layouts) {
+      const tab = document.createElement('div');
+      tab.className = 'layout-tab' + (l.id === activeId ? ' active' : '');
+
+      const label = document.createElement('span');
+      label.className = 'layout-tab-label';
+      label.textContent = l.name;
+      label.title = 'Click to switch -- double-click to rename';
+      label.addEventListener('click', () => {
+        if (l.id === activeId) return;
+        PlotWorkspace.setActiveLayout(l.id);
+        refreshWorkspace();
+      });
+      label.addEventListener('dblclick', () => startRenameTab(tab, label, l));
+      tab.appendChild(label);
+
+      // Deleting the last layout has no sane empty state to fall back to
+      // (PlotWorkspace.deleteLayout already refuses it), so the control
+      // for it is simply not shown rather than present-but-disabled.
+      if (layouts.length > 1) {
+        const close = document.createElement('span');
+        close.className = 'layout-tab-remove';
+        close.textContent = '×';
+        close.title = 'Delete this layout';
+        close.addEventListener('click', (e) => {
+          e.stopPropagation();
+          PlotWorkspace.deleteLayout(l.id);
+          refreshWorkspace();
+        });
+        tab.appendChild(close);
+      }
+
+      container.appendChild(tab);
+    }
+
+    const addTab = document.createElement('div');
+    addTab.className = 'layout-tab-add';
+    addTab.textContent = '+';
+    addTab.title = 'New layout';
+    addTab.addEventListener('click', openNew);
+    container.appendChild(addTab);
+  }
+
+  function startRenameTab(tab, labelEl, l) {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'layout-tab-edit';
+    input.value = l.name;
+    input.addEventListener('click', (e) => e.stopPropagation());
+    tab.replaceChild(input, labelEl);
+    input.focus();
+    input.select();
+
+    const commit = () => {
+      PlotWorkspace.renameLayout(l.id, input.value);
+      refreshWorkspace();
+    };
+    input.addEventListener('blur', commit);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') input.blur();
+      if (e.key === 'Escape') { input.value = l.name; input.blur(); }
+    });
+  }
+
+  return { openNew, openEdit, openClear, renderTabs };
 })();

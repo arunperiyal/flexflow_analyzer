@@ -64,6 +64,52 @@ body {
   color: #94a3b8;
 }
 
+/* Layout tab strip -- one tab per layout, each an independent workspace of
+   panels/grid/style; switching tabs swaps out everything below the strip. */
+#layout-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 32px;
+  padding: 0 12px;
+  background: #0f172a;
+  flex: none;
+  overflow-x: auto;
+}
+.layout-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 4px 4px 0 0;
+  font-size: 12px;
+  color: #cbd5e1;
+  cursor: pointer;
+  white-space: nowrap;
+  flex: none;
+}
+.layout-tab:hover { background: #1e293b; color: #fff; }
+.layout-tab.active { background: #f1f5f9; color: #0f172a; }
+.layout-tab-remove { color: #94a3b8; cursor: pointer; font-weight: 400; }
+.layout-tab-remove:hover { color: #dc2626; }
+.layout-tab-edit {
+  font-size: 12px;
+  padding: 2px 4px;
+  border: 1px solid #7c3aed;
+  border-radius: 3px;
+  width: 100px;
+}
+.layout-tab-add {
+  padding: 5px 10px;
+  border-radius: 4px;
+  color: #cbd5e1;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  flex: none;
+}
+.layout-tab-add:hover { background: #1e293b; color: #fff; }
+
 /* Body: sidebar + plot area */
 #body { display: flex; flex: 1; min-height: 0; }
 

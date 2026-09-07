@@ -24,38 +24,76 @@ const PlotWorkspace = (() => {
     return { rows: 1, columns: 1, width: null, height: null, areas: [] };
   }
 
+  // A layout tab is its own independent workspace: panels/traces, the
+  // grid, global style, and Link X-axes all belong to exactly one tab --
+  // switching tabs swaps the whole set. `raw` may be a bare, pre-tabs
+  // workspace object (id/name absent) or an already-tabbed entry that
+  // predates a later field -- either way, every field ends up backfilled
+  // the same way the old single-workspace `load()` did it.
+  function normalizeLayoutEntry(raw, fallbackId, fallbackName) {
+    const panels = raw.panels || [];
+    const oldLayout = raw.layout || {};
+    const layout = {
+      ...defaultLayout(),
+      columns: oldLayout.columns || 1,
+      rows: oldLayout.rows || Math.max(1, Math.ceil(panels.length / (oldLayout.columns || 1))),
+      width: oldLayout.width ?? null,
+      height: oldLayout.height ?? null,
+      areas: Array.isArray(oldLayout.areas) ? oldLayout.areas : [],
+    };
+    for (const p of panels) {
+      p.style = p.style || {};
+      if (!('pane' in p)) p.pane = null;
+    }
+    return {
+      id: raw.id || fallbackId,
+      name: raw.name || fallbackName,
+      linkX: raw.linkX !== undefined ? raw.linkX : true,
+      panels,
+      layout,
+      style: { ...defaultGlobalStyle(), ...(raw.style || {}) },
+      activePanelId: raw.activePanelId || null,
+    };
+  }
+
+  function defaultLayoutEntry(id, name, gridSpec) {
+    return {
+      id, name, linkX: true, panels: [],
+      layout: { ...defaultLayout(), ...(gridSpec || {}) },
+      style: defaultGlobalStyle(), activePanelId: null,
+    };
+  }
+
   function load() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
-        const oldLayout = parsed.layout || {};
-        // Pre-pane-grid workspaces only ever recorded `columns`; `rows` was
-        // implicit (however many the panel count needed). Backfilling it
-        // from the panel count keeps an old workspace's grid the same
-        // shape it already had, rather than clipping it to one row.
-        parsed.layout = {
-          ...defaultLayout(),
-          columns: oldLayout.columns || 1,
-          rows: oldLayout.rows || Math.max(1, Math.ceil(parsed.panels.length / (oldLayout.columns || 1))),
-          width: oldLayout.width ?? null,
-          height: oldLayout.height ?? null,
-          areas: Array.isArray(oldLayout.areas) ? oldLayout.areas : [],
-        };
-        parsed.style = { ...defaultGlobalStyle(), ...(parsed.style || {}) };
-        for (const p of parsed.panels) {
-          p.style = p.style || {};
-          if (!('pane' in p)) p.pane = null;
+        if (Array.isArray(parsed.layouts) && parsed.layouts.length) {
+          const layouts = parsed.layouts.map((l, i) => normalizeLayoutEntry(l, `l${i + 1}`, `Layout ${i + 1}`));
+          const activeLayoutId = layouts.some(l => l.id === parsed.activeLayoutId)
+            ? parsed.activeLayoutId : layouts[0].id;
+          return { activeLayoutId, layouts };
         }
-        return parsed;
+        // Pre-tabs workspace: the whole saved object WAS one layout.
+        return { activeLayoutId: 'l1', layouts: [normalizeLayoutEntry(parsed, 'l1', 'Layout 1')] };
       }
     } catch (e) { /* private mode, cleared storage, etc. */ }
-    return { linkX: true, panels: [], layout: defaultLayout(), style: defaultGlobalStyle() };
+    return { activeLayoutId: 'l1', layouts: [defaultLayoutEntry('l1', 'Layout 1')] };
   }
 
   let ws = load();
-  let nextPanelId = 1 + ws.panels.reduce((max, p) => {
+
+  function active() {
+    return ws.layouts.find(l => l.id === ws.activeLayoutId) || ws.layouts[0];
+  }
+
+  let nextPanelId = 1 + ws.layouts.flatMap(l => l.panels).reduce((max, p) => {
     const n = parseInt((p.id || '').replace('p', ''), 10);
+    return isNaN(n) ? max : Math.max(max, n);
+  }, 0);
+  let nextLayoutId = 1 + ws.layouts.reduce((max, l) => {
+    const n = parseInt((l.id || '').replace('l', ''), 10);
     return isNaN(n) ? max : Math.max(max, n);
   }, 0);
   let colorIdx = 0;
@@ -79,10 +117,11 @@ const PlotWorkspace = (() => {
     // Excludes spatial panels: they share the "same case -> same panel"
     // instinct, but a time trace and a spatial trace can never share an
     // x-axis, so auto-routing must not merge them just because the case matches.
-    let panel = ws.panels.find(p => p.kind !== 'spatial' && p.traces.some(t => t.case === caseName));
+    const L = active();
+    let panel = L.panels.find(p => p.kind !== 'spatial' && p.traces.some(t => t.case === caseName));
     if (!panel) {
       panel = { id: `p${nextPanelId++}`, title: caseName, traces: [], style: {}, pane: pane ?? null };
-      ws.panels.push(panel);
+      L.panels.push(panel);
     }
     return panel;
   }
@@ -94,12 +133,13 @@ const PlotWorkspace = (() => {
   // grid; ignored when overlaying onto an existing panel, which already
   // has one.
   function addTraces(caseName, group, rows, nodeOf, column, targetPanelId, pane) {
+    const L = active();
     let panel;
     if (targetPanelId === '__new__') {
       panel = { id: `p${nextPanelId++}`, title: caseName, traces: [], style: {}, pane: pane ?? null };
-      ws.panels.push(panel);
+      L.panels.push(panel);
     } else if (targetPanelId) {
-      panel = ws.panels.find(p => p.id === targetPanelId);
+      panel = L.panels.find(p => p.id === targetPanelId);
     }
     if (!panel) panel = panelFor(caseName, pane);
 
@@ -111,7 +151,7 @@ const PlotWorkspace = (() => {
       panel.traces.push({ case: caseName, group, row, node: nodeOf ? nodeOf(row) : null,
                           col: column, color: nextColor() });
     }
-    if (!ws.activePanelId) ws.activePanelId = panel.id;
+    if (!L.activePanelId) L.activePanelId = panel.id;
     save();
   }
 
@@ -124,21 +164,23 @@ const PlotWorkspace = (() => {
   // the picker's own projection -- a property of the map, not of history,
   // so there is nothing to refetch later.
   function panelForSpatial(caseName, pane) {
-    let panel = ws.panels.find(p => p.kind === 'spatial' && p.traces.some(t => t.case === caseName));
+    const L = active();
+    let panel = L.panels.find(p => p.kind === 'spatial' && p.traces.some(t => t.case === caseName));
     if (!panel) {
       panel = { id: `p${nextPanelId++}`, title: `${caseName} (spatial)`, kind: 'spatial', traces: [], style: {}, pane: pane ?? null };
-      ws.panels.push(panel);
+      L.panels.push(panel);
     }
     return panel;
   }
 
   function addSpatialTrace(caseName, group, points, column, mode, opts, targetPanelId, pane) {
+    const L = active();
     let panel;
     if (targetPanelId === '__new__') {
       panel = { id: `p${nextPanelId++}`, title: `${caseName} (spatial)`, kind: 'spatial', traces: [], style: {}, pane: pane ?? null };
-      ws.panels.push(panel);
+      L.panels.push(panel);
     } else if (targetPanelId) {
-      panel = ws.panels.find(p => p.id === targetPanelId);
+      panel = L.panels.find(p => p.id === targetPanelId);
     }
     if (!panel) panel = panelForSpatial(caseName, pane);
 
@@ -148,48 +190,50 @@ const PlotWorkspace = (() => {
       points: [...points].sort((a, b) => a.x - b.x),
       color: nextColor(),
     });
-    if (!ws.activePanelId) ws.activePanelId = panel.id;
+    if (!L.activePanelId) L.activePanelId = panel.id;
     save();
     return panel;
   }
 
   function removeTrace(panelId, index) {
-    const panel = ws.panels.find(p => p.id === panelId);
+    const L = active();
+    const panel = L.panels.find(p => p.id === panelId);
     if (!panel) return;
     panel.traces.splice(index, 1);
     if (!panel.traces.length) {
-      ws.panels = ws.panels.filter(p => p.id !== panelId);
-      if (ws.activePanelId === panelId) {
-        ws.activePanelId = ws.panels.length ? ws.panels[0].id : null;
+      L.panels = L.panels.filter(p => p.id !== panelId);
+      if (L.activePanelId === panelId) {
+        L.activePanelId = L.panels.length ? L.panels[0].id : null;
       }
     }
     save();
   }
 
   function removePanel(panelId) {
-    ws.panels = ws.panels.filter(p => p.id !== panelId);
-    if (ws.activePanelId === panelId) {
-      ws.activePanelId = ws.panels.length ? ws.panels[0].id : null;
+    const L = active();
+    L.panels = L.panels.filter(p => p.id !== panelId);
+    if (L.activePanelId === panelId) {
+      L.activePanelId = L.panels.length ? L.panels[0].id : null;
     }
     save();
   }
 
   function clearPanel(panelId) {
-    const panel = ws.panels.find(p => p.id === panelId);
+    const panel = active().panels.find(p => p.id === panelId);
     if (!panel) return;
     panel.traces = [];
     save();
   }
 
   function renamePanel(panelId, title) {
-    const panel = ws.panels.find(p => p.id === panelId);
+    const panel = active().panels.find(p => p.id === panelId);
     if (!panel) return;
     panel.title = title;
     save();
   }
 
   function setPanelStyle(panelId, patch) {
-    const panel = ws.panels.find(p => p.id === panelId);
+    const panel = active().panels.find(p => p.id === panelId);
     if (!panel) return;
     panel.style = { ...(panel.style || {}), ...patch };
     save();
@@ -203,62 +247,105 @@ const PlotWorkspace = (() => {
   }
 
   function setGlobalStyle(patch) {
-    ws.style = { ...ws.style, ...patch };
+    const L = active();
+    L.style = { ...L.style, ...patch };
     save();
   }
 
   // Per-trace overrides (color, line style, marker) -- distinct from panel
   // style since these describe one line, not the axes it is drawn on.
   function setTraceStyle(panelId, traceIndex, patch) {
-    const panel = ws.panels.find(p => p.id === panelId);
+    const panel = active().panels.find(p => p.id === panelId);
     if (!panel || !panel.traces[traceIndex]) return;
     panel.traces[traceIndex] = { ...panel.traces[traceIndex], ...patch };
     save();
   }
 
   function setActivePanel(id) {
-    ws.activePanelId = id;
+    active().activePanelId = id;
     save();
   }
 
-  // Layout -> New: replaces the grid outright. Every panel's pane is
-  // cleared rather than left pointing at a cell that may no longer exist
-  // (or may now mean something else) in the new grid -- panels themselves
-  // are untouched, they just fall back to auto-placement (see
-  // PlotArea.resolvePanes) until re-assigned.
-  function setLayout(spec) {
-    ws.layout = { ...defaultLayout(), ...spec };
-    for (const p of ws.panels) p.pane = null;
-    save();
-  }
-
-  // Layout -> Edit: resizes the grid in place. A panel's existing pane is
-  // left alone -- if it's now out of the shrunk grid's bounds,
-  // resolvePanes() falls back to auto-placement for that panel same as an
-  // unassigned one, rather than this needing to hunt down and clear it.
+  // Layout -> Edit: resizes the active layout's grid in place. A panel's
+  // existing pane is left alone -- if it's now out of the shrunk grid's
+  // bounds, resolvePanes() falls back to auto-placement for that panel
+  // same as an unassigned one, rather than this needing to hunt it down.
   function updateLayout(patch) {
-    ws.layout = { ...ws.layout, ...patch };
+    const L = active();
+    L.layout = { ...L.layout, ...patch };
     save();
   }
 
   function setPanelPane(panelId, pane) {
-    const panel = ws.panels.find(p => p.id === panelId);
+    const panel = active().panels.find(p => p.id === panelId);
     if (!panel) return;
     panel.pane = pane;
     save();
   }
 
   function setLinkX(v) {
-    ws.linkX = v;
+    active().linkX = v;
     save();
   }
 
-  function state() { return ws; }
+  function state() { return active(); }
+
+  // -- Layout tabs -----------------------------------------------------
+  // Each entry is its own independent workspace (panels, grid, style,
+  // linkX) -- see normalizeLayoutEntry above.
+
+  function listLayouts() {
+    return ws.layouts.map(l => ({ id: l.id, name: l.name }));
+  }
+
+  function activeLayoutId() {
+    return ws.activeLayoutId;
+  }
+
+  function setActiveLayout(id) {
+    if (!ws.layouts.some(l => l.id === id)) return;
+    ws.activeLayoutId = id;
+    save();
+  }
+
+  // Layout -> New (also the tab strip's "+"): a brand new, empty layout
+  // tab with the chosen grid -- unlike the old single-workspace "New",
+  // there are no existing panels to reset since nothing here existed yet.
+  function createLayout(spec) {
+    const id = `l${nextLayoutId++}`;
+    const name = `Layout ${ws.layouts.length + 1}`;
+    const entry = defaultLayoutEntry(id, name, spec);
+    ws.layouts.push(entry);
+    ws.activeLayoutId = id;
+    save();
+    return id;
+  }
+
+  function renameLayout(id, name) {
+    const entry = ws.layouts.find(l => l.id === id);
+    if (!entry) return;
+    entry.name = (name || '').trim() || entry.name;
+    save();
+  }
+
+  // Always keeps at least one layout -- there is no sane "no layout"
+  // empty state for the rest of the app to fall back to.
+  function deleteLayout(id) {
+    if (ws.layouts.length <= 1) return;
+    const idx = ws.layouts.findIndex(l => l.id === id);
+    if (idx === -1) return;
+    ws.layouts.splice(idx, 1);
+    if (ws.activeLayoutId === id) {
+      ws.activeLayoutId = ws.layouts[Math.min(idx, ws.layouts.length - 1)].id;
+    }
+    save();
+  }
 
   return {
     state, addTraces, addSpatialTrace, removeTrace, removePanel, clearPanel, renamePanel,
-    setYLock, setLayout, updateLayout, setPanelPane, setLinkX, setPanelStyle, setGlobalStyle,
+    setYLock, updateLayout, setPanelPane, setLinkX, setPanelStyle, setGlobalStyle,
     setActivePanel, setTraceStyle,
+    listLayouts, activeLayoutId, setActiveLayout, createLayout, renameLayout, deleteLayout,
   };
 })();
 
@@ -386,6 +473,7 @@ const PanelTree = (() => {
 })();
 
 function refreshWorkspace() {
+  Layout.renderTabs();
   PanelTree.render();
   PlotArea.render();
   StyleSidebar.render();
