@@ -72,5 +72,15 @@ class Loader:
                 entry.arrays[cache_key] = series.load(paths, sorted(names), entry.meta, group)
             return entry.meta, entry.arrays[cache_key]
 
+    def clear(self):
+        """Drop every cached case -- the next meta()/load() call re-reads
+        from disk regardless of mtime. The mtime check above only catches a
+        rewrite that actually bumps the file's mtime; a case directory
+        replaced wholesale by one that happens to preserve it (or system
+        clock oddities) would otherwise keep serving stale arrays. Exposed
+        for Settings -> Clear Cache."""
+        with self._lock:
+            self._cache.clear()
+
 
 loader = Loader()
