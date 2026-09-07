@@ -21,9 +21,12 @@ const PlotWorkspace = (() => {
   // width/height: null means "auto" (Plotly's own responsive sizing) -- set
   // by Layout -> New/Edit, not required to have a value. areas: merged
   // (span > 1x1) regions only -- every other cell is an implicit 1x1 area
-  // (see PlotArea.gridSlots).
+  // (see PlotArea.gridSlots). rowFracs/colFracs: null means "equal size"
+  // (the default); a real array is relative weights, one per row/column,
+  // set by dragging a resize handle directly on the rendered panels (see
+  // PlotArea.gridDims) -- not editable from the Layout dialog itself.
   function defaultLayout() {
-    return { rows: 1, columns: 1, width: null, height: null, areas: [] };
+    return { rows: 1, columns: 1, width: null, height: null, areas: [], rowFracs: null, colFracs: null };
   }
 
   // A layout tab is its own independent workspace: panels/traces, the
@@ -42,6 +45,8 @@ const PlotWorkspace = (() => {
       width: oldLayout.width ?? null,
       height: oldLayout.height ?? null,
       areas: Array.isArray(oldLayout.areas) ? oldLayout.areas : [],
+      rowFracs: Array.isArray(oldLayout.rowFracs) ? oldLayout.rowFracs : null,
+      colFracs: Array.isArray(oldLayout.colFracs) ? oldLayout.colFracs : null,
     };
     for (const p of panels) {
       p.style = p.style || {};
@@ -326,9 +331,18 @@ const PlotWorkspace = (() => {
   // existing pane is left alone -- if it's now out of the shrunk grid's
   // bounds, resolvePanes() falls back to auto-placement for that panel
   // same as an unassigned one, rather than this needing to hunt it down.
+  // A row/column count change resets any drag-resized row/column weights
+  // -- an old set of weights doesn't have a sane mapping onto a different
+  // track count.
   function updateLayout(patch) {
     const L = active();
+    const countChanged = ('rows' in patch && patch.rows !== L.layout.rows) ||
+                          ('columns' in patch && patch.columns !== L.layout.columns);
     L.layout = { ...L.layout, ...patch };
+    if (countChanged) {
+      L.layout.rowFracs = null;
+      L.layout.colFracs = null;
+    }
     save();
   }
 
@@ -336,6 +350,17 @@ const PlotWorkspace = (() => {
     const panel = active().panels.find(p => p.id === panelId);
     if (!panel) return;
     panel.pane = pane;
+    save();
+  }
+
+  // Set by dragging a resize handle directly on the rendered panels --
+  // relative weights for the active layout's rows/columns, or null for
+  // "equal size" (the default). Neither array needs to sum to anything in
+  // particular (see PlotArea.gridDims).
+  function setGridFracs(rowFracs, colFracs) {
+    const L = active();
+    L.layout.rowFracs = rowFracs;
+    L.layout.colFracs = colFracs;
     save();
   }
 
@@ -394,7 +419,7 @@ const PlotWorkspace = (() => {
 
   return {
     state, addTraces, addSpatialTrace, removeTrace, removePanel, clearPanel, renamePanel,
-    setYLock, updateLayout, setPanelPane, setPanelStyle, setGlobalStyle, setCaseStyle,
+    setYLock, updateLayout, setPanelPane, setGridFracs, setPanelStyle, setGlobalStyle, setCaseStyle,
     setActivePanel, setTraceStyle,
     listLayouts, activeLayoutId, setActiveLayout, createLayout, renameLayout, deleteLayout,
   };

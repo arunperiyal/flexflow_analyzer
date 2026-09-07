@@ -451,3 +451,30 @@ def test_export_honors_ticks_inside(client):
     res = client.post('/api/export', json={'panels': _panels(), 'style': {'ticksInside': True}})
     assert res.status_code == 200
     assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
+
+
+# -- Drag-resized row/column weights (PlotWorkspace.setGridFracs) -----------
+
+def test_export_honors_custom_row_and_col_fracs(client):
+    panels = [
+        {'id': 'p1', 'title': 'a', 'traces': _panels()[0]['traces'], 'pane': {'row': 0, 'col': 0}},
+        {'id': 'p2', 'title': 'b', 'traces': _panels()[0]['traces'], 'pane': {'row': 0, 'col': 1}},
+    ]
+    res = client.post('/api/export', json={
+        'panels': panels,
+        'layout': {'rows': 1, 'columns': 2, 'rowFracs': [1], 'colFracs': [3, 1]},
+    })
+    assert res.status_code == 200
+    assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
+
+
+def test_export_ignores_frac_arrays_whose_length_no_longer_matches_the_grid(client):
+    # A stale weights array (e.g. from before the grid was resized) must
+    # not crash GridSpec -- just fall back to equal sizing.
+    panels = _panels()
+    res = client.post('/api/export', json={
+        'panels': panels,
+        'layout': {'rows': 1, 'columns': 1, 'colFracs': [3, 1]},   # length 2, but only 1 column
+    })
+    assert res.status_code == 200
+    assert res.data[:8] == b'\x89PNG\r\n\x1a\n'

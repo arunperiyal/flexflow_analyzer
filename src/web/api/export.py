@@ -155,8 +155,17 @@ def export_png():
         # GridSpec natively supports a subplot spanning multiple cells via
         # slicing -- unlike plt.subplots' uniform (rows, columns) array, so
         # a merged pane just slices a bigger block instead of needing any
-        # special-casing here.
-        gs = GridSpec(rows, columns, figure=fig)
+        # special-casing here. height_ratios/width_ratios mirror a
+        # drag-resized row/column (PlotWorkspace.setGridFracs) -- only used
+        # when their length still matches the resolved grid (an
+        # overflow-grown row count wouldn't have a matching weight anyway).
+        row_fracs = layout.get('rowFracs')
+        col_fracs = layout.get('colFracs')
+        gs = GridSpec(
+            rows, columns, figure=fig,
+            height_ratios=row_fracs if isinstance(row_fracs, list) and len(row_fracs) == rows else None,
+            width_ratios=col_fracs if isinstance(col_fracs, list) and len(col_fracs) == columns else None,
+        )
 
         for panel in panels:
             slot = pane_of[panel['id']]
