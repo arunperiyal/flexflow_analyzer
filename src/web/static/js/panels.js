@@ -18,39 +18,46 @@ const PlotWorkspace = (() => {
     };
   }
 
-  // width/height: null means "auto" (Plotly's own responsive sizing) -- set
-  // by Layout -> New/Edit, not required to have a value. areas: merged
-  // (span > 1x1) regions only -- every other cell is an implicit 1x1 area
-  // (see PlotArea.gridSlots). rowFracs/colFracs: null means "equal size"
-  // (the default); a real array is relative weights, one per row/column,
-  // typed in from the Style sidebar's Panel section (see setTrackWeight)
-  // for whichever row/column the selected panel's pane is in.
+  // width/height: the figure's fixed canvas size, in inches -- set by
+  // Layout -> New/Edit. Every pane is positioned/sized independently within
+  // this canvas (see defaultPane) rather than being a cell of a shared grid.
   function defaultLayout() {
-    return { rows: 1, columns: 1, width: null, height: null, areas: [], rowFracs: null, colFracs: null };
+    return { width: 6.5, height: 4.5 };
+  }
+
+  // An unset panel.pane (never touched in Layout -> Panes) fills the whole
+  // canvas -- the sane starting point for a freshly added panel, which the
+  // user then repositions/resizes explicitly.
+  function defaultPane(layout) {
+    return { x: 0, y: 0, w: layout.width, h: layout.height };
+  }
+
+  function isFreeformPane(p) {
+    return !!p && typeof p.x === 'number' && typeof p.y === 'number'
+      && typeof p.w === 'number' && typeof p.h === 'number';
   }
 
   // A layout tab is its own independent workspace: panels/traces, the
-  // grid, global style, and Link X-axes all belong to exactly one tab --
-  // switching tabs swaps the whole set. `raw` may be a bare, pre-tabs
-  // workspace object (id/name absent) or an already-tabbed entry that
-  // predates a later field -- either way, every field ends up backfilled
-  // the same way the old single-workspace `load()` did it.
+  // canvas, and global style all belong to exactly one tab -- switching
+  // tabs swaps the whole set. `raw` may be a bare, pre-tabs workspace
+  // object (id/name absent) or an already-tabbed entry that predates a
+  // later field -- either way, every field ends up backfilled the same way
+  // the old single-workspace `load()` did it. A saved workspace from before
+  // free-form panes (grid rows/columns, width/height in px) has no sane
+  // geometric mapping onto inches, so it is reset to fresh defaults rather
+  // than misread as inches -- detected by the old `rows`/`columns` fields,
+  // which the new shape never has.
   function normalizeLayoutEntry(raw, fallbackId, fallbackName) {
     const panels = raw.panels || [];
     const oldLayout = raw.layout || {};
+    const isLegacyGrid = 'rows' in oldLayout || 'columns' in oldLayout;
     const layout = {
-      ...defaultLayout(),
-      columns: oldLayout.columns || 1,
-      rows: oldLayout.rows || Math.max(1, Math.ceil(panels.length / (oldLayout.columns || 1))),
-      width: oldLayout.width ?? null,
-      height: oldLayout.height ?? null,
-      areas: Array.isArray(oldLayout.areas) ? oldLayout.areas : [],
-      rowFracs: Array.isArray(oldLayout.rowFracs) ? oldLayout.rowFracs : null,
-      colFracs: Array.isArray(oldLayout.colFracs) ? oldLayout.colFracs : null,
+      width: (!isLegacyGrid && typeof oldLayout.width === 'number') ? oldLayout.width : defaultLayout().width,
+      height: (!isLegacyGrid && typeof oldLayout.height === 'number') ? oldLayout.height : defaultLayout().height,
     };
     for (const p of panels) {
       p.style = p.style || {};
-      if (!('pane' in p)) p.pane = null;
+      if (!isFreeformPane(p.pane)) p.pane = defaultPane(layout);
     }
     // A workspace saved before case styles existed still gets one: the
     // first trace already plotted for each case becomes that case's
@@ -75,10 +82,10 @@ const PlotWorkspace = (() => {
     };
   }
 
-  function defaultLayoutEntry(id, name, gridSpec) {
+  function defaultLayoutEntry(id, name, canvasSpec) {
     return {
       id, name, panels: [],
-      layout: { ...defaultLayout(), ...(gridSpec || {}) },
+      layout: { ...defaultLayout(), ...(canvasSpec || {}) },
       style: defaultGlobalStyle(), activePanelId: null, caseStyles: {},
     };
   }
@@ -147,15 +154,17 @@ const PlotWorkspace = (() => {
   // new ones too (several rows, one case -> shared panel); otherwise a new
   // panel is made, which is what keeps two cases from landing on one panel
   // by accident. Overridable per row (targetPanelId in addTraces) --
-  // deliberately overlaying two cases is a choice, not a default.
-  function panelFor(caseName, pane) {
+  // deliberately overlaying two cases is a choice, not a default. A new
+  // panel's pane is left unset (fills the canvas -- see defaultPane) until
+  // arranged via Layout -> Panes.
+  function panelFor(caseName) {
     // Excludes spatial panels: they share the "same case -> same panel"
     // instinct, but a time trace and a spatial trace can never share an
     // x-axis, so auto-routing must not merge them just because the case matches.
     const L = active();
     let panel = L.panels.find(p => p.kind !== 'spatial' && p.traces.some(t => t.case === caseName));
     if (!panel) {
-      panel = { id: `p${nextPanelId++}`, title: caseName, traces: [], style: {}, pane: pane ?? null };
+      panel = { id: `p${nextPanelId++}`, title: caseName, traces: [], style: {}, pane: null };
       L.panels.push(panel);
     }
     return panel;
@@ -164,19 +173,16 @@ const PlotWorkspace = (() => {
   // targetPanelId: omit/falsy for the routing default above; '__new__' to
   // force a fresh panel even if one already holds this case; an existing
   // panel id to overlay onto it regardless of which case(s) it already holds.
-  // pane ({row, col}): where a *newly created* panel should sit in the
-  // grid; ignored when overlaying onto an existing panel, which already
-  // has one.
-  function addTraces(caseName, group, rows, nodeOf, column, targetPanelId, pane) {
+  function addTraces(caseName, group, rows, nodeOf, column, targetPanelId) {
     const L = active();
     let panel;
     if (targetPanelId === '__new__') {
-      panel = { id: `p${nextPanelId++}`, title: caseName, traces: [], style: {}, pane: pane ?? null };
+      panel = { id: `p${nextPanelId++}`, title: caseName, traces: [], style: {}, pane: null };
       L.panels.push(panel);
     } else if (targetPanelId) {
       panel = L.panels.find(p => p.id === targetPanelId);
     }
-    if (!panel) panel = panelFor(caseName, pane);
+    if (!panel) panel = panelFor(caseName);
 
     const cs = caseStyleFor(caseName);
     for (const row of rows) {
@@ -199,26 +205,26 @@ const PlotWorkspace = (() => {
   // point is comparing across nodes. `x` is captured once at add-time from
   // the picker's own projection -- a property of the map, not of history,
   // so there is nothing to refetch later.
-  function panelForSpatial(caseName, pane) {
+  function panelForSpatial(caseName) {
     const L = active();
     let panel = L.panels.find(p => p.kind === 'spatial' && p.traces.some(t => t.case === caseName));
     if (!panel) {
-      panel = { id: `p${nextPanelId++}`, title: `${caseName} (spatial)`, kind: 'spatial', traces: [], style: {}, pane: pane ?? null };
+      panel = { id: `p${nextPanelId++}`, title: `${caseName} (spatial)`, kind: 'spatial', traces: [], style: {}, pane: null };
       L.panels.push(panel);
     }
     return panel;
   }
 
-  function addSpatialTrace(caseName, group, points, column, mode, opts, targetPanelId, pane) {
+  function addSpatialTrace(caseName, group, points, column, mode, opts, targetPanelId) {
     const L = active();
     let panel;
     if (targetPanelId === '__new__') {
-      panel = { id: `p${nextPanelId++}`, title: `${caseName} (spatial)`, kind: 'spatial', traces: [], style: {}, pane: pane ?? null };
+      panel = { id: `p${nextPanelId++}`, title: `${caseName} (spatial)`, kind: 'spatial', traces: [], style: {}, pane: null };
       L.panels.push(panel);
     } else if (targetPanelId) {
       panel = L.panels.find(p => p.id === targetPanelId);
     }
-    if (!panel) panel = panelForSpatial(caseName, pane);
+    if (!panel) panel = panelForSpatial(caseName);
 
     const cs = caseStyleFor(caseName);
     panel.traces.push({
@@ -327,46 +333,25 @@ const PlotWorkspace = (() => {
     save();
   }
 
-  // Layout -> Edit: resizes the active layout's grid in place. A panel's
-  // existing pane is left alone -- if it's now out of the shrunk grid's
-  // bounds, resolvePanes() falls back to auto-placement for that panel
-  // same as an unassigned one, rather than this needing to hunt it down.
-  // A row/column count change resets any drag-resized row/column weights
-  // -- an old set of weights doesn't have a sane mapping onto a different
-  // track count.
+  // Layout -> Edit: resizes the active layout's canvas (inches) in place.
+  // Panes are left exactly as they are -- unlike the old grid, there is no
+  // "no longer fits" case to fall back from, since a pane's x/y/w/h is
+  // never relative to the canvas size.
   function updateLayout(patch) {
     const L = active();
-    const countChanged = ('rows' in patch && patch.rows !== L.layout.rows) ||
-                          ('columns' in patch && patch.columns !== L.layout.columns);
     L.layout = { ...L.layout, ...patch };
-    if (countChanged) {
-      L.layout.rowFracs = null;
-      L.layout.colFracs = null;
-    }
     save();
   }
 
-  function setPanelPane(panelId, pane) {
-    const panel = active().panels.find(p => p.id === panelId);
-    if (!panel) return;
-    panel.pane = pane;
-    save();
-  }
-
-  // Style sidebar's Panel section types in one row/column's size directly
-  // (a relative weight, not required to sum to anything in particular --
-  // see PlotArea.gridDims) -- reads the current weights for that axis (or
-  // an implicit all-equal array if none are set yet) and only touches the
-  // one index the panel's pane currently resolves into.
-  function setTrackWeight(kind, index, weight) {
+  // Layout -> Panes: patches one panel's pane (x/y/w/h, inches), merging
+  // onto its current one (or the fill-the-canvas default if never set) so
+  // a caller can pass just the one field that changed.
+  function setPanelPane(panelId, patch) {
     const L = active();
-    const count = kind === 'row' ? L.layout.rows : L.layout.columns;
-    const key = kind === 'row' ? 'rowFracs' : 'colFracs';
-    if (!(index >= 0) || index >= count) return;
-    const current = (Array.isArray(L.layout[key]) && L.layout[key].length === count)
-      ? L.layout[key].slice() : Array(count).fill(1);
-    current[index] = weight > 0 ? weight : 1;
-    L.layout[key] = current;
+    const panel = L.panels.find(p => p.id === panelId);
+    if (!panel) return;
+    const current = isFreeformPane(panel.pane) ? panel.pane : defaultPane(L.layout);
+    panel.pane = { ...current, ...patch };
     save();
   }
 
@@ -391,8 +376,8 @@ const PlotWorkspace = (() => {
   }
 
   // Layout -> New (also the tab strip's "+"): a brand new, empty layout
-  // tab with the chosen grid -- unlike the old single-workspace "New",
-  // there are no existing panels to reset since nothing here existed yet.
+  // tab with the chosen canvas size -- unlike the old single-workspace
+  // "New", there are no existing panels to reset since nothing here existed yet.
   function createLayout(spec) {
     const id = `l${nextLayoutId++}`;
     const name = `Layout ${ws.layouts.length + 1}`;
@@ -425,7 +410,7 @@ const PlotWorkspace = (() => {
 
   return {
     state, addTraces, addSpatialTrace, removeTrace, removePanel, clearPanel, renamePanel,
-    setYLock, updateLayout, setPanelPane, setTrackWeight, setPanelStyle, setGlobalStyle, setCaseStyle,
+    setYLock, updateLayout, setPanelPane, setPanelStyle, setGlobalStyle, setCaseStyle,
     setActivePanel, setTraceStyle,
     listLayouts, activeLayoutId, setActiveLayout, createLayout, renameLayout, deleteLayout,
   };

@@ -1,5 +1,5 @@
-// Renders the plot workspace: one Plotly figure, panels as stacked subplots
-// sharing an x-axis when linked (§5 of the plan).
+// Renders the plot workspace: one Plotly figure, each panel its own
+// independently positioned/sized subplot (§5 of the plan).
 const PlotArea = (() => {
   // Lazy-loaded only when the LaTeX checkbox is turned on. Unlike the
   // single-file Plotly bundles, MathJax needs its own config/extension/
@@ -174,161 +174,37 @@ const PlotArea = (() => {
     return lo <= hi ? [lo, hi] : null;
   }
 
-  // Every cell of the (rows, columns) grid, as non-overlapping rectangular
-  // slots: `areas` (merged, span > 1x1) first, then every remaining cell
-  // as its own implicit 1x1 slot. An invalid area (out of bounds, or
-  // overlapping an earlier one) is dropped rather than corrupting the
-  // whole grid -- Layout -> New/Edit is expected to only ever hand this
-  // valid, non-overlapping areas, but a hand-edited or stale saved
-  // workspace should still render something sane. Sorted row-major by
-  // top-left corner so auto-placement below has a stable order.
-  function computeSlots(rows, columns, areas) {
-    const covered = new Set();
-    const slots = [];
-    for (const a of areas || []) {
-      if (!(a.rowSpan > 0) || !(a.colSpan > 0)) continue;
-      if (a.row < 0 || a.col < 0 || a.row + a.rowSpan > rows || a.col + a.colSpan > columns) continue;
-      let overlap = false;
-      for (let r = a.row; r < a.row + a.rowSpan && !overlap; r++) {
-        for (let c = a.col; c < a.col + a.colSpan; c++) {
-          if (covered.has(`${r},${c}`)) { overlap = true; break; }
-        }
-      }
-      if (overlap) continue;
-      for (let r = a.row; r < a.row + a.rowSpan; r++) {
-        for (let c = a.col; c < a.col + a.colSpan; c++) covered.add(`${r},${c}`);
-      }
-      slots.push({ row: a.row, col: a.col, rowSpan: a.rowSpan, colSpan: a.colSpan });
+  // A panel's own pane (x, y, w, h -- inches, from Layout -> Panes), or the
+  // canvas-filling default when it hasn't been placed yet (see
+  // PlotWorkspace's defaultPane). Every pane is independent: no grid, no
+  // shared tracks, free to overlap or leave gaps -- entirely the typed
+  // numbers' doing.
+  function paneRect(ws, panel) {
+    const p = panel.pane;
+    if (p && typeof p.x === 'number' && typeof p.y === 'number' && typeof p.w === 'number' && typeof p.h === 'number') {
+      return p;
     }
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < columns; c++) {
-        if (!covered.has(`${r},${c}`)) slots.push({ row: r, col: c, rowSpan: 1, colSpan: 1 });
-      }
-    }
-    slots.sort((s1, s2) => s1.row - s2.row || s1.col - s2.col);
-    return slots;
+    return { x: 0, y: 0, w: ws.layout.width, h: ws.layout.height };
   }
 
-  // The full slot list for the workspace's current layout -- used both by
-  // resolvePanes below and by the Plot -> New pane picker (which needs
-  // every slot, occupied or not, to draw the whole grid).
-  function gridSlots(ws) {
-    const columns = Math.max(1, ws.layout.columns || 1);
-    const rows = Math.max(1, ws.layout.rows || 1);
-    return { rows, columns, slots: computeSlots(rows, columns, ws.layout.areas) };
-  }
+  function clamp01(v) { return Math.max(0, Math.min(1, v)); }
 
-  // Drops any area that no longer fits a (possibly shrunk) grid, or that
-  // overlaps an area kept ahead of it -- shared by Layout -> New/Edit
-  // (live, as rows/columns are edited) and the workspace load path.
-  function clampAreas(areas, rows, columns) {
-    return computeSlots(rows, columns, areas).filter(s => s.rowSpan > 1 || s.colSpan > 1);
-  }
-
-  // Assigns every panel a slot: a valid, non-conflicting panel.pane (its
-  // slot's top-left corner) wins that slot; anything else (unset, no
-  // matching slot, or a second panel claiming an already-taken slot) falls
-  // back to the next free slot in row-major order, growing the grid
-  // downward (as new, unmerged 1x1 rows) rather than dropping the panel.
-  // Returns {rows, columns, paneOf}, paneOf mapping panel id -> the full
-  // slot {row, col, rowSpan, colSpan} it landed in.
-  function resolvePanes(ws) {
-    const columns = Math.max(1, ws.layout.columns || 1);
-    let rows = Math.max(1, ws.layout.rows || 1);
-    let slots = computeSlots(rows, columns, ws.layout.areas);
-    const bySlotKey = new Map(slots.map(s => [`${s.row},${s.col}`, s]));
-    const used = new Set();
-    const paneOf = new Map();
-
-    ws.panels.forEach(panel => {
-      const p = panel.pane;
-      if (p && Number.isInteger(p.row) && Number.isInteger(p.col)) {
-        const key = `${p.row},${p.col}`;
-        const slot = bySlotKey.get(key);
-        if (slot && !used.has(key)) {
-          used.add(key);
-          paneOf.set(panel.id, slot);
-        }
-      }
-    });
-
-    let freeSlots = slots.filter(s => !used.has(`${s.row},${s.col}`));
-    let freeIdx = 0;
-    ws.panels.forEach(panel => {
-      if (paneOf.has(panel.id)) return;
-      if (freeIdx >= freeSlots.length) {
-        // Out of room: add one more unmerged row and try again.
-        rows += 1;
-        for (let c = 0; c < columns; c++) freeSlots.push({ row: rows - 1, col: c, rowSpan: 1, colSpan: 1 });
-      }
-      const slot = freeSlots[freeIdx++];
-      used.add(`${slot.row},${slot.col}`);
-      paneOf.set(panel.id, slot);
-    });
-
-    return { rows, columns, paneOf };
-  }
-
-  // A grid-with-gap layout (like a CSS grid with `gap`), rows/columns
-  // equal-size by default but individually resizable (Style sidebar's
-  // Panel section) -- `rowFracs`/`colFracs` are relative weights (not
-  // required to sum to anything in particular), defaulting to equal
-  // weights when absent. The gap itself is always the fixed size it would
-  // be in the equal-weight case, so an unresized grid's own row/column
-  // sizes render the same regardless of any other row/column's weight.
-  //
-  // A *fraction* of cell size (the old 0.08) fundamentally can't reserve
-  // enough room reliably: tick labels and axis titles (drawn just outside
-  // each subplot's own domain box, not accounted for by the domain math
-  // at all) are a roughly fixed PIXEL size regardless of how big the
-  // figure is, so the same fraction that's fine on a tall figure starts
-  // visibly overlapping the next panel over on a short one -- found by
-  // actually looking at a 2-row grid at the default height. So the gap is
-  // instead a fixed pixel target (enough for a tick-label row + axis
-  // title + Plotly's own padding, with columns needing a bit less since
-  // there's usually less text stacked there) converted to a fraction
-  // using the figure's own known size -- exact for height (always
-  // computed ahead of render), a best-effort estimate for width in
-  // auto/responsive mode (not knowable until Plotly lays out the
-  // container). Still not a real measurement of the rendered text, so an
-  // unusually large font can still collide -- shrinking it or hiding a
-  // panel's own ticks/label (Panel section) is the escape hatch for that.
-  const ROW_GAP_PX = 56;
-  const COL_GAP_PX = 60;
-  const FALLBACK_WIDTH_PX = 900;   // typical plot-area width when auto/responsive
-  function trackLayout(fracsRaw, count, gapFrac) {
-    // Capped so the gaps alone can never consume more than 70% of the
-    // figure -- a fixed per-gap pixel target times a great many tracks
-    // could otherwise leave zero (or negative) room for actual content.
-    const gap = count > 1 ? Math.min(gapFrac, 0.7 / (count - 1)) : 0;
-    const available = 1 - gap * Math.max(0, count - 1);
-    const weights = (Array.isArray(fracsRaw) && fracsRaw.length === count && fracsRaw.every(w => w > 0))
-      ? fracsRaw : Array(count).fill(1);
-    const weightSum = weights.reduce((a, b) => a + b, 0);
-    const sizes = weights.map(w => (w / weightSum) * available);
-    const starts = [];
-    let acc = 0;
-    for (let i = 0; i < count; i++) {
-      starts.push(acc);
-      acc += sizes[i] + gap;
-    }
-    return { starts, sizes, gap };
-  }
-  function gridDims(rows, columns, rowFracs, colFracs, figureHeightPx, figureWidthPx) {
-    const rowGapFrac = ROW_GAP_PX / (figureHeightPx || Math.max(240, rows * 220));
-    const colGapFrac = COL_GAP_PX / (figureWidthPx || FALLBACK_WIDTH_PX);
-    const cols = trackLayout(colFracs, columns, colGapFrac);
-    const rowsL = trackLayout(rowFracs, rows, rowGapFrac);
-    return { colStarts: cols.starts, colSizes: cols.sizes, rowStarts: rowsL.starts, rowSizes: rowsL.sizes };
-  }
-  function slotDomain(slot, dims) {
-    const lastCol = slot.col + slot.colSpan - 1;
-    const x0 = dims.colStarts[slot.col];
-    const x1 = dims.colStarts[lastCol] + dims.colSizes[lastCol];
-    const topRow = slot.row;
-    const lastRow = slot.row + slot.rowSpan - 1;
-    const yTop = 1 - dims.rowStarts[topRow];
-    const yBottom = 1 - (dims.rowStarts[lastRow] + dims.rowSizes[lastRow]);
+  // Inches -> Plotly domain fraction [0,1] (y flipped: inches count down
+  // from the canvas top, Plotly domains count up from the bottom). Clamped
+  // rather than left to Plotly, which rejects a domain outside [0,1] --
+  // a pane typed to run past the canvas edge, or with zero/negative size,
+  // still renders something instead of breaking the whole figure; the
+  // typed numbers themselves are left alone in state, so shrinking the
+  // canvas back later doesn't lose the pane's intended rect.
+  function paneDomain(pane, layout) {
+    const w = layout.width || 0.001;
+    const h = layout.height || 0.001;
+    let x0 = clamp01(pane.x / w);
+    let x1 = clamp01((pane.x + pane.w) / w);
+    let yBottom = clamp01(1 - (pane.y + pane.h) / h);
+    let yTop = clamp01(1 - pane.y / h);
+    if (x1 <= x0) x1 = Math.min(1, x0 + 0.01);
+    if (yTop <= yBottom) yTop = Math.min(1, yBottom + 0.01);
     return { x: [x0, x1], y: [yBottom, yTop] };
   }
 
@@ -372,15 +248,7 @@ const PlotArea = (() => {
       return;
     }
 
-    // An explicit width/height (Layout -> New/Edit) must render at exactly
-    // that pixel size -- forcing the container to width:100% here would
-    // override it right back to "fill whatever space is available",
-    // which is what silently ignored it before. Auto ('' width/height
-    // unset) is the only case that should stretch to fill #plotarea.
-    const hasExplicitSize = !!(ws.layout.width || ws.layout.height);
-    document.getElementById('plotarea').innerHTML = hasExplicitSize
-      ? '<div id="plotly-panels"></div>'
-      : '<div id="plotly-panels" style="width:100%"></div>';
+    document.getElementById('plotarea').innerHTML = '<div id="plotly-panels"></div>';
 
     const style = ws.style || {};
     // Covers every path that can end up rendering with latex:true, not
@@ -391,37 +259,24 @@ const PlotArea = (() => {
     if (style.latex && !window.MathJax) {
       ensureMathJax().then(() => render()).catch(err => console.warn(err.message));
     }
-    const resolved = resolvePanes(ws);
-    const { rows, columns } = resolved;
     const margin = {
       t: style.marginTop ?? (style.title ? 44 : 24),
       r: style.marginRight ?? 20,
       b: style.marginBottom ?? 40,
       l: style.marginLeft ?? 60,
     };
-    // The same height this render() computes for the actual Plotly figure
-    // just below -- gridDims needs it ahead of time to convert its
-    // pixel-sized gap target into a fraction. Domains apply within the
-    // INNER plot area (figure size minus margins), not the full figure, so
-    // the margins are subtracted here -- otherwise the real on-screen gap
-    // ends up smaller than ROW_GAP_PX/COL_GAP_PX by the margin's share of
-    // the figure. Width has no such advance value in auto/responsive mode
-    // (Plotly decides it from the container), so gridDims falls back to a
-    // best-effort estimate then.
-    const figureHeightPx = (ws.layout.height || Math.max(240, rows * 220)) - margin.t - margin.b;
-    const figureWidthPx = ws.layout.width ? (ws.layout.width - margin.l - margin.r) : undefined;
-    const dims = gridDims(rows, columns, ws.layout.rowFracs, ws.layout.colFracs, figureHeightPx, figureWidthPx);
-
-    // No Plotly `grid` here -- it has no notion of a subplot spanning more
-    // than one cell, so each panel's xaxis/yaxis gets an explicit `domain`
-    // (via slotDomain) instead, computed the same way for a plain 1x1 slot
-    // or a merged one.
+    // The canvas (Layout -> New/Edit) is always a fixed size, in inches --
+    // rendered on-screen at the same 96 px/in CSS uses for "1in", so what
+    // you see is to scale. No Plotly `grid` here -- each panel's xaxis/
+    // yaxis gets an explicit `domain` (via paneDomain) computed straight
+    // from its own pane rect, independent of every other panel's.
+    const SCREEN_DPI = 96;
     const traces = [];
     const layout = {
       margin,
       showlegend: !!style.showLegend,
-      width: ws.layout.width || undefined,
-      height: ws.layout.height || Math.max(240, rows * 220),
+      width: ws.layout.width * SCREEN_DPI,
+      height: ws.layout.height * SCREEN_DPI,
       paper_bgcolor: '#ffffff',
       plot_bgcolor: '#ffffff',
     };
@@ -512,15 +367,14 @@ const PlotArea = (() => {
       layout[xKey] = swap ? logicalYConfig : logicalXConfig;
       layout[yKey] = swap ? logicalXConfig : logicalYConfig;
 
-      // Domain/anchor are pure page geometry -- which slot this panel sits
-      // in -- independent of swap, which only decides which physical axis
+      // Domain/anchor are pure page geometry -- this panel's own pane --
+      // independent of swap, which only decides which physical axis
       // carries which logical data. `anchor` takes Plotly's short axis
       // reference ('y2'), not the layout object's key ('yaxis2') -- passing
       // the key here is silently accepted (it doesn't match any real axis)
       // and Plotly falls back to some other anchor, which is what put a
       // panel's own tick labels over a completely different subplot.
-      const slotForDomain = resolved.paneOf.get(panel.id);
-      const domain = slotDomain(slotForDomain, dims);
+      const domain = paneDomain(paneRect(ws, panel), ws.layout);
       layout[xKey].domain = domain.x;
       layout[xKey].anchor = yref;
       layout[yKey].domain = domain.y;
@@ -540,11 +394,11 @@ const PlotArea = (() => {
     });
 
     // responsive stretches the plot to fill its container on resize --
-    // exactly what an explicit width/height must NOT do, or the pixel
-    // size just entered gets silently overridden right back to "fill
-    // whatever space is available" (the width/height "doesn't properly
-    // fit in" symptom).
-    await Plotly.newPlot('plotly-panels', traces, layout, { displaylogo: false, responsive: !hasExplicitSize });
+    // exactly what a fixed-inches canvas must NOT do, or the pixel size
+    // just computed gets silently overridden right back to "fill whatever
+    // space is available" (the width/height "doesn't properly fit in"
+    // symptom from before the canvas was mandatory).
+    await Plotly.newPlot('plotly-panels', traces, layout, { displaylogo: false, responsive: false });
   }
 
   // The logical Y/X range, i.e. what the style sidebar's Y/X fields (and
@@ -566,8 +420,8 @@ const PlotArea = (() => {
     const gd = document.getElementById('plotly-panels');
     if (!gd || !gd.layout) return null;
     // Axis numbering is just render()'s panel array order -- see the n =
-    // panelIdx + 1 there -- since domains (not axis position) now carry
-    // the grid geometry.
+    // panelIdx + 1 there -- since each panel's own pane (not axis
+    // position) carries where it actually sits on the page.
     const idx = PlotWorkspace.state().panels.findIndex(p => p.id === panelId);
     const n = idx + 1;
     const axis = gd.layout[n === 1 ? `${letter}axis` : `${letter}axis${n}`];
@@ -575,8 +429,7 @@ const PlotArea = (() => {
   }
 
   return {
-    render, placeholder, currentYRange, currentXRange, ensureMathJax,
-    resolvePanes, gridSlots, clampAreas,
+    render, placeholder, currentYRange, currentXRange, ensureMathJax, paneRect,
   };
 })();
 
