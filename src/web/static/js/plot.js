@@ -369,6 +369,18 @@ const PlotArea = (() => {
     if (style.title) layout.title = { text: style.title };
     if (style.showLegend) layout.legend = legendLayout(style);
 
+    // Link X-axes ties every (non-spatial, non-swapped) panel's time axis
+    // to one shared reference -- the first such panel's, not blindly 'x':
+    // panel index 0 can just as easily be a spatial panel (position, not
+    // time), and `matches`-ing a time axis to a spatial one is nonsense
+    // that visibly corrupts the render (a linked axis's ticks end up drawn
+    // over the wrong subplot).
+    let firstTimeXRef = null;
+    ws.panels.forEach((panel, idx) => {
+      if (firstTimeXRef || panel.kind === 'spatial' || (panel.style && panel.style.swapAxes)) return;
+      firstTimeXRef = idx === 0 ? 'x' : `x${idx + 1}`;
+    });
+
     // "Swap X/Y" rotates a panel 90 degrees: the style sidebar's X/Y fields
     // (label, limits, tick step, tick angle) always describe the same
     // logical quantity (time or position on X, the plotted value on Y)
@@ -441,8 +453,10 @@ const PlotArea = (() => {
           // Plotly's `matches` only links same-letter axes (x-to-x), so a
           // swapped panel -- whose logical time axis now sits on physical
           // y -- can't participate; linking is skipped for it rather than
-          // silently doing nothing or erroring.
-          matches: (ws.linkX && !swap) ? 'x' : undefined,
+          // silently doing nothing or erroring. A panel never matches its
+          // own axis either (firstTimeXRef === xref for whichever panel it
+          // points at).
+          matches: (ws.linkX && !swap && firstTimeXRef && xref !== firstTimeXRef) ? firstTimeXRef : undefined,
         };
         logicalYConfig = { title: pStyle.ylabel || panel.title };
       }
@@ -458,13 +472,17 @@ const PlotArea = (() => {
 
       // Domain/anchor are pure page geometry -- which slot this panel sits
       // in -- independent of swap, which only decides which physical axis
-      // carries which logical data.
+      // carries which logical data. `anchor` takes Plotly's short axis
+      // reference ('y2'), not the layout object's key ('yaxis2') -- passing
+      // the key here is silently accepted (it doesn't match any real axis)
+      // and Plotly falls back to some other anchor, which is what put a
+      // panel's own tick labels over a completely different subplot.
       const slotForDomain = resolved.paneOf.get(panel.id);
       const domain = slotDomain(slotForDomain, dims);
       layout[xKey].domain = domain.x;
-      layout[xKey].anchor = yKey;
+      layout[xKey].anchor = yref;
       layout[yKey].domain = domain.y;
-      layout[yKey].anchor = xKey;
+      layout[yKey].anchor = xref;
     });
 
     Plotly.newPlot('plotly-panels', traces, layout, { displaylogo: false, responsive: true });
