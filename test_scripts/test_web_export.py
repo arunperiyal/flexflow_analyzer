@@ -390,12 +390,15 @@ def test_pane_rect_defaults_to_filling_the_canvas_when_unset():
         {'x': 0, 'y': 0, 'w': 6.5, 'h': 4.5}
 
 
+_ZERO_MARGIN_CONTENT = {'x0': 0, 'y0': 0, 'w': 6, 'h': 4}   # the full 6x4in canvas, no inset
+
+
 def test_pane_axes_rect_maps_inches_to_a_figure_fraction_rect():
     from src.web.api.export import _pane_axes_rect
 
     # Top-left quarter of a 6x4in canvas -> left=0, bottom=0.5 (y counts up
     # from the bottom, inches count down from the top), width=0.5, height=0.5.
-    rect = _pane_axes_rect({'x': 0, 'y': 0, 'w': 3, 'h': 2}, width_in=6, height_in=4)
+    rect = _pane_axes_rect({'x': 0, 'y': 0, 'w': 3, 'h': 2}, width_in=6, height_in=4, content=_ZERO_MARGIN_CONTENT)
     assert rect == [0, 0.5, 0.5, 0.5]
 
 
@@ -404,9 +407,44 @@ def test_pane_axes_rect_clamps_a_pane_that_runs_past_the_canvas_edge():
 
     # A pane wider than the canvas itself must not hand matplotlib a
     # fraction outside [0, 1] -- clamped rather than raising.
-    rect = _pane_axes_rect({'x': 0, 'y': 0, 'w': 20, 'h': 2}, width_in=6, height_in=4)
+    rect = _pane_axes_rect({'x': 0, 'y': 0, 'w': 20, 'h': 2}, width_in=6, height_in=4, content=_ZERO_MARGIN_CONTENT)
     left, bottom, width, height = rect
     assert 0 <= left <= 1 and 0 <= left + width <= 1
+
+
+def test_content_area_in_insets_by_the_style_margins_in_inches():
+    from src.web.api.export import _content_area_in, _SCREEN_DPI
+
+    # Default margins (no style overrides, no title): t=24px, r=20px, b=40px, l=60px.
+    content = _content_area_in(6.5, 4.5, {})
+    assert content['x0'] == pytest.approx(60 / _SCREEN_DPI)
+    assert content['y0'] == pytest.approx(24 / _SCREEN_DPI)
+    assert content['w'] == pytest.approx(6.5 - 60 / _SCREEN_DPI - 20 / _SCREEN_DPI)
+    assert content['h'] == pytest.approx(4.5 - 24 / _SCREEN_DPI - 40 / _SCREEN_DPI)
+
+
+def test_content_area_in_honors_explicit_margin_overrides():
+    from src.web.api.export import _content_area_in, _SCREEN_DPI
+
+    content = _content_area_in(6, 4, {'marginTop': 10, 'marginRight': 10, 'marginBottom': 10, 'marginLeft': 96})
+    assert content['x0'] == pytest.approx(1.0)   # 96px / 96 px-per-in == 1in
+    assert content['y0'] == pytest.approx(10 / _SCREEN_DPI)
+
+
+def test_pane_at_the_canvas_edge_still_lands_inside_the_margin_not_the_paper_edge():
+    # Regression: a pane pinned to x=0 (a common, deliberate choice -- see
+    # Layout -> Panes) used to map straight onto the literal PNG paper edge,
+    # leaving matplotlib zero room to draw that axes' own y-tick labels/
+    # y-axis label, which were then silently clipped off the saved image
+    # (no bbox_inches='tight' to expand the page for them anymore).
+    from src.web.api.export import _pane_axes_rect, _content_area_in
+
+    width_in, height_in = 6.5, 4.5
+    content = _content_area_in(width_in, height_in, {})
+    left, bottom, width, height = _pane_axes_rect(
+        {'x': 0, 'y': 0, 'w': width_in, 'h': height_in}, width_in, height_in, content)
+    assert left > 0   # room reserved to the left for tick labels/axis label
+    assert bottom > 0   # ... and below, for the x-axis's own labels
 
 
 def test_export_honors_explicit_pane_positions(client):

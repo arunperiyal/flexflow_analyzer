@@ -54,15 +54,59 @@ def _pane_rect(panel, layout):
     return {'x': 0, 'y': 0, 'w': layout.get('width') or 6.5, 'h': layout.get('height') or 4.5}
 
 
-def _pane_axes_rect(pane, width_in, height_in):
+# The same 96 px/in plot.js's SCREEN_DPI renders the browser's on-screen
+# figure at -- converts the style's px margins to inches on that same
+# scale, so a given margin setting insets the same PHYSICAL amount here as
+# it visually does there.
+_SCREEN_DPI = 96
+
+
+def _content_area_in(width_in, height_in, style):
+    """The canvas inset by the global margins (inches) -- the same region
+    Plotly's own layout.margin carves the plot area out of in the browser.
+    A pane's x/y/w/h is expressed in inches of the FULL canvas (see
+    paneDomain in plot.js), but Plotly then places that fraction inside
+    its margin-inset plot area, never against the paper's own edge -- so
+    this is applied here too, in _pane_axes_rect below, rather than mapping
+    a pane straight onto the full page. Skipping it left a pane pinned to
+    the canvas edge (x=0 is a common, deliberate choice) with literally
+    zero room for its own tick labels/axis label, silently clipping them
+    off the page now that savefig has no bbox_inches='tight' to expand for it."""
+    margin_t = (style.get('marginTop') if style.get('marginTop') is not None
+                else (44 if style.get('title') else 24)) / _SCREEN_DPI
+    margin_r = (style.get('marginRight') if style.get('marginRight') is not None else 20) / _SCREEN_DPI
+    margin_b = (style.get('marginBottom') if style.get('marginBottom') is not None else 40) / _SCREEN_DPI
+    margin_l = (style.get('marginLeft') if style.get('marginLeft') is not None else 60) / _SCREEN_DPI
+    return {
+        'x0': margin_l, 'y0': margin_t,
+        'w': max(width_in - margin_l - margin_r, 0.01),
+        'h': max(height_in - margin_t - margin_b, 0.01),
+    }
+
+
+def _pane_axes_rect(pane, width_in, height_in, content):
     """A pane's inches rect -> a matplotlib add_axes rect (figure-fraction
-    [left, bottom, width, height], y counting up from the bottom). Clamped
-    the same way plot.js's paneDomain is -- a pane typed past the canvas
-    edge, or with zero/negative size, still renders instead of raising."""
-    left = min(max(pane['x'] / width_in, 0), 1)
-    right = min(max((pane['x'] + pane['w']) / width_in, 0), 1)
-    bottom = min(max(1 - (pane['y'] + pane['h']) / height_in, 0), 1)
-    top = min(max(1 - pane['y'] / height_in, 0), 1)
+    [left, bottom, width, height], y counting up from the bottom). The
+    pane's own fraction of the full canvas is placed inside `content` (see
+    _content_area_in) before converting to a figure-fraction, mirroring
+    how Plotly places a `domain` fraction inside its margin-inset plot
+    area rather than against the paper edge. Clamped the same way plot.js's
+    paneDomain is -- a pane typed past the canvas edge, or with zero/
+    negative size, still renders instead of raising."""
+    fx0 = pane['x'] / width_in
+    fx1 = (pane['x'] + pane['w']) / width_in
+    fy_top = pane['y'] / height_in
+    fy_bottom = (pane['y'] + pane['h']) / height_in
+
+    left_in = content['x0'] + fx0 * content['w']
+    right_in = content['x0'] + fx1 * content['w']
+    top_in = content['y0'] + fy_top * content['h']
+    bottom_in = content['y0'] + fy_bottom * content['h']
+
+    left = min(max(left_in / width_in, 0), 1)
+    right = min(max(right_in / width_in, 0), 1)
+    bottom = min(max(1 - bottom_in / height_in, 0), 1)
+    top = min(max(1 - top_in / height_in, 0), 1)
     if right <= left:
         right = min(1, left + 0.01)
     if top <= bottom:
@@ -105,6 +149,7 @@ def export_png():
     width_in = layout.get('width') or 6.5
     height_in = layout.get('height') or 4.5
     figsize = (width_in, height_in)
+    content = _content_area_in(width_in, height_in, style)
 
     # rc_context scopes the font override to this figure, rather than
     # mutating matplotlib's global rcParams for every concurrent request.
@@ -116,7 +161,7 @@ def export_png():
         # needed since panes are independent (mirrors plot.js's paneDomain).
         for panel in panels:
             pane = _pane_rect(panel, layout)
-            ax = fig.add_axes(_pane_axes_rect(pane, width_in, height_in))
+            ax = fig.add_axes(_pane_axes_rect(pane, width_in, height_in, content))
             pstyle = panel.get('style') or {}
 
             # Swap X/Y rotates the panel 90 degrees: pstyle's x*/y* fields
