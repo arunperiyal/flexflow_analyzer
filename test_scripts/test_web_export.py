@@ -274,6 +274,10 @@ def test_export_renders_dollar_wrapped_text_via_matplotlibs_own_mathtext(client)
 
 # -- Layout grid / pane assignment ------------------------------------------
 
+def _cell(row, col):
+    return {'row': row, 'col': col, 'rowSpan': 1, 'colSpan': 1}
+
+
 def test_resolve_panes_honors_explicit_non_conflicting_panes():
     from src.web.api.export import _resolve_panes
 
@@ -283,7 +287,7 @@ def test_resolve_panes_honors_explicit_non_conflicting_panes():
     ]
     rows, columns, pane_of = _resolve_panes(panels, {'rows': 2, 'columns': 2})
     assert (rows, columns) == (2, 2)
-    assert pane_of == {'p1': (1, 0), 'p2': (0, 1)}
+    assert pane_of == {'p1': _cell(1, 0), 'p2': _cell(0, 1)}
 
 
 def test_resolve_panes_falls_back_conflicting_panes_to_next_free_cell():
@@ -295,10 +299,10 @@ def test_resolve_panes_falls_back_conflicting_panes_to_next_free_cell():
         {'id': 'p3', 'pane': None},                  # unassigned
     ]
     rows, columns, pane_of = _resolve_panes(panels, {'rows': 1, 'columns': 2})
-    assert pane_of['p1'] == (0, 0)
+    assert pane_of['p1'] == _cell(0, 0)
     # p2 and p3 both land on free cells, never re-using (0, 0).
-    assert pane_of['p2'] != (0, 0)
-    assert pane_of['p3'] != (0, 0)
+    assert pane_of['p2'] != _cell(0, 0)
+    assert pane_of['p3'] != _cell(0, 0)
     assert pane_of['p2'] != pane_of['p3']
 
 
@@ -309,7 +313,51 @@ def test_resolve_panes_grows_rows_downward_when_the_grid_is_full():
     rows, columns, pane_of = _resolve_panes(panels, {'rows': 1, 'columns': 2})
     assert columns == 2
     assert rows == 2
-    assert len(set(pane_of.values())) == 3
+    seen = {(s['row'], s['col']) for s in pane_of.values()}
+    assert len(seen) == 3
+
+
+# -- Merged panes (Layout -> New's cell-merge) ------------------------------
+
+def test_resolve_panes_places_a_panel_into_a_merged_area():
+    from src.web.api.export import _resolve_panes
+
+    layout = {'rows': 3, 'columns': 2, 'areas': [{'row': 0, 'col': 0, 'rowSpan': 3, 'colSpan': 1}]}
+    panels = [
+        {'id': 'p1', 'pane': {'row': 0, 'col': 0}},   # the merged column
+        {'id': 'p2', 'pane': None},
+        {'id': 'p3', 'pane': None},
+    ]
+    rows, columns, pane_of = _resolve_panes(panels, layout)
+    assert pane_of['p1'] == {'row': 0, 'col': 0, 'rowSpan': 3, 'colSpan': 1}
+    # p2/p3 auto-place into the remaining single-column-1 cells, never
+    # re-splitting the merged column.
+    assert pane_of['p2'] == _cell(0, 1)
+    assert pane_of['p3'] == _cell(1, 1)
+
+
+def test_resolve_panes_ignores_an_out_of_bounds_merged_area():
+    from src.web.api.export import _compute_slots
+
+    # rowSpan runs past a 2-row grid -- dropped rather than corrupting the
+    # whole slot list.
+    slots = _compute_slots(2, 2, [{'row': 0, 'col': 0, 'rowSpan': 3, 'colSpan': 1}])
+    assert all(s['rowSpan'] == 1 and s['colSpan'] == 1 for s in slots)
+    assert len(slots) == 4
+
+
+def test_export_honors_a_merged_column(client):
+    panels = [
+        {'id': 'p1', 'title': 'merged', 'traces': _panels()[0]['traces'], 'pane': {'row': 0, 'col': 0}},
+        {'id': 'p2', 'title': 'top-right', 'traces': _panels()[0]['traces'], 'pane': {'row': 0, 'col': 1}},
+        {'id': 'p3', 'title': 'bottom-right', 'traces': _panels()[0]['traces'], 'pane': {'row': 1, 'col': 1}},
+    ]
+    res = client.post('/api/export', json={
+        'panels': panels,
+        'layout': {'rows': 2, 'columns': 2, 'areas': [{'row': 0, 'col': 0, 'rowSpan': 2, 'colSpan': 1}]},
+    })
+    assert res.status_code == 200
+    assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
 
 
 def test_export_honors_an_explicit_grid_layout(client):

@@ -170,58 +170,117 @@ const PlotArea = (() => {
     return lo <= hi ? [lo, hi] : null;
   }
 
-  // Assigns every panel a (row, col) cell: a valid, non-conflicting
-  // panel.pane wins its cell; anything else (unset, out of bounds, or a
-  // second panel claiming an already-taken cell) falls back to the next
-  // free cell in row-major order, growing the grid downward rather than
-  // dropping the panel. Returns {rows, columns, paneOf}, paneOf mapping
-  // panel id -> {row, col}.
+  // Every cell of the (rows, columns) grid, as non-overlapping rectangular
+  // slots: `areas` (merged, span > 1x1) first, then every remaining cell
+  // as its own implicit 1x1 slot. An invalid area (out of bounds, or
+  // overlapping an earlier one) is dropped rather than corrupting the
+  // whole grid -- Layout -> New/Edit is expected to only ever hand this
+  // valid, non-overlapping areas, but a hand-edited or stale saved
+  // workspace should still render something sane. Sorted row-major by
+  // top-left corner so auto-placement below has a stable order.
+  function computeSlots(rows, columns, areas) {
+    const covered = new Set();
+    const slots = [];
+    for (const a of areas || []) {
+      if (!(a.rowSpan > 0) || !(a.colSpan > 0)) continue;
+      if (a.row < 0 || a.col < 0 || a.row + a.rowSpan > rows || a.col + a.colSpan > columns) continue;
+      let overlap = false;
+      for (let r = a.row; r < a.row + a.rowSpan && !overlap; r++) {
+        for (let c = a.col; c < a.col + a.colSpan; c++) {
+          if (covered.has(`${r},${c}`)) { overlap = true; break; }
+        }
+      }
+      if (overlap) continue;
+      for (let r = a.row; r < a.row + a.rowSpan; r++) {
+        for (let c = a.col; c < a.col + a.colSpan; c++) covered.add(`${r},${c}`);
+      }
+      slots.push({ row: a.row, col: a.col, rowSpan: a.rowSpan, colSpan: a.colSpan });
+    }
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < columns; c++) {
+        if (!covered.has(`${r},${c}`)) slots.push({ row: r, col: c, rowSpan: 1, colSpan: 1 });
+      }
+    }
+    slots.sort((s1, s2) => s1.row - s2.row || s1.col - s2.col);
+    return slots;
+  }
+
+  // The full slot list for the workspace's current layout -- used both by
+  // resolvePanes below and by the Plot -> New pane picker (which needs
+  // every slot, occupied or not, to draw the whole grid).
+  function gridSlots(ws) {
+    const columns = Math.max(1, ws.layout.columns || 1);
+    const rows = Math.max(1, ws.layout.rows || 1);
+    return { rows, columns, slots: computeSlots(rows, columns, ws.layout.areas) };
+  }
+
+  // Drops any area that no longer fits a (possibly shrunk) grid, or that
+  // overlaps an area kept ahead of it -- shared by Layout -> New/Edit
+  // (live, as rows/columns are edited) and the workspace load path.
+  function clampAreas(areas, rows, columns) {
+    return computeSlots(rows, columns, areas).filter(s => s.rowSpan > 1 || s.colSpan > 1);
+  }
+
+  // Assigns every panel a slot: a valid, non-conflicting panel.pane (its
+  // slot's top-left corner) wins that slot; anything else (unset, no
+  // matching slot, or a second panel claiming an already-taken slot) falls
+  // back to the next free slot in row-major order, growing the grid
+  // downward (as new, unmerged 1x1 rows) rather than dropping the panel.
+  // Returns {rows, columns, paneOf}, paneOf mapping panel id -> the full
+  // slot {row, col, rowSpan, colSpan} it landed in.
   function resolvePanes(ws) {
     const columns = Math.max(1, ws.layout.columns || 1);
     let rows = Math.max(1, ws.layout.rows || 1);
-    const occupied = new Set();
+    let slots = computeSlots(rows, columns, ws.layout.areas);
+    const bySlotKey = new Map(slots.map(s => [`${s.row},${s.col}`, s]));
+    const used = new Set();
     const paneOf = new Map();
 
     ws.panels.forEach(panel => {
       const p = panel.pane;
-      if (p && Number.isInteger(p.row) && Number.isInteger(p.col) &&
-          p.row >= 0 && p.col >= 0 && p.col < columns) {
+      if (p && Number.isInteger(p.row) && Number.isInteger(p.col)) {
         const key = `${p.row},${p.col}`;
-        if (!occupied.has(key)) {
-          occupied.add(key);
-          paneOf.set(panel.id, { row: p.row, col: p.col });
-          if (p.row >= rows) rows = p.row + 1;
+        const slot = bySlotKey.get(key);
+        if (slot && !used.has(key)) {
+          used.add(key);
+          paneOf.set(panel.id, slot);
         }
       }
     });
 
-    let searchRow = 0, searchCol = 0;
-    function nextFreeCell() {
-      while (occupied.has(`${searchRow},${searchCol}`)) {
-        searchCol += 1;
-        if (searchCol >= columns) { searchCol = 0; searchRow += 1; }
-      }
-      occupied.add(`${searchRow},${searchCol}`);
-      return { row: searchRow, col: searchCol };
-    }
+    let freeSlots = slots.filter(s => !used.has(`${s.row},${s.col}`));
+    let freeIdx = 0;
     ws.panels.forEach(panel => {
-      if (!paneOf.has(panel.id)) {
-        const cell = nextFreeCell();
-        paneOf.set(panel.id, cell);
-        if (cell.row >= rows) rows = cell.row + 1;
+      if (paneOf.has(panel.id)) return;
+      if (freeIdx >= freeSlots.length) {
+        // Out of room: add one more unmerged row and try again.
+        rows += 1;
+        for (let c = 0; c < columns; c++) freeSlots.push({ row: rows - 1, col: c, rowSpan: 1, colSpan: 1 });
       }
+      const slot = freeSlots[freeIdx++];
+      used.add(`${slot.row},${slot.col}`);
+      paneOf.set(panel.id, slot);
     });
 
     return { rows, columns, paneOf };
   }
 
-  // Plotly numbers grid subplots row-major from 1 (xaxis/yaxis, then
-  // xaxis2/yaxis2, ...) -- this is that number for whichever cell a panel
-  // resolved into.
-  function axisNumber(resolved, panelId) {
-    const cell = resolved.paneOf.get(panelId);
-    if (!cell) return 1;
-    return cell.row * resolved.columns + cell.col + 1;
+  // A uniform grid-with-gap layout (like a CSS grid with `gap`): every
+  // column/row is the same size, a slot's fractional [x0, x1] / [y0, y1]
+  // domain simply spans `colSpan`/`rowSpan` units plus the gaps between
+  // them. Row 0 is the top (Plotly's y-domain is bottom-up, hence `1 -`).
+  const GRID_GAP = 0.08;   // fraction of one cell's own size
+  function gridDims(rows, columns) {
+    const colUnit = 1 / (columns + GRID_GAP * (columns - 1));
+    const rowUnit = 1 / (rows + GRID_GAP * (rows - 1));
+    return { colUnit, colGap: colUnit * GRID_GAP, rowUnit, rowGap: rowUnit * GRID_GAP };
+  }
+  function slotDomain(slot, dims) {
+    const x0 = slot.col * (dims.colUnit + dims.colGap);
+    const x1 = x0 + slot.colSpan * dims.colUnit + (slot.colSpan - 1) * dims.colGap;
+    const yTop = 1 - slot.row * (dims.rowUnit + dims.rowGap);
+    const yBottom = yTop - (slot.rowSpan * dims.rowUnit + (slot.rowSpan - 1) * dims.rowGap);
+    return { x: [x0, x1], y: [yBottom, yTop] };
   }
 
   async function render() {
@@ -277,20 +336,28 @@ const PlotArea = (() => {
     }
     const resolved = resolvePanes(ws);
     const { rows, columns } = resolved;
+    const dims = gridDims(rows, columns);
     // Only the bottom-most panel in each column needs the shared 'time'
     // label -- linked x-axes make repeating it above pure noise. Replaces
     // the old "last panel in the (single) stacked column" check, which
     // relied on array order matching visual order; with explicit panes
-    // the two can differ.
+    // the two can differ. A slot spanning multiple columns counts as the
+    // bottom of every column it covers.
     const maxRowByCol = new Map();
     ws.panels.forEach(panel => {
-      const cell = resolved.paneOf.get(panel.id);
-      if ((maxRowByCol.get(cell.col) ?? -1) < cell.row) maxRowByCol.set(cell.col, cell.row);
+      const slot = resolved.paneOf.get(panel.id);
+      const bottomRow = slot.row + slot.rowSpan - 1;
+      for (let c = slot.col; c < slot.col + slot.colSpan; c++) {
+        if ((maxRowByCol.get(c) ?? -1) < bottomRow) maxRowByCol.set(c, bottomRow);
+      }
     });
 
+    // No Plotly `grid` here -- it has no notion of a subplot spanning more
+    // than one cell, so each panel's xaxis/yaxis gets an explicit `domain`
+    // (via slotDomain) instead, computed the same way for a plain 1x1 slot
+    // or a merged one.
     const traces = [];
     const layout = {
-      grid: { rows, columns, pattern: 'independent', roworder: 'top to bottom' },
       margin: { t: style.title ? 44 : 24, r: 20, b: 40, l: 60 },
       showlegend: !!style.showLegend,
       width: ws.layout.width || undefined,
@@ -310,8 +377,8 @@ const PlotArea = (() => {
     // below, then assigned to xKey/yKey (or the reverse) at the end,
     // rather than threading a swap flag through every line that touches
     // an axis.
-    ws.panels.forEach(panel => {
-      const n = axisNumber(resolved, panel.id);
+    ws.panels.forEach((panel, panelIdx) => {
+      const n = panelIdx + 1;
       const xref = n === 1 ? 'x' : `x${n}`;
       const yref = n === 1 ? 'y' : `y${n}`;
       const isSpatial = panel.kind === 'spatial';
@@ -367,8 +434,8 @@ const PlotArea = (() => {
         // label -- unless the panel has its own explicit label, shown
         // regardless of position (an explicit choice overrides that
         // de-duplication).
-        const cell = resolved.paneOf.get(panel.id);
-        const isBottomOfColumn = cell.row === maxRowByCol.get(cell.col);
+        const slot = resolved.paneOf.get(panel.id);
+        const isBottomOfColumn = (slot.row + slot.rowSpan - 1) === maxRowByCol.get(slot.col);
         logicalXConfig = {
           title: pStyle.xlabel || (isBottomOfColumn ? 'time [s]' : ''),
           // Plotly's `matches` only links same-letter axes (x-to-x), so a
@@ -388,6 +455,16 @@ const PlotArea = (() => {
 
       layout[xKey] = swap ? logicalYConfig : logicalXConfig;
       layout[yKey] = swap ? logicalXConfig : logicalYConfig;
+
+      // Domain/anchor are pure page geometry -- which slot this panel sits
+      // in -- independent of swap, which only decides which physical axis
+      // carries which logical data.
+      const slotForDomain = resolved.paneOf.get(panel.id);
+      const domain = slotDomain(slotForDomain, dims);
+      layout[xKey].domain = domain.x;
+      layout[xKey].anchor = yKey;
+      layout[yKey].domain = domain.y;
+      layout[yKey].anchor = xKey;
     });
 
     Plotly.newPlot('plotly-panels', traces, layout, { displaylogo: false, responsive: true });
@@ -411,12 +488,19 @@ const PlotArea = (() => {
   function axisRange(panelId, letter) {
     const gd = document.getElementById('plotly-panels');
     if (!gd || !gd.layout) return null;
-    const n = axisNumber(resolvePanes(PlotWorkspace.state()), panelId);
+    // Axis numbering is just render()'s panel array order -- see the n =
+    // panelIdx + 1 there -- since domains (not axis position) now carry
+    // the grid geometry.
+    const idx = PlotWorkspace.state().panels.findIndex(p => p.id === panelId);
+    const n = idx + 1;
     const axis = gd.layout[n === 1 ? `${letter}axis` : `${letter}axis${n}`];
     return axis && axis.range ? [axis.range[0], axis.range[1]] : null;
   }
 
-  return { render, placeholder, currentYRange, currentXRange, ensureMathJax, resolvePanes };
+  return {
+    render, placeholder, currentYRange, currentXRange, ensureMathJax,
+    resolvePanes, gridSlots, clampAreas,
+  };
 })();
 
 // Plot -> Export PNG (300 dpi): POSTs the workspace, matplotlib renders it

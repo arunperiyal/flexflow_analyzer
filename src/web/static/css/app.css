@@ -387,11 +387,10 @@ body {
 /* Layout -> New/Edit reuses .style-limit-row (side-by-side number inputs)
    from the style sidebar's own limit fields. */
 
-.pane-grid { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
-.pane-grid-row { display: flex; gap: 4px; }
+/* Plot -> New's pane picker: a CSS grid so a merged slot's button can span
+   more than one row/column (grid-row/grid-column set inline per slot). */
+.pane-grid { display: grid; gap: 4px; margin-bottom: 10px; }
 .pane-cell {
-  width: 32px;
-  height: 32px;
   border: 1px solid #cbd5e1;
   border-radius: 4px;
   background: #f8fafc;
@@ -401,3 +400,37 @@ body {
 .pane-cell:hover:not(.occupied) { border-color: #7c3aed; background: #f3e8ff; }
 .pane-cell.occupied { background: #e2e8f0; border-style: dashed; cursor: not-allowed; }
 .pane-cell.selected { background: #7c3aed; border-color: #7c3aed; }
+
+/* Layout -> New/Edit's grid editor: unit cells are the only interactive
+   surface (drag-select always operates in 1x1 grid coordinates); merge and
+   selection overlays are decorative (pointer-events: none) so drags reach
+   the unit cell underneath even when a merged block is drawn on top. */
+#layout-grid-editor { display: grid; gap: 3px; margin: 8px 0 12px; width: max-content; }
+.layout-unit-cell {
+  border: 1px solid #cbd5e1;
+  border-radius: 3px;
+  background: #f8fafc;
+  cursor: pointer;
+  user-select: none;
+}
+.layout-unit-cell:hover { border-color: #7c3aed; }
+.layout-merge-overlay {
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(37, 99, 235, 0.1);
+  border: 1px solid #93c5fd;
+  border-radius: 4px;
+  font-size: 9px;
+  color: #2563eb;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.layout-selection-overlay {
+  pointer-events: none;
+  background: rgba(124, 58, 237, 0.18);
+  border: 2px solid #7c3aed;
+  border-radius: 4px;
+}
+.btn-row-left { display: flex; justify-content: flex-start; gap: 8px; margin: 0 0 12px; }

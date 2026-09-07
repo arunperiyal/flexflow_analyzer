@@ -302,31 +302,30 @@ const NewPlot = (() => {
     const box = document.getElementById('np-pane-section');
     if (!box) return;
     const ws = PlotWorkspace.state();
-    const { rows, columns, paneOf } = PlotArea.resolvePanes(ws);
+    // gridSlots gives every slot (merged or not) so a merged block renders
+    // as one big button spanning its footprint, not several small ones.
+    const { rows, columns, slots } = PlotArea.gridSlots(ws);
+    const { paneOf } = PlotArea.resolvePanes(ws);
     const occupantAt = new Map();
     ws.panels.forEach(p => {
-      const cell = paneOf.get(p.id);
-      if (cell) occupantAt.set(`${cell.row},${cell.col}`, p.title);
+      const slot = paneOf.get(p.id);
+      if (slot) occupantAt.set(`${slot.row},${slot.col}`, p.title);
     });
 
-    let gridHtml = '';
-    for (let r = 0; r < rows; r++) {
-      gridHtml += '<div class="pane-grid-row">';
-      for (let c = 0; c < columns; c++) {
-        const occupant = occupantAt.get(`${r},${c}`);
-        const isSelected = selectedPane && selectedPane.row === r && selectedPane.col === c;
-        const classes = ['pane-cell'];
-        if (occupant) classes.push('occupied');
-        if (isSelected) classes.push('selected');
-        gridHtml += `<button type="button" class="${classes.join(' ')}" data-row="${r}" data-col="${c}"` +
-                    `${occupant ? ` disabled title="${occupant}"` : ''}></button>`;
-      }
-      gridHtml += '</div>';
-    }
+    const gridHtml = slots.map(slot => {
+      const occupant = occupantAt.get(`${slot.row},${slot.col}`);
+      const isSelected = selectedPane && selectedPane.row === slot.row && selectedPane.col === slot.col;
+      const classes = ['pane-cell'];
+      if (occupant) classes.push('occupied');
+      if (isSelected) classes.push('selected');
+      return `<button type="button" class="${classes.join(' ')}" data-row="${slot.row}" data-col="${slot.col}"
+        style="grid-row:${slot.row + 1} / span ${slot.rowSpan}; grid-column:${slot.col + 1} / span ${slot.colSpan};"
+        ${occupant ? ` disabled title="${occupant}"` : ''}></button>`;
+    }).join('');
 
     box.innerHTML = `
       <label>Pane for a new panel -- ${selectedPane ? `row ${selectedPane.row + 1}, col ${selectedPane.col + 1}` : 'Auto'}</label>
-      <div class="pane-grid">${gridHtml}</div>
+      <div class="pane-grid" style="grid-template-rows:repeat(${rows}, 28px); grid-template-columns:repeat(${columns}, 28px);">${gridHtml}</div>
     `;
     box.querySelectorAll('.pane-cell:not(.occupied)').forEach(btn => {
       btn.addEventListener('click', () => {
