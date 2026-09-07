@@ -59,19 +59,9 @@ const PlotWorkspace = (() => {
         }
       }
     }
-    // linkGroups: array of pane-key arrays ({row, col} top-left of a
-    // slot) -- panes in the same inner array share one x-axis; a pane in
-    // no group has its own independent one. null means "auto": every
-    // non-spatial, non-swapped panel in one implicit group, which is
-    // what the old boolean linkX:true meant -- so a pre-groups workspace
-    // (no linkGroups field) backfills to null unless it had linkX:false,
-    // which becomes an explicit empty list (link nothing).
-    const linkGroups = Array.isArray(raw.linkGroups) ? raw.linkGroups : (raw.linkX === false ? [] : null);
-
     return {
       id: raw.id || fallbackId,
       name: raw.name || fallbackName,
-      linkGroups,
       panels,
       layout,
       style: { ...defaultGlobalStyle(), ...(raw.style || {}) },
@@ -82,7 +72,7 @@ const PlotWorkspace = (() => {
 
   function defaultLayoutEntry(id, name, gridSpec) {
     return {
-      id, name, linkGroups: null, panels: [],
+      id, name, panels: [],
       layout: { ...defaultLayout(), ...(gridSpec || {}) },
       style: defaultGlobalStyle(), activePanelId: null, caseStyles: {},
     };
@@ -336,18 +326,9 @@ const PlotWorkspace = (() => {
   // existing pane is left alone -- if it's now out of the shrunk grid's
   // bounds, resolvePanes() falls back to auto-placement for that panel
   // same as an unassigned one, rather than this needing to hunt it down.
-  // A shrunk grid can also strand an x-axis link group's pane references
-  // out of bounds -- those are dropped the same way PlotArea.clampAreas
-  // drops an out-of-bounds merge, and a group left with under 2 panes
-  // (nothing left to share an axis with) is dropped entirely.
   function updateLayout(patch) {
     const L = active();
     L.layout = { ...L.layout, ...patch };
-    if (Array.isArray(L.linkGroups)) {
-      L.linkGroups = L.linkGroups
-        .map(group => group.filter(p => p.row < L.layout.rows && p.col < L.layout.columns))
-        .filter(group => group.length >= 2);
-    }
     save();
   }
 
@@ -358,19 +339,11 @@ const PlotWorkspace = (() => {
     save();
   }
 
-  // null: auto (every non-spatial, non-swapped panel shares one x-axis).
-  // []: nothing shared. [[...panes], [...panes]]: custom groups -- see
-  // normalizeLayoutEntry for the exact shape.
-  function setLinkGroups(groups) {
-    active().linkGroups = groups;
-    save();
-  }
-
   function state() { return active(); }
 
   // -- Layout tabs -----------------------------------------------------
-  // Each entry is its own independent workspace (panels, grid, style,
-  // linkGroups) -- see normalizeLayoutEntry above.
+  // Each entry is its own independent workspace (panels, grid, style) --
+  // see normalizeLayoutEntry above.
 
   function listLayouts() {
     return ws.layouts.map(l => ({ id: l.id, name: l.name }));
@@ -421,7 +394,7 @@ const PlotWorkspace = (() => {
 
   return {
     state, addTraces, addSpatialTrace, removeTrace, removePanel, clearPanel, renamePanel,
-    setYLock, updateLayout, setPanelPane, setLinkGroups, setPanelStyle, setGlobalStyle, setCaseStyle,
+    setYLock, updateLayout, setPanelPane, setPanelStyle, setGlobalStyle, setCaseStyle,
     setActivePanel, setTraceStyle,
     listLayouts, activeLayoutId, setActiveLayout, createLayout, renameLayout, deleteLayout,
   };
@@ -507,11 +480,6 @@ const PanelTree = (() => {
 
       container.appendChild(node);
     }
-
-    const linkHint = document.createElement('div');
-    linkHint.className = 'link-x-hint';
-    linkHint.textContent = 'Layout → Edit sets which panes share an x-axis.';
-    container.appendChild(linkHint);
   }
 
   function traceLabel(t) {

@@ -397,7 +397,6 @@ body {
 .trace-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .trace-remove { cursor: pointer; color: #cbd5e1; }
 .trace-remove:hover { color: #dc2626; }
-.link-x-hint { font-size: 11px; color: #94a3b8; margin-top: 8px; }
 
 .panel-title { cursor: text; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .panel-title-edit {
@@ -488,39 +487,3 @@ body {
   border-radius: 4px;
 }
 .btn-row-left { display: flex; justify-content: flex-start; gap: 8px; margin: 0 0 12px; }
-
-/* Layout -> New/Edit's x-axis-link grid: click (not drag) toggles a pane
-   into the pending selection; committing colors it by whichever group it
-   lands in, cycling a small palette. */
-#layout-link-grid { display: grid; gap: 3px; margin: 8px 0; width: max-content; }
-.layout-link-cell {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid #cbd5e1;
-  border-radius: 3px;
-  background: #f8fafc;
-  cursor: pointer;
-  font-size: 10px;
-  color: #64748b;
-}
-.layout-link-cell:hover { border-color: #7c3aed; }
-.layout-link-cell.pending { outline: 2px solid #7c3aed; outline-offset: -2px; }
-.layout-link-group-0 { background: #dbeafe; border-color: #60a5fa; }
-.layout-link-group-1 { background: #dcfce7; border-color: #4ade80; }
-.layout-link-group-2 { background: #fef3c7; border-color: #fbbf24; }
-.layout-link-group-3 { background: #fce7f3; border-color: #f472b6; }
-.layout-link-group-4 { background: #e0e7ff; border-color: #818cf8; }
-.layout-link-group-5 { background: #ffedd5; border-color: #fb923c; }
-.layout-link-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-  border: 1px solid #cbd5e1;
-  border-radius: 4px;
-  font-size: 11px;
-  margin: 0 6px 6px 0;
-}
-.layout-link-chip-remove { cursor: pointer; color: #64748b; font-weight: 700; }
-.layout-link-chip-remove:hover { color: #dc2626; }
