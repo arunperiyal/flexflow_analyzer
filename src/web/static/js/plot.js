@@ -270,16 +270,37 @@ const PlotArea = (() => {
   }
 
   // A grid-with-gap layout (like a CSS grid with `gap`), rows/columns
-  // equal-size by default but individually resizable by dragging (see
-  // renderResizeHandles) -- `rowFracs`/`colFracs` are relative weights
-  // (not required to sum to anything in particular), defaulting to equal
+  // equal-size by default but individually resizable (Style sidebar's
+  // Panel section) -- `rowFracs`/`colFracs` are relative weights (not
+  // required to sum to anything in particular), defaulting to equal
   // weights when absent. The gap itself is always the fixed size it would
-  // be in the equal-weight case, so a plain (unresized) grid renders
-  // pixel-identical to the old uniform-only implementation.
-  const GRID_GAP = 0.08;   // fraction of one (equal-weight) cell's own size
-  function trackLayout(fracsRaw, count) {
-    const unitRef = 1 / (count + GRID_GAP * (count - 1));
-    const gap = unitRef * GRID_GAP;
+  // be in the equal-weight case, so an unresized grid's own row/column
+  // sizes render the same regardless of any other row/column's weight.
+  //
+  // A *fraction* of cell size (the old 0.08) fundamentally can't reserve
+  // enough room reliably: tick labels and axis titles (drawn just outside
+  // each subplot's own domain box, not accounted for by the domain math
+  // at all) are a roughly fixed PIXEL size regardless of how big the
+  // figure is, so the same fraction that's fine on a tall figure starts
+  // visibly overlapping the next panel over on a short one -- found by
+  // actually looking at a 2-row grid at the default height. So the gap is
+  // instead a fixed pixel target (enough for a tick-label row + axis
+  // title + Plotly's own padding, with columns needing a bit less since
+  // there's usually less text stacked there) converted to a fraction
+  // using the figure's own known size -- exact for height (always
+  // computed ahead of render), a best-effort estimate for width in
+  // auto/responsive mode (not knowable until Plotly lays out the
+  // container). Still not a real measurement of the rendered text, so an
+  // unusually large font can still collide -- shrinking it or hiding a
+  // panel's own ticks/label (Panel section) is the escape hatch for that.
+  const ROW_GAP_PX = 56;
+  const COL_GAP_PX = 60;
+  const FALLBACK_WIDTH_PX = 900;   // typical plot-area width when auto/responsive
+  function trackLayout(fracsRaw, count, gapFrac) {
+    // Capped so the gaps alone can never consume more than 70% of the
+    // figure -- a fixed per-gap pixel target times a great many tracks
+    // could otherwise leave zero (or negative) room for actual content.
+    const gap = count > 1 ? Math.min(gapFrac, 0.7 / (count - 1)) : 0;
     const available = 1 - gap * Math.max(0, count - 1);
     const weights = (Array.isArray(fracsRaw) && fracsRaw.length === count && fracsRaw.every(w => w > 0))
       ? fracsRaw : Array(count).fill(1);
@@ -293,9 +314,11 @@ const PlotArea = (() => {
     }
     return { starts, sizes, gap };
   }
-  function gridDims(rows, columns, rowFracs, colFracs) {
-    const cols = trackLayout(colFracs, columns);
-    const rowsL = trackLayout(rowFracs, rows);
+  function gridDims(rows, columns, rowFracs, colFracs, figureHeightPx, figureWidthPx) {
+    const rowGapFrac = ROW_GAP_PX / (figureHeightPx || Math.max(240, rows * 220));
+    const colGapFrac = COL_GAP_PX / (figureWidthPx || FALLBACK_WIDTH_PX);
+    const cols = trackLayout(colFracs, columns, colGapFrac);
+    const rowsL = trackLayout(rowFracs, rows, rowGapFrac);
     return { colStarts: cols.starts, colSizes: cols.sizes, rowStarts: rowsL.starts, rowSizes: rowsL.sizes };
   }
   function slotDomain(slot, dims) {
@@ -370,7 +393,24 @@ const PlotArea = (() => {
     }
     const resolved = resolvePanes(ws);
     const { rows, columns } = resolved;
-    const dims = gridDims(rows, columns, ws.layout.rowFracs, ws.layout.colFracs);
+    const margin = {
+      t: style.marginTop ?? (style.title ? 44 : 24),
+      r: style.marginRight ?? 20,
+      b: style.marginBottom ?? 40,
+      l: style.marginLeft ?? 60,
+    };
+    // The same height this render() computes for the actual Plotly figure
+    // just below -- gridDims needs it ahead of time to convert its
+    // pixel-sized gap target into a fraction. Domains apply within the
+    // INNER plot area (figure size minus margins), not the full figure, so
+    // the margins are subtracted here -- otherwise the real on-screen gap
+    // ends up smaller than ROW_GAP_PX/COL_GAP_PX by the margin's share of
+    // the figure. Width has no such advance value in auto/responsive mode
+    // (Plotly decides it from the container), so gridDims falls back to a
+    // best-effort estimate then.
+    const figureHeightPx = (ws.layout.height || Math.max(240, rows * 220)) - margin.t - margin.b;
+    const figureWidthPx = ws.layout.width ? (ws.layout.width - margin.l - margin.r) : undefined;
+    const dims = gridDims(rows, columns, ws.layout.rowFracs, ws.layout.colFracs, figureHeightPx, figureWidthPx);
 
     // No Plotly `grid` here -- it has no notion of a subplot spanning more
     // than one cell, so each panel's xaxis/yaxis gets an explicit `domain`
@@ -378,12 +418,7 @@ const PlotArea = (() => {
     // or a merged one.
     const traces = [];
     const layout = {
-      margin: {
-        t: style.marginTop ?? (style.title ? 44 : 24),
-        r: style.marginRight ?? 20,
-        b: style.marginBottom ?? 40,
-        l: style.marginLeft ?? 60,
-      },
+      margin,
       showlegend: !!style.showLegend,
       width: ws.layout.width || undefined,
       height: ws.layout.height || Math.max(240, rows * 220),
@@ -510,109 +545,6 @@ const PlotArea = (() => {
     // whatever space is available" (the width/height "doesn't properly
     // fit in" symptom).
     await Plotly.newPlot('plotly-panels', traces, layout, { displaylogo: false, responsive: !hasExplicitSize });
-    renderResizeHandles(ws, rows, columns);
-  }
-
-  // Thin draggable strips laid directly over the rendered figure at each
-  // row/column boundary -- dragging one grows one row/column and shrinks
-  // its neighbor by the same amount (see PlotWorkspace.setGridFracs).
-  // Positioned from Plotly's own internal `_fullLayout._size` (the plot
-  // area's pixel box within the figure), the standard technique for
-  // overlaying DOM elements aligned to a Plotly chart.
-  function renderResizeHandles(ws, rows, columns) {
-    const area = document.getElementById('plotarea');
-    if (!area) return;
-    area.querySelectorAll('.grid-resize-handle').forEach(el => el.remove());
-    const gd = document.getElementById('plotly-panels');
-    if (!gd || !gd._fullLayout || !gd._fullLayout._size) return;
-    const size = gd._fullLayout._size;
-    const baseLeft = gd.offsetLeft;
-    const baseTop = gd.offsetTop;
-    const dims = gridDims(rows, columns, ws.layout.rowFracs, ws.layout.colFracs);
-
-    for (let c = 0; c < columns - 1; c++) {
-      const midFrac = (dims.colStarts[c] + dims.colSizes[c] + dims.colStarts[c + 1]) / 2;
-      const handle = document.createElement('div');
-      handle.className = 'grid-resize-handle grid-resize-col';
-      handle.style.left = `${baseLeft + size.l + midFrac * size.w - 3}px`;
-      handle.style.top = `${baseTop + size.t}px`;
-      handle.style.height = `${size.h}px`;
-      handle.title = 'Drag to resize these columns';
-      handle.addEventListener('mousedown', e => startGridResize(e, 'col', c, size));
-      area.appendChild(handle);
-    }
-    for (let r = 0; r < rows - 1; r++) {
-      const midFrac = (dims.rowStarts[r] + dims.rowSizes[r] + dims.rowStarts[r + 1]) / 2;
-      const handle = document.createElement('div');
-      handle.className = 'grid-resize-handle grid-resize-row';
-      handle.style.top = `${baseTop + size.t + midFrac * size.h - 3}px`;
-      handle.style.left = `${baseLeft + size.l}px`;
-      handle.style.width = `${size.w}px`;
-      handle.title = 'Drag to resize these rows';
-      handle.addEventListener('mousedown', e => startGridResize(e, 'row', r, size));
-      area.appendChild(handle);
-    }
-  }
-
-  // Applies a live preview of candidate row/col weights via Plotly.relayout
-  // (cheap -- no data refetch) while dragging; the real commit (persisting
-  // the weights and a full render() to reposition the handles themselves)
-  // only happens once, on mouseup.
-  function applyGridFracsPreview(gd, ws, resolved, rowFracs, colFracs) {
-    const dims = gridDims(resolved.rows, resolved.columns, rowFracs, colFracs);
-    const update = {};
-    ws.panels.forEach((panel, idx) => {
-      const n = idx + 1;
-      const xKey = n === 1 ? 'xaxis' : `xaxis${n}`;
-      const yKey = n === 1 ? 'yaxis' : `yaxis${n}`;
-      const slot = resolved.paneOf.get(panel.id);
-      const domain = slotDomain(slot, dims);
-      update[`${xKey}.domain`] = domain.x;
-      update[`${yKey}.domain`] = domain.y;
-    });
-    Plotly.relayout(gd, update);
-  }
-
-  function startGridResize(e, kind, boundaryIdx, size) {
-    e.preventDefault();
-    const ws = PlotWorkspace.state();
-    const gd = document.getElementById('plotly-panels');
-    if (!gd) return;
-    const resolved = resolvePanes(ws);
-    const count = kind === 'col' ? resolved.columns : resolved.rows;
-    const existing = kind === 'col' ? ws.layout.colFracs : ws.layout.rowFracs;
-    const weights = (Array.isArray(existing) && existing.length === count) ? existing.slice() : Array(count).fill(1);
-    const totalWeight = weights.reduce((a, b) => a + b, 0);
-    const minWeight = totalWeight * 0.1;   // keeps a track from collapsing to nothing
-    const a = boundaryIdx, b = boundaryIdx + 1;
-    const startX = e.clientX, startY = e.clientY;
-    let preview = null;
-
-    function onMove(ev) {
-      const deltaPx = kind === 'col' ? (ev.clientX - startX) : (ev.clientY - startY);
-      const deltaWeight = (deltaPx / (kind === 'col' ? size.w : size.h)) * totalWeight;
-      let newA = weights[a] + deltaWeight;
-      let newB = weights[b] - deltaWeight;
-      if (newA < minWeight) { newA = minWeight; newB = weights[a] + weights[b] - minWeight; }
-      if (newB < minWeight) { newB = minWeight; newA = weights[a] + weights[b] - minWeight; }
-      preview = weights.slice();
-      preview[a] = newA;
-      preview[b] = newB;
-      const rowFracs = kind === 'row' ? preview : ws.layout.rowFracs;
-      const colFracs = kind === 'col' ? preview : ws.layout.colFracs;
-      applyGridFracsPreview(gd, ws, resolved, rowFracs, colFracs);
-    }
-    function onUp() {
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-      if (!preview) return;
-      const rowFracs = kind === 'row' ? preview : ws.layout.rowFracs;
-      const colFracs = kind === 'col' ? preview : ws.layout.colFracs;
-      PlotWorkspace.setGridFracs(rowFracs, colFracs);
-      render();
-    }
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
   }
 
   // The logical Y/X range, i.e. what the style sidebar's Y/X fields (and

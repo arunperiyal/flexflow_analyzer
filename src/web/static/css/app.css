@@ -162,7 +162,6 @@ body {
 .empty { color: #94a3b8; font-size: 12px; }
 
 #plotarea {
-  position: relative;
   flex: 1;
   display: flex;
   align-items: center;
@@ -170,19 +169,6 @@ body {
   padding: 24px;
   overflow: auto;
 }
-
-/* Row/column resize handles overlaid directly on the rendered panels --
-   absolutely positioned within #plotarea (position:relative above),
-   independent of Plotly's own DOM so a re-render just wipes and rebuilds
-   them fresh each time (see PlotArea.renderResizeHandles). */
-.grid-resize-handle {
-  position: absolute;
-  z-index: 15;
-  background: transparent;
-}
-.grid-resize-handle:hover { background: rgba(124, 58, 237, 0.35); }
-.grid-resize-col { width: 6px; cursor: col-resize; }
-.grid-resize-row { height: 6px; cursor: row-resize; }
 
 .plot-placeholder {
   color: #94a3b8;
