@@ -433,19 +433,62 @@ const PlotArea = (() => {
   };
 })();
 
-// Plot -> Export PNG (300 dpi): POSTs the workspace, matplotlib renders it
-// server-side (§Phase 3 -- no client-side path from the raw arrays).
+// Layout -> Export: POSTs the workspace, matplotlib renders it server-side
+// (§Phase 3 -- no client-side path from the raw arrays), as either PNG (a
+// chosen dpi) or PDF (vector -- no dpi to choose, so that field is only
+// shown for PNG).
 const Export = (() => {
-  async function run() {
+  const DEFAULT_DPI = 300;
+
+  function open() {
     const ws = PlotWorkspace.state();
     if (!ws.panels.length) {
       alert('No panels to export -- Plot → New first.');
       return;
     }
-    CommandLog.prompt('plot export --dpi 300');
+    Menu.openDialog(`
+      <h2>Layout &rarr; Export</h2>
+      <label for="export-format">Format</label>
+      <select id="export-format" class="style-panel-select">
+        <option value="png">PNG (raster)</option>
+        <option value="pdf">PDF (vector)</option>
+      </select>
+      <div id="export-format-options"></div>
+      <div class="btn-row">
+        <button id="export-cancel">Cancel</button>
+        <button id="export-go" class="primary">Export</button>
+      </div>
+    `);
+    document.getElementById('export-cancel').addEventListener('click', Menu.closeDialog);
+    document.getElementById('export-format').addEventListener('change', renderFormatOptions);
+    document.getElementById('export-go').addEventListener('click', runExport);
+    renderFormatOptions();
+  }
+
+  function renderFormatOptions() {
+    const box = document.getElementById('export-format-options');
+    const format = document.getElementById('export-format').value;
+    box.innerHTML = format === 'png'
+      ? `<div class="style-row">
+           <label for="export-dpi">DPI</label>
+           <input type="number" id="export-dpi" value="${DEFAULT_DPI}" min="50" max="1200" step="1">
+         </div>`
+      : `<div class="empty">PDF is a vector format -- lines and text stay sharp at any zoom, so there's no DPI to set.</div>`;
+  }
+
+  async function runExport() {
+    const ws = PlotWorkspace.state();
+    const format = document.getElementById('export-format').value;
+    let dpi = DEFAULT_DPI;
+    if (format === 'png') {
+      const raw = parseInt(document.getElementById('export-dpi').value, 10);
+      dpi = Number.isFinite(raw) ? Math.max(50, Math.min(1200, raw)) : DEFAULT_DPI;
+    }
+
+    CommandLog.prompt(`plot export --format ${format}${format === 'png' ? ` --dpi ${dpi}` : ''}`);
     const res = await fetch('/api/export', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ panels: ws.panels, style: ws.style, layout: ws.layout }),
+      body: JSON.stringify({ panels: ws.panels, style: ws.style, layout: ws.layout, format, dpi }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: 'export failed' }));
@@ -456,12 +499,13 @@ const Export = (() => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'flexflow_plot.png';
+    a.download = `flexflow_plot.${format}`;
     document.body.appendChild(a);
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
+    Menu.closeDialog();
   }
 
-  return { run };
+  return { open };
 })();

@@ -226,7 +226,7 @@ const Menu = (() => {
     });
     document.getElementById('layout-export').addEventListener('click', () => {
       closeAll();
-      Export.run();
+      Export.open();
     });
   }
 

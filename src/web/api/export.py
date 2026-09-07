@@ -1,4 +1,5 @@
-"""/api/export — the plot workspace rendered via matplotlib at 300 dpi.
+"""/api/export — the plot workspace rendered via matplotlib, as PNG (a
+chosen dpi, default 300) or PDF (vector; dpi is moot).
 
 Phase 3 polish. No shared `plot_utils.save_figure()` exists to reuse (see
 src/utils/plot_utils.py) -- each CLI call site builds its own Figure and
@@ -177,8 +178,19 @@ def _plot_kwargs(trace, style):
     return kwargs
 
 
+# dpi only affects PNG (a raster format); a PDF's paths and text stay
+# vector regardless, so it's not offered for that format at all (see
+# Export -> Format in layout.js) -- but a value arriving anyway (e.g. a
+# stale/hand-built request) is still clamped rather than trusted outright,
+# the same as PNG's, since matplotlib will happily try to rasterize any
+# embedded raster content in a PDF at whatever dpi it's given too.
+_MIN_DPI = 50
+_MAX_DPI = 1200
+_MIMETYPES = {'png': 'image/png', 'pdf': 'application/pdf'}
+
+
 @bp.post('')
-def export_png():
+def export_plot():
     root = current_app.config['WORKSPACE_ROOT']
     data = request.get_json(silent=True) or {}
     panels = data.get('panels') or []
@@ -187,6 +199,17 @@ def export_png():
 
     if not panels:
         return jsonify({'error': 'no panels to export'}), 400
+
+    fmt = (data.get('format') or 'png').lower()
+    if fmt not in _MIMETYPES:
+        return jsonify({'error': f"unsupported format: {fmt!r} (must be png or pdf)"}), 400
+
+    dpi = data.get('dpi')
+    try:
+        dpi = 300 if dpi is None else int(dpi)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'dpi must be a number'}), 400
+    dpi = max(_MIN_DPI, min(_MAX_DPI, dpi))
 
     width_in = layout.get('width') or 6.5
     height_in = layout.get('height') or 4.5
@@ -248,13 +271,13 @@ def export_png():
         # point of typing an explicit rect per panel in Layout -> Panes.
 
         buf = io.BytesIO()
-        fig.savefig(buf, dpi=300, format='png')
+        fig.savefig(buf, dpi=dpi, format=fmt)
         plt.close(fig)
         buf.seek(0)
 
-    current_app.logbuf.write(f"export: {len(panels)} panel(s) -> flexflow_plot.png (300 dpi)")
-    return send_file(buf, mimetype='image/png', as_attachment=True,
-                     download_name='flexflow_plot.png')
+    download_name = f'flexflow_plot.{fmt}'
+    current_app.logbuf.write(f"export: {len(panels)} panel(s) -> {download_name} ({dpi} dpi)")
+    return send_file(buf, mimetype=_MIMETYPES[fmt], as_attachment=True, download_name=download_name)
 
 
 def _trace_values(root, trace):
@@ -348,7 +371,7 @@ def _style_panel_axes(ax, pstyle, style, swap, plotted, default_xlabel, panel_ti
     if pstyle.get('ytickangle') is not None:
         ax.tick_params(axis=y_tick_axis, labelrotation=pstyle['ytickangle'])
 
-    # rc_context's font.family (set once, figure-wide, in export_png)
+    # rc_context's font.family (set once, figure-wide, in export_plot)
     # reaches axis labels, titles and the legend, but NOT tick label Text
     # objects -- a matplotlib quirk already found and worked around the
     # same way in the CLI plot command (apply_plot_properties in
