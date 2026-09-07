@@ -25,11 +25,9 @@ def scan():
     root = current_app.config['WORKSPACE_ROOT']
     scan_dir = Path(data.get('dir') or root).expanduser().resolve()
     if not scan_dir.is_dir():
-        current_app.logbuf.write(f"scan: not a directory: {scan_dir}")
         return jsonify({'error': f'not a directory: {scan_dir}'}), 400
 
     candidates = registry.scan(scan_dir)
-    current_app.logbuf.write(f"scanned {scan_dir}: {len(candidates)} candidate(s)")
     return jsonify({'candidates': candidates})
 
 
@@ -58,15 +56,9 @@ def add():
     scan_dir = Path(data.get('dir') or root).expanduser().resolve()
     exclude = set(data.get('exclude') or [])
     if not scan_dir.is_dir():
-        current_app.logbuf.write(f"case add: not a directory: {scan_dir}")
         return jsonify({'error': f'not a directory: {scan_dir}'}), 400
 
-    with current_app.logbuf.capture():
-        print(f"case add {scan_dir}")
-        cases = registry.add_cases(root, scan_dir, exclude)
-        names = ', '.join(c['name'] for c in cases) or '(none)'
-        print(f"registered {names}")
-
+    cases = registry.add_cases(root, scan_dir, exclude)
     return jsonify(cases)
 
 
@@ -74,7 +66,6 @@ def add():
 def delete(name):
     root = current_app.config['WORKSPACE_ROOT']
     cases = registry.delete_case(root, name)
-    current_app.logbuf.write(f"removed {name} from the registry")
     return jsonify(cases)
 
 
@@ -88,7 +79,6 @@ def meta(name):
     try:
         series_meta = loader.meta(case_dir)
     except FileNotFoundError as exc:
-        current_app.logbuf.write(f"{name}: {exc}")
         return jsonify({'error': str(exc)}), 404
 
     try:

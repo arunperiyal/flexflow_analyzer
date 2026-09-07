@@ -151,7 +151,6 @@ const Menu = (() => {
           Array.from(document.querySelectorAll('.cand-check:checked')).map(el => el.dataset.name)
         );
         const exclude = candidates.map(c => c.name).filter(n => !checked.has(n));
-        CommandLog.prompt(`case add ${dir}`);
         const res = await fetch('/api/cases', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

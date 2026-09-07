@@ -73,25 +73,12 @@
     </aside>
   </div>
 
-  <footer id="command-window">
-    <div class="command-header">
-      <span>COMMAND WINDOW</span>
-      <span class="command-header-note">auto-scroll &middot; type 'help'</span>
-    </div>
-    <div id="command-log"></div>
-    <div id="command-input-row">
-      <span class="prompt">flexflow &rsaquo;</span>
-      <input type="text" id="command-input" autocomplete="off" spellcheck="false">
-    </div>
-  </footer>
-
   <div id="dialog-backdrop" hidden>
     <div id="dialog"></div>
   </div>
 
 </div>
 <script src="{{ url_for('static', filename='vendor/plotly-basic.min.js') }}"></script>
-<script src="{{ url_for('static', filename='js/log.js') }}"></script>
 <script src="{{ url_for('static', filename='js/menu.js') }}"></script>
 <script src="{{ url_for('static', filename='js/picker.js') }}"></script>
 <script src="{{ url_for('static', filename='js/panels.js') }}"></script>
@@ -99,7 +86,6 @@
 <script src="{{ url_for('static', filename='js/layout.js') }}"></script>
 <script src="{{ url_for('static', filename='js/styles.js') }}"></script>
 <script src="{{ url_for('static', filename='js/newplot.js') }}"></script>
-<script src="{{ url_for('static', filename='js/shell.js') }}"></script>
 <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
 </html>

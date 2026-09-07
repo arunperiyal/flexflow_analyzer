@@ -90,10 +90,9 @@ const NewPlot = (() => {
                 'can take a while for a large case.')) {
       return;
     }
-    CommandLog.prompt(`case out ${currentCaseName} --map`);
     const mapSection = document.getElementById('np-map-section');
     mapSection.insertAdjacentHTML('beforeend',
-      '<div id="np-write-status" class="empty">Writing maps&hellip; watch the command window for progress.</div>');
+      '<div id="np-write-status" class="empty">Writing maps&hellip;</div>');
 
     const res = await fetch(`/api/cases/${encodeURIComponent(currentCaseName)}/maps`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}),
@@ -421,7 +420,6 @@ const NewPlot = (() => {
       }
     }
 
-    CommandLog.prompt(`plot new · map ${currentMapFile} · rows ${Array.from(selectedRows).join(',')}`);
     refreshWorkspace();
     Menu.closeDialog();
   }
