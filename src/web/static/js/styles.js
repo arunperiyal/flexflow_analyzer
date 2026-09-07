@@ -59,9 +59,20 @@ const StyleSidebar = (() => {
     return ws.panels.find(p => p.id === ws.activePanelId) || ws.panels[0];
   }
 
+  // Escapes a value for use inside an HTML attribute -- FONTS' CSS
+  // font-family stacks carry embedded double quotes ('"Times New Roman",
+  // Times, serif'), which unescaped terminate the value="..." attribute
+  // right there: the browser reads value="" (empty, same as Default) and
+  // the rest of the string as bogus trailing attributes, so every font
+  // whose stack quotes its name was silently unselectable -- picking
+  // "Times New Roman" always saved '' regardless, no error anywhere.
+  function escapeAttr(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+  }
+
   function options(pairs, current) {
     return pairs.map(([value, label]) =>
-      `<option value="${value}" ${value === (current || '') ? 'selected' : ''}>${label}</option>`
+      `<option value="${escapeAttr(value)}" ${value === (current || '') ? 'selected' : ''}>${label}</option>`
     ).join('');
   }
 
@@ -99,7 +110,7 @@ const StyleSidebar = (() => {
       </div>
       <div class="style-row">
         <label for="style-title">Title</label>
-        <input type="text" id="style-title" value="${g.title || ''}" placeholder="none">
+        <input type="text" id="style-title" value="${escapeAttr(g.title || '')}" placeholder="none">
       </div>
       <label class="style-row checkbox">
         <input type="checkbox" id="style-show-legend" ${g.showLegend ? 'checked' : ''}> Show legend
@@ -161,11 +172,11 @@ const StyleSidebar = (() => {
 
       <div class="style-row">
         <label for="style-xlabel">X label</label>
-        <input type="text" id="style-xlabel" placeholder="auto" value="${s.xlabel || ''}">
+        <input type="text" id="style-xlabel" placeholder="auto" value="${escapeAttr(s.xlabel || '')}">
       </div>
       <div class="style-row">
         <label for="style-ylabel">Y label</label>
-        <input type="text" id="style-ylabel" placeholder="auto" value="${s.ylabel || ''}">
+        <input type="text" id="style-ylabel" placeholder="auto" value="${escapeAttr(s.ylabel || '')}">
       </div>
       <label>X limits</label>
       <div class="style-limit-row">
