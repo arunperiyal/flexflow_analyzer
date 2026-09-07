@@ -15,6 +15,7 @@ import io
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from matplotlib.gridspec import GridSpec
 from matplotlib.ticker import MultipleLocator
 from flask import Blueprint, current_app, jsonify, request, send_file
 
@@ -40,42 +41,68 @@ def _matplotlib_font(css_family):
     return first or None
 
 
+def _compute_slots(rows, columns, areas):
+    """Python port of plot.js's computeSlots: every cell of the grid as
+    non-overlapping rectangular slots -- `areas` (merged, span > 1x1) first,
+    then every remaining cell as its own implicit 1x1 slot. An invalid area
+    (out of bounds, or overlapping an earlier one) is dropped. Sorted
+    row-major by top-left corner."""
+    covered = set()
+    slots = []
+    for a in areas or []:
+        row, col = a.get('row'), a.get('col')
+        row_span, col_span = a.get('rowSpan') or 0, a.get('colSpan') or 0
+        if row_span <= 0 or col_span <= 0:
+            continue
+        if row is None or col is None or row < 0 or col < 0 or row + row_span > rows or col + col_span > columns:
+            continue
+        cells = [(r, c) for r in range(row, row + row_span) for c in range(col, col + col_span)]
+        if any(cell in covered for cell in cells):
+            continue
+        covered.update(cells)
+        slots.append({'row': row, 'col': col, 'rowSpan': row_span, 'colSpan': col_span})
+    for r in range(rows):
+        for c in range(columns):
+            if (r, c) not in covered:
+                slots.append({'row': r, 'col': c, 'rowSpan': 1, 'colSpan': 1})
+    slots.sort(key=lambda s: (s['row'], s['col']))
+    return slots
+
+
 def _resolve_panes(panels, layout):
     """Python port of plot.js's resolvePanes: honors valid, non-conflicting
-    explicit panel['pane'] assignments, then falls back unassigned/conflicting
-    panels to the next free cell in row-major order, growing rows as needed."""
+    explicit panel['pane'] assignments (a slot's top-left cell), then falls
+    back unassigned/conflicting panels to the next free slot in row-major
+    order, growing rows (as new, unmerged 1x1 rows) as needed."""
     columns = max(1, int(layout.get('columns') or 1))
     rows = max(1, int(layout.get('rows') or 1))
-    occupied = set()
+    slots = _compute_slots(rows, columns, layout.get('areas'))
+    by_key = {(s['row'], s['col']): s for s in slots}
+    used = set()
     pane_of = {}
 
     for panel in panels:
         p = panel.get('pane')
-        if (p and isinstance(p.get('row'), int) and isinstance(p.get('col'), int)
-                and p['row'] >= 0 and 0 <= p['col'] < columns):
+        if p and isinstance(p.get('row'), int) and isinstance(p.get('col'), int):
             key = (p['row'], p['col'])
-            if key not in occupied:
-                occupied.add(key)
-                pane_of[panel['id']] = key
-                rows = max(rows, p['row'] + 1)
+            slot = by_key.get(key)
+            if slot and key not in used:
+                used.add(key)
+                pane_of[panel['id']] = slot
 
-    search = [0, 0]
-
-    def next_free_cell():
-        while (search[0], search[1]) in occupied:
-            search[1] += 1
-            if search[1] >= columns:
-                search[1] = 0
-                search[0] += 1
-        cell = (search[0], search[1])
-        occupied.add(cell)
-        return cell
-
+    free_slots = [s for s in slots if (s['row'], s['col']) not in used]
+    free_idx = 0
     for panel in panels:
-        if panel['id'] not in pane_of:
-            cell = next_free_cell()
-            pane_of[panel['id']] = cell
-            rows = max(rows, cell[0] + 1)
+        if panel['id'] in pane_of:
+            continue
+        if free_idx >= len(free_slots):
+            rows += 1
+            for c in range(columns):
+                free_slots.append({'row': rows - 1, 'col': c, 'rowSpan': 1, 'colSpan': 1})
+        slot = free_slots[free_idx]
+        free_idx += 1
+        used.add((slot['row'], slot['col']))
+        pane_of[panel['id']] = slot
 
     return rows, columns, pane_of
 
@@ -105,9 +132,11 @@ def export_png():
 
     rows, columns, pane_of = _resolve_panes(panels, layout)
     max_row_by_col = {}
-    for (r, c) in pane_of.values():
-        if c not in max_row_by_col or r > max_row_by_col[c]:
-            max_row_by_col[c] = r
+    for slot in pane_of.values():
+        bottom = slot['row'] + slot['rowSpan'] - 1
+        for c in range(slot['col'], slot['col'] + slot['colSpan']):
+            if c not in max_row_by_col or bottom > max_row_by_col[c]:
+                max_row_by_col[c] = bottom
 
     width_px, height_px = layout.get('width'), layout.get('height')
     figsize = (
@@ -119,19 +148,23 @@ def export_png():
     # mutating matplotlib's global rcParams for every concurrent request.
     font_name = _matplotlib_font(style.get('fontFamily'))
     with plt.rc_context({'font.family': font_name} if font_name else {}):
-        fig, axes = plt.subplots(rows, columns, figsize=figsize,
-                                 sharex=link_x, squeeze=False)
-
-        used_cells = set(pane_of.values())
-        for r in range(rows):
-            for c in range(columns):
-                if (r, c) not in used_cells:
-                    axes[r, c].axis('off')
+        fig = plt.figure(figsize=figsize)
+        # GridSpec natively supports a subplot spanning multiple cells via
+        # slicing -- unlike plt.subplots' uniform (rows, columns) array, so
+        # a merged pane just slices a bigger block instead of needing any
+        # special-casing here.
+        gs = GridSpec(rows, columns, figure=fig)
+        first_ax = None
 
         for panel in panels:
-            row, col = pane_of[panel['id']]
-            ax = axes[row, col]
-            is_bottom = row == max_row_by_col.get(col)
+            slot = pane_of[panel['id']]
+            ax = fig.add_subplot(
+                gs[slot['row']:slot['row'] + slot['rowSpan'], slot['col']:slot['col'] + slot['colSpan']],
+                sharex=first_ax if link_x else None,
+            )
+            if first_ax is None:
+                first_ax = ax
+            is_bottom = (slot['row'] + slot['rowSpan'] - 1) == max_row_by_col.get(slot['col'])
             pstyle = panel.get('style') or {}
 
             if panel.get('kind') == 'spatial':

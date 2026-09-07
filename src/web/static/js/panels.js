@@ -17,9 +17,11 @@ const PlotWorkspace = (() => {
   }
 
   // width/height: null means "auto" (Plotly's own responsive sizing) -- set
-  // by Layout -> New/Edit, not required to have a value.
+  // by Layout -> New/Edit, not required to have a value. areas: merged
+  // (span > 1x1) regions only -- every other cell is an implicit 1x1 area
+  // (see PlotArea.gridSlots).
   function defaultLayout() {
-    return { rows: 1, columns: 1, width: null, height: null };
+    return { rows: 1, columns: 1, width: null, height: null, areas: [] };
   }
 
   function load() {
@@ -38,6 +40,7 @@ const PlotWorkspace = (() => {
           rows: oldLayout.rows || Math.max(1, Math.ceil(parsed.panels.length / (oldLayout.columns || 1))),
           width: oldLayout.width ?? null,
           height: oldLayout.height ?? null,
+          areas: Array.isArray(oldLayout.areas) ? oldLayout.areas : [],
         };
         parsed.style = { ...defaultGlobalStyle(), ...(parsed.style || {}) };
         for (const p of parsed.panels) {
