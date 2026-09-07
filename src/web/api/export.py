@@ -195,7 +195,8 @@ def export_png():
                         **_plot_kwargs(trace, style))
                 plotted += 1
             ax.set_title(panel.get('title') or '', fontsize=style.get('labelFontSize') or 9)
-            ax.tick_params(labelsize=style.get('tickFontSize') or 7)
+            ax.tick_params(labelsize=style.get('tickFontSize') or 7,
+                           direction='in' if style.get('ticksInside') else 'out')
             ax.grid(style.get('showGrid', True))
             # A static PNG has no colored panel-tree to cross-reference
             # trace colors against (unlike the browser view), so unlike

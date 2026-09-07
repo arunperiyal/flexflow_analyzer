@@ -121,10 +121,9 @@ const StyleSidebar = (() => {
       <label class="style-row checkbox">
         <input type="checkbox" id="style-panel-border" ${g.showPanelBorder ? 'checked' : ''}> Box around each panel
       </label>
-      <div class="style-row">
-        <label for="style-panel-gap">Panel spacing (%)</label>
-        <input type="number" id="style-panel-gap" value="${g.panelGapPct ?? ''}" placeholder="auto" min="0" max="50">
-      </div>
+      <label class="style-row checkbox">
+        <input type="checkbox" id="style-ticks-inside" ${g.ticksInside ? 'checked' : ''}> Tick marks inside
+      </label>
       <label>Margins (px)</label>
       <div class="style-limit-row">
         <input type="number" id="style-margin-top" placeholder="top" min="0" value="${g.marginTop ?? ''}">
@@ -278,7 +277,7 @@ const StyleSidebar = (() => {
     // fires this change event at all), so this just flips the flag.
     document.getElementById('style-latex').addEventListener('change', (e) => global({ latex: e.target.checked }));
     document.getElementById('style-panel-border').addEventListener('change', (e) => global({ showPanelBorder: e.target.checked }));
-    document.getElementById('style-panel-gap').addEventListener('change', (e) => global({ panelGapPct: numberOrNull(e.target.value) }));
+    document.getElementById('style-ticks-inside').addEventListener('change', (e) => global({ ticksInside: e.target.checked }));
     document.getElementById('style-margin-top').addEventListener('change', (e) => global({ marginTop: numberOrNull(e.target.value) }));
     document.getElementById('style-margin-right').addEventListener('change', (e) => global({ marginRight: numberOrNull(e.target.value) }));
     document.getElementById('style-margin-bottom').addEventListener('change', (e) => global({ marginBottom: numberOrNull(e.target.value) }));
