@@ -1,4 +1,4 @@
-"""/api/cases* — the registry (list, scan, add, delete) and per-case metadata."""
+"""/api/cases* — the registry (list, browse, scan, add, delete) and per-case metadata."""
 
 from pathlib import Path
 
@@ -31,6 +31,24 @@ def scan():
     candidates = registry.scan(scan_dir)
     current_app.logbuf.write(f"scanned {scan_dir}: {len(candidates)} candidate(s)")
     return jsonify({'candidates': candidates})
+
+
+@bp.get('/browse')
+def browse():
+    """Backs Case -> Add's directory browser: the subdirectories of ?dir
+    (default the workspace root), so the dialog can be clicked through
+    (and its breadcrumbs clicked back up) instead of requiring an exact
+    path typed in from memory."""
+    root = current_app.config['WORKSPACE_ROOT']
+    raw = request.args.get('dir') or str(root)
+    try:
+        target = Path(raw).expanduser().resolve()
+    except OSError:
+        return jsonify({'error': f'not a directory: {raw}'}), 400
+    if not target.is_dir():
+        return jsonify({'error': f'not a directory: {target}'}), 400
+
+    return jsonify(registry.browse(target))
 
 
 @bp.post('')

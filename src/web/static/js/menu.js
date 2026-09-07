@@ -38,14 +38,73 @@ const Menu = (() => {
         <h2>Case &rarr; Add</h2>
         <label for="scan-dir">Directory to scan</label>
         <input type="text" id="scan-dir" value="${root}">
+        <div id="dir-breadcrumbs" class="dir-breadcrumbs"></div>
+        <div id="dir-browser-list" class="candidate-list"></div>
         <div id="scan-error"></div>
         <div class="btn-row">
           <button id="scan-cancel">Cancel</button>
           <button id="scan-go" class="primary">Scan</button>
         </div>
-      `);
+      `, { wide: true });
       document.getElementById('scan-cancel').addEventListener('click', closeDialog);
       document.getElementById('scan-go').addEventListener('click', runScan);
+      document.getElementById('scan-dir').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); browseTo(e.target.value.trim()); }
+      });
+      browseTo(root);
+    });
+  }
+
+  // Case -> Add's directory browser: click a subdirectory to step into it,
+  // click a breadcrumb segment to jump back up to it -- an alternative to
+  // typing the exact absolute path from memory, which the text field
+  // above still takes directly (Enter re-browses to whatever's typed), so
+  // pasting a known path still works exactly as before.
+  function renderBreadcrumbs(dir) {
+    const parts = dir.split('/').filter(Boolean);
+    let acc = '';
+    const segments = [{ label: '/', path: '/' }];
+    for (const part of parts) {
+      acc += `/${part}`;
+      segments.push({ label: part, path: acc });
+    }
+    return segments.map((seg, i) => {
+      const isLast = i === segments.length - 1;
+      const cls = 'dir-breadcrumb-seg' + (isLast ? ' current' : '');
+      const sep = isLast ? '' : '<span class="dir-breadcrumb-sep">/</span>';
+      return `<span class="${cls}" data-path="${seg.path}">${seg.label}</span>${sep}`;
+    }).join('');
+  }
+
+  async function browseTo(dir) {
+    const list = document.getElementById('dir-browser-list');
+    if (!list) return;   // the dialog moved on (Scan clicked, or closed) while this was in flight
+    list.innerHTML = '<div class="candidate-row empty">Loading&hellip;</div>';
+    const res = await fetch(`/api/cases/browse?dir=${encodeURIComponent(dir)}`);
+    const data = await res.json();
+    // Re-check after the await -- the dialog can easily have moved on by
+    // the time this resolves (Scan clicked, Cancel, or a faster second
+    // browseTo already landed from clicking around quickly).
+    if (!document.getElementById('dir-browser-list')) return;
+    const errBox = document.getElementById('scan-error');
+    if (!res.ok) {
+      errBox.innerHTML = `<div class="error">${data.error || 'could not open that directory'}</div>`;
+      list.innerHTML = '';
+      return;
+    }
+    errBox.innerHTML = '';
+    document.getElementById('scan-dir').value = data.dir;
+    document.getElementById('dir-breadcrumbs').innerHTML = renderBreadcrumbs(data.dir);
+    document.querySelectorAll('.dir-breadcrumb-seg').forEach(seg => {
+      seg.addEventListener('click', () => browseTo(seg.dataset.path));
+    });
+
+    list.innerHTML = data.entries.length
+      ? data.entries.map(name => `<div class="candidate-row dir-browser-row">${name}</div>`).join('')
+      : '<div class="candidate-row empty">No subdirectories</div>';
+    const base = data.dir === '/' ? '' : data.dir;
+    list.querySelectorAll('.dir-browser-row').forEach(row => {
+      row.addEventListener('click', () => browseTo(`${base}/${row.textContent}`));
     });
   }
 

@@ -34,6 +34,26 @@ def scan(scan_dir: Path) -> list:
     return [{'name': p.name, 'path': str(p)} for p in scan_for_cases(scan_dir)]
 
 
+def browse(dir_path: Path) -> dict:
+    """*dir_path*'s own subdirectories, plus its parent -- for Case -> Add's
+    directory browser, so finding the directory to scan doesn't require
+    already knowing (and typing out) its exact absolute path. Dotfiles
+    (.git, .cases' own directory entries, etc.) are left out as clutter a
+    case-directory browse never needs; a directory this process cannot
+    list (permissions) is reported empty rather than raising, same as an
+    empty folder -- there is nothing this dialog can do about either one."""
+    try:
+        entries = sorted(p.name for p in dir_path.iterdir() if p.is_dir() and not p.name.startswith('.'))
+    except PermissionError:
+        entries = []
+    parent = dir_path.parent
+    return {
+        'dir': str(dir_path),
+        'parent': str(parent) if parent != dir_path else None,
+        'entries': entries,
+    }
+
+
 def add_cases(root: Path, scan_dir: Path, exclude: set) -> list:
     """Scan *scan_dir*, drop names in *exclude*, and merge the result into
     root/.cases -- adding a case from one directory must not lose cases
