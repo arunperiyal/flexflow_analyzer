@@ -342,6 +342,24 @@ body {
 #dialog .candidate-row:hover { background: #f8fafc; }
 #dialog .error { color: #dc2626; font-size: 12px; margin-bottom: 8px; }
 
+/* Case -> Add's directory browser: breadcrumbs (click any ancestor to
+   jump back up to it) above a clickable subdirectory list (.dir-browser-row
+   reuses .candidate-row's look, just clickable). */
+.dir-breadcrumbs {
+  font-family: 'DejaVu Sans Mono', Menlo, Consolas, monospace;
+  font-size: 11px;
+  color: #64748b;
+  margin: 6px 0 8px;
+  word-break: break-all;
+}
+.dir-breadcrumb-seg { cursor: pointer; padding: 2px 1px; border-radius: 3px; }
+.dir-breadcrumb-seg:hover { background: #eff6ff; color: #1d4ed8; }
+.dir-breadcrumb-seg.current { color: #0f172a; font-weight: 700; cursor: default; }
+.dir-breadcrumb-seg.current:hover { background: none; }
+.dir-breadcrumb-sep { color: #cbd5e1; }
+#dialog .dir-browser-row { cursor: pointer; }
+#dialog .dir-browser-row:hover { background: #eff6ff; color: #1d4ed8; }
+
 /* New Plot dialog extras */
 .map-row label { display: flex; align-items: center; gap: 8px; flex: 1; cursor: pointer; }
 .map-file { font-weight: 700; color: #0f172a; }
