@@ -323,7 +323,15 @@ const PlotArea = (() => {
       return;
     }
 
-    document.getElementById('plotarea').innerHTML = '<div id="plotly-panels" style="width:100%"></div>';
+    // An explicit width/height (Layout -> New/Edit) must render at exactly
+    // that pixel size -- forcing the container to width:100% here would
+    // override it right back to "fill whatever space is available",
+    // which is what silently ignored it before. Auto ('' width/height
+    // unset) is the only case that should stretch to fill #plotarea.
+    const hasExplicitSize = !!(ws.layout.width || ws.layout.height);
+    document.getElementById('plotarea').innerHTML = hasExplicitSize
+      ? '<div id="plotly-panels"></div>'
+      : '<div id="plotly-panels" style="width:100%"></div>';
 
     const style = ws.style || {};
     // Covers every path that can end up rendering with latex:true, not
@@ -337,14 +345,17 @@ const PlotArea = (() => {
     const resolved = resolvePanes(ws);
     const { rows, columns } = resolved;
     const dims = gridDims(rows, columns);
-    // Only the bottom-most panel in each column needs the shared 'time'
-    // label -- linked x-axes make repeating it above pure noise. Replaces
-    // the old "last panel in the (single) stacked column" check, which
-    // relied on array order matching visual order; with explicit panes
-    // the two can differ. A slot spanning multiple columns counts as the
-    // bottom of every column it covers.
+    // Only the bottom-most *time* panel in each column needs the shared
+    // 'time' label -- linked x-axes make repeating it above pure noise.
+    // Spatial panels are excluded from this contest entirely: they plot
+    // position, not time, and already always get their own label (see
+    // isSpatial below), so one sitting at the bottom of a column must not
+    // steal the "bottom of column" slot away from the time panels above
+    // it and leave them all with no label at all. A slot spanning
+    // multiple columns counts as the bottom of every column it covers.
     const maxRowByCol = new Map();
     ws.panels.forEach(panel => {
+      if (panel.kind === 'spatial') return;
       const slot = resolved.paneOf.get(panel.id);
       const bottomRow = slot.row + slot.rowSpan - 1;
       for (let c = slot.col; c < slot.col + slot.colSpan; c++) {
@@ -485,7 +496,12 @@ const PlotArea = (() => {
       layout[yKey].anchor = xref;
     });
 
-    Plotly.newPlot('plotly-panels', traces, layout, { displaylogo: false, responsive: true });
+    // responsive stretches the plot to fill its container on resize --
+    // exactly what an explicit width/height must NOT do, or the pixel
+    // size just entered gets silently overridden right back to "fill
+    // whatever space is available" (the width/height "doesn't properly
+    // fit in" symptom).
+    Plotly.newPlot('plotly-panels', traces, layout, { displaylogo: false, responsive: !hasExplicitSize });
   }
 
   // The logical Y/X range, i.e. what the style sidebar's Y/X fields (and
