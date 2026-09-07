@@ -301,15 +301,77 @@ def test_plot_kwargs_maps_marker_size_and_step_onto_matplotlib_names():
     assert 'markevery' not in kwargs_step1
 
 
-def test_export_font_family_takes_the_first_name_from_a_css_stack(client):
-    # The style sidebar's font dropdown sends CSS font-family syntax
-    # (e.g. '"Times New Roman", Times, serif'); matplotlib's rcParams
-    # wants a bare name, not that list syntax.
+def test_matplotlib_font_returns_none_for_no_font_family():
     from src.web.api.export import _matplotlib_font
-    assert _matplotlib_font('"Times New Roman", Times, serif') == 'Times New Roman'
-    assert _matplotlib_font('Arial, sans-serif') == 'Arial'
     assert _matplotlib_font('') is None
     assert _matplotlib_font(None) is None
+
+
+def test_matplotlib_font_returns_an_already_installed_name_unchanged():
+    # No need to substitute or fall back when the exact requested name is
+    # right there in matplotlib's own font list.
+    from matplotlib import font_manager
+    from src.web.api.export import _matplotlib_font
+    installed_name = next(iter({f.name for f in font_manager.fontManager.ttflist}))
+    assert _matplotlib_font(f'"{installed_name}", serif') == installed_name
+
+
+def test_matplotlib_font_prefers_an_installed_substitute_over_a_missing_windows_font():
+    # The style sidebar's font dropdown sends CSS font-family syntax (e.g.
+    # '"Times New Roman", Times, serif') naming Windows/macOS fonts that
+    # are usually missing on a Linux export host -- matplotlib silently
+    # substitutes DejaVu Sans for any it can't find rather than raising or
+    # warning anywhere visible, which is exactly why 'Times New Roman'
+    # used to render as a plain sans font with no error. Each of these
+    # should resolve to its metric-compatible open substitute instead,
+    # when that substitute is actually installed here.
+    from matplotlib import font_manager
+    from src.web.api.export import _matplotlib_font, _FONT_SUBSTITUTES
+
+    installed = {f.name for f in font_manager.fontManager.ttflist}
+    for requested, substitute in _FONT_SUBSTITUTES.items():
+        if substitute not in installed:
+            continue   # this box doesn't have the substitute either -- nothing to assert
+        css = f'"{requested.title()}", serif'
+        assert _matplotlib_font(css) == substitute
+
+
+def test_matplotlib_font_falls_back_to_the_css_stacks_generic_keyword():
+    # A font with neither an install nor a known substitute (made up, so
+    # it can never collide with something actually present) falls back to
+    # the CSS stack's own trailing generic keyword -- serif/sans-serif/
+    # monospace -- which matplotlib always understands, rather than being
+    # handed a specific name it will just drop silently.
+    from src.web.api.export import _matplotlib_font
+    assert _matplotlib_font('"Definitely Not A Real Font XYZ", sans-serif') == 'sans-serif'
+    assert _matplotlib_font('"Also Not Real ABC", serif') == 'serif'
+    assert _matplotlib_font('"Nor This One", monospace') == 'monospace'
+
+
+def test_export_honors_every_style_sidebar_font_choice(client):
+    # Every font the Style sidebar's dropdown (styles.js's FONTS) can send
+    # should resolve to something matplotlib can actually render -- an
+    # installed name or a generic family keyword -- not silently collapse
+    # to whichever font.family happens to already be the default.
+    from matplotlib import font_manager
+    from src.web.api.export import _matplotlib_font
+
+    stacks = [
+        'Arial, sans-serif',
+        'Helvetica, Arial, sans-serif',
+        'Georgia, serif',
+        '"Times New Roman", Times, serif',
+        '"Courier New", Courier, monospace',
+        'Verdana, sans-serif',
+        '"Trebuchet MS", sans-serif',
+        '"Segoe UI", Roboto, sans-serif',
+        '"DejaVu Sans Mono", monospace',
+    ]
+    installed = {f.name for f in font_manager.fontManager.ttflist}
+    generic = {'serif', 'sans-serif', 'monospace', 'cursive', 'fantasy'}
+    for css in stacks:
+        resolved = _matplotlib_font(css)
+        assert resolved in installed or resolved in generic, f"{css!r} resolved to unusable {resolved!r}"
 
     res = client.post('/api/export', json={
         'panels': _panels(), 'style': {'fontFamily': '"Times New Roman", Times, serif'},
