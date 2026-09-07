@@ -106,8 +106,3 @@ def test_write_maps_returns_a_job_id_and_eventually_completes(write_client):
     assert data['status'] == 'done'
     files = {row['file'] for row in data['result']}
     assert files == {'othd.riser_probe.map', 'othd.riser_probe1_field.map'}
-
-    log = write_client.get('/api/log').get_json()
-    lines = ' '.join(e['line'] for e in log['lines'])
-    assert 'case out BR0SG0U1P0 --map' in lines
-    assert 'wrote' in lines

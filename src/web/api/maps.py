@@ -121,22 +121,16 @@ def write_maps(name):
 
     data = request.get_json(silent=True) or {}
     targets = data.get('blocks') or [None]   # None -> every mappable block
-    logbuf = current_app.logbuf
 
     def run():
         logger = Logger(verbose=True)
-        with logbuf.capture():
-            for block in targets:
-                print(f"case out {name} --map" + (f" {block}" if block else ""))
-                try:
-                    result = write_case_maps(case_dir, block, logger)
-                except WriteError as exc:
-                    print(f"  ! {exc}")
-                    if not exc.skip:
-                        raise
-                    continue
-                for path, rows in result['written']:
-                    print(f"  wrote {rows} row(s) -> {path.name}")
+        for block in targets:
+            try:
+                write_case_maps(case_dir, block, logger)
+            except WriteError as exc:
+                if not exc.skip:
+                    raise
+                continue
 
         domain = DomainConfig.find(case_dir)
         return [_map_summary(case_dir, p, domain) for p in list_maps(case_dir)]

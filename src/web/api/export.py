@@ -276,7 +276,6 @@ def export_plot():
         buf.seek(0)
 
     download_name = f'flexflow_plot.{fmt}'
-    current_app.logbuf.write(f"export: {len(panels)} panel(s) -> {download_name} ({dpi} dpi)")
     return send_file(buf, mimetype=_MIMETYPES[fmt], as_attachment=True, download_name=download_name)
 
 

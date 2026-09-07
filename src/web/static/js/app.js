@@ -1,4 +1,4 @@
-// Wires up the case sidebar; delegates menus to Menu and the log to CommandLog.
+// Wires up the case sidebar; delegates menus to Menu.
 const App = (() => {
   async function fetchCases() {
     const res = await fetch('/api/cases');
@@ -42,8 +42,6 @@ const App = (() => {
   function init() {
     const root = document.getElementById('app').dataset.root;
     Menu.init(root);
-    CommandLog.start();
-    Shell.wireInput();
     refreshCases();
     refreshWorkspace();
   }

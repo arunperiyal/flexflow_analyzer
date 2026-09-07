@@ -10,7 +10,7 @@ what it does and doesn't already catch on its own).
 from pathlib import Path
 
 import matplotlib
-from flask import Blueprint, current_app, jsonify
+from flask import Blueprint, jsonify
 
 from ..services.loader import loader
 
@@ -36,8 +36,4 @@ def _rebuild_matplotlib_font_cache():
 def clear_cache():
     font_count = _rebuild_matplotlib_font_cache()
     loader.clear()
-
-    current_app.logbuf.write(
-        f"cleared caches: matplotlib fonts ({font_count} found), case data loader"
-    )
     return jsonify({'ok': True, 'fonts': font_count})

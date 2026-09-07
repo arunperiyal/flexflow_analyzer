@@ -59,10 +59,3 @@ def test_clear_cache_empties_the_loader_cache(client):
     res = client.post('/api/settings/clear-cache')
     assert res.status_code == 200
     assert not loader._cache
-
-
-def test_clear_cache_logs_to_the_command_window(client):
-    res = client.post('/api/settings/clear-cache')
-    assert res.status_code == 200
-    log = client.get('/api/log?since=0').get_json()
-    assert any('cleared caches' in entry['line'] for entry in log['lines'])

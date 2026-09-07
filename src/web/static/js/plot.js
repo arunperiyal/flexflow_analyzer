@@ -483,7 +483,6 @@ const Export = (() => {
       const raw = parseInt(document.getElementById('export-dpi').value, 10);
       dpi = Number.isFinite(raw) ? Math.max(50, Math.min(1200, raw)) : DEFAULT_DPI;
     }
-    CommandLog.prompt(`plot export --format ${format}${format === 'png' ? ` --dpi ${dpi}` : ''}`);
     try {
       await doExport(format, dpi);
       Menu.closeDialog();
@@ -492,10 +491,6 @@ const Export = (() => {
     }
   }
 
-  // The actual export -- shared by the dialog's Export button above and
-  // Shell's `plot export` command below, which echoes the typed command
-  // itself (Shell.run) and prints/reports failure inline rather than
-  // alert()ing, so this only ever throws, never alerts.
   async function doExport(format, dpi) {
     const ws = PlotWorkspace.state();
     if (!ws.panels.length) throw new Error('No panels to export -- Plot → New first.');
@@ -518,15 +513,5 @@ const Export = (() => {
     URL.revokeObjectURL(url);
   }
 
-  // Shell's `plot export [--format png|pdf] [--dpi N]`.
-  async function runFromCommand(format, dpiRaw) {
-    format = format === 'pdf' ? 'pdf' : 'png';
-    const dpi = format === 'png'
-      ? Math.max(50, Math.min(1200, parseInt(dpiRaw, 10) || DEFAULT_DPI))
-      : DEFAULT_DPI;
-    await doExport(format, dpi);
-    return `exported flexflow_plot.${format}`;
-  }
-
-  return { open, runFromCommand };
+  return { open };
 })();
