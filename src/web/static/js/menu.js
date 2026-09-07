@@ -161,9 +161,41 @@ const Menu = (() => {
       closeAll();
       Layout.openEdit();
     });
+    document.getElementById('layout-panes').addEventListener('click', () => {
+      closeAll();
+      Layout.openPanes();
+    });
     document.getElementById('layout-export').addEventListener('click', () => {
       closeAll();
       Export.run();
+    });
+  }
+
+  // Settings -> Units: just "inches" for now (every layout/pane dimension
+  // is already always inches) -- the dropdown exists so a later unit
+  // doesn't need new menu plumbing, only a new <option>.
+  const UNITS_KEY = 'flexflow.units';
+
+  function wireSettingsMenu() {
+    document.getElementById('settings-units').addEventListener('click', () => {
+      closeAll();
+      let current = 'in';
+      try { current = localStorage.getItem(UNITS_KEY) || 'in'; } catch (e) { /* private mode, etc. */ }
+      openDialog(`
+        <h2>Settings &rarr; Units</h2>
+        <label for="settings-units-select">Units</label>
+        <select id="settings-units-select">
+          <option value="in" ${current === 'in' ? 'selected' : ''}>Inches</option>
+        </select>
+        <div class="btn-row">
+          <button id="settings-units-close" class="primary">Close</button>
+        </div>
+      `);
+      document.getElementById('settings-units-close').addEventListener('click', () => {
+        const value = document.getElementById('settings-units-select').value;
+        try { localStorage.setItem(UNITS_KEY, value); } catch (e) { /* ignore */ }
+        closeDialog();
+      });
     });
   }
 
@@ -173,6 +205,7 @@ const Menu = (() => {
     wireDeleteDialog();
     wirePlotMenu();
     wireLayoutMenu();
+    wireSettingsMenu();
   }
 
   return { init, openDialog, closeDialog };

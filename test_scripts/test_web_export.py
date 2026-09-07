@@ -272,113 +272,83 @@ def test_export_renders_dollar_wrapped_text_via_matplotlibs_own_mathtext(client)
     assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
 
 
-# -- Layout grid / pane assignment ------------------------------------------
+# -- Pane position/size (Layout -> Panes) -----------------------------------
 
-def _cell(row, col):
-    return {'row': row, 'col': col, 'rowSpan': 1, 'colSpan': 1}
+def test_pane_rect_uses_explicit_xywh_when_present():
+    from src.web.api.export import _pane_rect
+
+    panel = {'id': 'p1', 'pane': {'x': 1, 'y': 0.5, 'w': 2, 'h': 1.5}}
+    assert _pane_rect(panel, {'width': 6.5, 'height': 4.5}) == {'x': 1, 'y': 0.5, 'w': 2, 'h': 1.5}
 
 
-def test_resolve_panes_honors_explicit_non_conflicting_panes():
-    from src.web.api.export import _resolve_panes
+def test_pane_rect_defaults_to_filling_the_canvas_when_unset():
+    from src.web.api.export import _pane_rect
 
+    assert _pane_rect({'id': 'p1', 'pane': None}, {'width': 6.5, 'height': 4.5}) == \
+        {'x': 0, 'y': 0, 'w': 6.5, 'h': 4.5}
+    assert _pane_rect({'id': 'p1'}, {'width': 6.5, 'height': 4.5}) == \
+        {'x': 0, 'y': 0, 'w': 6.5, 'h': 4.5}
+    # A stale/legacy shape (e.g. the old {row, col}) is not free-form either.
+    assert _pane_rect({'id': 'p1', 'pane': {'row': 0, 'col': 1}}, {'width': 6.5, 'height': 4.5}) == \
+        {'x': 0, 'y': 0, 'w': 6.5, 'h': 4.5}
+
+
+def test_pane_axes_rect_maps_inches_to_a_figure_fraction_rect():
+    from src.web.api.export import _pane_axes_rect
+
+    # Top-left quarter of a 6x4in canvas -> left=0, bottom=0.5 (y counts up
+    # from the bottom, inches count down from the top), width=0.5, height=0.5.
+    rect = _pane_axes_rect({'x': 0, 'y': 0, 'w': 3, 'h': 2}, width_in=6, height_in=4)
+    assert rect == [0, 0.5, 0.5, 0.5]
+
+
+def test_pane_axes_rect_clamps_a_pane_that_runs_past_the_canvas_edge():
+    from src.web.api.export import _pane_axes_rect
+
+    # A pane wider than the canvas itself must not hand matplotlib a
+    # fraction outside [0, 1] -- clamped rather than raising.
+    rect = _pane_axes_rect({'x': 0, 'y': 0, 'w': 20, 'h': 2}, width_in=6, height_in=4)
+    left, bottom, width, height = rect
+    assert 0 <= left <= 1 and 0 <= left + width <= 1
+
+
+def test_export_honors_explicit_pane_positions(client):
     panels = [
-        {'id': 'p1', 'pane': {'row': 1, 'col': 0}},
-        {'id': 'p2', 'pane': {'row': 0, 'col': 1}},
+        {'id': 'p1', 'title': 'left', 'traces': _panels()[0]['traces'], 'pane': {'x': 0, 'y': 0, 'w': 3, 'h': 4}},
+        {'id': 'p2', 'title': 'right', 'traces': _panels()[0]['traces'], 'pane': {'x': 3, 'y': 0, 'w': 3, 'h': 4}},
     ]
-    rows, columns, pane_of = _resolve_panes(panels, {'rows': 2, 'columns': 2})
-    assert (rows, columns) == (2, 2)
-    assert pane_of == {'p1': _cell(1, 0), 'p2': _cell(0, 1)}
-
-
-def test_resolve_panes_falls_back_conflicting_panes_to_next_free_cell():
-    from src.web.api.export import _resolve_panes
-
-    panels = [
-        {'id': 'p1', 'pane': {'row': 0, 'col': 0}},
-        {'id': 'p2', 'pane': {'row': 0, 'col': 0}},  # conflicts with p1
-        {'id': 'p3', 'pane': None},                  # unassigned
-    ]
-    rows, columns, pane_of = _resolve_panes(panels, {'rows': 1, 'columns': 2})
-    assert pane_of['p1'] == _cell(0, 0)
-    # p2 and p3 both land on free cells, never re-using (0, 0).
-    assert pane_of['p2'] != _cell(0, 0)
-    assert pane_of['p3'] != _cell(0, 0)
-    assert pane_of['p2'] != pane_of['p3']
-
-
-def test_resolve_panes_grows_rows_downward_when_the_grid_is_full():
-    from src.web.api.export import _resolve_panes
-
-    panels = [{'id': f'p{i}'} for i in range(3)]
-    rows, columns, pane_of = _resolve_panes(panels, {'rows': 1, 'columns': 2})
-    assert columns == 2
-    assert rows == 2
-    seen = {(s['row'], s['col']) for s in pane_of.values()}
-    assert len(seen) == 3
-
-
-# -- Merged panes (Layout -> New's cell-merge) ------------------------------
-
-def test_resolve_panes_places_a_panel_into_a_merged_area():
-    from src.web.api.export import _resolve_panes
-
-    layout = {'rows': 3, 'columns': 2, 'areas': [{'row': 0, 'col': 0, 'rowSpan': 3, 'colSpan': 1}]}
-    panels = [
-        {'id': 'p1', 'pane': {'row': 0, 'col': 0}},   # the merged column
-        {'id': 'p2', 'pane': None},
-        {'id': 'p3', 'pane': None},
-    ]
-    rows, columns, pane_of = _resolve_panes(panels, layout)
-    assert pane_of['p1'] == {'row': 0, 'col': 0, 'rowSpan': 3, 'colSpan': 1}
-    # p2/p3 auto-place into the remaining single-column-1 cells, never
-    # re-splitting the merged column.
-    assert pane_of['p2'] == _cell(0, 1)
-    assert pane_of['p3'] == _cell(1, 1)
-
-
-def test_resolve_panes_ignores_an_out_of_bounds_merged_area():
-    from src.web.api.export import _compute_slots
-
-    # rowSpan runs past a 2-row grid -- dropped rather than corrupting the
-    # whole slot list.
-    slots = _compute_slots(2, 2, [{'row': 0, 'col': 0, 'rowSpan': 3, 'colSpan': 1}])
-    assert all(s['rowSpan'] == 1 and s['colSpan'] == 1 for s in slots)
-    assert len(slots) == 4
-
-
-def test_export_honors_a_merged_column(client):
-    panels = [
-        {'id': 'p1', 'title': 'merged', 'traces': _panels()[0]['traces'], 'pane': {'row': 0, 'col': 0}},
-        {'id': 'p2', 'title': 'top-right', 'traces': _panels()[0]['traces'], 'pane': {'row': 0, 'col': 1}},
-        {'id': 'p3', 'title': 'bottom-right', 'traces': _panels()[0]['traces'], 'pane': {'row': 1, 'col': 1}},
-    ]
-    res = client.post('/api/export', json={
-        'panels': panels,
-        'layout': {'rows': 2, 'columns': 2, 'areas': [{'row': 0, 'col': 0, 'rowSpan': 2, 'colSpan': 1}]},
-    })
+    res = client.post('/api/export', json={'panels': panels, 'layout': {'width': 6, 'height': 4}})
     assert res.status_code == 200
     assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
 
 
-def test_export_honors_an_explicit_grid_layout(client):
-    panels = _panels() + [{'id': 'p2', 'title': 'second', 'traces': _panels()[0]['traces'],
-                           'pane': {'row': 0, 'col': 1}}]
-    panels[0]['pane'] = {'row': 0, 'col': 0}
-    res = client.post('/api/export', json={
-        'panels': panels, 'layout': {'rows': 1, 'columns': 2, 'width': 900, 'height': 400},
-    })
+def test_export_defaults_a_panel_with_no_pane_to_filling_the_canvas(client):
+    res = client.post('/api/export', json={'panels': _panels(), 'layout': {'width': 5, 'height': 3}})
     assert res.status_code == 200
     assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
 
 
-def test_export_a_spatial_panel_at_the_bottom_of_a_column_does_not_crash(client):
+def test_export_does_not_crash_on_a_pane_that_overlaps_or_overruns_the_canvas(client):
+    # Free-form panes may overlap each other, or a typo/out-of-range value
+    # may run one past the canvas edge -- neither should break the export.
     panels = [
-        {'id': 'p1', 'title': 'time', 'traces': _panels()[0]['traces'], 'pane': {'row': 0, 'col': 0}},
-        {'id': 'p2', 'title': 'spatial', 'kind': 'spatial', 'pane': {'row': 1, 'col': 0},
+        {'id': 'p1', 'title': 'overlap-a', 'traces': _panels()[0]['traces'], 'pane': {'x': 0, 'y': 0, 'w': 5, 'h': 3}},
+        {'id': 'p2', 'title': 'overlap-b', 'traces': _panels()[0]['traces'], 'pane': {'x': 1, 'y': 1, 'w': 5, 'h': 3}},
+        {'id': 'p3', 'title': 'off-canvas', 'traces': _panels()[0]['traces'], 'pane': {'x': -1, 'y': -1, 'w': 20, 'h': 20}},
+    ]
+    res = client.post('/api/export', json={'panels': panels, 'layout': {'width': 5, 'height': 3}})
+    assert res.status_code == 200
+    assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
+
+
+def test_export_a_spatial_panel_does_not_crash(client):
+    panels = [
+        {'id': 'p1', 'title': 'time', 'traces': _panels()[0]['traces'], 'pane': {'x': 0, 'y': 0, 'w': 6, 'h': 2}},
+        {'id': 'p2', 'title': 'spatial', 'kind': 'spatial', 'pane': {'x': 0, 'y': 2, 'w': 6, 'h': 2},
          'traces': [{'case': 'BR0SG0U1P0', 'group': 0, 'col': 'aleDisp_y', 'mode': 'snapshot',
                      'time': 1.0, 'points': [{'row': 0, 'x': 0.0}], 'color': '#000'}]},
     ]
-    res = client.post('/api/export', json={'panels': panels, 'layout': {'rows': 2, 'columns': 1}})
+    res = client.post('/api/export', json={'panels': panels, 'layout': {'width': 6, 'height': 4}})
     assert res.status_code == 200
     assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
 
@@ -441,40 +411,16 @@ def test_export_defaults_to_showing_time_label_on_every_panel(client):
     # No more "only the bottom of the column" heuristic -- every time
     # panel defaults to showing 'time [s]' unless its own showXLabel is
     # explicitly turned off.
-    panels = _panels() + [{'id': 'p2', 'title': 'second', 'traces': _panels()[0]['traces']}]
-    res = client.post('/api/export', json={'panels': panels, 'layout': {'rows': 2, 'columns': 1}})
+    panels = [
+        {'id': 'p1', 'title': 'first', 'traces': _panels()[0]['traces'], 'pane': {'x': 0, 'y': 0, 'w': 6, 'h': 2}},
+        {'id': 'p2', 'title': 'second', 'traces': _panels()[0]['traces'], 'pane': {'x': 0, 'y': 2, 'w': 6, 'h': 2}},
+    ]
+    res = client.post('/api/export', json={'panels': panels, 'layout': {'width': 6, 'height': 4}})
     assert res.status_code == 200
     assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
 
 
 def test_export_honors_ticks_inside(client):
     res = client.post('/api/export', json={'panels': _panels(), 'style': {'ticksInside': True}})
-    assert res.status_code == 200
-    assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
-
-
-# -- Drag-resized row/column weights (PlotWorkspace.setGridFracs) -----------
-
-def test_export_honors_custom_row_and_col_fracs(client):
-    panels = [
-        {'id': 'p1', 'title': 'a', 'traces': _panels()[0]['traces'], 'pane': {'row': 0, 'col': 0}},
-        {'id': 'p2', 'title': 'b', 'traces': _panels()[0]['traces'], 'pane': {'row': 0, 'col': 1}},
-    ]
-    res = client.post('/api/export', json={
-        'panels': panels,
-        'layout': {'rows': 1, 'columns': 2, 'rowFracs': [1], 'colFracs': [3, 1]},
-    })
-    assert res.status_code == 200
-    assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
-
-
-def test_export_ignores_frac_arrays_whose_length_no_longer_matches_the_grid(client):
-    # A stale weights array (e.g. from before the grid was resized) must
-    # not crash GridSpec -- just fall back to equal sizing.
-    panels = _panels()
-    res = client.post('/api/export', json={
-        'panels': panels,
-        'layout': {'rows': 1, 'columns': 1, 'colFracs': [3, 1]},   # length 2, but only 1 column
-    })
     assert res.status_code == 200
     assert res.data[:8] == b'\x89PNG\r\n\x1a\n'

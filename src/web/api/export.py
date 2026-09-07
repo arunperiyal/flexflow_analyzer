@@ -3,8 +3,11 @@
 Phase 3 polish. No shared `plot_utils.save_figure()` exists to reuse (see
 src/utils/plot_utils.py) -- each CLI call site builds its own Figure and
 calls `fig.savefig(path, dpi=300, bbox_inches='tight')` directly
-(src/commands/visualization/plot_impl/command.py and compare_impl/command.py);
-this follows the same convention rather than inventing a different one.
+(src/commands/visualization/plot_impl/command.py and compare_impl/command.py).
+This one deliberately does NOT use bbox_inches='tight': every panel here is
+placed by an explicit, user-typed inches rect (Layout -> Panes), and cropping
+to content would silently resize the figure away from the canvas size those
+rects were positioned against.
 
 The workspace lives in the browser (§5 of the plan), so the request carries
 the panels/traces to render rather than the server holding any of it.
@@ -15,7 +18,6 @@ import io
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from matplotlib.gridspec import GridSpec
 from matplotlib.ticker import MultipleLocator
 from flask import Blueprint, current_app, jsonify, request, send_file
 
@@ -41,70 +43,30 @@ def _matplotlib_font(css_family):
     return first or None
 
 
-def _compute_slots(rows, columns, areas):
-    """Python port of plot.js's computeSlots: every cell of the grid as
-    non-overlapping rectangular slots -- `areas` (merged, span > 1x1) first,
-    then every remaining cell as its own implicit 1x1 slot. An invalid area
-    (out of bounds, or overlapping an earlier one) is dropped. Sorted
-    row-major by top-left corner."""
-    covered = set()
-    slots = []
-    for a in areas or []:
-        row, col = a.get('row'), a.get('col')
-        row_span, col_span = a.get('rowSpan') or 0, a.get('colSpan') or 0
-        if row_span <= 0 or col_span <= 0:
-            continue
-        if row is None or col is None or row < 0 or col < 0 or row + row_span > rows or col + col_span > columns:
-            continue
-        cells = [(r, c) for r in range(row, row + row_span) for c in range(col, col + col_span)]
-        if any(cell in covered for cell in cells):
-            continue
-        covered.update(cells)
-        slots.append({'row': row, 'col': col, 'rowSpan': row_span, 'colSpan': col_span})
-    for r in range(rows):
-        for c in range(columns):
-            if (r, c) not in covered:
-                slots.append({'row': r, 'col': c, 'rowSpan': 1, 'colSpan': 1})
-    slots.sort(key=lambda s: (s['row'], s['col']))
-    return slots
+def _pane_rect(panel, layout):
+    """A panel's own pane (x, y, w, h -- inches, from Layout -> Panes), or
+    the canvas-filling default when it hasn't been placed yet. Python
+    mirror of plot.js's PlotArea.paneRect."""
+    p = panel.get('pane')
+    if isinstance(p, dict) and all(isinstance(p.get(k), (int, float)) for k in ('x', 'y', 'w', 'h')):
+        return p
+    return {'x': 0, 'y': 0, 'w': layout.get('width') or 6.5, 'h': layout.get('height') or 4.5}
 
 
-def _resolve_panes(panels, layout):
-    """Python port of plot.js's resolvePanes: honors valid, non-conflicting
-    explicit panel['pane'] assignments (a slot's top-left cell), then falls
-    back unassigned/conflicting panels to the next free slot in row-major
-    order, growing rows (as new, unmerged 1x1 rows) as needed."""
-    columns = max(1, int(layout.get('columns') or 1))
-    rows = max(1, int(layout.get('rows') or 1))
-    slots = _compute_slots(rows, columns, layout.get('areas'))
-    by_key = {(s['row'], s['col']): s for s in slots}
-    used = set()
-    pane_of = {}
-
-    for panel in panels:
-        p = panel.get('pane')
-        if p and isinstance(p.get('row'), int) and isinstance(p.get('col'), int):
-            key = (p['row'], p['col'])
-            slot = by_key.get(key)
-            if slot and key not in used:
-                used.add(key)
-                pane_of[panel['id']] = slot
-
-    free_slots = [s for s in slots if (s['row'], s['col']) not in used]
-    free_idx = 0
-    for panel in panels:
-        if panel['id'] in pane_of:
-            continue
-        if free_idx >= len(free_slots):
-            rows += 1
-            for c in range(columns):
-                free_slots.append({'row': rows - 1, 'col': c, 'rowSpan': 1, 'colSpan': 1})
-        slot = free_slots[free_idx]
-        free_idx += 1
-        used.add((slot['row'], slot['col']))
-        pane_of[panel['id']] = slot
-
-    return rows, columns, pane_of
+def _pane_axes_rect(pane, width_in, height_in):
+    """A pane's inches rect -> a matplotlib add_axes rect (figure-fraction
+    [left, bottom, width, height], y counting up from the bottom). Clamped
+    the same way plot.js's paneDomain is -- a pane typed past the canvas
+    edge, or with zero/negative size, still renders instead of raising."""
+    left = min(max(pane['x'] / width_in, 0), 1)
+    right = min(max((pane['x'] + pane['w']) / width_in, 0), 1)
+    bottom = min(max(1 - (pane['y'] + pane['h']) / height_in, 0), 1)
+    top = min(max(1 - pane['y'] / height_in, 0), 1)
+    if right <= left:
+        right = min(1, left + 0.01)
+    if top <= bottom:
+        top = min(1, bottom + 0.01)
+    return [left, bottom, right - left, top - bottom]
 
 
 def _hide_ticks(ax, physical_axis):
@@ -139,39 +101,21 @@ def export_png():
     if not panels:
         return jsonify({'error': 'no panels to export'}), 400
 
-    rows, columns, pane_of = _resolve_panes(panels, layout)
-
-    width_px, height_px = layout.get('width'), layout.get('height')
-    figsize = (
-        width_px / 100 if width_px else max(6, 4.5 * columns),
-        height_px / 100 if height_px else max(2.6, 2.6 * rows),
-    )
+    width_in = layout.get('width') or 6.5
+    height_in = layout.get('height') or 4.5
+    figsize = (width_in, height_in)
 
     # rc_context scopes the font override to this figure, rather than
     # mutating matplotlib's global rcParams for every concurrent request.
     font_name = _matplotlib_font(style.get('fontFamily'))
     with plt.rc_context({'font.family': font_name} if font_name else {}):
         fig = plt.figure(figsize=figsize)
-        # GridSpec natively supports a subplot spanning multiple cells via
-        # slicing -- unlike plt.subplots' uniform (rows, columns) array, so
-        # a merged pane just slices a bigger block instead of needing any
-        # special-casing here. height_ratios/width_ratios mirror a
-        # drag-resized row/column (PlotWorkspace.setGridFracs) -- only used
-        # when their length still matches the resolved grid (an
-        # overflow-grown row count wouldn't have a matching weight anyway).
-        row_fracs = layout.get('rowFracs')
-        col_fracs = layout.get('colFracs')
-        gs = GridSpec(
-            rows, columns, figure=fig,
-            height_ratios=row_fracs if isinstance(row_fracs, list) and len(row_fracs) == rows else None,
-            width_ratios=col_fracs if isinstance(col_fracs, list) and len(col_fracs) == columns else None,
-        )
-
+        # Each panel gets its own freely positioned axes -- add_axes takes
+        # a figure-fraction rect directly, no GridSpec/shared-track notion
+        # needed since panes are independent (mirrors plot.js's paneDomain).
         for panel in panels:
-            slot = pane_of[panel['id']]
-            ax = fig.add_subplot(
-                gs[slot['row']:slot['row'] + slot['rowSpan'], slot['col']:slot['col'] + slot['colSpan']],
-            )
+            pane = _pane_rect(panel, layout)
+            ax = fig.add_axes(_pane_axes_rect(pane, width_in, height_in))
             pstyle = panel.get('style') or {}
 
             if panel.get('kind') == 'spatial':
@@ -246,10 +190,13 @@ def export_png():
 
         if style.get('title'):
             fig.suptitle(style['title'], fontsize=(style.get('labelFontSize') or 9) + 2)
-        fig.tight_layout()
+        # No tight_layout()/bbox_inches='tight' -- both would resize or
+        # recrop the figure away from the exact (width_in, height_in)
+        # canvas the panes were positioned against, which is the whole
+        # point of typing an explicit rect per panel in Layout -> Panes.
 
         buf = io.BytesIO()
-        fig.savefig(buf, dpi=300, bbox_inches='tight', format='png')
+        fig.savefig(buf, dpi=300, format='png')
         plt.close(fig)
         buf.seek(0)
 

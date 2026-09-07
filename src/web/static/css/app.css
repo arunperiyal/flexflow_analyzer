@@ -433,58 +433,37 @@ body {
 /* Layout -> New/Edit reuses .style-limit-row (side-by-side number inputs)
    from the style sidebar's own limit fields. */
 
-/* Plot -> New's pane picker: a CSS grid so a merged slot's button can span
-   more than one row/column (grid-row/grid-column set inline per slot). */
-.pane-grid { display: grid; gap: 4px; margin-bottom: 10px; }
-.pane-cell {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+/* Layout -> Panes: a to-scale preview (left) beside per-panel x/y/w/h
+   controls (right, scrollable independently of the preview). */
+.panes-editor { display: flex; gap: 16px; align-items: flex-start; }
+.panes-preview { flex: none; padding: 4px; }
+.panes-canvas {
+  position: relative;
+  background: #fff;
   border: 1px solid #cbd5e1;
-  border-radius: 4px;
-  background: #f8fafc;
-  cursor: pointer;
-  padding: 0;
-  font-size: 10px;
-  color: #64748b;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.15);
 }
-.pane-cell:hover:not(.occupied) { border-color: #7c3aed; background: #f3e8ff; }
-.pane-cell.occupied { background: #e2e8f0; border-style: dashed; cursor: not-allowed; }
-.pane-cell.selected { background: #7c3aed; border-color: #7c3aed; color: #fff; }
-
-/* Layout -> New/Edit's grid editor: unit cells are the only interactive
-   surface (drag-select always operates in 1x1 grid coordinates); merge and
-   selection overlays are decorative (pointer-events: none) so drags reach
-   the unit cell underneath even when a merged block is drawn on top. */
-#layout-grid-editor { display: grid; gap: 3px; margin: 8px 0 12px; width: max-content; }
-.layout-unit-cell {
+.pane-preview-rect {
+  position: absolute;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #cbd5e1;
-  border-radius: 3px;
-  background: #f8fafc;
-  cursor: pointer;
-  user-select: none;
-  font-size: 10px;
-  color: #94a3b8;
+  border: 1px solid #7c3aed;
+  background: rgba(124, 58, 237, 0.12);
+  font-size: 11px;
+  color: #7c3aed;
+  overflow: hidden;
 }
-.layout-unit-cell:hover { border-color: #7c3aed; }
-.layout-merge-overlay {
-  pointer-events: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(37, 99, 235, 0.1);
-  border: 1px solid #93c5fd;
-  border-radius: 4px;
-  font-size: 10px;
-  color: #2563eb;
+.pane-preview-rect.active { background: rgba(124, 58, 237, 0.3); border-width: 2px; }
+.panes-controls { flex: 1; min-width: 0; max-height: 400px; overflow-y: auto; }
+.pane-control-row { padding: 8px 0; border-bottom: 1px solid #e2e8f0; }
+.pane-control-row:last-child { border-bottom: none; }
+.pane-control-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #334155;
+  margin-bottom: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.layout-selection-overlay {
-  pointer-events: none;
-  background: rgba(124, 58, 237, 0.18);
-  border: 2px solid #7c3aed;
-  border-radius: 4px;
-}
-.btn-row-left { display: flex; justify-content: flex-start; gap: 8px; margin: 0 0 12px; }

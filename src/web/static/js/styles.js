@@ -154,31 +154,10 @@ const StyleSidebar = (() => {
       .map(p => `<option value="${p.id}" ${p.id === panel.id ? 'selected' : ''}>${p.title}</option>`)
       .join('');
 
-    // Pane position/size, typed in here instead of dragged on the
-    // rendered figure -- shown 1-based (row 1, col 1 is the top-left)
-    // since that's the numbering the Layout dialog and pane picker
-    // already use. "Size" is that row/column's relative weight (see
-    // PlotArea.gridDims), shared by every panel in the same row/column,
-    // not just this one.
-    const slot = PlotArea.resolvePanes(ws).paneOf.get(panel.id) || { row: 0, col: 0 };
-    const rowWeight = (Array.isArray(ws.layout.rowFracs) && ws.layout.rowFracs[slot.row] != null)
-      ? ws.layout.rowFracs[slot.row] : 1;
-    const colWeight = (Array.isArray(ws.layout.colFracs) && ws.layout.colFracs[slot.col] != null)
-      ? ws.layout.colFracs[slot.col] : 1;
-
+    // Pane position/size lives in Layout -> Panes now (a to-scale preview
+    // alongside the numbers), not here.
     const panelBody = `
       <select id="style-panel-select" class="style-panel-select">${panelOptions}</select>
-
-      <label>Pane position (row, column)</label>
-      <div class="style-limit-row">
-        <input type="number" id="style-pane-row" min="1" value="${slot.row + 1}">
-        <input type="number" id="style-pane-col" min="1" value="${slot.col + 1}">
-      </div>
-      <label>Pane size (row weight, column weight)</label>
-      <div class="style-limit-row">
-        <input type="number" id="style-row-weight" min="0.1" step="0.1" value="${rowWeight}">
-        <input type="number" id="style-col-weight" min="0.1" step="0.1" value="${colWeight}">
-      </div>
 
       <div class="style-row">
         <label for="style-xlabel">X label</label>
@@ -310,32 +289,6 @@ const StyleSidebar = (() => {
   function wire(panel) {
     document.getElementById('style-panel-select').addEventListener('change', (e) => {
       PlotWorkspace.setActivePanel(e.target.value);
-      refreshWorkspace();
-    });
-
-    // Reads the panel's *current* resolved pane fresh each time, rather
-    // than closing over the one computed for this render -- typing into
-    // one field and then the other must not stomp the first field's
-    // already-applied change with a stale coordinate.
-    function currentSlot() {
-      return PlotArea.resolvePanes(PlotWorkspace.state()).paneOf.get(panel.id) || { row: 0, col: 0 };
-    }
-    document.getElementById('style-pane-row').addEventListener('change', (e) => {
-      const row = Math.max(0, (parseInt(e.target.value, 10) || 1) - 1);
-      PlotWorkspace.setPanelPane(panel.id, { row, col: currentSlot().col });
-      refreshWorkspace();
-    });
-    document.getElementById('style-pane-col').addEventListener('change', (e) => {
-      const col = Math.max(0, (parseInt(e.target.value, 10) || 1) - 1);
-      PlotWorkspace.setPanelPane(panel.id, { row: currentSlot().row, col });
-      refreshWorkspace();
-    });
-    document.getElementById('style-row-weight').addEventListener('change', (e) => {
-      PlotWorkspace.setTrackWeight('row', currentSlot().row, parseFloat(e.target.value));
-      refreshWorkspace();
-    });
-    document.getElementById('style-col-weight').addEventListener('change', (e) => {
-      PlotWorkspace.setTrackWeight('col', currentSlot().col, parseFloat(e.target.value));
       refreshWorkspace();
     });
 
