@@ -195,6 +195,18 @@ const StyleSidebar = (() => {
       <label class="style-row checkbox">
         <input type="checkbox" id="style-swap-axes" ${s.swapAxes ? 'checked' : ''}> Swap X/Y axes
       </label>
+      <label class="style-row checkbox">
+        <input type="checkbox" id="style-show-x-ticks" ${s.showXTicks === false ? '' : 'checked'}> Show X ticks
+      </label>
+      <label class="style-row checkbox">
+        <input type="checkbox" id="style-show-y-ticks" ${s.showYTicks === false ? '' : 'checked'}> Show Y ticks
+      </label>
+      <label class="style-row checkbox">
+        <input type="checkbox" id="style-show-x-label" ${s.showXLabel === false ? '' : 'checked'}> Show X label
+      </label>
+      <label class="style-row checkbox">
+        <input type="checkbox" id="style-show-y-label" ${s.showYLabel === false ? '' : 'checked'}> Show Y label
+      </label>
     `;
 
     box.innerHTML = group('global', 'Global', globalBody)
@@ -350,6 +362,22 @@ const StyleSidebar = (() => {
     });
     document.getElementById('style-swap-axes').addEventListener('change', (e) => {
       PlotWorkspace.setPanelStyle(panel.id, { swapAxes: e.target.checked });
+      PlotArea.render();
+    });
+    document.getElementById('style-show-x-ticks').addEventListener('change', (e) => {
+      PlotWorkspace.setPanelStyle(panel.id, { showXTicks: e.target.checked });
+      PlotArea.render();
+    });
+    document.getElementById('style-show-y-ticks').addEventListener('change', (e) => {
+      PlotWorkspace.setPanelStyle(panel.id, { showYTicks: e.target.checked });
+      PlotArea.render();
+    });
+    document.getElementById('style-show-x-label').addEventListener('change', (e) => {
+      PlotWorkspace.setPanelStyle(panel.id, { showXLabel: e.target.checked });
+      PlotArea.render();
+    });
+    document.getElementById('style-show-y-label').addEventListener('change', (e) => {
+      PlotWorkspace.setPanelStyle(panel.id, { showYLabel: e.target.checked });
       PlotArea.render();
     });
 

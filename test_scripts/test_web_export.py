@@ -371,25 +371,7 @@ def test_export_honors_an_explicit_grid_layout(client):
     assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
 
 
-def test_export_bottom_of_column_label_in_a_two_column_grid(client):
-    # Column 0 has one panel (its own bottom); column 1 has two panels
-    # stacked -- only the row-1 one should be the "bottom of its column".
-    panels = [
-        {'id': 'p1', 'title': 'a', 'traces': _panels()[0]['traces'], 'pane': {'row': 0, 'col': 0}},
-        {'id': 'p2', 'title': 'b', 'traces': _panels()[0]['traces'], 'pane': {'row': 0, 'col': 1}},
-        {'id': 'p3', 'title': 'c', 'traces': _panels()[0]['traces'], 'pane': {'row': 1, 'col': 1}},
-    ]
-    res = client.post('/api/export', json={
-        'panels': panels, 'layout': {'rows': 2, 'columns': 2},
-    })
-    assert res.status_code == 200
-    assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
-
-
 def test_export_a_spatial_panel_at_the_bottom_of_a_column_does_not_crash(client):
-    # A spatial panel sitting at the bottom of a column must not blow up
-    # the "bottom of column" bookkeeping (it's excluded from that contest
-    # entirely -- see _resolve_link_groups's sibling max_row_by_col fix).
     panels = [
         {'id': 'p1', 'title': 'time', 'traces': _panels()[0]['traces'], 'pane': {'row': 0, 'col': 0}},
         {'id': 'p2', 'title': 'spatial', 'kind': 'spatial', 'pane': {'row': 1, 'col': 0},
@@ -401,53 +383,65 @@ def test_export_a_spatial_panel_at_the_bottom_of_a_column_does_not_crash(client)
     assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
 
 
-# -- X-axis link groups (Layout -> Edit's per-pane sharing) -----------------
+# -- Per-panel tick/label visibility -----------------------------------------
 
-def test_resolve_link_groups_auto_links_every_non_spatial_non_swapped_panel():
-    from src.web.api.export import _resolve_link_groups
+def test_hide_ticks_hides_marks_and_labels_on_the_requested_physical_axis():
+    from src.web.api.export import _hide_ticks
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
 
-    panels = [
-        {'id': 'p1'},
-        {'id': 'p2', 'kind': 'spatial'},
-        {'id': 'p3', 'style': {'swapAxes': True}},
-        {'id': 'p4'},
-    ]
-    pane_of = {}  # unused in 'auto' mode
-    group_of = _resolve_link_groups(panels, pane_of, None)
-    assert group_of == {'p1': 'auto', 'p4': 'auto'}
+    fig, ax = plt.subplots()
+    _hide_ticks(ax, 'x')
+    x_params = ax.xaxis.get_tick_params()
+    assert x_params['bottom'] is False and x_params['labelbottom'] is False
+    # The y axis is untouched by hiding x.
+    y_params = ax.yaxis.get_tick_params()
+    assert y_params['left'] is not False
 
-
-def test_resolve_link_groups_honors_explicit_pane_based_groups():
-    from src.web.api.export import _resolve_link_groups
-
-    panels = [
-        {'id': 'p1'}, {'id': 'p2'}, {'id': 'p3'},
-    ]
-    pane_of = {
-        'p1': {'row': 0, 'col': 0}, 'p2': {'row': 0, 'col': 1}, 'p3': {'row': 1, 'col': 0},
-    }
-    link_groups = [[{'row': 0, 'col': 0}, {'row': 1, 'col': 0}]]   # p1 + p3, not p2
-    group_of = _resolve_link_groups(panels, pane_of, link_groups)
-    assert group_of == {'p1': 0, 'p3': 0}
-    assert 'p2' not in group_of
+    _hide_ticks(ax, 'y')
+    y_params = ax.yaxis.get_tick_params()
+    assert y_params['left'] is False and y_params['labelleft'] is False
+    plt.close(fig)
 
 
-def test_resolve_link_groups_empty_list_links_nothing():
-    from src.web.api.export import _resolve_link_groups
+def test_export_honors_show_x_ticks_false(client):
+    panels = _panels()
+    panels[0]['style'] = {'showXTicks': False}
+    res = client.post('/api/export', json={'panels': panels})
+    assert res.status_code == 200
+    assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
 
-    panels = [{'id': 'p1'}, {'id': 'p2'}]
-    group_of = _resolve_link_groups(panels, {'p1': {'row': 0, 'col': 0}}, [])
-    assert group_of == {}
+
+def test_export_honors_show_y_ticks_false(client):
+    panels = _panels()
+    panels[0]['style'] = {'showYTicks': False}
+    res = client.post('/api/export', json={'panels': panels})
+    assert res.status_code == 200
+    assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
 
 
-def test_export_honors_explicit_link_groups(client):
-    panels = [
-        {'id': 'p1', 'title': 'a', 'traces': _panels()[0]['traces'], 'pane': {'row': 0, 'col': 0}},
-        {'id': 'p2', 'title': 'b', 'traces': _panels()[0]['traces'], 'pane': {'row': 0, 'col': 1}},
-    ]
-    res = client.post('/api/export', json={
-        'panels': panels, 'layout': {'rows': 1, 'columns': 2},
-        'linkGroups': [[{'row': 0, 'col': 0}, {'row': 0, 'col': 1}]],
-    })
+def test_export_honors_show_x_label_false(client):
+    panels = _panels()
+    panels[0]['style'] = {'showXLabel': False}
+    res = client.post('/api/export', json={'panels': panels})
+    assert res.status_code == 200
+    assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
+
+
+def test_export_honors_show_y_label_false(client):
+    panels = _panels()
+    panels[0]['style'] = {'showYLabel': False, 'ylabel': 'Displacement [m]'}
+    res = client.post('/api/export', json={'panels': panels})
+    assert res.status_code == 200
+    assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
+
+
+def test_export_defaults_to_showing_time_label_on_every_panel(client):
+    # No more "only the bottom of the column" heuristic -- every time
+    # panel defaults to showing 'time [s]' unless its own showXLabel is
+    # explicitly turned off.
+    panels = _panels() + [{'id': 'p2', 'title': 'second', 'traces': _panels()[0]['traces']}]
+    res = client.post('/api/export', json={'panels': panels, 'layout': {'rows': 2, 'columns': 1}})
     assert res.status_code == 200
     assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
