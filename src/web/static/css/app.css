@@ -391,15 +391,20 @@ body {
    more than one row/column (grid-row/grid-column set inline per slot). */
 .pane-grid { display: grid; gap: 4px; margin-bottom: 10px; }
 .pane-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: 1px solid #cbd5e1;
   border-radius: 4px;
   background: #f8fafc;
   cursor: pointer;
   padding: 0;
+  font-size: 10px;
+  color: #64748b;
 }
 .pane-cell:hover:not(.occupied) { border-color: #7c3aed; background: #f3e8ff; }
 .pane-cell.occupied { background: #e2e8f0; border-style: dashed; cursor: not-allowed; }
-.pane-cell.selected { background: #7c3aed; border-color: #7c3aed; }
+.pane-cell.selected { background: #7c3aed; border-color: #7c3aed; color: #fff; }
 
 /* Layout -> New/Edit's grid editor: unit cells are the only interactive
    surface (drag-select always operates in 1x1 grid coordinates); merge and
@@ -407,11 +412,16 @@ body {
    the unit cell underneath even when a merged block is drawn on top. */
 #layout-grid-editor { display: grid; gap: 3px; margin: 8px 0 12px; width: max-content; }
 .layout-unit-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: 1px solid #cbd5e1;
   border-radius: 3px;
   background: #f8fafc;
   cursor: pointer;
   user-select: none;
+  font-size: 10px;
+  color: #94a3b8;
 }
 .layout-unit-cell:hover { border-color: #7c3aed; }
 .layout-merge-overlay {
@@ -422,10 +432,8 @@ body {
   background: rgba(37, 99, 235, 0.1);
   border: 1px solid #93c5fd;
   border-radius: 4px;
-  font-size: 9px;
+  font-size: 10px;
   color: #2563eb;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 .layout-selection-overlay {
   pointer-events: none;

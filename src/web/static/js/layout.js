@@ -95,16 +95,31 @@ const Layout = (() => {
     }
 
     function renderGridStructure() {
+      // Pane numbers: 1-based position in gridSlots' row-major slot list --
+      // the same order the Plot -> New pane picker numbers by, so a
+      // "pane 3" mentioned in one place means the same cell in the other.
+      const { slots } = PlotArea.gridSlots({ layout: { rows: state.rows, columns: state.columns, areas: state.areas } });
+      const numberOf = new Map(slots.map((s, i) => [`${s.row},${s.col}`, i + 1]));
+      const covered = new Set();
+      for (const a of state.areas) {
+        for (let r = a.row; r < a.row + a.rowSpan; r++) {
+          for (let c = a.col; c < a.col + a.colSpan; c++) covered.add(`${r},${c}`);
+        }
+      }
+
       let html = '';
       for (let r = 0; r < state.rows; r++) {
         for (let c = 0; c < state.columns; c++) {
+          // A merge overlay already labels its whole block -- a covered
+          // unit cell stays blank rather than repeating that number.
+          const label = covered.has(`${r},${c}`) ? '' : numberOf.get(`${r},${c}`);
           html += `<div class="layout-unit-cell" data-row="${r}" data-col="${c}"
-            style="grid-row:${r + 1}; grid-column:${c + 1};"></div>`;
+            style="grid-row:${r + 1}; grid-column:${c + 1};">${label}</div>`;
         }
       }
       for (const a of state.areas) {
         html += `<div class="layout-merge-overlay"
-          style="grid-row:${a.row + 1} / span ${a.rowSpan}; grid-column:${a.col + 1} / span ${a.colSpan};">merged</div>`;
+          style="grid-row:${a.row + 1} / span ${a.rowSpan}; grid-column:${a.col + 1} / span ${a.colSpan};">Pane ${numberOf.get(`${a.row},${a.col}`)}</div>`;
       }
       html += `<div id="layout-selection-overlay" class="layout-selection-overlay" hidden></div>`;
       gridBox.innerHTML = html;
