@@ -23,8 +23,8 @@ const PlotWorkspace = (() => {
   // (span > 1x1) regions only -- every other cell is an implicit 1x1 area
   // (see PlotArea.gridSlots). rowFracs/colFracs: null means "equal size"
   // (the default); a real array is relative weights, one per row/column,
-  // set by dragging a resize handle directly on the rendered panels (see
-  // PlotArea.gridDims) -- not editable from the Layout dialog itself.
+  // typed in from the Style sidebar's Panel section (see setTrackWeight)
+  // for whichever row/column the selected panel's pane is in.
   function defaultLayout() {
     return { rows: 1, columns: 1, width: null, height: null, areas: [], rowFracs: null, colFracs: null };
   }
@@ -353,14 +353,20 @@ const PlotWorkspace = (() => {
     save();
   }
 
-  // Set by dragging a resize handle directly on the rendered panels --
-  // relative weights for the active layout's rows/columns, or null for
-  // "equal size" (the default). Neither array needs to sum to anything in
-  // particular (see PlotArea.gridDims).
-  function setGridFracs(rowFracs, colFracs) {
+  // Style sidebar's Panel section types in one row/column's size directly
+  // (a relative weight, not required to sum to anything in particular --
+  // see PlotArea.gridDims) -- reads the current weights for that axis (or
+  // an implicit all-equal array if none are set yet) and only touches the
+  // one index the panel's pane currently resolves into.
+  function setTrackWeight(kind, index, weight) {
     const L = active();
-    L.layout.rowFracs = rowFracs;
-    L.layout.colFracs = colFracs;
+    const count = kind === 'row' ? L.layout.rows : L.layout.columns;
+    const key = kind === 'row' ? 'rowFracs' : 'colFracs';
+    if (!(index >= 0) || index >= count) return;
+    const current = (Array.isArray(L.layout[key]) && L.layout[key].length === count)
+      ? L.layout[key].slice() : Array(count).fill(1);
+    current[index] = weight > 0 ? weight : 1;
+    L.layout[key] = current;
     save();
   }
 
@@ -419,7 +425,7 @@ const PlotWorkspace = (() => {
 
   return {
     state, addTraces, addSpatialTrace, removeTrace, removePanel, clearPanel, renamePanel,
-    setYLock, updateLayout, setPanelPane, setGridFracs, setPanelStyle, setGlobalStyle, setCaseStyle,
+    setYLock, updateLayout, setPanelPane, setTrackWeight, setPanelStyle, setGlobalStyle, setCaseStyle,
     setActivePanel, setTraceStyle,
     listLayouts, activeLayoutId, setActiveLayout, createLayout, renameLayout, deleteLayout,
   };
