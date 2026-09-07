@@ -43,6 +43,7 @@ const App = (() => {
     const root = document.getElementById('app').dataset.root;
     Menu.init(root);
     CommandLog.start();
+    Shell.wireInput();
     refreshCases();
     refreshWorkspace();
   }

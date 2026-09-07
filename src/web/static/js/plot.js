@@ -477,23 +477,35 @@ const Export = (() => {
   }
 
   async function runExport() {
-    const ws = PlotWorkspace.state();
     const format = document.getElementById('export-format').value;
     let dpi = DEFAULT_DPI;
     if (format === 'png') {
       const raw = parseInt(document.getElementById('export-dpi').value, 10);
       dpi = Number.isFinite(raw) ? Math.max(50, Math.min(1200, raw)) : DEFAULT_DPI;
     }
-
     CommandLog.prompt(`plot export --format ${format}${format === 'png' ? ` --dpi ${dpi}` : ''}`);
+    try {
+      await doExport(format, dpi);
+      Menu.closeDialog();
+    } catch (e) {
+      alert(e.message);
+    }
+  }
+
+  // The actual export -- shared by the dialog's Export button above and
+  // Shell's `plot export` command below, which echoes the typed command
+  // itself (Shell.run) and prints/reports failure inline rather than
+  // alert()ing, so this only ever throws, never alerts.
+  async function doExport(format, dpi) {
+    const ws = PlotWorkspace.state();
+    if (!ws.panels.length) throw new Error('No panels to export -- Plot → New first.');
     const res = await fetch('/api/export', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ panels: ws.panels, style: ws.style, layout: ws.layout, format, dpi }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: 'export failed' }));
-      alert(err.error);
-      return;
+      throw new Error(err.error);
     }
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
@@ -504,8 +516,17 @@ const Export = (() => {
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
-    Menu.closeDialog();
   }
 
-  return { open };
+  // Shell's `plot export [--format png|pdf] [--dpi N]`.
+  async function runFromCommand(format, dpiRaw) {
+    format = format === 'pdf' ? 'pdf' : 'png';
+    const dpi = format === 'png'
+      ? Math.max(50, Math.min(1200, parseInt(dpiRaw, 10) || DEFAULT_DPI))
+      : DEFAULT_DPI;
+    await doExport(format, dpi);
+    return `exported flexflow_plot.${format}`;
+  }
+
+  return { open, runFromCommand };
 })();

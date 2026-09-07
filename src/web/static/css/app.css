@@ -292,6 +292,25 @@ body {
 #command-log .prompt { color: #4ade80; font-weight: 700; }
 #command-log .line { color: #94a3b8; padding-left: 12px; }
 #command-log .err { color: #fca5a5; padding-left: 12px; }
+#command-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  border-top: 1px solid #1e293b;
+  font-family: 'DejaVu Sans Mono', Menlo, Consolas, monospace;
+  font-size: 12px;
+  flex: none;
+}
+#command-input-row .prompt { color: #4ade80; font-weight: 700; }
+#command-input {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  color: #e2e8f0;
+  font: inherit;
+}
 
 /* Dialog */
 #dialog-backdrop[hidden] { display: none; }
