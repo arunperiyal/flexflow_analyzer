@@ -45,6 +45,18 @@ const PlotWorkspace = (() => {
       p.style = p.style || {};
       if (!('pane' in p)) p.pane = null;
     }
+    // A workspace saved before case styles existed still gets one: the
+    // first trace already plotted for each case becomes that case's
+    // registered style, so nothing visually changes on load, but every
+    // later trace of that case (and any edit made here) now follows it.
+    const caseStyles = { ...(raw.caseStyles || {}) };
+    for (const p of panels) {
+      for (const t of p.traces) {
+        if (t.case && !caseStyles[t.case]) {
+          caseStyles[t.case] = { color: t.color || null, lineStyle: t.lineStyle || '', marker: t.marker || '' };
+        }
+      }
+    }
     return {
       id: raw.id || fallbackId,
       name: raw.name || fallbackName,
@@ -53,6 +65,7 @@ const PlotWorkspace = (() => {
       layout,
       style: { ...defaultGlobalStyle(), ...(raw.style || {}) },
       activePanelId: raw.activePanelId || null,
+      caseStyles,
     };
   }
 
@@ -60,7 +73,7 @@ const PlotWorkspace = (() => {
     return {
       id, name, linkX: true, panels: [],
       layout: { ...defaultLayout(), ...(gridSpec || {}) },
-      style: defaultGlobalStyle(), activePanelId: null,
+      style: defaultGlobalStyle(), activePanelId: null, caseStyles: {},
     };
   }
 
@@ -108,6 +121,22 @@ const PlotWorkspace = (() => {
     return c;
   }
 
+  // A case's color/line-style/marker, registered the first time any trace
+  // of it is added to this layout (auto-assigning a color the same way a
+  // trace always has) so every later trace of the same case -- in any
+  // panel -- starts out looking consistent rather than getting its own
+  // independently rotated color. Still just a *default*: a trace can be
+  // styled away from it afterward via the per-trace controls, same as
+  // always -- see setCaseStyle for how a later case-style edit respects that.
+  function caseStyleFor(caseName) {
+    const L = active();
+    L.caseStyles = L.caseStyles || {};
+    if (!L.caseStyles[caseName]) {
+      L.caseStyles[caseName] = { color: nextColor(), lineStyle: '', marker: '' };
+    }
+    return L.caseStyles[caseName];
+  }
+
   // Routing default (§5): a panel already holding this case's traces gets the
   // new ones too (several rows, one case -> shared panel); otherwise a new
   // panel is made, which is what keeps two cases from landing on one panel
@@ -143,13 +172,14 @@ const PlotWorkspace = (() => {
     }
     if (!panel) panel = panelFor(caseName, pane);
 
+    const cs = caseStyleFor(caseName);
     for (const row of rows) {
       const already = panel.traces.some(
         t => t.case === caseName && t.group === group && t.row === row && t.col === column
       );
       if (already) continue;
       panel.traces.push({ case: caseName, group, row, node: nodeOf ? nodeOf(row) : null,
-                          col: column, color: nextColor() });
+                          col: column, color: cs.color, lineStyle: cs.lineStyle, marker: cs.marker });
     }
     if (!L.activePanelId) L.activePanelId = panel.id;
     save();
@@ -184,11 +214,12 @@ const PlotWorkspace = (() => {
     }
     if (!panel) panel = panelForSpatial(caseName, pane);
 
+    const cs = caseStyleFor(caseName);
     panel.traces.push({
       case: caseName, group, col: column, mode,
       time: opts.time, stat: opts.stat, t1: opts.t1, t2: opts.t2, axLabel: opts.axLabel,
       points: [...points].sort((a, b) => a.x - b.x),
-      color: nextColor(),
+      color: cs.color, lineStyle: cs.lineStyle, marker: cs.marker,
     });
     if (!L.activePanelId) L.activePanelId = panel.id;
     save();
@@ -249,6 +280,30 @@ const PlotWorkspace = (() => {
   function setGlobalStyle(patch) {
     const L = active();
     L.style = { ...L.style, ...patch };
+    save();
+  }
+
+  // Case -> Style: sets the case's default color/line-style/marker and
+  // reapplies it to every trace of that case (any panel) that is still at
+  // the case's *previous* default -- a trace deliberately styled away from
+  // it (e.g. distinguishing several nodes of one case overlaid in a single
+  // panel, via the per-trace controls) is left alone rather than being
+  // silently snapped back on the next case-style edit.
+  function setCaseStyle(caseName, patch) {
+    const L = active();
+    L.caseStyles = L.caseStyles || {};
+    const prev = L.caseStyles[caseName] || { color: null, lineStyle: '', marker: '' };
+    const next = { ...prev, ...patch };
+    L.caseStyles[caseName] = next;
+
+    for (const panel of L.panels) {
+      for (const t of panel.traces) {
+        if (t.case !== caseName) continue;
+        if ('color' in patch && t.color === prev.color) t.color = next.color;
+        if ('lineStyle' in patch && (t.lineStyle || '') === (prev.lineStyle || '')) t.lineStyle = next.lineStyle;
+        if ('marker' in patch && (t.marker || '') === (prev.marker || '')) t.marker = next.marker;
+      }
+    }
     save();
   }
 
@@ -343,7 +398,7 @@ const PlotWorkspace = (() => {
 
   return {
     state, addTraces, addSpatialTrace, removeTrace, removePanel, clearPanel, renamePanel,
-    setYLock, updateLayout, setPanelPane, setLinkX, setPanelStyle, setGlobalStyle,
+    setYLock, updateLayout, setPanelPane, setLinkX, setPanelStyle, setGlobalStyle, setCaseStyle,
     setActivePanel, setTraceStyle,
     listLayouts, activeLayoutId, setActiveLayout, createLayout, renameLayout, deleteLayout,
   };
