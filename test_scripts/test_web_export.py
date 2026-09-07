@@ -40,7 +40,7 @@ def _panels():
 
 
 def test_export_returns_a_png(client):
-    res = client.post('/api/export', json={'panels': _panels(), 'linkX': True})
+    res = client.post('/api/export', json={'panels': _panels(), 'linkGroups': None})
     assert res.status_code == 200
     assert res.mimetype == 'image/png'
     assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
@@ -381,6 +381,73 @@ def test_export_bottom_of_column_label_in_a_two_column_grid(client):
     ]
     res = client.post('/api/export', json={
         'panels': panels, 'layout': {'rows': 2, 'columns': 2},
+    })
+    assert res.status_code == 200
+    assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
+
+
+def test_export_a_spatial_panel_at_the_bottom_of_a_column_does_not_crash(client):
+    # A spatial panel sitting at the bottom of a column must not blow up
+    # the "bottom of column" bookkeeping (it's excluded from that contest
+    # entirely -- see _resolve_link_groups's sibling max_row_by_col fix).
+    panels = [
+        {'id': 'p1', 'title': 'time', 'traces': _panels()[0]['traces'], 'pane': {'row': 0, 'col': 0}},
+        {'id': 'p2', 'title': 'spatial', 'kind': 'spatial', 'pane': {'row': 1, 'col': 0},
+         'traces': [{'case': 'BR0SG0U1P0', 'group': 0, 'col': 'aleDisp_y', 'mode': 'snapshot',
+                     'time': 1.0, 'points': [{'row': 0, 'x': 0.0}], 'color': '#000'}]},
+    ]
+    res = client.post('/api/export', json={'panels': panels, 'layout': {'rows': 2, 'columns': 1}})
+    assert res.status_code == 200
+    assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
+
+
+# -- X-axis link groups (Layout -> Edit's per-pane sharing) -----------------
+
+def test_resolve_link_groups_auto_links_every_non_spatial_non_swapped_panel():
+    from src.web.api.export import _resolve_link_groups
+
+    panels = [
+        {'id': 'p1'},
+        {'id': 'p2', 'kind': 'spatial'},
+        {'id': 'p3', 'style': {'swapAxes': True}},
+        {'id': 'p4'},
+    ]
+    pane_of = {}  # unused in 'auto' mode
+    group_of = _resolve_link_groups(panels, pane_of, None)
+    assert group_of == {'p1': 'auto', 'p4': 'auto'}
+
+
+def test_resolve_link_groups_honors_explicit_pane_based_groups():
+    from src.web.api.export import _resolve_link_groups
+
+    panels = [
+        {'id': 'p1'}, {'id': 'p2'}, {'id': 'p3'},
+    ]
+    pane_of = {
+        'p1': {'row': 0, 'col': 0}, 'p2': {'row': 0, 'col': 1}, 'p3': {'row': 1, 'col': 0},
+    }
+    link_groups = [[{'row': 0, 'col': 0}, {'row': 1, 'col': 0}]]   # p1 + p3, not p2
+    group_of = _resolve_link_groups(panels, pane_of, link_groups)
+    assert group_of == {'p1': 0, 'p3': 0}
+    assert 'p2' not in group_of
+
+
+def test_resolve_link_groups_empty_list_links_nothing():
+    from src.web.api.export import _resolve_link_groups
+
+    panels = [{'id': 'p1'}, {'id': 'p2'}]
+    group_of = _resolve_link_groups(panels, {'p1': {'row': 0, 'col': 0}}, [])
+    assert group_of == {}
+
+
+def test_export_honors_explicit_link_groups(client):
+    panels = [
+        {'id': 'p1', 'title': 'a', 'traces': _panels()[0]['traces'], 'pane': {'row': 0, 'col': 0}},
+        {'id': 'p2', 'title': 'b', 'traces': _panels()[0]['traces'], 'pane': {'row': 0, 'col': 1}},
+    ]
+    res = client.post('/api/export', json={
+        'panels': panels, 'layout': {'rows': 1, 'columns': 2},
+        'linkGroups': [[{'row': 0, 'col': 0}, {'row': 0, 'col': 1}]],
     })
     assert res.status_code == 200
     assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
