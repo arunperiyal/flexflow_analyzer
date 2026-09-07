@@ -238,7 +238,7 @@ def export_png():
                     plotted += 1
                 default_xlabel = 'time [s]'
 
-            _style_panel_axes(ax, pstyle, style, swap, plotted, default_xlabel, panel.get('title'))
+            _style_panel_axes(ax, pstyle, style, swap, plotted, default_xlabel, panel.get('title'), font_name)
 
         if style.get('title'):
             fig.suptitle(style['title'], fontsize=(style.get('labelFontSize') or 9) + 2)
@@ -313,7 +313,7 @@ def _spatial_trace_label(trace):
     return f"{trace.get('case')} {trace.get('col')} {what}"
 
 
-def _style_panel_axes(ax, pstyle, style, swap, plotted, default_xlabel, panel_title):
+def _style_panel_axes(ax, pstyle, style, swap, plotted, default_xlabel, panel_title, font_name):
     """Grid/legend/limits/ticks/labels shared by every panel kind -- mirrors
     plot.js's applyAxisStyle plus the tick/label config render() builds
     around it, including its Y-label fallback to the panel's own title:
@@ -347,6 +347,19 @@ def _style_panel_axes(ax, pstyle, style, swap, plotted, default_xlabel, panel_ti
         ax.tick_params(axis=x_tick_axis, labelrotation=pstyle['xtickangle'])
     if pstyle.get('ytickangle') is not None:
         ax.tick_params(axis=y_tick_axis, labelrotation=pstyle['ytickangle'])
+
+    # rc_context's font.family (set once, figure-wide, in export_png)
+    # reaches axis labels, titles and the legend, but NOT tick label Text
+    # objects -- a matplotlib quirk already found and worked around the
+    # same way in the CLI plot command (apply_plot_properties in
+    # src/commands/visualization/plot_impl/command.py: "Set font for tick
+    # labels if fontname specified"). Done last, after every call above
+    # that can (re)create tick label Text objects -- a custom locator or
+    # rotation -- so nothing set here gets regenerated back to the default
+    # afterward.
+    if font_name:
+        for label in x_axis.get_ticklabels() + y_axis.get_ticklabels():
+            label.set_fontfamily(font_name)
 
     # Each panel's tick marks/numbers and axis label are shown or hidden
     # per-panel (Style sidebar's Panel section), not inferred from position.

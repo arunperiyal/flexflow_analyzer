@@ -380,6 +380,52 @@ def test_export_honors_every_style_sidebar_font_choice(client):
     assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
 
 
+def test_style_panel_axes_sets_tick_label_font_family_directly():
+    # Regression: matplotlib's rc_context({'font.family': ...}) reaches
+    # axis labels, titles and the legend, but NOT tick label Text objects
+    # -- a quirk already found and worked around the same way in the CLI
+    # plot command (apply_plot_properties, src/commands/visualization/
+    # plot_impl/command.py: "Set font for tick labels if fontname
+    # specified"). Without the same fix here, the axis numbers silently
+    # stayed in matplotlib's default font while every other piece of text
+    # on the figure switched to the requested one.
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    from src.web.api.export import _style_panel_axes
+
+    with plt.rc_context({'font.family': 'Liberation Serif'}):
+        fig, ax = plt.subplots()
+        ax.plot([0, 1], [0, 1])
+        _style_panel_axes(ax, {}, {}, swap=False, plotted=0, default_xlabel='time [s]',
+                          panel_title='p', font_name='Liberation Serif')
+        fig.canvas.draw()
+        tick_labels = ax.get_xticklabels() + ax.get_yticklabels()
+        assert tick_labels   # the axes actually has ticks to check
+        for label in tick_labels:
+            assert label.get_fontfamily() == ['Liberation Serif']
+        plt.close(fig)
+
+
+def test_style_panel_axes_leaves_tick_font_alone_when_no_font_requested():
+    # font_name is None (the Style sidebar's "Default" option) -- nothing
+    # here should force a font choice matplotlib wasn't asked for.
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    from src.web.api.export import _style_panel_axes
+
+    fig, ax = plt.subplots()
+    ax.plot([0, 1], [0, 1])
+    default_family = plt.rcParams['font.family']
+    _style_panel_axes(ax, {}, {}, swap=False, plotted=0, default_xlabel='time [s]',
+                      panel_title='p', font_name=None)
+    fig.canvas.draw()
+    for label in ax.get_xticklabels() + ax.get_yticklabels():
+        assert label.get_fontfamily() == default_family
+    plt.close(fig)
+
+
 # -- swap X/Y ------------------------------------------------------------
 
 def test_export_swap_axes_with_all_style_fields_set(client):
