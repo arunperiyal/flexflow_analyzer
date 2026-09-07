@@ -24,6 +24,7 @@ from flask import Blueprint, current_app, jsonify, request, send_file
 from ..services import registry
 from ..services.columns import column_map as build_column_map
 from ..services.loader import loader
+from ..services.spatial import STATS, nearest_time_index, window_mask
 
 bp = Blueprint('export', __name__, url_prefix='/api/export')
 
@@ -118,75 +119,39 @@ def export_png():
             ax = fig.add_axes(_pane_axes_rect(pane, width_in, height_in))
             pstyle = panel.get('style') or {}
 
-            if panel.get('kind') == 'spatial':
-                # Not yet supported: a spatial trace has no single `row`
-                # (get_node_displacements(row) is the time-domain shape this
-                # export follows), so it needs its own /spatial-backed
-                # reduction here rather than being force-fit into the same
-                # code path.
-                ax.text(0.5, 0.5, 'spatial panels are not yet exported',
-                       ha='center', va='center', fontsize=8, color='#94a3b8', transform=ax.transAxes)
-                ax.set_title(panel.get('title') or '', fontsize=9)
-                ax.tick_params(labelsize=7)
-                continue
-
             # Swap X/Y rotates the panel 90 degrees: pstyle's x*/y* fields
-            # always describe the same logical quantity (time on X, the
-            # plotted value on Y) regardless of swap -- swap only decides
-            # which physical matplotlib axis (ax.xaxis vs ax.yaxis) each
-            # one lands on, mirroring plot.js's logicalX/logicalY split.
+            # always describe the same logical quantity (time/position on X,
+            # the plotted value on Y) regardless of swap -- swap only
+            # decides which physical matplotlib axis (ax.xaxis vs ax.yaxis)
+            # each one lands on, mirroring plot.js's logicalX/logicalY split.
             swap = bool(pstyle.get('swapAxes'))
-
             plotted = 0
-            for trace in panel.get('traces') or []:
-                values, times = _trace_values(root, trace)
-                if values is None:
-                    continue
-                first, second = (values, times) if swap else (times, values)
-                ax.plot(first, second, color=trace.get('color'),
-                        label=f"{trace.get('case')} r{trace.get('row')} {trace.get('col')}",
-                        **_plot_kwargs(trace, style))
-                plotted += 1
-            ax.set_title(panel.get('title') or '', fontsize=style.get('labelFontSize') or 9)
-            ax.tick_params(labelsize=style.get('tickFontSize') or 7,
-                           direction='in' if style.get('ticksInside') else 'out')
-            ax.grid(style.get('showGrid', True))
-            # A static PNG has no colored panel-tree to cross-reference
-            # trace colors against (unlike the browser view), so unlike
-            # there, a legend is shown by default here.
-            if plotted and style.get('showLegend', True):
-                ax.legend(fontsize=style.get('legendFontSize') or 6, loc='upper right')
 
-            x_axis, y_axis = (ax.yaxis, ax.xaxis) if swap else (ax.xaxis, ax.yaxis)
-            set_xlim, set_ylim = (ax.set_ylim, ax.set_xlim) if swap else (ax.set_xlim, ax.set_ylim)
-            set_xlabel, set_ylabel = (ax.set_ylabel, ax.set_xlabel) if swap else (ax.set_xlabel, ax.set_ylabel)
-            x_tick_axis, y_tick_axis = ('y', 'x') if swap else ('x', 'y')
+            if panel.get('kind') == 'spatial':
+                traces = panel.get('traces') or []
+                ax_label = (traces[0].get('axLabel') if traces else None) or 'position'
+                for trace in traces:
+                    xs, ys = _spatial_trace_values(root, trace)
+                    if xs is None:
+                        continue
+                    first, second = (ys, xs) if swap else (xs, ys)
+                    ax.plot(first, second, color=trace.get('color'), label=_spatial_trace_label(trace),
+                            **_plot_kwargs(trace, style))
+                    plotted += 1
+                default_xlabel = ax_label
+            else:
+                for trace in panel.get('traces') or []:
+                    values, times = _trace_values(root, trace)
+                    if values is None:
+                        continue
+                    first, second = (values, times) if swap else (times, values)
+                    ax.plot(first, second, color=trace.get('color'),
+                            label=f"{trace.get('case')} r{trace.get('row')} {trace.get('col')}",
+                            **_plot_kwargs(trace, style))
+                    plotted += 1
+                default_xlabel = 'time [s]'
 
-            if pstyle.get('xlim'):
-                set_xlim(pstyle['xlim'])
-            if pstyle.get('ylim'):
-                set_ylim(pstyle['ylim'])
-            if pstyle.get('xtick', 0) > 0:
-                x_axis.set_major_locator(MultipleLocator(pstyle['xtick']))
-            if pstyle.get('ytick', 0) > 0:
-                y_axis.set_major_locator(MultipleLocator(pstyle['ytick']))
-            if pstyle.get('xtickangle') is not None:
-                ax.tick_params(axis=x_tick_axis, labelrotation=pstyle['xtickangle'])
-            if pstyle.get('ytickangle') is not None:
-                ax.tick_params(axis=y_tick_axis, labelrotation=pstyle['ytickangle'])
-
-            # Each panel's tick marks/numbers and axis title are shown or
-            # hidden per-panel (Style sidebar's Panel section), not
-            # inferred from grid position.
-            if pstyle.get('showXTicks') is False:
-                _hide_ticks(ax, x_tick_axis)
-            if pstyle.get('showYTicks') is False:
-                _hide_ticks(ax, y_tick_axis)
-
-            if pstyle.get('showXLabel') is not False:
-                set_xlabel(pstyle.get('xlabel') or 'time [s]', fontsize=style.get('labelFontSize') or 8)
-            if pstyle.get('showYLabel') is not False and pstyle.get('ylabel'):
-                set_ylabel(pstyle['ylabel'], fontsize=style.get('labelFontSize') or 9)
+            _style_panel_axes(ax, pstyle, style, swap, plotted, default_xlabel, panel.get('title'))
 
         if style.get('title'):
             fig.suptitle(style['title'], fontsize=(style.get('labelFontSize') or 9) + 2)
@@ -220,3 +185,90 @@ def _trace_values(root, trace):
         return arrays[var_name][:, row, comp], meta.times
     except (FileNotFoundError, KeyError, IndexError, TypeError):
         return None, None
+
+
+def _spatial_trace_values(root, trace):
+    """(xs, ys) for one spatial trace, or (None, None) if it cannot be
+    read. xs is the picker's own x, already carried on trace['points']
+    (the same one /api/cases/<case>/spatial's caller supplies from the
+    browser's own projection -- nothing to recompute here). ys is one
+    value per point's row, computed the same way that endpoint does
+    (services.spatial): either a single-time snapshot or a stat reduced
+    over a time window."""
+    case_dir = registry.case_path(root, trace.get('case') or '')
+    points = trace.get('points') or []
+    if case_dir is None or not points:
+        return None, None
+    try:
+        meta = loader.meta(case_dir)
+        group = trace.get('group')
+        cmap = build_column_map(meta, group)
+        var_name, comp = cmap[trace.get('col')]
+        meta, arrays = loader.load(case_dir, [var_name], group=group)
+        arr = arrays[var_name]
+        rows = [p['row'] for p in points]
+        xs = [p['x'] for p in points]
+        if trace.get('mode') == 'snapshot':
+            t_idx = nearest_time_index(meta.times, trace.get('time'))
+            ys = [float(arr[t_idx, row, comp]) for row in rows]
+        else:
+            mask = window_mask(meta.times, trace.get('t1'), trace.get('t2'))
+            stat_fn = STATS[trace.get('stat')]
+            ys = [stat_fn(arr[mask, row, comp]) for row in rows]
+        return xs, ys
+    except (FileNotFoundError, KeyError, IndexError, TypeError, ValueError):
+        return None, None
+
+
+def _spatial_trace_label(trace):
+    """Legend text for one spatial trace -- matches plot.js's spatialTraceName."""
+    what = f"@t={trace.get('time')}" if trace.get('mode') == 'snapshot' else trace.get('stat')
+    return f"{trace.get('case')} {trace.get('col')} {what}"
+
+
+def _style_panel_axes(ax, pstyle, style, swap, plotted, default_xlabel, panel_title):
+    """Grid/legend/limits/ticks/labels shared by every panel kind -- mirrors
+    plot.js's applyAxisStyle plus the tick/label config render() builds
+    around it, including its Y-label fallback to the panel's own title:
+    Plotly never draws that title as a heading above the panel (there is
+    no "above the panel" in the browser view at all), only ever as the
+    Y-axis label's own default when the panel has no explicit ylabel -- so
+    neither does this, now that it matches the plot area exactly."""
+    ax.tick_params(labelsize=style.get('tickFontSize') or 7,
+                   direction='in' if style.get('ticksInside') else 'out')
+    ax.grid(style.get('showGrid', True))
+    # A static PNG has no colored panel-tree to cross-reference trace
+    # colors against (unlike the browser view), so unlike there, a legend
+    # is shown by default here.
+    if plotted and style.get('showLegend', True):
+        ax.legend(fontsize=style.get('legendFontSize') or 6, loc='upper right')
+
+    x_axis, y_axis = (ax.yaxis, ax.xaxis) if swap else (ax.xaxis, ax.yaxis)
+    set_xlim, set_ylim = (ax.set_ylim, ax.set_xlim) if swap else (ax.set_xlim, ax.set_ylim)
+    set_xlabel, set_ylabel = (ax.set_ylabel, ax.set_xlabel) if swap else (ax.set_xlabel, ax.set_ylabel)
+    x_tick_axis, y_tick_axis = ('y', 'x') if swap else ('x', 'y')
+
+    if pstyle.get('xlim'):
+        set_xlim(pstyle['xlim'])
+    if pstyle.get('ylim'):
+        set_ylim(pstyle['ylim'])
+    if pstyle.get('xtick', 0) > 0:
+        x_axis.set_major_locator(MultipleLocator(pstyle['xtick']))
+    if pstyle.get('ytick', 0) > 0:
+        y_axis.set_major_locator(MultipleLocator(pstyle['ytick']))
+    if pstyle.get('xtickangle') is not None:
+        ax.tick_params(axis=x_tick_axis, labelrotation=pstyle['xtickangle'])
+    if pstyle.get('ytickangle') is not None:
+        ax.tick_params(axis=y_tick_axis, labelrotation=pstyle['ytickangle'])
+
+    # Each panel's tick marks/numbers and axis label are shown or hidden
+    # per-panel (Style sidebar's Panel section), not inferred from position.
+    if pstyle.get('showXTicks') is False:
+        _hide_ticks(ax, x_tick_axis)
+    if pstyle.get('showYTicks') is False:
+        _hide_ticks(ax, y_tick_axis)
+
+    if pstyle.get('showXLabel') is not False:
+        set_xlabel(pstyle.get('xlabel') or default_xlabel, fontsize=style.get('labelFontSize') or 8)
+    if pstyle.get('showYLabel') is not False:
+        set_ylabel(pstyle.get('ylabel') or panel_title or '', fontsize=style.get('labelFontSize') or 9)

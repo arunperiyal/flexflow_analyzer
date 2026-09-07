@@ -74,7 +74,8 @@ def test_export_does_not_crash_on_a_spatial_panel(client):
     # A spatial trace has no `row` (it carries `points` instead) -- naively
     # reusing the time-domain _trace_values() path on it used to misindex
     # the array (row=None shifted `comp` onto the node axis) and raise
-    # inside matplotlib's plot() rather than being skipped cleanly.
+    # inside matplotlib's plot(). Now it's routed through
+    # _spatial_trace_values() instead (see the correctness tests below).
     panels = [{
         'id': 'p1', 'title': 'spatial rms', 'kind': 'spatial',
         'traces': [{
@@ -85,6 +86,102 @@ def test_export_does_not_crash_on_a_spatial_panel(client):
     res = client.post('/api/export', json={'panels': panels})
     assert res.status_code == 200
     assert res.mimetype == 'image/png'
+
+
+# -- Spatial panel export -----------------------------------------------
+
+def test_spatial_trace_values_reads_a_snapshot_matching_the_spatial_endpoint(client):
+    from src.web.api.export import _spatial_trace_values
+    from src.web.services import registry
+    from src.web.services.columns import column_map as build_column_map
+    from src.web.services.loader import loader
+    from src.web.services.spatial import nearest_time_index
+
+    root = client.application.config['WORKSPACE_ROOT']
+    trace = {
+        'case': 'BR0SG0U1P0', 'group': 0, 'col': 'aleDisp_y', 'mode': 'snapshot', 'time': 1.0,
+        'points': [{'row': 0, 'x': 0.0}, {'row': 12, 'x': 1.0}],
+    }
+    xs, ys = _spatial_trace_values(root, trace)
+    assert xs == [0.0, 1.0]
+
+    # Cross-checked against the same read /api/cases/<case>/spatial itself does.
+    case_dir = registry.case_path(root, 'BR0SG0U1P0')
+    meta = loader.meta(case_dir)
+    cmap = build_column_map(meta, 0)
+    var_name, comp = cmap['aleDisp_y']
+    _, arrays = loader.load(case_dir, [var_name], group=0)
+    t_idx = nearest_time_index(meta.times, 1.0)
+    expected = [float(arrays[var_name][t_idx, 0, comp]), float(arrays[var_name][t_idx, 12, comp])]
+    assert ys == pytest.approx(expected)
+
+
+def test_spatial_trace_values_reads_a_stat_reduction(client):
+    from src.web.api.export import _spatial_trace_values
+
+    root = client.application.config['WORKSPACE_ROOT']
+    trace = {
+        'case': 'BR0SG0U1P0', 'group': 0, 'col': 'aleDisp_y', 'mode': 'stat', 'stat': 'rms',
+        'points': [{'row': 0, 'x': 0.0}, {'row': 12, 'x': 1.0}],
+    }
+    xs, ys = _spatial_trace_values(root, trace)
+    assert xs == [0.0, 1.0]
+    assert all(v >= 0 for v in ys)   # rms is non-negative
+    assert ys[0] != ys[1]            # two different nodes, not accidentally reading the same row
+
+
+def test_spatial_trace_values_returns_none_for_an_unregistered_case(client):
+    from src.web.api.export import _spatial_trace_values
+
+    root = client.application.config['WORKSPACE_ROOT']
+    trace = {'case': 'no-such-case', 'group': 0, 'col': 'aleDisp_y', 'mode': 'snapshot', 'time': 1.0,
+              'points': [{'row': 0, 'x': 0.0}]}
+    xs, ys = _spatial_trace_values(root, trace)
+    assert xs is None and ys is None
+
+
+def test_spatial_trace_values_returns_none_for_no_points(client):
+    from src.web.api.export import _spatial_trace_values
+    root = client.application.config['WORKSPACE_ROOT']
+    xs, ys = _spatial_trace_values(root, {'case': 'BR0SG0U1P0', 'points': []})
+    assert xs is None and ys is None
+
+
+def test_spatial_trace_label_matches_plot_js_spatial_trace_name():
+    from src.web.api.export import _spatial_trace_label
+    assert _spatial_trace_label({'case': 'c1', 'col': 'aleDisp_y', 'mode': 'snapshot', 'time': 1.0}) \
+        == 'c1 aleDisp_y @t=1.0'
+    assert _spatial_trace_label({'case': 'c1', 'col': 'aleDisp_y', 'mode': 'stat', 'stat': 'rms'}) \
+        == 'c1 aleDisp_y rms'
+
+
+def test_export_renders_actual_spatial_data_not_a_placeholder(client):
+    panels = [{
+        'id': 'p1', 'title': 'spatial rms', 'kind': 'spatial',
+        'traces': [{
+            'case': 'BR0SG0U1P0', 'group': 0, 'col': 'aleDisp_y', 'mode': 'stat', 'stat': 'rms',
+            'points': [{'row': 0, 'x': 0.0}, {'row': 12, 'x': 1.0}], 'color': '#dc2626',
+        }],
+    }]
+    res = client.post('/api/export', json={'panels': panels})
+    assert res.status_code == 200
+    assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
+    # Bigger than a near-empty placeholder axes -- a real plotted line plus
+    # axis chrome renders meaningfully more PNG data than blank white space.
+    assert len(res.data) > 5000
+
+
+def test_export_honors_swap_axes_on_a_spatial_panel(client):
+    panels = [{
+        'id': 'p1', 'title': 'swapped', 'kind': 'spatial', 'style': {'swapAxes': True},
+        'traces': [{
+            'case': 'BR0SG0U1P0', 'group': 0, 'col': 'aleDisp_y', 'mode': 'snapshot', 'time': 1.0,
+            'points': [{'row': 0, 'x': 0.0}, {'row': 12, 'x': 1.0}], 'color': '#000',
+        }],
+    }]
+    res = client.post('/api/export', json={'panels': panels})
+    assert res.status_code == 200
+    assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
 
 
 def test_export_mixed_time_and_spatial_panels(client):
