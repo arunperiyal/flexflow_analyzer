@@ -52,6 +52,76 @@ def test_export_with_no_panels_is_a_400(client):
     assert res.status_code == 400
 
 
+# -- Format (PNG/PDF) and DPI -------------------------------------------
+
+def test_export_defaults_to_png_at_300_dpi_with_no_format_or_dpi_given(client):
+    res = client.post('/api/export', json={'panels': _panels()})
+    assert res.status_code == 200
+    assert res.mimetype == 'image/png'
+    assert 'flexflow_plot.png' in res.headers.get('Content-Disposition', '')
+
+
+def test_export_honors_format_pdf(client):
+    res = client.post('/api/export', json={'panels': _panels(), 'format': 'pdf'})
+    assert res.status_code == 200
+    assert res.mimetype == 'application/pdf'
+    assert res.data[:5] == b'%PDF-'
+    assert 'flexflow_plot.pdf' in res.headers.get('Content-Disposition', '')
+
+
+def test_export_rejects_an_unsupported_format(client):
+    res = client.post('/api/export', json={'panels': _panels(), 'format': 'svg'})
+    assert res.status_code == 400
+    assert 'error' in res.get_json()
+
+
+def test_export_format_is_case_insensitive(client):
+    res = client.post('/api/export', json={'panels': _panels(), 'format': 'PDF'})
+    assert res.status_code == 200
+    assert res.mimetype == 'application/pdf'
+
+
+def test_export_honors_a_custom_png_dpi(client):
+    low = client.post('/api/export', json={'panels': _panels(), 'format': 'png', 'dpi': 72})
+    high = client.post('/api/export', json={'panels': _panels(), 'format': 'png', 'dpi': 600})
+    assert low.status_code == 200 and high.status_code == 200
+    # Not a pixel-exact assertion (compression makes that fragile) -- a
+    # rendered PNG at 600 dpi is unambiguously bigger than the same
+    # figure at 72 dpi, so this at least proves dpi is actually reaching
+    # savefig() and not being silently ignored.
+    assert len(high.data) > len(low.data)
+
+
+def test_export_clamps_a_dpi_outside_the_sane_range(client):
+    # An unreasonably high dpi on a several-inch canvas would otherwise
+    # try to allocate a huge raster buffer -- clamped rather than trusted,
+    # same as a pane rect running off the canvas edge already is.
+    from src.web.api.export import _MAX_DPI, _MIN_DPI
+    too_high = client.post('/api/export', json={'panels': _panels(), 'format': 'png', 'dpi': 999999})
+    too_low = client.post('/api/export', json={'panels': _panels(), 'format': 'png', 'dpi': -5})
+    assert too_high.status_code == 200
+    assert too_low.status_code == 200
+    at_max = client.post('/api/export', json={'panels': _panels(), 'format': 'png', 'dpi': _MAX_DPI})
+    at_min = client.post('/api/export', json={'panels': _panels(), 'format': 'png', 'dpi': _MIN_DPI})
+    assert too_high.data == at_max.data
+    assert too_low.data == at_min.data
+
+
+def test_export_rejects_a_non_numeric_dpi(client):
+    res = client.post('/api/export', json={'panels': _panels(), 'dpi': 'lots'})
+    assert res.status_code == 400
+    assert 'error' in res.get_json()
+
+
+def test_export_ignores_dpi_for_pdf_rather_than_erroring(client):
+    # dpi is meaningless for a vector format -- accepted and ignored,
+    # not rejected, since the dialog only shows the field for PNG and a
+    # stray value here shouldn't block an otherwise-valid PDF export.
+    res = client.post('/api/export', json={'panels': _panels(), 'format': 'pdf', 'dpi': 999999})
+    assert res.status_code == 200
+    assert res.mimetype == 'application/pdf'
+
+
 def test_export_skips_a_trace_from_an_unregistered_case(client):
     panels = [{
         'id': 'p1', 'title': 'ghost',
