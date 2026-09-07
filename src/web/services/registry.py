@@ -35,10 +35,19 @@ def scan(scan_dir: Path) -> list:
 
 
 def add_cases(root: Path, scan_dir: Path, exclude: set) -> list:
-    """Scan *scan_dir*, drop names in *exclude*, and write root/.cases."""
+    """Scan *scan_dir*, drop names in *exclude*, and merge the result into
+    root/.cases -- adding a case from one directory must not lose cases
+    already registered from a previous scan of a different directory
+    (write_cases_file always replaces the file wholesale, so the existing
+    entries have to be read and folded in here first)."""
     found = scan_for_cases(scan_dir)
     selected = [p for p in found if p.name not in exclude]
-    write_cases_file(root, selected)
+
+    by_name = {e['name']: Path(e['path']) for e in load_cases_file(root)}
+    for p in selected:
+        by_name[p.name] = p   # a re-scanned name refreshes its path
+
+    write_cases_file(root, list(by_name.values()))
     return list_cases(root)
 
 
