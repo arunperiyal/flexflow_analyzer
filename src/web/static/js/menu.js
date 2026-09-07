@@ -256,6 +256,43 @@ const Menu = (() => {
         closeDialog();
       });
     });
+
+    // Settings -> Clear Cache: server-side caches that can go stale
+    // independent of anything changed in the app itself -- matplotlib's
+    // installed-font list (built once; a font installed on the system
+    // afterward, like a Times New Roman package, isn't picked up until
+    // this runs) and the per-case data loader's cache. Never touches this
+    // workspace's own panels/layouts/style (that's not a cache, it's the
+    // user's work) -- only /api/settings/clear-cache's own two things.
+    document.getElementById('settings-clear-cache').addEventListener('click', () => {
+      closeAll();
+      openDialog(`
+        <h2>Settings &rarr; Clear Cache</h2>
+        <label>Rescans installed fonts and drops the per-case data cache -- use this if a
+          font you just installed, or simulation output you just re-ran, still looks stale.</label>
+        <div id="clear-cache-status"></div>
+        <div class="btn-row">
+          <button id="clear-cache-close">Close</button>
+          <button id="clear-cache-go" class="primary">Clear Cache</button>
+        </div>
+      `);
+      document.getElementById('clear-cache-close').addEventListener('click', closeDialog);
+      document.getElementById('clear-cache-go').addEventListener('click', async (e) => {
+        const btn = e.target;
+        const status = document.getElementById('clear-cache-status');
+        btn.disabled = true;
+        status.innerHTML = '<div class="empty">Clearing&hellip;</div>';
+        try {
+          const res = await fetch('/api/settings/clear-cache', { method: 'POST' });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'clear failed');
+          status.innerHTML = `<div class="empty">Done -- ${data.fonts} font(s) found.</div>`;
+        } catch (err) {
+          status.innerHTML = `<div class="error">${err.message}</div>`;
+        }
+        btn.disabled = false;
+      });
+    });
   }
 
   function init(root) {

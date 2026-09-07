@@ -386,22 +386,30 @@ def test_matplotlib_font_returns_an_already_installed_name_unchanged():
     assert _matplotlib_font(f'"{installed_name}", serif') == installed_name
 
 
-def test_matplotlib_font_prefers_an_installed_substitute_over_a_missing_windows_font():
+def test_matplotlib_font_prefers_an_installed_substitute_over_a_missing_windows_font(monkeypatch):
     # The style sidebar's font dropdown sends CSS font-family syntax (e.g.
     # '"Times New Roman", Times, serif') naming Windows/macOS fonts that
-    # are usually missing on a Linux export host -- matplotlib silently
+    # are often missing on a Linux export host -- matplotlib silently
     # substitutes DejaVu Sans for any it can't find rather than raising or
     # warning anywhere visible, which is exactly why 'Times New Roman'
     # used to render as a plain sans font with no error. Each of these
-    # should resolve to its metric-compatible open substitute instead,
-    # when that substitute is actually installed here.
+    # should resolve to its metric-compatible open substitute instead, when
+    # the real font is missing but the substitute is installed.
+    #
+    # The exact fonts this host has vary (this one now has the real
+    # Microsoft core fonts installed -- see Settings -> Clear Cache, added
+    # after this app first hit that gap), so the "requested font missing"
+    # half of that condition is faked here via a stand-in installed set,
+    # rather than relying on it happening to be true of whatever box the
+    # suite runs on.
+    from types import SimpleNamespace
     from matplotlib import font_manager
     from src.web.api.export import _matplotlib_font, _FONT_SUBSTITUTES
 
-    installed = {f.name for f in font_manager.fontManager.ttflist}
+    fake_installed = [SimpleNamespace(name=n) for n in _FONT_SUBSTITUTES.values()]
+    monkeypatch.setattr(font_manager.fontManager, 'ttflist', fake_installed)
+
     for requested, substitute in _FONT_SUBSTITUTES.items():
-        if substitute not in installed:
-            continue   # this box doesn't have the substitute either -- nothing to assert
         css = f'"{requested.title()}", serif'
         assert _matplotlib_font(css) == substitute
 
