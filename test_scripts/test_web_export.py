@@ -445,3 +445,9 @@ def test_export_defaults_to_showing_time_label_on_every_panel(client):
     res = client.post('/api/export', json={'panels': panels, 'layout': {'rows': 2, 'columns': 1}})
     assert res.status_code == 200
     assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
+
+
+def test_export_honors_ticks_inside(client):
+    res = client.post('/api/export', json={'panels': _panels(), 'style': {'ticksInside': True}})
+    assert res.status_code == 200
+    assert res.data[:8] == b'\x89PNG\r\n\x1a\n'

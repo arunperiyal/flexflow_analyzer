@@ -97,6 +97,10 @@ const PlotArea = (() => {
     if (style.tickFontSize) axisLayout.tickfont = { size: style.tickFontSize };
     if (tickAngle) axisLayout.tickangle = tickAngle;
     axisLayout.showgrid = style.showGrid !== false;
+    // ticks:'' (no marks at all) is set ahead of this call when the panel's
+    // own showXTicks/showYTicks is off -- global "inside" must not
+    // override that back on.
+    if (style.ticksInside && axisLayout.ticks !== '') axisLayout.ticks = 'inside';
 
     const range = lim || dataRange;
     if (tickStep > 0) {
@@ -269,15 +273,11 @@ const PlotArea = (() => {
   // column/row is the same size, a slot's fractional [x0, x1] / [y0, y1]
   // domain simply spans `colSpan`/`rowSpan` units plus the gaps between
   // them. Row 0 is the top (Plotly's y-domain is bottom-up, hence `1 -`).
-  // `gapFrac` is a fraction of one cell's own size -- style.panelGapPct
-  // (a plain 0-50 percent the Global style section edits) divided by 100,
-  // or this default when unset.
-  const DEFAULT_GRID_GAP = 0.08;
-  function gridDims(rows, columns, gapFrac) {
-    const gap = gapFrac ?? DEFAULT_GRID_GAP;
-    const colUnit = 1 / (columns + gap * (columns - 1));
-    const rowUnit = 1 / (rows + gap * (rows - 1));
-    return { colUnit, colGap: colUnit * gap, rowUnit, rowGap: rowUnit * gap };
+  const GRID_GAP = 0.08;   // fraction of one cell's own size
+  function gridDims(rows, columns) {
+    const colUnit = 1 / (columns + GRID_GAP * (columns - 1));
+    const rowUnit = 1 / (rows + GRID_GAP * (rows - 1));
+    return { colUnit, colGap: colUnit * GRID_GAP, rowUnit, rowGap: rowUnit * GRID_GAP };
   }
   function slotDomain(slot, dims) {
     const x0 = slot.col * (dims.colUnit + dims.colGap);
@@ -348,7 +348,7 @@ const PlotArea = (() => {
     }
     const resolved = resolvePanes(ws);
     const { rows, columns } = resolved;
-    const dims = gridDims(rows, columns, style.panelGapPct != null ? style.panelGapPct / 100 : null);
+    const dims = gridDims(rows, columns);
 
     // No Plotly `grid` here -- it has no notion of a subplot spanning more
     // than one cell, so each panel's xaxis/yaxis gets an explicit `domain`
