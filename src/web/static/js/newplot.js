@@ -312,19 +312,25 @@ const NewPlot = (() => {
       if (slot) occupantAt.set(`${slot.row},${slot.col}`, p.title);
     });
 
-    const gridHtml = slots.map(slot => {
+    // Numbered 1-based in row-major slot order -- the same order Layout ->
+    // New/Edit's grid editor numbers by, so "pane 3" means the same cell
+    // in both places.
+    let selectedNumber = null;
+    const gridHtml = slots.map((slot, i) => {
+      const number = i + 1;
       const occupant = occupantAt.get(`${slot.row},${slot.col}`);
       const isSelected = selectedPane && selectedPane.row === slot.row && selectedPane.col === slot.col;
+      if (isSelected) selectedNumber = number;
       const classes = ['pane-cell'];
       if (occupant) classes.push('occupied');
       if (isSelected) classes.push('selected');
       return `<button type="button" class="${classes.join(' ')}" data-row="${slot.row}" data-col="${slot.col}"
         style="grid-row:${slot.row + 1} / span ${slot.rowSpan}; grid-column:${slot.col + 1} / span ${slot.colSpan};"
-        ${occupant ? ` disabled title="${occupant}"` : ''}></button>`;
+        ${occupant ? ` disabled title="${occupant}"` : ''}>${number}</button>`;
     }).join('');
 
     box.innerHTML = `
-      <label>Pane for a new panel -- ${selectedPane ? `row ${selectedPane.row + 1}, col ${selectedPane.col + 1}` : 'Auto'}</label>
+      <label>Pane for a new panel -- ${selectedPane ? `pane ${selectedNumber} (row ${selectedPane.row + 1}, col ${selectedPane.col + 1})` : 'Auto'}</label>
       <div class="pane-grid" style="grid-template-rows:repeat(${rows}, 28px); grid-template-columns:repeat(${columns}, 28px);">${gridHtml}</div>
     `;
     box.querySelectorAll('.pane-cell:not(.occupied)').forEach(btn => {
