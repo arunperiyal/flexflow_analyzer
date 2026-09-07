@@ -269,11 +269,15 @@ const PlotArea = (() => {
   // column/row is the same size, a slot's fractional [x0, x1] / [y0, y1]
   // domain simply spans `colSpan`/`rowSpan` units plus the gaps between
   // them. Row 0 is the top (Plotly's y-domain is bottom-up, hence `1 -`).
-  const GRID_GAP = 0.08;   // fraction of one cell's own size
-  function gridDims(rows, columns) {
-    const colUnit = 1 / (columns + GRID_GAP * (columns - 1));
-    const rowUnit = 1 / (rows + GRID_GAP * (rows - 1));
-    return { colUnit, colGap: colUnit * GRID_GAP, rowUnit, rowGap: rowUnit * GRID_GAP };
+  // `gapFrac` is a fraction of one cell's own size -- style.panelGapPct
+  // (a plain 0-50 percent the Global style section edits) divided by 100,
+  // or this default when unset.
+  const DEFAULT_GRID_GAP = 0.08;
+  function gridDims(rows, columns, gapFrac) {
+    const gap = gapFrac ?? DEFAULT_GRID_GAP;
+    const colUnit = 1 / (columns + gap * (columns - 1));
+    const rowUnit = 1 / (rows + gap * (rows - 1));
+    return { colUnit, colGap: colUnit * gap, rowUnit, rowGap: rowUnit * gap };
   }
   function slotDomain(slot, dims) {
     const x0 = slot.col * (dims.colUnit + dims.colGap);
@@ -344,7 +348,7 @@ const PlotArea = (() => {
     }
     const resolved = resolvePanes(ws);
     const { rows, columns } = resolved;
-    const dims = gridDims(rows, columns);
+    const dims = gridDims(rows, columns, style.panelGapPct != null ? style.panelGapPct / 100 : null);
     // Only the bottom-most *time* panel in each column needs the shared
     // 'time' label -- linked x-axes make repeating it above pure noise.
     // Spatial panels are excluded from this contest entirely: they plot
@@ -369,7 +373,12 @@ const PlotArea = (() => {
     // or a merged one.
     const traces = [];
     const layout = {
-      margin: { t: style.title ? 44 : 24, r: 20, b: 40, l: 60 },
+      margin: {
+        t: style.marginTop ?? (style.title ? 44 : 24),
+        r: style.marginRight ?? 20,
+        b: style.marginBottom ?? 40,
+        l: style.marginLeft ?? 60,
+      },
       showlegend: !!style.showLegend,
       width: ws.layout.width || undefined,
       height: ws.layout.height || Math.max(240, rows * 220),
@@ -494,6 +503,18 @@ const PlotArea = (() => {
       layout[xKey].anchor = yref;
       layout[yKey].domain = domain.y;
       layout[yKey].anchor = xref;
+
+      // A box around each panel: `mirror` draws the axis line on the
+      // opposite side too, so showline+mirror on both axes closes the
+      // rectangle.
+      if (style.showPanelBorder) {
+        layout[xKey].showline = true;
+        layout[xKey].mirror = true;
+        layout[xKey].linecolor = '#94a3b8';
+        layout[yKey].showline = true;
+        layout[yKey].mirror = true;
+        layout[yKey].linecolor = '#94a3b8';
+      }
     });
 
     // responsive stretches the plot to fill its container on resize --
