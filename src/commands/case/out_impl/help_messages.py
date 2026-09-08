@@ -19,10 +19,13 @@ Build small derived files from a case's own inputs.
     {Colors.YELLOW}--list{Colors.RESET}             Table of the case's outputTimeHistory blocks:
                        name, input file, predicted othId, type, map file, probe.
                        Says which blocks are mapped and what each othId holds.
-                       With the {Colors.YELLOW}*{Colors.RESET} case it surveys every case in the .cases
-                       registry as one table with a Case column -- which is how
-                       you see which cases still need mapping. Does not cover
-                       outputSurface blocks -- see OUTPUT SURFACES below.
+                       A case with an outputSurface block gets a second table
+                       for it -- name, .srf, predicted osgId, elementGroup,
+                       shape, map file -- printed only when the case has one,
+                       since most don't yet. With the {Colors.YELLOW}*{Colors.RESET} case both surveys
+                       run across the whole .cases registry, each as one table
+                       with a Case column -- which is how you see which cases
+                       still need mapping.
     {Colors.YELLOW}--map [NAME]{Colors.RESET}  Write a map for every outputTimeHistory block in the
                        .def that names a file its records are indexed by, and
                        for every outputSurface block. Give NAME to do just

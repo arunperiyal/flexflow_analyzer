@@ -711,6 +711,47 @@ def survey_time_history(case_dir, logger):
     return rows
 
 
+def survey_output_surfaces(case_dir, logger):
+    """What the .def declares for outputSurface blocks, and what has been
+    written for them.
+
+    Mirrors survey_time_history exactly, for the other shape of output: an
+    outputSurface has no probe geometry to read back (oisd carries no per-node
+    records to parameterise), but does carry elementGroup/shape, and its
+    predicted id is osgId rather than othId.
+    """
+    case_dir = Path(case_dir)
+    if not case_dir.is_dir():
+        raise WriteError(f"Case directory not found: {case_dir}")
+    problem = _problem_name(case_dir)
+    def_file = find_def_file(str(case_dir), problem)
+    if not def_file:
+        raise WriteError(f"No .def file in {case_dir}", skip=True)
+
+    blocks = parse_output_surfaces(def_file)
+    if not blocks:
+        raise WriteError(f"{Path(def_file).name} declares no outputSurface block",
+                         skip=True)
+    osg_ids = _osg_ids(blocks, case_dir)
+
+    rows = []
+    for block in blocks:
+        source = block.get("surfaces")
+        source_path = case_dir / source if source else None
+        map_path = case_dir / f"oisd.{_map_stem(block['name'])}.map" if source else None
+        rows.append({
+            "name": block["name"],
+            "elementGroup": block.get("elementGroup") or "?",
+            "shape": block.get("shape") or "?",
+            "file": source,
+            "file_exists": bool(source_path and source_path.exists()),
+            "osg_id": osg_ids[block["name"]],
+            "map": map_path.name if map_path else None,
+            "map_exists": bool(map_path and map_path.exists()),
+        })
+    return rows
+
+
 def _survey_cells(row):
     """One survey row as table cells: Name, File, OthId, Type, MapFile, Probe."""
     if row["file"] is None:
@@ -758,6 +799,52 @@ def _print_survey(case_dir, rows):
     console.print()
 
 
+def _survey_surface_cells(row):
+    """One outputSurface survey row as table cells: Name, File, OsgId,
+    ElementGroup, Shape, MapFile."""
+    if row["file"] is None:
+        source = "[dim]none[/dim]"
+    elif row["file_exists"]:
+        source = row["file"]
+    else:
+        source = f"[yellow]{row['file']}[/yellow] [dim](missing)[/dim]"
+    osg_id = str(row["osg_id"]) if row["osg_id"] is not None else "[dim]--[/dim]"
+    mapped = row["map"] if row["map_exists"] else f"[dim]{row['map'] or '--'}[/dim]"
+    return row["name"], source, osg_id, row["elementGroup"], row["shape"], mapped
+
+
+def _print_surface_survey(case_dir, rows):
+    """The outputSurface table: which surfaces are declared, and whether each
+    is mapped. A separate table from outputTimeHistory's, not extra columns on
+    it -- OsgId/ElementGroup/Shape have no counterpart there, and Probe/Type
+    have none here."""
+    from rich.console import Console
+    from rich.table import Table
+    from rich import box
+
+    console = Console()
+    table = Table(box=box.SIMPLE, show_header=True, header_style="bold yellow",
+                  title=f"outputSurface in {Path(case_dir).name}",
+                  title_justify="left", title_style="bold cyan")
+    for name in ("Name", "File", "OsgId", "ElementGroup", "Shape", "MapFile"):
+        table.add_column(name)
+
+    for row in rows:
+        table.add_row(*_survey_surface_cells(row))
+
+    console.print()
+    console.print(table)
+    missing = [r for r in rows if r["osg_id"] is None]
+    console.print("[dim]OsgId is predicted from the .def, not read from an oisd file. "
+                  "Read it from the oisd to be certain.[/dim]")
+    if missing:
+        console.print("[dim]-- under OsgId: the .srf is missing or empty, so the "
+                      "solver writes no record and later ids shift down.[/dim]")
+    if any(not r["map_exists"] for r in rows):
+        console.print("[dim]A greyed MapFile has not been written yet; --map writes it.[/dim]")
+    console.print()
+
+
 def _list_all_cases(logger):
     """Survey every case in the .cases registry as one table.
 
@@ -781,25 +868,44 @@ def _list_all_cases(logger):
     for name in ("Case", "Name", "File", "OthId", "Type", "MapFile", "Probe"):
         table.add_column(name)
 
+    surf_table = Table(box=box.SIMPLE, show_header=True, header_style="bold yellow",
+                       title_justify="left", title_style="bold cyan")
+    for name in ("Case", "Name", "File", "OsgId", "ElementGroup", "Shape", "MapFile"):
+        surf_table.add_column(name)
+
     listed, skipped, failed, blocks = [], [], [], 0
+    surf_listed, surf_skipped, surf_failed, surfaces = [], [], [], 0
     for entry in cases:
         name = entry.get("name", "?")
         path = entry.get("path")
         if not path:
             failed.append((name, "no path in .cases"))
+            surf_failed.append((name, "no path in .cases"))
             continue
+
         try:
             rows = survey_time_history(path, logger)
         except WriteError as exc:
             (skipped if exc.skip else failed).append((name, str(exc)))
-            continue
-        listed.append(name)
-        blocks += len(rows)
-        for i, row in enumerate(rows):
-            # The case name only on its first row: repeating it down a group
-            # makes the column hard to scan, which is the one thing it is for.
-            table.add_row(f"[bold]{name}[/bold]" if i == 0 else "",
-                          *_survey_cells(row))
+        else:
+            listed.append(name)
+            blocks += len(rows)
+            for i, row in enumerate(rows):
+                # The case name only on its first row: repeating it down a group
+                # makes the column hard to scan, which is the one thing it is for.
+                table.add_row(f"[bold]{name}[/bold]" if i == 0 else "",
+                              *_survey_cells(row))
+
+        try:
+            surf_rows = survey_output_surfaces(path, logger)
+        except WriteError as exc:
+            (surf_skipped if exc.skip else surf_failed).append((name, str(exc)))
+        else:
+            surf_listed.append(name)
+            surfaces += len(surf_rows)
+            for i, row in enumerate(surf_rows):
+                surf_table.add_row(f"[bold]{name}[/bold]" if i == 0 else "",
+                                   *_survey_surface_cells(row))
 
     console.print()
     if listed:
@@ -818,7 +924,32 @@ def _list_all_cases(logger):
         console.print("[dim]OthId is predicted from the .def, not read from an othd. "
                       "A greyed MapFile has not been written yet; --map writes it.[/dim]")
     console.print()
-    if not listed:
+
+    # Gated on a real result (listed or failed), not merely attempted: a
+    # registry with no outputSurface block anywhere -- the common case, today
+    # -- is all "skipped", and printing a second empty-handed section for
+    # every `* --list` call just because no case uses this yet would be noise
+    # nobody asked for. A genuine failure still surfaces, same as the table
+    # above.
+    if surf_listed or surf_failed:
+        if surf_listed:
+            surf_table.title = (
+                f"outputSurface in {len(surf_listed)} of {len(cases)} case(s)"
+                if len(surf_listed) != len(cases)
+                else f"outputSurface across {len(cases)} case(s)")
+            console.print(surf_table)
+        console.print(f"[bold]{len(surf_listed)} case(s)[/bold], {surfaces} surface(s)"
+                      + (f"; {len(surf_skipped)} skipped" if surf_skipped else "")
+                      + (f"; [yellow]{len(surf_failed)} failed[/yellow]" if surf_failed else ""))
+        for who, why in surf_skipped + surf_failed:
+            console.print(f"  [dim]{who}: {why}[/dim]")
+        if surf_listed:
+            console.print("[dim]OsgId is predicted from the .def, not read from an oisd "
+                          "file. A greyed MapFile has not been written yet; --map "
+                          "writes it.[/dim]")
+        console.print()
+
+    if not listed and not surf_listed:
         sys.exit(1)
 
 
@@ -878,12 +1009,28 @@ def execute_out(args):
         if is_wildcard_case(args.case):
             _list_all_cases(logger)
             return
+        history_error = None
         try:
             rows = survey_time_history(args.case, logger)
         except WriteError as exc:
-            logger.error(str(exc))
+            history_error, rows = exc, []
+        surface_error = None
+        try:
+            surf_rows = survey_output_surfaces(args.case, logger)
+        except WriteError as exc:
+            surface_error, surf_rows = exc, []
+        if not rows and not surf_rows:
+            # Neither kind of block was listable -- report whatever each side
+            # says, deduped (a missing case dir/def file gives the same
+            # message from both).
+            for message in dict.fromkeys(
+                    str(e) for e in (history_error, surface_error) if e):
+                logger.error(message)
             sys.exit(1)
-        _print_survey(args.case, rows)
+        if rows:
+            _print_survey(args.case, rows)
+        if surf_rows:
+            _print_surface_survey(args.case, surf_rows)
         return
 
     # --map alone is True; --map NAME carries the selector as its value.
