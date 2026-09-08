@@ -11,6 +11,14 @@ only a few dozen nodes are wanted.
 This writes those few dozen out as `othd.<set>.map`, so the coordinates file can
 be deleted and the othd stays readable.
 
+An outputSurface block is a different shape of output: its oisd holds one
+aggregate record per timestep for the *whole* surface (totTrac, totMoment, ...),
+not one row per node, so there is no positional row to resolve against the mesh.
+`--map` writes `oisd.<name>.map` for these too, but for a different reason -- not
+to make the data readable (it already carries no ids to resolve), but to record
+which surface it is: the .srf/.nbc it is built from, and the osgId predicted for
+it, none of which the oisd file states either.
+
 Accepts the `*` wildcard case, in which case every case in the `.cases` registry
 is done in turn -- and a case that cannot be done is reported and stepped over
 rather than ending the batch.
@@ -22,11 +30,12 @@ from pathlib import Path
 from ....utils.logger import Logger
 from ....utils.progress import progress_enabled, spinner
 from ....core.parsers.def_parser import (find_def_file, parse_output_time_history,
-                                         parse_node_coordinates)
+                                         parse_output_surfaces, parse_node_coordinates)
 from ...case_iteration import is_wildcard_case, load_cases_from_directory
 
 MAP_HEADER = ["row", "node", "x", "y", "z"]
 POINT_MAP_HEADER = ["row", "x", "y", "z"]
+SURFACE_NODE_HEADER = ["row", "node"]
 
 # How a reader should parameterise a probe set: arc length along a line, two
 # coordinates on a surface, nothing shared between independent points. It cannot
@@ -73,10 +82,11 @@ def _set_name(node_file, problem):
     """'riser.cyl_nodes.nbc' -> 'cyl_nodes' (the part naming the node set).
 
     Only used to let --map NAME be given as the node set, which reads naturally
-    even though maps are named after the block.
+    even though maps are named after the block. '.srf' is included alongside the
+    node-file suffixes so an outputSurface's --map NAME can be given the same way.
     """
     stem = Path(node_file).name
-    for suffix in (".nbc", ".txt", ".dat"):
+    for suffix in (".nbc", ".txt", ".dat", ".srf"):
         if stem.endswith(suffix):
             stem = stem[: -len(suffix)]
             break
@@ -101,6 +111,29 @@ def _oth_ids(blocks, case_dir):
     ids, next_id = {}, 0
     for block in blocks:
         source = block.get("nodes") or block.get("coordinates")
+        if source:
+            path = Path(case_dir) / source
+            if not path.exists() or path.stat().st_size == 0:
+                ids[block["name"]] = None
+                continue
+        ids[block["name"]] = next_id
+        next_id += 1
+    return ids
+
+
+def _osg_ids(blocks, case_dir):
+    """Predict each outputSurface block's osgId -- its position among the surfaces
+    actually written.
+
+    An oisd record carries osgId, not the block's name, and nothing in the .def
+    states the mapping between them either. Mirrors _oth_ids' reasoning exactly:
+    assumed to follow declaration order, skipping a block whose .srf is missing
+    or empty -- the one thing that would stop the solver writing it -- so ids
+    after a skipped block shift down.
+    """
+    ids, next_id = {}, 0
+    for block in blocks:
+        source = block.get("surfaces")
         if source:
             path = Path(case_dir) / source
             if not path.exists() or path.stat().st_size == 0:
@@ -217,6 +250,53 @@ def _read_node_list(path):
     return ids
 
 
+def _srf_sibling_nbc(srf_path):
+    """The .nbc naming the same nodes as `srf_path`'s surface.
+
+    gmshCnvt (modules/gmshCnvt/gmshCnvt.c, writeSrf/writeNbcs) writes both from
+    the same physical-group tag: '<problem>.<tag>.srf' and '<problem>.<tag>.nbc'.
+    The outputSurface block does not name the .nbc directly, so it is found by
+    swapping the .srf's suffix rather than reading it from the .def.
+    """
+    return Path(srf_path).with_suffix('.nbc')
+
+
+def _read_srf_elements(path):
+    """Surface elements from a .srf, in file order: (parentId, elemId, node ids).
+
+    Row layout is `parentElemId elemId node1 node2 ... nodeN`, per gmshCnvt's own
+    writer (writeSrf: iostPutIntN(parentHd->usrId), iostPutIntN(elemHd->usrId),
+    iostPutInts(elemHd->nodeUsrIds, nElemNodes)) -- confirmed against that source,
+    not inferred from the sample alone. N is fixed by the block's declared shape
+    but not assumed here: every row is required to carry the same node count as
+    the first, since a surface mixing shapes would otherwise silently misalign.
+    """
+    rows = []
+    for lineno, raw in enumerate(open(path), start=1):
+        line = raw.split('#', 1)[0].strip()
+        if not line:
+            continue
+        fields = line.split()
+        if len(fields) < 3:
+            raise WriteError(f"{Path(path).name}:{lineno}: expected 'parentId elemId "
+                             "node1 ...', found too few columns")
+        try:
+            parent_id, elem_id = int(fields[0]), int(fields[1])
+            node_ids = [int(f) for f in fields[2:]]
+        except ValueError:
+            raise WriteError(f"{Path(path).name}:{lineno}: '{line}' does not hold "
+                             "integer ids")
+        rows.append((parent_id, elem_id, node_ids))
+    if not rows:
+        raise WriteError(f"{Path(path).name} lists no surface elements")
+    widths = {len(r[2]) for r in rows}
+    if len(widths) != 1:
+        raise WriteError(f"{Path(path).name} mixes element node counts "
+                         f"{sorted(widths)}; expected every row to carry the same "
+                         "number of nodes")
+    return rows
+
+
 def _read_coordinates(crd_path, wanted):
     """Coordinates of `wanted` node ids, in one streamed pass over the .crd.
 
@@ -318,9 +398,73 @@ def _write_point_map(path, block, point_file, points, case_name, problem,
     Path(path).write_text("\n".join(lines) + "\n")
 
 
+def _surface_map_header(block, osg_id, skipped_before, srf_file, n_elements,
+                        nbc_file, n_nodes, case_name, problem):
+    """The '#' block a surface map carries, saying what this surface is and
+    where its oisd data would come from.
+
+    Unlike an othd map, `row` here does not index anything in the oisd itself --
+    an outputSurface writes one aggregate record per timestep for the whole
+    surface, not one per node or element. This exists to say which surface a
+    block is, and what it is built from, none of which the oisd states either.
+    """
+    lines = [
+        "# FlexFlow oisd map",
+        f"# case: {case_name}   problem: {problem or '?'}",
+        f"# outputSurface: \"{block['name']}\"   elementGroup: {block['elementGroup']}"
+        f"   shape: {block['shape']}",
+    ]
+    if block['intgOutFreq'] is not None or block['nodalOutFreq'] is not None:
+        lines.append(f"# intgOutFreq: {block['intgOutFreq']}   "
+                     f"nodalOutFreq: {block['nodalOutFreq']}")
+    if osg_id is not None:
+        basis = (f"{skipped_before} earlier outputSurface(s) not written (its .srf "
+                 "missing or empty)" if skipped_before
+                 else "no earlier outputSurface is skipped")
+        lines += [f"# osgId: {osg_id}",
+                  f"# osgId predicted from the .def, not read from an oisd file: {basis}"]
+    lines += [
+        f"# surfaces: {srf_file} ({n_elements} element(s))",
+        f"# nodes: {nbc_file} ({n_nodes} node(s)) -- derived from the .srf's "
+        "filename (same problem+tag, .nbc suffix); the outputSurface block does "
+        "not name it directly",
+        "# oisd holds one aggregate record per timestep for the whole surface "
+        "(totArea, totTrac, totMoment, avePres, ...), not one row per node or "
+        "element. The rows below are this surface's mesh, not its data -- what a "
+        "reader needs to identify the surface and, later, render it.",
+    ]
+    return lines
+
+
+def _write_surface_map(path, block, srf_file, elements, nbc_file, node_ids,
+                       case_name, problem, osg_id=None, skipped_before=0):
+    """An outputSurface's map: which surface this is, and the mesh it covers.
+
+    Two tables, not one -- nodes (from the .nbc) and elements (from the .srf) --
+    since the two files carry different things and neither's rows index the
+    other's.
+    """
+    lines = _surface_map_header(block, osg_id, skipped_before, srf_file,
+                                len(elements), nbc_file, len(node_ids),
+                                case_name, problem)
+    lines.append("")
+    lines.append(",".join(SURFACE_NODE_HEADER))
+    for row, node in enumerate(node_ids):
+        lines.append(f"{row},{node}")
+    lines.append("")
+    node_cols = [f"node{i + 1}" for i in range(len(elements[0][2]))]
+    lines.append(",".join(["row", "parent", "id"] + node_cols))
+    for row, (parent_id, elem_id, nodes) in enumerate(elements):
+        fields = [row, parent_id, elem_id] + nodes
+        lines.append(",".join(str(v) for v in fields))
+    Path(path).write_text("\n".join(lines) + "\n")
+
+
 def write_case_maps(case_dir, wanted, logger, show_progress=False,
                     probe=None, closed=None):
-    """Build every requested othd map for one case.
+    """Build every requested output map for one case -- othd.<block>.map for
+    each mappable outputTimeHistory block, oisd.<name>.map for each mappable
+    outputSurface block.
 
     Returns {'written': [(path, rows), ...], 'crd': name, 'crd_mb': size}.
     Raises WriteError -- with skip=True when the case simply has nothing to map.
@@ -357,14 +501,32 @@ def write_case_maps(case_dir, wanted, logger, show_progress=False,
                         "record for it")
             continue
         mappable.append((block, source[0], source[1]))
-    if not mappable:
-        raise WriteError(f"{Path(def_file).name} has no outputTimeHistory block whose "
-                         "records can be mapped", skip=True)
+
+    surf_blocks = parse_output_surfaces(def_file)
+    osg_ids = _osg_ids(surf_blocks, case_dir)
+    surf_mappable = []
+    for block in surf_blocks:
+        source = block.get("surfaces")
+        if not source:
+            logger.info(f"skipping outputSurface \"{block['name']}\": names no "
+                        "surfaces file")
+            continue
+        if osg_ids[block["name"]] is None:
+            logger.info(f"skipping outputSurface \"{block['name']}\": {source} is "
+                        "missing or empty, so the solver writes no record for it")
+            continue
+        surf_mappable.append((block, source))
+
+    if not mappable and not surf_mappable:
+        raise WriteError(f"{Path(def_file).name} has no outputTimeHistory or "
+                         "outputSurface block whose records can be mapped", skip=True)
 
     if wanted:
         named = [entry for entry in mappable
                  if wanted in (entry[0]["name"], _set_name(entry[2], problem))]
-        if not named:
+        surf_named = [entry for entry in surf_mappable
+                     if wanted in (entry[0]["name"], _set_name(entry[1], problem))]
+        if not named and not surf_named:
             # Naming a block whose input file is absent is a mistake worth reporting,
             # rather than the silent skip that scanning every block gets.
             for block in blocks:
@@ -373,11 +535,19 @@ def write_case_maps(case_dir, wanted, logger, show_progress=False,
                     raise WriteError(
                         f"outputTimeHistory \"{block['name']}\" names {src}, which is "
                         "missing or empty; the solver writes no record for it")
-            raise WriteError(f"No outputTimeHistory matches '{wanted}'", skip=True)
+            for block in surf_blocks:
+                src = block.get("surfaces")
+                if src and wanted in (block["name"], _set_name(src, problem)):
+                    raise WriteError(
+                        f"outputSurface \"{block['name']}\" names {src}, which is "
+                        "missing or empty; the solver writes no record for it")
+            raise WriteError(f"No outputTimeHistory or outputSurface matches "
+                             f"'{wanted}'", skip=True)
         mappable = named
+        surf_mappable = surf_named
 
     # The mesh is only needed if a nodal block is in play; a case of nothing but
-    # coordinates blocks maps fine without it.
+    # coordinates (and outputSurface) blocks maps fine without it.
     nodal = [(block, source) for block, key, source in mappable if key == "nodes"]
     crd_name, crd_path, crd_mb = None, None, 0.0
     if nodal:
@@ -436,6 +606,32 @@ def write_case_maps(case_dir, wanted, logger, show_progress=False,
             _write_point_map(out, block, source, rows, case_dir.name, problem,
                              oth_id, skipped_before, stale, probe, closed)
         written.append((out, len(rows)))
+
+    surf_resolved = {}
+    for block, source in surf_mappable:
+        source_path = case_dir / source
+        if not source_path.exists():
+            raise WriteError(f"Surfaces file not found: {source_path} "
+                             f"(from outputSurface \"{block['name']}\")")
+        elements = _read_srf_elements(source_path)
+        nbc_path = _srf_sibling_nbc(source_path)
+        if not nbc_path.exists():
+            raise WriteError(f"Node file not found: {nbc_path} (expected alongside "
+                             f"{source}, from outputSurface \"{block['name']}\")")
+        node_ids = _read_node_list(nbc_path)
+        surf_resolved[block["name"]] = (source, elements, nbc_path.name, node_ids)
+
+    surf_order = [b["name"] for b in surf_blocks]
+    for block, source in surf_mappable:
+        srf_file, elements, nbc_file, node_ids = surf_resolved[block["name"]]
+        osg_id = osg_ids[block["name"]]
+        skipped_before = sum(1 for name in surf_order[:surf_order.index(block["name"])]
+                             if osg_ids[name] is None)
+        out = case_dir / f"oisd.{_map_stem(block['name'])}.map"
+        _write_surface_map(out, block, srf_file, elements, nbc_file, node_ids,
+                           case_dir.name, problem, osg_id, skipped_before)
+        written.append((out, len(elements)))
+
     return {"written": written, "crd": crd_name, "crd_mb": crd_mb}
 
 

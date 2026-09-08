@@ -142,6 +142,37 @@ def parse_output_time_history(def_file_path):
     return blocks
 
 
+def parse_output_surfaces(def_file_path):
+    """Every outputSurface block in a .def, in file order.
+
+    Returns a list of dicts with `name`, `surfaces` (the .srf file it names),
+    `elementGroup`, `shape`, `intgOutFreq` and `nodalOutFreq`. Unlike an
+    outputTimeHistory block, an outputSurface writes one aggregate oisd record
+    per timestep for the whole surface -- there is no per-node file to index by,
+    so nothing here plays the role `nodes`/`coordinates` does above.
+    """
+    entries = []
+    for block in parse_blocks(def_file_path, kind='outputSurface'):
+        values = block['values']
+        entry = {
+            'name': block['name'],
+            'surfaces': as_file(values.get('surfaces')),
+            'elementGroup': as_string(values.get('elementGroup')),
+            'shape': as_string(values.get('shape')),
+            'intgOutFreq': None,
+            'nodalOutFreq': None,
+        }
+        for key in ('intgOutFreq', 'nodalOutFreq'):
+            raw = values.get(key)
+            if raw is not None:
+                try:
+                    entry[key] = int(raw)
+                except ValueError:
+                    pass
+        entries.append(entry)
+    return entries
+
+
 def parse_def_file(case_directory, problem_name=None):
     """
     Parse FlexFlow .def file and extract all relevant configuration.

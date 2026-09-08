@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+### ✨ `case out --map` writes `oisd.<name>.map` for outputSurface blocks too
+
+- An outputSurface is a different shape of output from an outputTimeHistory:
+  its oisd holds **one aggregate record per timestep for the whole surface**
+  (`totTrac`, `totMoment`, `totArea`, `avePres`), not one row per node, so
+  there is no positional row to resolve against the mesh the way a nodal
+  othd needs. `oisd.<name>.map` is written anyway, but for a different
+  reason: not to make the oisd readable, but to record **which surface it
+  is** -- the `.srf`/`.nbc` it is built from, and the `osgId` predicted for
+  it, none of which the oisd file states either.
+- Two tables, not one: every node from the `.nbc`, and every element from
+  the `.srf` (`parentId elemId node1...nodeN` -- verified against the actual
+  writer, `gmshCnvt.c`'s `writeSrf`, not guessed from a sample). The `.nbc`
+  is not named in the outputSurface block; it is found by swapping the
+  `.srf`'s suffix, since gmshCnvt writes both from the same physical-group
+  tag.
+- `osgId` is predicted the same way `othId` already is: declaration order
+  among outputSurface blocks, shifted down by one for each earlier block
+  whose `.srf` is missing or empty. An oisd record carries `osgId`, not a
+  name, and nothing else says which block it belongs to.
+- `--map [NAME]` now covers both kinds of block in one pass; `NAME` matches
+  either a block name or its node/point/surface-set name, across both.
+  `--list` is unchanged -- it still surveys outputTimeHistory blocks only.
+
 ### ✨ `field compute wall_shear` / `separation`: where the flow leaves the surface
 
 - **`field compute wall_shear` *(new)*** — viscous wall shear on every surface

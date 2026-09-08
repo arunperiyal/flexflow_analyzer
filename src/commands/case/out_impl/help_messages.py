@@ -21,11 +21,13 @@ Build small derived files from a case's own inputs.
                        Says which blocks are mapped and what each othId holds.
                        With the {Colors.YELLOW}*{Colors.RESET} case it surveys every case in the .cases
                        registry as one table with a Case column -- which is how
-                       you see which cases still need mapping.
+                       you see which cases still need mapping. Does not cover
+                       outputSurface blocks -- see OUTPUT SURFACES below.
     {Colors.YELLOW}--map [NAME]{Colors.RESET}  Write a map for every outputTimeHistory block in the
-                       .def that names a file its records are indexed by.
-                       Give NAME to do just one, matched against the block
-                       name or the node/point-set name.
+                       .def that names a file its records are indexed by, and
+                       for every outputSurface block. Give NAME to do just
+                       one, matched against the block name or the
+                       node/point/surface-set name.
     {Colors.YELLOW}--probe-type TYPE{Colors.RESET}  Declare how the probe set should be read:
                        {Colors.YELLOW}point{Colors.RESET} independent locations, nothing shared between them
                        {Colors.YELLOW}line{Colors.RESET}  ordered samples along a curve -- parameterise by arc length
@@ -100,6 +102,32 @@ Build small derived files from a case's own inputs.
     If an input file is {Colors.BOLD}newer{Colors.RESET} than the case's othd files, those were written
     without it and their ids are lower than the ones predicted here. That is
     reported and noted in the map. Read the ids from the othd and prefer them.
+
+{Colors.BOLD}OUTPUT SURFACES (oisd):{Colors.RESET}
+
+    An outputSurface is a different shape of output: its oisd holds {Colors.BOLD}one
+    aggregate record per timestep for the whole surface{Colors.RESET} (totTrac, totMoment,
+    totArea, avePres, ...), not one row per node -- so there is no positional
+    row to resolve against the mesh the way a nodal othd needs.
+
+    {Colors.YELLOW}oisd.<name>.map{Colors.RESET} is written anyway, but for a different reason: not to
+    make the oisd readable, but to record {Colors.BOLD}which surface it is{Colors.RESET} -- the .srf
+    and .nbc it is built from, and the osgId predicted for it, none of which
+    the oisd file states either. Two tables, not one:
+
+        row,node                              {Colors.DIM}# every node in the .nbc{Colors.RESET}
+        0,2
+        row,parent,id,node1,node2,node3,node4  {Colors.DIM}# every element in the .srf{Colors.RESET}
+        0,1482577,34858,2,220,40798,812
+
+    {Colors.YELLOW}parent{Colors.RESET} is the volume element this face belongs to (elementGroup), {Colors.YELLOW}id{Colors.RESET}
+    the surface element's own id. Both come straight from the .srf gmshCnvt
+    wrote; nodeN count matches the block's declared shape.
+
+    {Colors.YELLOW}# osgId: <n>{Colors.RESET} is predicted the same way {Colors.YELLOW}othId{Colors.RESET} is: declaration order among
+    outputSurface blocks, shifted down by one for each earlier block whose
+    .srf is missing or empty. An oisd record carries osgId, not a name, and
+    nothing else says which block it belongs to.
 
 {Colors.BOLD}PROBE GEOMETRY:{Colors.RESET}
 

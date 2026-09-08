@@ -11,10 +11,13 @@ import os
 
 import pytest
 
-from src.core.parsers.def_parser import parse_output_time_history, parse_node_coordinates
+from src.core.parsers.def_parser import (parse_output_time_history, parse_output_surfaces,
+                                         parse_node_coordinates)
 from src.commands.case.out_impl.command import (execute_out, WriteError,
                                                 _read_coordinate_list,
+                                                write_case_maps,
                                                 survey_time_history)
+from src.utils.logger import Logger
 
 DEF_TEMPLATE = """
 nodeCoordinates {{
@@ -69,6 +72,82 @@ outputTimeHistory( "surface_probe" ) {{
     outputFrequency = 1
 }}
 """
+
+# an outputSurface block alongside a nodal one, so oisd and othd handling can be
+# checked side by side without either one masking a bug in the other
+DEF_WITH_SURFACE = """
+nodeCoordinates {{
+    coordinates     = File( "{crd}" )
+}}
+outputSurface( "cylinder_body" ) {{
+    surfaces        = File( "riser.cyl.srf" )
+    elementGroup    = "interior"
+    shape           = fourNodeQuad
+    intgOutFreq     = 1
+    nodalOutFreq    = 1
+}}
+outputTimeHistory( "riser_probe" ) {{
+    type            = nodal
+    nodes           = File( "riser.cyl_nodes.nbc" )
+    outputFrequency = 1
+}}
+"""
+
+# two outputSurface blocks, so osgId prediction (declaration order, shifted by a
+# missing .srf) can be checked the same way _oth_ids already is
+DEF_TWO_SURFACES = """
+outputSurface( "surf_a" ) {{
+    surfaces        = File( "riser.a.srf" )
+    elementGroup    = "interior"
+    shape           = fourNodeQuad
+}}
+outputSurface( "surf_b" ) {{
+    surfaces        = File( "riser.b.srf" )
+    elementGroup    = "interior"
+    shape           = fourNodeQuad
+}}
+"""
+
+
+@pytest.fixture
+def surface_case(tmp_path):
+    """A case with one outputSurface block (3 quad elements) and one nodal block."""
+    (tmp_path / "simflow.config").write_text("problem = riser\n")
+    (tmp_path / "riser.def").write_text(DEF_WITH_SURFACE.format(crd="riser.crd"))
+    (tmp_path / "riser.cyl_nodes.nbc").write_text("2\n18\n")
+    (tmp_path / "riser.crd").write_text("".join(
+        f"{n} {n / 10:.16e} {n / 100:.16e} {-n / 100:.16e}\n" for n in range(1, 20)))
+    # parentId elemId node1 node2 node3 node4 -- a 3-element strip sharing edges,
+    # matching gmshCnvt's writeSrf row layout
+    (tmp_path / "riser.cyl.srf").write_text(
+        "100 1 1 2 3 4\n"
+        "102 2 4 3 5 6\n"
+        "104 3 6 5 7 8\n"
+    )
+    # deliberately not sorted/contiguous, like the .nbc fixtures above
+    (tmp_path / "riser.cyl.nbc").write_text("4\n1\n2\n3\n8\n5\n6\n7\n")
+    return tmp_path
+
+
+def read_surface_map(path):
+    """An oisd map's two tables (nodes, then elements), split on the blank line
+    between them."""
+    comments = [ln for ln in path.read_text().splitlines() if ln.startswith("#")]
+    sections, current = [], []
+    for ln in path.read_text().splitlines():
+        if ln.startswith("#"):
+            continue
+        if not ln.strip():
+            if current:
+                sections.append(current)
+                current = []
+            continue
+        current.append(ln)
+    if current:
+        sections.append(current)
+    node_header, node_rows = sections[0][0].split(","), [ln.split(",") for ln in sections[0][1:]]
+    elem_header, elem_rows = sections[1][0].split(","), [ln.split(",") for ln in sections[1][1:]]
+    return comments, (node_header, node_rows), (elem_header, elem_rows)
 
 
 @pytest.fixture
@@ -356,6 +435,136 @@ class TestMapNaming:
         execute_out(make_args(case, map="cyl_nodes"))
         assert (case / "othd.riser_probe.map").exists()
         assert not (case / "othd.riser_tip.map").exists()
+
+
+class TestOutputSurfaceParsing:
+    """outputSurface writes an aggregate oisd record, not a positional one --
+    there is no nodes/coordinates field to key records by."""
+
+    def test_finds_every_output_surface(self, surface_case):
+        blocks = parse_output_surfaces(str(surface_case / "riser.def"))
+        assert [b["name"] for b in blocks] == ["cylinder_body"]
+        block = blocks[0]
+        assert block["surfaces"] == "riser.cyl.srf"
+        assert block["elementGroup"] == "interior"
+        assert block["shape"] == "fourNodeQuad"
+        assert block["intgOutFreq"] == 1
+        assert block["nodalOutFreq"] == 1
+
+    def test_a_def_with_no_output_surface_gives_an_empty_list(self, case):
+        assert parse_output_surfaces(str(case / "riser.def")) == []
+
+
+class TestOisdMap:
+    """oisd.<name>.map: not a row->node lookup like othd (an outputSurface's oisd
+    holds one aggregate record per timestep for the whole surface), but the
+    surface's mesh -- the .srf/.nbc it is built from -- since nothing else names
+    it."""
+
+    def test_writes_a_map_named_after_the_block(self, surface_case):
+        execute_out(make_args(surface_case))
+        assert (surface_case / "oisd.cylinder_body.map").exists()
+        assert (surface_case / "othd.riser_probe.map").exists()   # othd unaffected
+
+    def test_node_table_preserves_the_nbc_order(self, surface_case):
+        execute_out(make_args(surface_case))
+        _, (node_header, node_rows), _ = read_surface_map(surface_case / "oisd.cylinder_body.map")
+        assert node_header == ["row", "node"]
+        assert [r[1] for r in node_rows] == ["4", "1", "2", "3", "8", "5", "6", "7"]
+
+    def test_element_table_preserves_the_srf_order_and_ids(self, surface_case):
+        execute_out(make_args(surface_case))
+        _, _, (elem_header, elem_rows) = read_surface_map(surface_case / "oisd.cylinder_body.map")
+        assert elem_header == ["row", "parent", "id", "node1", "node2", "node3", "node4"]
+        assert elem_rows[0] == ["0", "100", "1", "1", "2", "3", "4"]
+        assert elem_rows[1] == ["1", "102", "2", "4", "3", "5", "6"]
+        assert elem_rows[2] == ["2", "104", "3", "6", "5", "7", "8"]
+
+    def test_header_records_the_block_and_its_files(self, surface_case):
+        execute_out(make_args(surface_case))
+        comments, _, _ = read_surface_map(surface_case / "oisd.cylinder_body.map")
+        blob = "\n".join(comments)
+        assert 'outputSurface: "cylinder_body"' in blob
+        assert "elementGroup: interior" in blob
+        assert "shape: fourNodeQuad" in blob
+        assert "intgOutFreq: 1" in blob and "nodalOutFreq: 1" in blob
+        assert "osgId: 0" in blob
+        assert "surfaces: riser.cyl.srf (3 element(s))" in blob
+        assert "nodes: riser.cyl.nbc (8 node(s))" in blob
+
+    def test_a_missing_srf_is_skipped_without_breaking_othd(self, tmp_path):
+        (tmp_path / "simflow.config").write_text("problem = riser\n")
+        (tmp_path / "riser.def").write_text(DEF_WITH_SURFACE.format(crd="riser.crd"))
+        (tmp_path / "riser.cyl_nodes.nbc").write_text("2\n18\n")
+        (tmp_path / "riser.crd").write_text("".join(
+            f"{n} {n / 10:.16e} {n / 100:.16e} {-n / 100:.16e}\n" for n in range(1, 20)))
+        # riser.cyl.srf deliberately absent
+        execute_out(make_args(tmp_path))
+        assert (tmp_path / "othd.riser_probe.map").exists()
+        assert not (tmp_path / "oisd.cylinder_body.map").exists()
+
+    def test_a_missing_sibling_nbc_raises(self, surface_case):
+        (surface_case / "riser.cyl.nbc").unlink()
+        with pytest.raises(WriteError, match="Node file not found"):
+            write_case_maps(str(surface_case), None, Logger())
+
+    def test_mismatched_element_node_counts_raise(self, surface_case):
+        (surface_case / "riser.cyl.srf").write_text(
+            "100 1 1 2 3 4\n"
+            "102 2 4 3 5\n"          # one node short
+        )
+        with pytest.raises(WriteError, match="mixes element node counts"):
+            write_case_maps(str(surface_case), None, Logger())
+
+    def test_the_selector_matches_the_block_name(self, surface_case):
+        execute_out(make_args(surface_case, map="cylinder_body"))
+        assert (surface_case / "oisd.cylinder_body.map").exists()
+        assert not (surface_case / "othd.riser_probe.map").exists()
+
+    def test_the_selector_also_matches_the_srf_derived_set_name(self, surface_case):
+        """--map cyl reads naturally even though the file is block-named."""
+        execute_out(make_args(surface_case, map="cyl"))
+        assert (surface_case / "oisd.cylinder_body.map").exists()
+        assert not (surface_case / "othd.riser_probe.map").exists()
+
+    def test_an_unmatched_selector_mentions_both_kinds_of_block(self, surface_case, capsys):
+        with pytest.raises(SystemExit):
+            execute_out(make_args(surface_case, map="nonexistent_thing"))
+        captured = capsys.readouterr()
+        message = flat(captured.err + captured.out)
+        assert "outputTimeHistory or outputSurface matches" in message
+
+
+
+class TestOsgIdPrediction:
+    """Mirrors TestStalePrediction/_oth_ids: nothing in a .def or an oisd file
+    states which osgId a block writes to, so it is predicted from declaration
+    order, shifted by any block whose .srf is missing."""
+
+    @staticmethod
+    def _write_two_surfaces(tmp_path, skip_a=False, skip_b=False):
+        (tmp_path / "simflow.config").write_text("problem = riser\n")
+        (tmp_path / "riser.def").write_text(DEF_TWO_SURFACES)
+        srf = "100 1 1 2 3 4\n"
+        if not skip_a:
+            (tmp_path / "riser.a.srf").write_text(srf)
+            (tmp_path / "riser.a.nbc").write_text("1\n2\n3\n4\n")
+        if not skip_b:
+            (tmp_path / "riser.b.srf").write_text(srf)
+            (tmp_path / "riser.b.nbc").write_text("1\n2\n3\n4\n")
+
+    def test_both_present_get_sequential_ids(self, tmp_path):
+        self._write_two_surfaces(tmp_path)
+        execute_out(make_args(tmp_path))
+        assert "# osgId: 0" in (tmp_path / "oisd.surf_a.map").read_text()
+        assert "# osgId: 1" in (tmp_path / "oisd.surf_b.map").read_text()
+
+    def test_a_missing_earlier_srf_shifts_the_later_id_down(self, tmp_path):
+        self._write_two_surfaces(tmp_path, skip_a=True)
+        execute_out(make_args(tmp_path))
+        assert not (tmp_path / "oisd.surf_a.map").exists()
+        assert "# osgId: 0" in (tmp_path / "oisd.surf_b.map").read_text()
+        assert "1 earlier outputSurface(s) not written" in (tmp_path / "oisd.surf_b.map").read_text()
 
 
 class TestList:
