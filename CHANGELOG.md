@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+### ✨ Plot -> New builds panels from oisd.<name>.map too
+
+- An outputSurface's data is a single aggregate time series for the whole
+  surface (`totTrac`, `totMoment`, `totArea`, `avePres`, ...), so its
+  `oisd.<name>.map` entries appear in the same map list `othd.<block>.map`
+  entries already do (badged **Surface**), and picking one skips the
+  node/point picker entirely -- there is only ever one row -- straight to
+  the variable checkboxes.
+- A surface's traces default into their own panel, separate from a case's
+  nodal traces (mirroring how a spatial trace already gets its own panel
+  kind): a nodal displacement and a surface's totArea rarely share a sane
+  y-axis, so auto-overlaying them by default would likely just be
+  confusing. Still overlayable onto any panel deliberately, via the
+  existing panel-choice dropdown.
+- `othId` and `osgId` are both plain integers starting at 0 -- a case can
+  have an outputTimeHistory at group 0 *and* an outputSurface at group 0.
+  Every layer that used to assume one flat `(case, group)` namespace now
+  carries which kind alongside it (loader's cache key, `/meta`'s `surfaces`
+  list kept separate from `groups`, `/history`'s new `kind` param, each
+  trace's `source`), so the two can never collide or get batched into the
+  same request.
+
 ### ✨ `case out --map` writes `oisd.<name>.map` for outputSurface blocks too
 
 - An outputSurface is a different shape of output from an outputTimeHistory:

@@ -21,11 +21,15 @@ const PlotArea = (() => {
     return mathJaxPromise;
   }
 
-  function groupKey(t) { return `${t.case}\u0000${t.group}`; }
+  // source ('othd' or 'oisd') is part of the key: othId and osgId are both
+  // plain integers starting at 0, so a plain (case, group) key would batch a
+  // surface trace and a nodal trace of the same case+group into one
+  // /history request neither is right for.
+  function groupKey(t) { return `${t.case} ${t.source || 'othd'} ${t.group}`; }
 
-  async function fetchHistory(caseName, group, rows, columns) {
+  async function fetchHistory(caseName, group, rows, columns, source = 'othd') {
     const params = new URLSearchParams({
-      group: String(group), columns: columns.join(','), rows: rows.join(','),
+      group: String(group), columns: columns.join(','), rows: rows.join(','), kind: source,
     });
     const res = await fetch(`/api/cases/${encodeURIComponent(caseName)}/history?${params}`);
     const data = await res.json();
@@ -225,7 +229,8 @@ const PlotArea = (() => {
       for (const t of panel.traces) {
         const key = groupKey(t);
         if (!groups.has(key)) {
-          groups.set(key, { case: t.case, group: t.group, rows: new Set(), columns: new Set() });
+          groups.set(key, { case: t.case, group: t.group, source: t.source || 'othd',
+                            rows: new Set(), columns: new Set() });
         }
         const g = groups.get(key);
         g.rows.add(t.row);
@@ -237,7 +242,7 @@ const PlotArea = (() => {
     const spatialResults = new Map();   // trace -> Map(row -> value)
     try {
       for (const [key, g] of groups) {
-        results.set(key, await fetchHistory(g.case, g.group, [...g.rows], [...g.columns]));
+        results.set(key, await fetchHistory(g.case, g.group, [...g.rows], [...g.columns], g.source));
       }
       for (const t of spatialTraces) {
         const data = await fetchSpatial(t);
@@ -323,10 +328,14 @@ const PlotArea = (() => {
           const symbol = markerSymbolFor(t, false);
           const logicalX = data ? data.times : [];
           const logicalY = s ? s.values : [];
+          // A surface trace's row is always 0 -- "r0" would say nothing a
+          // reader could use, unlike a nodal trace's row. The block name
+          // (e.g. "cylinder_body") identifies it instead.
+          const name = t.source === 'oisd' ? `${t.case} ${t.block} ${t.col}` : `${t.case} r${t.row} ${t.col}`;
           const trace = {
             x: swap ? logicalY : logicalX, y: swap ? logicalX : logicalY,
             xaxis: xref, yaxis: yref, mode: symbol ? 'lines+markers' : 'lines', type: 'scatter',
-            name: `${t.case} r${t.row} ${t.col}`,
+            name,
             line: lineFor(t),
           };
           addMarker(trace, t, symbol, 6, style, logicalX.length);

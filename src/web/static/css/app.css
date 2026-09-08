@@ -336,6 +336,19 @@ body {
 .badge { font-size: 11px; margin-left: auto; }
 .badge.ok { color: #059669; }
 .badge.warn { color: #d97706; }
+/* outputSurface's map list entries -- a whole-surface aggregate, not a
+   node/point probe, badged so it reads as a different kind of choice
+   rather than an unusual othd map. */
+.map-kind {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #7c3aed;
+  background: #f3e8ff;
+  border-radius: 3px;
+  padding: 1px 5px;
+}
 #np-picker { border: 1px solid #e2e8f0; border-radius: 4px; margin: 8px 0; }
 .view-row { display: flex; align-items: center; gap: 12px; }
 .view-row select { flex: 1; }

@@ -34,8 +34,12 @@ def history(name):
     if len(rows) > MAX_ROWS:
         return jsonify({'error': f'at most {MAX_ROWS} rows per request'}), 400
 
+    kind = request.args.get('kind', 'othd')
+    if kind not in ('othd', 'oisd'):
+        return jsonify({'error': f"kind must be 'othd' or 'oisd', got '{kind}'"}), 400
+
     try:
-        series_meta = loader.meta(case_dir)
+        series_meta = loader.meta(case_dir, kind=kind)
     except FileNotFoundError as exc:
         return jsonify({'error': str(exc)}), 404
 
@@ -53,7 +57,7 @@ def history(name):
 
     needed_vars = sorted({column_map[c][0] for c in columns})
     try:
-        meta, arrays = loader.load(case_dir, needed_vars, group=group)
+        meta, arrays = loader.load(case_dir, needed_vars, group=group, kind=kind)
     except KeyError as exc:
         return jsonify({'error': str(exc)}), 400
 

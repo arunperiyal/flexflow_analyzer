@@ -3,8 +3,15 @@
 Per §9 of docs/WEBAPP_PLAN.md: SeriesMeta and loaded arrays are cached per
 case, keyed additionally by (group, columns) for the arrays, bounded to a
 handful of cases (panels pin two at once for a comparison), and re-read when
-the othd mtime moves. The lock is held across the whole scan/load so two tabs
+the mtime moves. The lock is held across the whole scan/load so two tabs
 opening the same case cannot start the same parse twice.
+
+`kind` ('othd' or 'oisd') is part of the cache key, not folded into one scan:
+series.scan() assumes every path it is given is the same kind (SeriesMeta.kind
+is read off the first path alone), and othId/osgId are both plain integers
+starting at 0 -- scanning both kinds' files together would silently let an
+outputSurface's group 0 collide with an outputTimeHistory's group 0. Every
+case is really *two* independent series, read and cached separately.
 """
 
 import threading
@@ -15,6 +22,11 @@ from typing import Optional
 from src.core.readers import series
 
 DEFAULT_MAX_CASES = 3
+
+_GLOBS = {
+    'othd': ('*.othd', 'othd_files/*.othd'),
+    'oisd': ('*.oisd', 'oisd_files/*.oisd'),
+}
 
 
 class _CacheEntry:
@@ -27,24 +39,25 @@ class _CacheEntry:
 class Loader:
     def __init__(self, max_cases: int = DEFAULT_MAX_CASES):
         self._max_cases = max_cases
-        self._cache: "OrderedDict[str, _CacheEntry]" = OrderedDict()
+        self._cache: "OrderedDict[tuple, _CacheEntry]" = OrderedDict()
         self._lock = threading.Lock()
 
     @staticmethod
-    def _othd_paths(case_dir: Path) -> list:
+    def _paths(case_dir: Path, kind: str) -> list:
         case_dir = Path(case_dir)
-        return sorted(case_dir.glob('*.othd')) + sorted(case_dir.glob('othd_files/*.othd'))
+        flat, archived = _GLOBS[kind]
+        return sorted(case_dir.glob(flat)) + sorted(case_dir.glob(archived))
 
     @staticmethod
     def _newest_mtime(paths: list) -> float:
         return max((p.stat().st_mtime for p in paths), default=0.0)
 
-    def _meta_locked(self, case_dir: Path):
-        paths = self._othd_paths(case_dir)
+    def _meta_locked(self, case_dir: Path, kind: str):
+        paths = self._paths(case_dir, kind)
         if not paths:
-            raise FileNotFoundError(f"no .othd files under {case_dir}")
+            raise FileNotFoundError(f"no .{kind} files under {case_dir}")
         mtime = self._newest_mtime(paths)
-        key = str(case_dir)
+        key = (str(case_dir), kind)
         entry = self._cache.get(key)
         if entry is None or entry.mtime != mtime:
             entry = _CacheEntry()
@@ -56,19 +69,19 @@ class Loader:
             self._cache.popitem(last=False)
         return entry
 
-    def meta(self, case_dir):
+    def meta(self, case_dir, kind: str = 'othd'):
         with self._lock:
-            return self._meta_locked(Path(case_dir)).meta
+            return self._meta_locked(Path(case_dir), kind).meta
 
-    def load(self, case_dir, names: list, group: Optional[int] = None):
+    def load(self, case_dir, names: list, group: Optional[int] = None, kind: str = 'othd'):
         """(SeriesMeta, {name: ndarray}) for `names` in `group` (default group if None)."""
         case_dir = Path(case_dir)
         with self._lock:
-            entry = self._meta_locked(case_dir)
+            entry = self._meta_locked(case_dir, kind)
             group = entry.meta.default_group if group is None else group
             cache_key = (group, tuple(sorted(names)))
             if cache_key not in entry.arrays:
-                paths = self._othd_paths(case_dir)
+                paths = self._paths(case_dir, kind)
                 entry.arrays[cache_key] = series.load(paths, sorted(names), entry.meta, group)
             return entry.meta, entry.arrays[cache_key]
 

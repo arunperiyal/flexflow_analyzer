@@ -5,8 +5,8 @@ Writes a map with the same functions the CLI uses
 is actually on disk, not a hand-typed fixture that could drift from the format.
 """
 
-from src.commands.case.out_impl.command import _write_node_map, _write_point_map
-from src.web.services.mapfile import list_maps, parse_map
+from src.commands.case.out_impl.command import _write_node_map, _write_point_map, _write_surface_map
+from src.web.services.mapfile import list_maps, parse_map, list_surface_maps, parse_surface_map
 
 
 def test_parses_a_nodal_map_with_probe_and_othid(tmp_path):
@@ -65,3 +65,52 @@ def test_map_with_no_probe_declared_reads_as_none(tmp_path):
     assert parsed.probe is None
     assert parsed.closed is None
     assert parsed.oth_id is None
+
+
+def _surface_block(name='cylinder_body'):
+    return {'name': name, 'elementGroup': 'interior', 'shape': 'fourNodeQuad',
+            'intgOutFreq': 1, 'nodalOutFreq': 1}
+
+
+def test_parses_a_surface_map(tmp_path):
+    elements = [(100, 1, [1, 2, 3, 4]), (102, 2, [4, 3, 5, 6])]
+    node_ids = [4, 1, 2, 3, 5, 6]
+    coords = {n: (f'{n / 10:.1f}', f'{n / 100:.2f}', f'{-n / 100:.2f}') for n in node_ids}
+    out = tmp_path / 'oisd.cylinder_body.map'
+    _write_surface_map(out, _surface_block(), 'riser.cyl.srf', elements, 'riser.cyl.nbc',
+                       node_ids, 'riser.crd', coords, 'BR0SG0U1P0', 'riser', osg_id=0,
+                       skipped_before=0)
+
+    parsed = parse_surface_map(out)
+    assert parsed.block == 'cylinder_body'
+    assert parsed.element_group == 'interior'
+    assert parsed.shape == 'fourNodeQuad'
+    assert parsed.osg_id == 0
+    assert parsed.srf_file == 'riser.cyl.srf' and parsed.srf_count == 2
+    assert parsed.nbc_file == 'riser.cyl.nbc' and parsed.nbc_count == 6
+
+    assert [n['node'] for n in parsed.nodes] == node_ids       # .nbc order preserved
+    assert parsed.nodes[0]['x'] == 0.4 and parsed.nodes[0]['y'] == 0.04
+
+    assert [e['id'] for e in parsed.elements] == [1, 2]
+    assert parsed.elements[0]['parent'] == 100
+    assert parsed.elements[1]['nodes'] == [4, 3, 5, 6]
+
+
+def test_surface_map_with_no_predicted_osgid(tmp_path):
+    """osgId is None when the block's .srf was missing/empty at prediction
+    time -- same as othId for an othd block (see _oth_ids)."""
+    out = tmp_path / 'oisd.cylinder_body.map'
+    _write_surface_map(out, _surface_block(), 'riser.cyl.srf', [(1, 1, [1, 2, 3, 4])],
+                       'riser.cyl.nbc', [1, 2, 3, 4], 'riser.crd',
+                       {n: ('0', '0', '0') for n in (1, 2, 3, 4)}, 'BR0', 'riser',
+                       osg_id=None)
+    parsed = parse_surface_map(out)
+    assert parsed.osg_id is None
+
+
+def test_list_surface_maps_sorted_by_name_and_not_confused_with_node_maps(tmp_path):
+    for name in ('oisd.b.map', 'oisd.a.map', 'othd.z.map'):
+        (tmp_path / name).write_text('# x\nrow,node,x,y,z\n0,1,0,0,0\n\nrow,parent,id,node1\n0,1,1,1\n')
+    found = [p.name for p in list_surface_maps(tmp_path)]
+    assert found == ['oisd.a.map', 'oisd.b.map']

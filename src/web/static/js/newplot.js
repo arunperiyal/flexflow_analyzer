@@ -66,7 +66,17 @@ const NewPlot = (() => {
       return;
     }
 
-    const rows = maps.map(m => `
+    const rows = maps.map(m => m.kind === 'surface' ? `
+      <div class="candidate-row map-row">
+        <input type="radio" name="np-map" value="${m.file}" id="map-${m.file}">
+        <label for="map-${m.file}">
+          <span class="map-file">${m.file}</span>
+          <span class="map-kind">Surface</span>
+          <span class="map-meta">${m.shape || '?'} &middot; ${m.elements} element(s) &middot; osgId ${m.osg_id ?? '?'}</span>
+          ${badge(m.osg_id_ok, 'osgId matches the oisd', "osgId does not match the oisd's real groups — read them before trusting it")}
+        </label>
+      </div>
+    ` : `
       <div class="candidate-row map-row">
         <input type="radio" name="np-map" value="${m.file}" id="map-${m.file}">
         <label for="map-${m.file}">
@@ -135,8 +145,14 @@ const NewPlot = (() => {
   }
 
   function groupForMap() {
+    const header = currentMapData.header;
+    if (header.kind === 'surface') {
+      if (!currentCaseMeta || !currentCaseMeta.surfaces.length) return null;
+      const wanted = header.osg_id;
+      return currentCaseMeta.surfaces.find(g => g.osgId === wanted) || currentCaseMeta.surfaces[0];
+    }
     if (!currentCaseMeta || !currentCaseMeta.groups.length) return null;
-    const wanted = currentMapData.header.oth_id;
+    const wanted = header.oth_id;
     return currentCaseMeta.groups.find(g => g.othId === wanted) || currentCaseMeta.groups[0];
   }
 
@@ -144,6 +160,21 @@ const NewPlot = (() => {
     const detail = document.getElementById('np-detail-section');
     const header = currentMapData.header;
     const group = groupForMap();
+
+    // A surface has exactly one row -- the whole surface -- so there is
+    // nothing for a picker to draw, same shape as the "point" case below but
+    // worded for what it actually is rather than reusing "row".
+    if (header.kind === 'surface') {
+      selectedRows = new Set([0]);
+      detail.innerHTML = `
+        <label>Surface</label>
+        <div class="empty">Whole surface &mdash; ${header.block} (osgId ${header.osg_id ?? '?'})</div>
+        ${renderVariablesHtml(group, false)}
+      `;
+      wireVariablesAndAdd(group);
+      updateAddButton();
+      return;
+    }
 
     if (header.probe === 'point' || !currentMapData.views.length) {
       const row = currentMapData.rows[0];
@@ -261,11 +292,17 @@ const NewPlot = (() => {
   ];
 
   function renderVariablesHtml(group, allowSpatial) {
-    if (!group) return '<div class="error">No time-history group found for this case.</div>';
+    if (!group) {
+      return '<div class="error">No time-history group found for this case.</div>';
+    }
     const header = currentMapData.header;
-    const mismatch = (header.oth_id !== null && header.oth_id !== group.othId)
-      ? `<div class="error">Map predicts othId ${header.oth_id}, but the othd only wrote ` +
-        `group ${group.othId} &mdash; using that instead.</div>`
+    const isSurface = header.kind === 'surface';
+    const groupId = isSurface ? group.osgId : group.othId;
+    const predictedId = isSurface ? header.osg_id : header.oth_id;
+    const idLabel = isSurface ? 'osgId' : 'othId';
+    const mismatch = (predictedId !== null && predictedId !== groupId)
+      ? `<div class="error">Map predicts ${idLabel} ${predictedId}, but the ` +
+        `${isSurface ? 'oisd' : 'othd'} only wrote group ${groupId} &mdash; using that instead.</div>`
       : '';
     const cols = group.columns
       .map(c => `<label class="var-check"><input type="checkbox" class="np-column" value="${c}"> ${c}</label>`)
@@ -280,7 +317,7 @@ const NewPlot = (() => {
     return `
       ${mismatch}
       ${kindRow}
-      <label>Variables (othId ${group.othId})</label>
+      <label>Variables (${idLabel} ${groupId})</label>
       <div class="var-list">${cols}</div>
       <div id="np-spatial-options"></div>
       <label for="np-panel">Panel</label>
@@ -409,6 +446,11 @@ const NewPlot = (() => {
               { stat, t1, t2, axLabel }, panelChoice);
           }
         }
+      }
+    } else if (currentMapData.header.kind === 'surface') {
+      for (const column of columns) {
+        PlotWorkspace.addSurfaceTrace(currentCaseName, group.osgId, currentMapData.header.block,
+          column, panelChoice);
       }
     } else {
       const nodeOf = (row) => {
