@@ -27,7 +27,16 @@
   name, and nothing else says which block it belongs to.
 - `--map [NAME]` now covers both kinds of block in one pass; `NAME` matches
   either a block name or its node/point/surface-set name, across both.
-  `--list` is unchanged -- it still surveys outputTimeHistory blocks only.
+- `--list` now surveys outputSurface blocks too, in a second table (`Name,
+  File, OsgId, ElementGroup, Shape, MapFile`) -- separate from the
+  outputTimeHistory one rather than shared columns, since neither table's
+  columns (`OthId`/`Type`/`Probe` vs. `OsgId`/`ElementGroup`/`Shape`) mean
+  anything to the other. Printed only for a case that actually has one, so a
+  registry where nothing uses outputSurface yet sees no extra, empty-handed
+  section -- a genuine failure (missing case dir, unreadable `.def`) still
+  surfaces regardless. Fixes a related bug: `--list` used to raise "declares
+  no outputTimeHistory block" and list nothing at all for a case whose only
+  declared output was an outputSurface block.
 
 ### ✨ `field compute wall_shear` / `separation`: where the flow leaves the surface
 

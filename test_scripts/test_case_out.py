@@ -16,7 +16,8 @@ from src.core.parsers.def_parser import (parse_output_time_history, parse_output
 from src.commands.case.out_impl.command import (execute_out, WriteError,
                                                 _read_coordinate_list,
                                                 write_case_maps,
-                                                survey_time_history)
+                                                survey_time_history,
+                                                survey_output_surfaces)
 from src.utils.logger import Logger
 
 DEF_TEMPLATE = """
@@ -656,6 +657,69 @@ class TestList:
         assert "Name" in out and "OthId" in out and "MapFile" in out and "Probe" in out
         assert "riser_probe" in out
         assert "predicted from the .def" in out       # never shown as measured
+
+
+class TestSurfaceList:
+    """`case out --list` also surveys outputSurface blocks, in a separate
+    table -- OsgId/ElementGroup/Shape have no counterpart in the
+    outputTimeHistory table, and Type/Probe have none here."""
+
+    def test_reports_the_declared_surface(self, surface_case):
+        rows = survey_output_surfaces(surface_case, None)
+        assert [r["name"] for r in rows] == ["cylinder_body"]
+        row = rows[0]
+        assert row["file"] == "riser.cyl.srf"
+        assert row["elementGroup"] == "interior"
+        assert row["shape"] == "fourNodeQuad"
+        assert row["osg_id"] == 0
+        assert row["map"] == "oisd.cylinder_body.map"
+
+    def test_says_whether_a_map_exists(self, surface_case):
+        before = survey_output_surfaces(surface_case, None)[0]
+        assert not before["map_exists"]
+
+        execute_out(make_args(surface_case))
+        after = survey_output_surfaces(surface_case, None)[0]
+        assert after["map_exists"]
+
+    def test_a_case_with_no_output_surface_is_a_skip(self, case):
+        with pytest.raises(WriteError) as exc:
+            survey_output_surfaces(case, None)
+        assert exc.value.skip is True
+
+    def test_a_surface_only_case_can_still_be_listed(self, tmp_path):
+        """The bug this fixes: --list used to error out entirely ('declares no
+        outputTimeHistory block') on a case whose only declared output is an
+        outputSurface block."""
+        (tmp_path / "simflow.config").write_text("problem = riser\n")
+        (tmp_path / "riser.def").write_text("""
+outputSurface( "surf_a" ) {
+    surfaces        = File( "riser.a.srf" )
+    elementGroup    = "interior"
+    shape           = fourNodeQuad
+}
+""")
+        (tmp_path / "riser.a.srf").write_text("100 1 1 2 3 4\n")
+        execute_out(make_args(tmp_path, list=True))   # must not exit/raise
+        with pytest.raises(WriteError) as exc:
+            survey_time_history(tmp_path, None)
+        assert exc.value.skip is True                 # the other side is still a skip
+
+    def test_both_tables_print_for_a_case_with_both(self, surface_case, capsys):
+        # Row/header content (e.g. "cylinder_body", "ElementGroup") is checked
+        # against the returned data above, not the rendered table -- rich
+        # truncates a narrow test console's cells with an ellipsis rather than
+        # wrapping, which a plain substring check cannot survive.
+        execute_out(make_args(surface_case, list=True))
+        out = flat(capsys.readouterr().out)
+        assert "outputTimeHistory in" in out
+        assert "outputSurface in" in out
+        assert "OsgId" in out
+
+    def test_no_surface_section_for_a_case_with_none(self, case, capsys):
+        execute_out(make_args(case, list=True))
+        out = flat(capsys.readouterr().out)
+        assert "outputSurface in" not in out
 
 
 class TestProbeDeclaration:
