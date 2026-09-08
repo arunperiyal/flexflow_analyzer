@@ -164,8 +164,9 @@ class CaseCommand(BaseCommand):
                                        'file, predicted othId, type, map file and probe')
         write_parser.add_argument('--map', dest='map', nargs='?',
                                   const=True, default=False, metavar='NAME',
-                                  help='Write a node map per outputTimeHistory block; '
-                                       'NAME selects one by block or node/point-set name')
+                                  help='Write a map per outputTimeHistory block (a node '
+                                       'map) and outputSurface block (its mesh); NAME '
+                                       'selects one by block or node/point/surface-set name')
         # Validated in the command, not with choices=: argparse's rejection surfaces
         # here as "Unknown subcommand", which points at the wrong thing entirely.
         write_parser.add_argument('--probe-type', dest='probe_type', type=str,

@@ -219,7 +219,7 @@ class FlexFlowCompleter(Completer):
         ('case', 'out'): {
             **_COMMON_FLAGS,
             '--list':       'Table of the case\'s outputTimeHistory blocks',
-            '--map':        'Write node maps for outputTimeHistory blocks',
+            '--map':        'Write maps for outputTimeHistory and outputSurface blocks',
             '--probe-type': 'Declare the probe geometry: point|line|helix|surface|cloud',
             '--closed':     'With --probe-type line or helix: the curve joins up',
         },
