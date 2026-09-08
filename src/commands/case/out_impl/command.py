@@ -35,7 +35,6 @@ from ...case_iteration import is_wildcard_case, load_cases_from_directory
 
 MAP_HEADER = ["row", "node", "x", "y", "z"]
 POINT_MAP_HEADER = ["row", "x", "y", "z"]
-SURFACE_NODE_HEADER = ["row", "node"]
 
 # How a reader should parameterise a probe set: arc length along a line, two
 # coordinates on a surface, nothing shared between independent points. It cannot
@@ -399,7 +398,7 @@ def _write_point_map(path, block, point_file, points, case_name, problem,
 
 
 def _surface_map_header(block, osg_id, skipped_before, srf_file, n_elements,
-                        nbc_file, n_nodes, case_name, problem):
+                        nbc_file, n_nodes, crd_name, case_name, problem):
     """The '#' block a surface map carries, saying what this surface is and
     where its oisd data would come from.
 
@@ -428,29 +427,37 @@ def _surface_map_header(block, osg_id, skipped_before, srf_file, n_elements,
         f"# nodes: {nbc_file} ({n_nodes} node(s)) -- derived from the .srf's "
         "filename (same problem+tag, .nbc suffix); the outputSurface block does "
         "not name it directly",
+        f"# coordinates are undeformed (from {crd_name}): this surface carries no "
+        "per-node displacement of its own (oisd is a whole-surface aggregate), so "
+        "there is nothing to add -- combine with a PLT's own displacement field "
+        "for a deformed view",
         "# oisd holds one aggregate record per timestep for the whole surface "
         "(totArea, totTrac, totMoment, avePres, ...), not one row per node or "
         "element. The rows below are this surface's mesh, not its data -- what a "
-        "reader needs to identify the surface and, later, render it.",
+        "reader needs to identify the surface and render it.",
     ]
     return lines
 
 
 def _write_surface_map(path, block, srf_file, elements, nbc_file, node_ids,
-                       case_name, problem, osg_id=None, skipped_before=0):
+                       crd_name, coords, case_name, problem, osg_id=None,
+                       skipped_before=0):
     """An outputSurface's map: which surface this is, and the mesh it covers.
 
-    Two tables, not one -- nodes (from the .nbc) and elements (from the .srf) --
-    since the two files carry different things and neither's rows index the
-    other's.
+    Two tables, not one -- nodes (from the .nbc, with undeformed coordinates
+    from the mesh) and elements (from the .srf, referencing those same node
+    ids) -- since the two files carry different things and neither's rows index
+    the other's. Coordinates are not repeated per element: a reader joins an
+    element's node ids back to the node table.
     """
     lines = _surface_map_header(block, osg_id, skipped_before, srf_file,
-                                len(elements), nbc_file, len(node_ids),
+                                len(elements), nbc_file, len(node_ids), crd_name,
                                 case_name, problem)
     lines.append("")
-    lines.append(",".join(SURFACE_NODE_HEADER))
+    lines.append(",".join(MAP_HEADER))
     for row, node in enumerate(node_ids):
-        lines.append(f"{row},{node}")
+        x, y, z = coords[node]
+        lines.append(f"{row},{node},{x},{y},{z}")
     lines.append("")
     node_cols = [f"node{i + 1}" for i in range(len(elements[0][2]))]
     lines.append(",".join(["row", "parent", "id"] + node_cols))
@@ -546,11 +553,14 @@ def write_case_maps(case_dir, wanted, logger, show_progress=False,
         mappable = named
         surf_mappable = surf_named
 
-    # The mesh is only needed if a nodal block is in play; a case of nothing but
-    # coordinates (and outputSurface) blocks maps fine without it.
+    # The mesh is needed for a nodal block, and for every outputSurface block --
+    # a surface's map carries its nodes' undeformed coordinates too, so it can be
+    # rendered without the mesh once written. A case of nothing but coordinates
+    # blocks maps fine without it.
     nodal = [(block, source) for block, key, source in mappable if key == "nodes"]
+    needs_mesh = bool(nodal) or bool(surf_mappable)
     crd_name, crd_path, crd_mb = None, None, 0.0
-    if nodal:
+    if needs_mesh:
         crd_name = parse_node_coordinates(def_file)
         if not crd_name:
             raise WriteError(f"{Path(def_file).name} has no "
@@ -575,10 +585,27 @@ def write_case_maps(case_dir, wanted, logger, show_progress=False,
                 logger.info(f"{source}: {dropped} line(s) held no x y z and were passed over")
             resolved[block["name"]] = points
 
+    surf_resolved = {}
+    for block, source in surf_mappable:
+        source_path = case_dir / source
+        if not source_path.exists():
+            raise WriteError(f"Surfaces file not found: {source_path} "
+                             f"(from outputSurface \"{block['name']}\")")
+        elements = _read_srf_elements(source_path)
+        nbc_path = _srf_sibling_nbc(source_path)
+        if not nbc_path.exists():
+            raise WriteError(f"Node file not found: {nbc_path} (expected alongside "
+                             f"{source}, from outputSurface \"{block['name']}\")")
+        node_ids = _read_node_list(nbc_path)
+        surf_resolved[block["name"]] = (source, elements, nbc_path.name, node_ids)
+
     coords = {}
-    if nodal:
-        # Every nodal map in this case is served from one pass over the mesh.
-        every = sorted({n for block, _ in nodal for n in resolved[block["name"]]})
+    if needs_mesh:
+        # Every nodal and surface map in this case is served from one pass over
+        # the mesh.
+        every = sorted(
+            {n for block, _ in nodal for n in resolved[block["name"]]}
+            | {n for block, _ in surf_mappable for n in surf_resolved[block["name"]][3]})
         logger.info(f"Looking up {len(every):,} node(s) in {crd_name} ({crd_mb:,.0f} MB)")
         with spinner(f"Reading {crd_name}", enabled=show_progress):
             coords = _read_coordinates(crd_path, every)
@@ -607,20 +634,6 @@ def write_case_maps(case_dir, wanted, logger, show_progress=False,
                              oth_id, skipped_before, stale, probe, closed)
         written.append((out, len(rows)))
 
-    surf_resolved = {}
-    for block, source in surf_mappable:
-        source_path = case_dir / source
-        if not source_path.exists():
-            raise WriteError(f"Surfaces file not found: {source_path} "
-                             f"(from outputSurface \"{block['name']}\")")
-        elements = _read_srf_elements(source_path)
-        nbc_path = _srf_sibling_nbc(source_path)
-        if not nbc_path.exists():
-            raise WriteError(f"Node file not found: {nbc_path} (expected alongside "
-                             f"{source}, from outputSurface \"{block['name']}\")")
-        node_ids = _read_node_list(nbc_path)
-        surf_resolved[block["name"]] = (source, elements, nbc_path.name, node_ids)
-
     surf_order = [b["name"] for b in surf_blocks]
     for block, source in surf_mappable:
         srf_file, elements, nbc_file, node_ids = surf_resolved[block["name"]]
@@ -629,7 +642,8 @@ def write_case_maps(case_dir, wanted, logger, show_progress=False,
                              if osg_ids[name] is None)
         out = case_dir / f"oisd.{_map_stem(block['name'])}.map"
         _write_surface_map(out, block, srf_file, elements, nbc_file, node_ids,
-                           case_dir.name, problem, osg_id, skipped_before)
+                           crd_name, coords, case_dir.name, problem, osg_id,
+                           skipped_before)
         written.append((out, len(elements)))
 
     return {"written": written, "crd": crd_name, "crd_mb": crd_mb}
@@ -819,7 +833,7 @@ def _write_all_cases(args, wanted, logger, probe=None, closed=None):
                      "Build one with `case add`.")
         sys.exit(1)
 
-    console.print(f"\n[bold cyan]Writing othd maps for {len(cases)} case(s)[/bold cyan]\n")
+    console.print(f"\n[bold cyan]Writing maps for {len(cases)} case(s)[/bold cyan]\n")
     done, skipped, failed, maps = [], [], [], 0
     for entry in cases:
         name = entry.get("name", "?")
@@ -910,5 +924,5 @@ def execute_out(args):
     summary = f"{len(result['written'])} map(s), {total} row(s)."
     if result["crd"]:
         summary += (f" {result['crd']} ({result['crd_mb']:,.0f} MB) is no longer needed "
-                    "to read these othd records.")
+                    "to read these maps.")
     print(summary)
