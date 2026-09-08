@@ -454,3 +454,59 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Help -> Flowchart: a straight-line sequence of clickable steps (left,
+   scrollable) connected by plain arrows, with the selected step's detail
+   shown on the right -- deliberately not a real diagram with branches/
+   connectors, since the whole point was to keep this simple. */
+.flowchart-editor { display: flex; gap: 16px; align-items: flex-start; }
+.flowchart-steps {
+  flex: none;
+  width: 260px;
+  max-height: 480px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+#dialog .flowchart-step {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #f8fafc;
+  font-size: 12px;
+  color: #334155;
+  cursor: pointer;
+}
+#dialog .flowchart-step:hover { border-color: #7c3aed; background: #f3e8ff; }
+#dialog .flowchart-step.active { border-color: #7c3aed; background: #7c3aed; color: #fff; font-weight: 700; }
+#dialog .flowchart-step.optional { border-style: dashed; }
+.flowchart-step-num { font-weight: 700; margin-right: 4px; }
+.flowchart-arrow { text-align: center; color: #94a3b8; font-size: 14px; line-height: 1; margin: 2px 0; }
+.flowchart-detail { flex: 1; min-width: 0; max-height: 480px; overflow-y: auto; padding: 4px; }
+.flowchart-detail h3 { margin: 0 0 8px; font-size: 14px; color: #0f172a; }
+.flowchart-optional-tag {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #7c3aed;
+  background: #f3e8ff;
+  border-radius: 3px;
+  padding: 2px 6px;
+  margin-bottom: 8px;
+}
+.flowchart-command {
+  font-family: 'DejaVu Sans Mono', Menlo, Consolas, monospace;
+  font-size: 12px;
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 8px 10px;
+  border-radius: 4px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0 0 10px;
+}
+.flowchart-detail p { font-size: 13px; line-height: 1.5; color: #334155; margin: 0 0 8px; }
