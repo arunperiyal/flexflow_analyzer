@@ -158,11 +158,14 @@ const PlotWorkspace = (() => {
   // panel's pane is left unset (fills the canvas -- see defaultPane) until
   // arranged via Layout -> Panes.
   function panelFor(caseName) {
-    // Excludes spatial panels: they share the "same case -> same panel"
-    // instinct, but a time trace and a spatial trace can never share an
-    // x-axis, so auto-routing must not merge them just because the case matches.
+    // Excludes spatial and surface panels: they share the "same case -> same
+    // panel" instinct, but neither shares an x-axis (spatial) or a sane
+    // shared y-scale (surface, usually a wildly different physical quantity
+    // from a nodal trace -- totArea next to a displacement) with a plain
+    // time trace, so auto-routing must not merge them just because the case matches.
     const L = active();
-    let panel = L.panels.find(p => p.kind !== 'spatial' && p.traces.some(t => t.case === caseName));
+    let panel = L.panels.find(p => p.kind !== 'spatial' && p.kind !== 'surface'
+                                   && p.traces.some(t => t.case === caseName));
     if (!panel) {
       panel = { id: `p${nextPanelId++}`, title: caseName, traces: [], style: {}, pane: null };
       L.panels.push(panel);
@@ -233,6 +236,47 @@ const PlotWorkspace = (() => {
       points: [...points].sort((a, b) => a.x - b.x),
       color: cs.color, lineStyle: cs.lineStyle, marker: cs.marker,
     });
+    if (!L.activePanelId) L.activePanelId = panel.id;
+    save();
+    return panel;
+  }
+
+  // A surface trace is still a plain time-vs-value line -- same x-axis
+  // (time), same fetch shape (/history with row always 0) as a nodal trace.
+  // It gets its own panel kind purely so auto-routing keeps it separate from
+  // a case's nodal traces (see panelFor's own comment): overlaying a nodal
+  // displacement with a surface's totArea by accident would share a y-axis
+  // between two unrelated physical quantities. Still overlayable onto any
+  // panel deliberately, via targetPanelId, same as addTraces.
+  function panelForSurface(caseName) {
+    const L = active();
+    let panel = L.panels.find(p => p.kind === 'surface' && p.traces.some(t => t.case === caseName));
+    if (!panel) {
+      panel = { id: `p${nextPanelId++}`, title: `${caseName} (surface)`, kind: 'surface', traces: [], style: {}, pane: null };
+      L.panels.push(panel);
+    }
+    return panel;
+  }
+
+  function addSurfaceTrace(caseName, group, block, column, targetPanelId) {
+    const L = active();
+    let panel;
+    if (targetPanelId === '__new__') {
+      panel = { id: `p${nextPanelId++}`, title: `${caseName} (surface)`, kind: 'surface', traces: [], style: {}, pane: null };
+      L.panels.push(panel);
+    } else if (targetPanelId) {
+      panel = L.panels.find(p => p.id === targetPanelId);
+    }
+    if (!panel) panel = panelForSurface(caseName);
+
+    const cs = caseStyleFor(caseName);
+    const already = panel.traces.some(
+      t => t.case === caseName && t.group === group && t.col === column && t.source === 'oisd'
+    );
+    if (!already) {
+      panel.traces.push({ case: caseName, group, row: 0, block, col: column, source: 'oisd',
+                          color: cs.color, lineStyle: cs.lineStyle, marker: cs.marker });
+    }
     if (!L.activePanelId) L.activePanelId = panel.id;
     save();
     return panel;
@@ -409,7 +453,7 @@ const PlotWorkspace = (() => {
   }
 
   return {
-    state, addTraces, addSpatialTrace, removeTrace, removePanel, clearPanel, renamePanel,
+    state, addTraces, addSpatialTrace, addSurfaceTrace, removeTrace, removePanel, clearPanel, renamePanel,
     setYLock, updateLayout, setPanelPane, setPanelStyle, setGlobalStyle, setCaseStyle,
     setActivePanel, setTraceStyle,
     listLayouts, activeLayoutId, setActiveLayout, createLayout, renameLayout, deleteLayout,

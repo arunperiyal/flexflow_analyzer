@@ -255,8 +255,13 @@ def export_plot():
                     if values is None:
                         continue
                     first, second = (values, times) if swap else (times, values)
-                    ax.plot(first, second, color=trace.get('color'),
-                            label=f"{trace.get('case')} r{trace.get('row')} {trace.get('col')}",
+                    # A surface trace's row is always 0 -- "r0" identifies
+                    # nothing a reader could use, unlike a nodal trace's row.
+                    # Its block name does instead, matching plot.js.
+                    label = (f"{trace.get('case')} {trace.get('block')} {trace.get('col')}"
+                            if trace.get('source') == 'oisd'
+                            else f"{trace.get('case')} r{trace.get('row')} {trace.get('col')}")
+                    ax.plot(first, second, color=trace.get('color'), label=label,
                             **_plot_kwargs(trace, style))
                     plotted += 1
                 default_xlabel = 'time [s]'
@@ -280,16 +285,22 @@ def export_plot():
 
 
 def _trace_values(root, trace):
-    """(values, times) for one trace, or (None, None) if it cannot be read."""
+    """(values, times) for one trace, or (None, None) if it cannot be read.
+
+    `source` ('othd', the default, or 'oisd' for a surface trace) picks which
+    files loader reads -- othId and osgId are both plain integers starting at
+    0, so a surface trace's `group` must never be read against the othd cache.
+    """
     case_dir = registry.case_path(root, trace.get('case') or '')
     if case_dir is None:
         return None, None
+    kind = trace.get('source') or 'othd'
     try:
-        meta = loader.meta(case_dir)
+        meta = loader.meta(case_dir, kind=kind)
         group = trace.get('group')
         cmap = build_column_map(meta, group)
         var_name, comp = cmap[trace.get('col')]
-        meta, arrays = loader.load(case_dir, [var_name], group=group)
+        meta, arrays = loader.load(case_dir, [var_name], group=group, kind=kind)
         row = trace.get('row')
         return arrays[var_name][:, row, comp], meta.times
     except (FileNotFoundError, KeyError, IndexError, TypeError):

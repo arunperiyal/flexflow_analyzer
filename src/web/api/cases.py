@@ -98,10 +98,27 @@ def meta(name):
         for g in series_meta.groups
     ]
 
+    # A separate list, not folded into `groups`: osgId and othId are both
+    # plain integers starting at 0, so merging them would make group 0 mean
+    # two different things depending on which kind a reader forgot to check.
+    try:
+        surface_meta = loader.meta(case_dir, kind='oisd')
+        surfaces = [
+            {
+                'osgId': g,
+                'variables': sorted(surface_meta.variables_of(g)),
+                'columns': surface_meta.column_names(g),
+            }
+            for g in surface_meta.groups
+        ]
+    except FileNotFoundError:
+        surfaces = []
+
     return jsonify({
         'problem': problem,
         'dt': dt,
         'groups': groups,
+        'surfaces': surfaces,
         'times': {
             'n': len(times),
             't_min': float(times.min()) if len(times) else None,

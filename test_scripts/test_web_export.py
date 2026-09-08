@@ -14,7 +14,8 @@ from src.web.server import create_app
 
 EXAMPLE = Path(__file__).resolve().parent.parent / 'examples' / 'BR0SG0U1P0'
 _NEEDED_FILES = ('simflow.config', 'riser.def', 'riser.cyl_nodes.nbc', 'probe_dat.txt',
-                 'othd.riser_probe.map', 'othd.riser_probe1_field.map')
+                 'othd.riser_probe.map', 'othd.riser_probe1_field.map',
+                 'riser.cyl.srf', 'riser.cyl.nbc', 'oisd.cylinder_body.map')
 
 
 @pytest.fixture(scope='module')
@@ -25,8 +26,19 @@ def client(tmp_path_factory):
     for name in _NEEDED_FILES:
         shutil.copy(EXAMPLE / name, case_dir / name)
     shutil.copytree(EXAMPLE / 'othd_files', case_dir / 'othd_files')
+    shutil.copytree(EXAMPLE / 'oisd_files', case_dir / 'oisd_files')
     (root / '.cases').write_text(json.dumps([{'name': 'BR0SG0U1P0', 'path': str(case_dir)}]))
     return create_app(root).test_client()
+
+
+def _surface_panels():
+    return [{
+        'id': 'p1', 'title': 'BR0SG0U1P0 (surface)', 'kind': 'surface',
+        'traces': [
+            {'case': 'BR0SG0U1P0', 'group': 0, 'row': 0, 'block': 'cylinder_body',
+             'col': 'totTrac_x', 'source': 'oisd', 'color': '#dc2626'},
+        ],
+    }]
 
 
 def _panels():
@@ -45,6 +57,32 @@ def test_export_returns_a_png(client):
     assert res.mimetype == 'image/png'
     assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
     assert 'flexflow_plot.png' in res.headers.get('Content-Disposition', '')
+
+
+def test_trace_values_reads_an_oisd_trace(client):
+    from src.web.api.export import _trace_values
+    root = client.application.config['WORKSPACE_ROOT']
+    trace = {'case': 'BR0SG0U1P0', 'group': 0, 'row': 0, 'col': 'totTrac_x', 'source': 'oisd'}
+    values, times = _trace_values(root, trace)
+    assert values is not None
+    assert len(values) == len(times) > 0
+
+
+def test_trace_values_does_not_read_othd_columns_with_oisd_source(client):
+    """group 0 exists in both kinds -- 'source' must be what picks the file
+    set, not the group number alone."""
+    from src.web.api.export import _trace_values
+    root = client.application.config['WORKSPACE_ROOT']
+    trace = {'case': 'BR0SG0U1P0', 'group': 0, 'row': 0, 'col': 'aleDisp_y', 'source': 'oisd'}
+    values, times = _trace_values(root, trace)
+    assert values is None and times is None
+
+
+def test_export_renders_a_surface_trace_panel(client):
+    res = client.post('/api/export', json={'panels': _surface_panels()})
+    assert res.status_code == 200
+    assert res.mimetype == 'image/png'
+    assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
 
 
 def test_export_with_no_panels_is_a_400(client):

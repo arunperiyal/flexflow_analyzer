@@ -21,7 +21,8 @@ from src.web.server import create_app
 
 EXAMPLE = Path(__file__).resolve().parent.parent / 'examples' / 'BR0SG0U1P0'
 _NEEDED_FILES = ('simflow.config', 'riser.def', 'riser.cyl_nodes.nbc', 'probe_dat.txt',
-                 'othd.riser_probe.map', 'othd.riser_probe1_field.map')
+                 'othd.riser_probe.map', 'othd.riser_probe1_field.map',
+                 'riser.cyl.srf', 'riser.cyl.nbc', 'oisd.cylinder_body.map')
 
 
 @pytest.fixture(scope='module')
@@ -33,6 +34,7 @@ def workspace(tmp_path_factory):
     for name in _NEEDED_FILES:
         shutil.copy(EXAMPLE / name, case_dir / name)
     shutil.copytree(EXAMPLE / 'othd_files', case_dir / 'othd_files')
+    shutil.copytree(EXAMPLE / 'oisd_files', case_dir / 'oisd_files')
     (root / '.cases').write_text(json.dumps([{'name': 'BR0SG0U1P0', 'path': str(case_dir)}]))
     return root, case_dir
 
@@ -61,6 +63,20 @@ def test_meta_reports_the_real_group_and_variables(client):
 def test_meta_404_for_unregistered_case(client):
     res = client.get('/api/cases/no-such-case/meta')
     assert res.status_code == 404
+
+
+def test_meta_reports_the_surface_group_separately(client):
+    res = client.get('/api/cases/BR0SG0U1P0/meta')
+    assert res.status_code == 200
+    data = res.get_json()
+    assert len(data['surfaces']) == 1
+    surface = data['surfaces'][0]
+    assert surface['osgId'] == 0
+    assert 'totTrac' in surface['variables']
+    assert 'totTrac_x' in surface['columns']
+    assert 'totArea' in surface['columns']       # a 1-component var: no _x/_y/_z suffix
+    # othd's own group-0 variables must not leak into the surface list
+    assert 'aleDisp' not in surface['variables']
 
 
 def test_maps_list_flags_the_wrong_predicted_othid(client):
@@ -106,6 +122,39 @@ def test_get_map_404_for_missing_file(client):
     assert res.status_code == 404
 
 
+def test_maps_list_includes_the_surface_map(client):
+    res = client.get('/api/cases/BR0SG0U1P0/maps')
+    assert res.status_code == 200
+    rows = {r['file']: r for r in res.get_json()}
+
+    surface = rows['oisd.cylinder_body.map']
+    assert surface['kind'] == 'surface'
+    assert surface['block'] == 'cylinder_body'
+    assert surface['element_group'] == 'interior'
+    assert surface['shape'] == 'fourNodeQuad'
+    assert surface['osg_id'] == 0
+    assert surface['osg_id_ok'] is True          # the real oisd_files/ do write osgId 0
+    assert surface['elements'] == 6144
+    assert surface['nodes'] == 6272
+
+    # node maps are unaffected, still carry the fields the surface map doesn't
+    assert rows['othd.riser_probe.map']['kind'] == 'node'
+
+
+def test_get_surface_map_has_no_picker_views(client):
+    """A surface has exactly one row -- the whole surface -- so the detail
+    response carries nothing for a picker to draw."""
+    res = client.get('/api/cases/BR0SG0U1P0/maps/oisd.cylinder_body.map')
+    assert res.status_code == 200
+    data = res.get_json()
+    assert data['header']['kind'] == 'surface'
+    assert data['header']['block'] == 'cylinder_body'
+    assert data['header']['osg_id'] == 0
+    assert data['views'] == []
+    assert data['rows'] == [{'row': 0, 'node': None}]
+    assert data['projection'] is None
+
+
 def test_history_returns_times_and_series_for_the_real_group(client):
     res = client.get('/api/cases/BR0SG0U1P0/history'
                      '?group=0&columns=aleDisp_y,aleDisp_z&rows=0,12')
@@ -139,3 +188,37 @@ def test_history_caps_rows_at_32(client):
     res = client.get(f'/api/cases/BR0SG0U1P0/history?columns=aleDisp_y&rows={rows}')
     assert res.status_code == 400
     assert 'at most' in res.get_json()['error']
+
+
+def test_history_kind_oisd_reads_the_surface_series(client):
+    res = client.get('/api/cases/BR0SG0U1P0/history'
+                     '?kind=oisd&group=0&columns=totTrac_x,totArea&rows=0')
+    assert res.status_code == 200
+    data = res.get_json()
+    assert data['group'] == 0
+    n = len(data['times'])
+    assert n > 0
+    assert len(data['series']) == 2
+    for s in data['series']:
+        assert s['row'] == 0
+        assert s['column'] in ('totTrac_x', 'totArea')
+        assert len(s['values']) == n
+
+
+def test_history_kind_oisd_row_1_is_out_of_range(client):
+    """A surface has exactly one row -- 0 -- since nodes_of() for an oisd
+    group is always 1."""
+    res = client.get('/api/cases/BR0SG0U1P0/history?kind=oisd&columns=totArea&rows=1')
+    assert res.status_code == 400
+    assert 'out of range' in res.get_json()['error']
+
+
+def test_history_kind_oisd_does_not_see_othd_columns(client):
+    res = client.get('/api/cases/BR0SG0U1P0/history?kind=oisd&columns=aleDisp_y&rows=0')
+    assert res.status_code == 400
+    assert 'unknown column' in res.get_json()['error']
+
+
+def test_history_rejects_unknown_kind(client):
+    res = client.get('/api/cases/BR0SG0U1P0/history?kind=nope&columns=aleDisp_y&rows=0')
+    assert res.status_code == 400
