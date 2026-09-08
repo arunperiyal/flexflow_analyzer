@@ -294,6 +294,13 @@ const Menu = (() => {
     });
   }
 
+  function wireHelpMenu() {
+    document.getElementById('help-flowchart').addEventListener('click', () => {
+      closeAll();
+      FlowChart.open();
+    });
+  }
+
   function init(root) {
     wireMenuBar();
     wireAddDialog(root);
@@ -301,6 +308,7 @@ const Menu = (() => {
     wirePlotMenu();
     wireLayoutMenu();
     wireSettingsMenu();
+    wireHelpMenu();
   }
 
   return { init, openDialog, closeDialog };

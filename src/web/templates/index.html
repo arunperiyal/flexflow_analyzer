@@ -34,7 +34,11 @@
       <div class="menu-item disabled" title="Later phase">Data</div>
       <div class="menu-item disabled" title="Later phase">Field</div>
       <div class="menu-item disabled" title="Later phase">View</div>
-      <div class="menu-item disabled" title="Later phase">Help</div>
+      <div class="menu-item" data-menu="help">Help
+        <div class="menu-dropdown" id="menu-help">
+          <div class="menu-option" id="help-flowchart">Flowchart&hellip;</div>
+        </div>
+      </div>
       <div class="menu-item" data-menu="settings">Settings
         <div class="menu-dropdown" id="menu-settings">
           <div class="menu-option" id="settings-units">Units&hellip;</div>
@@ -86,6 +90,7 @@
 <script src="{{ url_for('static', filename='js/layout.js') }}"></script>
 <script src="{{ url_for('static', filename='js/styles.js') }}"></script>
 <script src="{{ url_for('static', filename='js/newplot.js') }}"></script>
+<script src="{{ url_for('static', filename='js/flowchart.js') }}"></script>
 <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
 </html>
