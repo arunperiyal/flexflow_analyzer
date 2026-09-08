@@ -115,14 +115,21 @@ Build small derived files from a case's own inputs.
     and .nbc it is built from, and the osgId predicted for it, none of which
     the oisd file states either. Two tables, not one:
 
-        row,node                              {Colors.DIM}# every node in the .nbc{Colors.RESET}
-        0,2
+        row,node,x,y,z                         {Colors.DIM}# every node in the .nbc{Colors.RESET}
+        0,2,-2.1648901405887341e-17,3.5355339059327368e-01,-3.5355339059327379e-01
         row,parent,id,node1,node2,node3,node4  {Colors.DIM}# every element in the .srf{Colors.RESET}
         0,1482577,34858,2,220,40798,812
 
     {Colors.YELLOW}parent{Colors.RESET} is the volume element this face belongs to (elementGroup), {Colors.YELLOW}id{Colors.RESET}
     the surface element's own id. Both come straight from the .srf gmshCnvt
-    wrote; nodeN count matches the block's declared shape.
+    wrote; nodeN count matches the block's declared shape. {Colors.YELLOW}x, y, z{Colors.RESET} are the
+    node's {Colors.BOLD}undeformed{Colors.RESET} mesh coordinates -- resolved against the mesh in the
+    same pass a nodal othd map already needs it for, so the mesh can still be
+    read once and then deleted. Unlike a nodal othd's coordinates, there is no
+    per-node displacement to add: oisd is a whole-surface aggregate, so these
+    are handy mainly for rendering the surface's shape, e.g. alongside a PLT.
+    An element's own row does not repeat them -- join its node ids back to the
+    node table above.
 
     {Colors.YELLOW}# osgId: <n>{Colors.RESET} is predicted the same way {Colors.YELLOW}othId{Colors.RESET} is: declaration order among
     outputSurface blocks, shifted down by one for each earlier block whose

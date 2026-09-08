@@ -96,6 +96,9 @@ outputTimeHistory( "riser_probe" ) {{
 # two outputSurface blocks, so osgId prediction (declaration order, shifted by a
 # missing .srf) can be checked the same way _oth_ids already is
 DEF_TWO_SURFACES = """
+nodeCoordinates {{
+    coordinates     = File( "{crd}" )
+}}
 outputSurface( "surf_a" ) {{
     surfaces        = File( "riser.a.srf" )
     elementGroup    = "interior"
@@ -469,8 +472,17 @@ class TestOisdMap:
     def test_node_table_preserves_the_nbc_order(self, surface_case):
         execute_out(make_args(surface_case))
         _, (node_header, node_rows), _ = read_surface_map(surface_case / "oisd.cylinder_body.map")
-        assert node_header == ["row", "node"]
+        assert node_header == ["row", "node", "x", "y", "z"]
         assert [r[1] for r in node_rows] == ["4", "1", "2", "3", "8", "5", "6", "7"]
+
+    def test_node_table_coordinates_come_from_the_mesh_file(self, surface_case):
+        execute_out(make_args(surface_case))
+        _, (_, node_rows), _ = read_surface_map(surface_case / "oisd.cylinder_body.map")
+        for row in node_rows:
+            node = int(row[1])
+            assert float(row[2]) == pytest.approx(node / 10)
+            assert float(row[3]) == pytest.approx(node / 100)
+            assert float(row[4]) == pytest.approx(-node / 100)
 
     def test_element_table_preserves_the_srf_order_and_ids(self, surface_case):
         execute_out(make_args(surface_case))
@@ -491,6 +503,25 @@ class TestOisdMap:
         assert "osgId: 0" in blob
         assert "surfaces: riser.cyl.srf (3 element(s))" in blob
         assert "nodes: riser.cyl.nbc (8 node(s))" in blob
+        assert "coordinates are undeformed (from riser.crd)" in blob
+
+    def test_a_surface_only_case_still_needs_the_mesh(self, tmp_path):
+        """Unlike a coordinates-type othd block, a surface's map carries node
+        coordinates, so the mesh is not optional just because there is no
+        nodal othd block in the case."""
+        (tmp_path / "simflow.config").write_text("problem = riser\n")
+        (tmp_path / "riser.def").write_text("""
+outputSurface( "surf_a" ) {
+    surfaces        = File( "riser.a.srf" )
+    elementGroup    = "interior"
+    shape           = fourNodeQuad
+}
+""")
+        (tmp_path / "riser.a.srf").write_text("100 1 1 2 3 4\n")
+        (tmp_path / "riser.a.nbc").write_text("1\n2\n3\n4\n")
+        # riser.crd deliberately absent, and no nodeCoordinates block either
+        with pytest.raises(WriteError, match="no nodeCoordinates"):
+            write_case_maps(str(tmp_path), None, Logger())
 
     def test_a_missing_srf_is_skipped_without_breaking_othd(self, tmp_path):
         (tmp_path / "simflow.config").write_text("problem = riser\n")
@@ -544,7 +575,9 @@ class TestOsgIdPrediction:
     @staticmethod
     def _write_two_surfaces(tmp_path, skip_a=False, skip_b=False):
         (tmp_path / "simflow.config").write_text("problem = riser\n")
-        (tmp_path / "riser.def").write_text(DEF_TWO_SURFACES)
+        (tmp_path / "riser.def").write_text(DEF_TWO_SURFACES.format(crd="riser.crd"))
+        (tmp_path / "riser.crd").write_text("".join(
+            f"{n} {n / 10:.16e} {n / 100:.16e} {-n / 100:.16e}\n" for n in range(1, 10)))
         srf = "100 1 1 2 3 4\n"
         if not skip_a:
             (tmp_path / "riser.a.srf").write_text(srf)

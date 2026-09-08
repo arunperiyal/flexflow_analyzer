@@ -12,12 +12,15 @@
   reason: not to make the oisd readable, but to record **which surface it
   is** -- the `.srf`/`.nbc` it is built from, and the `osgId` predicted for
   it, none of which the oisd file states either.
-- Two tables, not one: every node from the `.nbc`, and every element from
-  the `.srf` (`parentId elemId node1...nodeN` -- verified against the actual
-  writer, `gmshCnvt.c`'s `writeSrf`, not guessed from a sample). The `.nbc`
-  is not named in the outputSurface block; it is found by swapping the
-  `.srf`'s suffix, since gmshCnvt writes both from the same physical-group
-  tag.
+- Two tables, not one: every node from the `.nbc` (with its **undeformed
+  coordinates**, resolved against the mesh in the same one-time pass a nodal
+  othd map already pays for -- handy for rendering the surface alongside a
+  PLT), and every element from the `.srf` (`parentId elemId node1...nodeN`
+  -- verified against the actual writer, `gmshCnvt.c`'s `writeSrf`, not
+  guessed from a sample). Coordinates are not repeated per element -- a
+  reader joins an element's node ids back to the node table. The `.nbc` is
+  not named in the outputSurface block; it is found by swapping the `.srf`'s
+  suffix, since gmshCnvt writes both from the same physical-group tag.
 - `osgId` is predicted the same way `othId` already is: declaration order
   among outputSurface blocks, shifted down by one for each earlier block
   whose `.srf` is missing or empty. An oisd record carries `osgId`, not a
