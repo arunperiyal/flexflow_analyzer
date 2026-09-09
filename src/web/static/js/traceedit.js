@@ -51,7 +51,7 @@ const TraceEditor = (() => {
     return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
   }
 
-  const TABS = [['color', 'Color'], ['line', 'Line'], ['marker', 'Marker']];
+  const TABS = [['color', 'Color'], ['line', 'Line'], ['marker', 'Marker'], ['value', 'Value']];
   let activeTab = 'color';
 
   function open(panelId, traceIndex) {
@@ -62,6 +62,19 @@ const TraceEditor = (() => {
   }
 
   function tabBody(trace) {
+    if (activeTab === 'value') {
+      return `
+        <label for="te-scale">Scale factor</label>
+        <input type="number" id="te-scale" step="any" placeholder="1" value="${trace.scale ?? ''}">
+        <p class="trace-editor-hint">Multiplies every plotted value -- e.g. turning a force trace
+          into a coefficient. Applies to hover values and the export too, not just this view.</p>
+        <label for="te-label">Label</label>
+        <input type="text" id="te-label" placeholder="${escapeAttr(PlotArea.autoLabel(trace))}"
+               value="${escapeAttr(trace.label || '')}">
+        <p class="trace-editor-hint">Shown in the legend in place of the name above. Leave blank to
+          use it.</p>
+      `;
+    }
     if (activeTab === 'line') {
       return `
         <label for="te-line">Line style</label>
@@ -138,6 +151,16 @@ const TraceEditor = (() => {
     } else if (activeTab === 'marker') {
       document.getElementById('te-marker').addEventListener('change', (e) => {
         apply(panel, traceIndex, { marker: e.target.value });
+      });
+    } else if (activeTab === 'value') {
+      document.getElementById('te-scale').addEventListener('change', (e) => {
+        const raw = e.target.value.trim();
+        const scale = raw === '' ? null : parseFloat(raw);
+        if (raw !== '' && Number.isNaN(scale)) return;   // leave the invalid text as typed
+        apply(panel, traceIndex, { scale });
+      });
+      document.getElementById('te-label').addEventListener('change', (e) => {
+        apply(panel, traceIndex, { label: e.target.value.trim() });
       });
     }
   }

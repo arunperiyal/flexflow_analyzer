@@ -437,6 +437,16 @@ body {
   cursor: pointer;
   margin-bottom: 12px;
 }
+.trace-editor-body input[type=text],
+.trace-editor-body input[type=number] {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+.trace-editor-hint { font-size: 10.5px; color: #94a3b8; margin: 0 0 12px; line-height: 1.4; }
 .color-swatches { display: flex; flex-wrap: wrap; gap: 6px; }
 .color-swatch {
   width: 22px;
