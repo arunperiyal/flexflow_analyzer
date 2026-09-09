@@ -1296,6 +1296,51 @@ def test_export_fft_scales_a_trace_and_uses_its_custom_label(client, monkeypatch
     np.testing.assert_allclose(captured['y'], raw_amplitude * 2.0)
 
 
+def test_export_fft_xscale_normalizes_the_frequency_axis(client, monkeypatch):
+    """xscale is independent of scale -- one normalizes frequency, the other
+    the amplitude -- so both apply at once without interfering."""
+    import numpy as np
+    from matplotlib.axes import Axes
+    from src.web.api import export as export_mod
+
+    root = client.application.config['WORKSPACE_ROOT']
+    trace = {'case': 'BR0SG0U1P0', 'group': 0, 'row': 0, 'col': 'aleDisp_y', 'source': 'othd'}
+    raw_freqs, raw_amplitude = export_mod._fft_trace_values(root, trace)
+
+    captured = {}
+    real_plot = Axes.plot
+
+    def spy_plot(self, *args, **kwargs):
+        captured['x'] = args[0]
+        captured['y'] = args[1]
+        return real_plot(self, *args, **kwargs)
+    monkeypatch.setattr(Axes, 'plot', spy_plot)
+
+    panels = _fft_panels()
+    panels[0]['traces'][0]['xscale'] = 0.5
+    panels[0]['traces'][0]['scale'] = 2.0
+    res = client.post('/api/export', json={'panels': panels})
+
+    assert res.status_code == 200
+    np.testing.assert_allclose(captured['x'], raw_freqs * 0.5)
+    np.testing.assert_allclose(captured['y'], raw_amplitude * 2.0)
+
+
+def test_xscale_of_defaults_to_1_when_unset():
+    from src.web.api.export import _xscale_of
+    assert _xscale_of({}) == 1
+
+
+def test_xscale_of_treats_an_explicit_zero_as_real_not_unset():
+    from src.web.api.export import _xscale_of
+    assert _xscale_of({'xscale': 0}) == 0
+
+
+def test_xscale_of_returns_the_explicit_value():
+    from src.web.api.export import _xscale_of
+    assert _xscale_of({'xscale': 0.5}) == 0.5
+
+
 def test_export_fft_panel_with_no_readable_traces_does_not_crash(client):
     panels = [{
         'id': 'p1', 'title': 'FFT', 'kind': 'fft',

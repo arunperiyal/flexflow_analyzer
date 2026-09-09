@@ -281,6 +281,7 @@ def export_plot():
                     if freqs is None:
                         continue
                     amplitude = amplitude * _scale_of(trace)
+                    freqs = freqs * _xscale_of(trace)
                     first, second = (amplitude, freqs) if swap else (freqs, amplitude)
                     label = _label_of(trace, _fft_auto_label(trace))
                     _target_ax(trace).plot(first, second, color=trace.get('color'), label=label,
@@ -421,6 +422,13 @@ def _scale_of(trace):
     genuine (if unusual) scale of 0 back into 1."""
     scale = trace.get('scale')
     return 1 if scale is None else scale
+
+
+def _xscale_of(trace):
+    """The same idea as _scale_of, but for an FFT trace's frequency axis --
+    matching plot.js's xscaleOf. Only ever read for a kind:'fft' trace."""
+    xscale = trace.get('xscale')
+    return 1 if xscale is None else xscale
 
 
 def _label_of(trace, auto_label):
