@@ -263,6 +263,10 @@ const StyleSidebar = (() => {
       <label class="style-row checkbox">
         <input type="checkbox" id="style-show-y2-label" ${s.showY2Label === false ? '' : 'checked'}> Show Y2 label
       </label>
+      <div class="style-row">
+        <label for="style-y2color">Y2 axis color</label>
+        <input type="color" id="style-y2color" value="${s.y2color || '#444444'}">
+      </div>
     `;
   }
 
@@ -426,6 +430,10 @@ const StyleSidebar = (() => {
       });
       document.getElementById('style-show-y2-label').addEventListener('change', (e) => {
         PlotWorkspace.setPanelStyle(panel.id, { showY2Label: e.target.checked });
+        PlotArea.render();
+      });
+      document.getElementById('style-y2color').addEventListener('change', (e) => {
+        PlotWorkspace.setPanelStyle(panel.id, { y2color: e.target.value });
         PlotArea.render();
       });
     }

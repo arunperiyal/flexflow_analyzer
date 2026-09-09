@@ -144,6 +144,16 @@ const PlotArea = (() => {
     }
   }
 
+  // An axis title is a plain string, unless applyAxisStyle already turned it
+  // into {text, font} (a label font size was set) -- tinting the secondary
+  // axis's title has to handle whichever shape it currently is, not assume
+  // one, or it silently drops the font-size Plotly object already built.
+  function withTitleColor(title, color) {
+    if (!title) return title;
+    if (typeof title === 'string') return { text: title, font: { color } };
+    return { ...title, font: { ...(title.font || {}), color } };
+  }
+
   // '' (unset) means "the sensible default for this trace kind": no marker
   // for a time trace, a circle for a spatial one (matches behavior before
   // markers were configurable). 'none' is an explicit request to hide it,
@@ -464,6 +474,17 @@ const PlotArea = (() => {
         secondaryConfig.anchor = swap ? yref : xref;
         secondaryConfig.domain = swap ? domain.x : domain.y;
         secondaryConfig.showgrid = false;   // the primary axis's own grid is enough
+        // Which line belongs to which axis is otherwise only in the legend
+        // -- tinting the axis line/ticks/label to match makes that visible
+        // right on the plot. `color` alone reaches the line/ticks/tick
+        // labels; the title text needs its own font.color, and applyAxisStyle
+        // above may have already turned title into {text, font} (a label
+        // font size set) or left it a plain string -- withTitleColor handles
+        // either shape rather than assuming one.
+        if (pStyle.y2color) {
+          secondaryConfig.color = pStyle.y2color;
+          secondaryConfig.title = withTitleColor(secondaryConfig.title, pStyle.y2color);
+        }
         layout[secondaryKey] = secondaryConfig;
       }
     });

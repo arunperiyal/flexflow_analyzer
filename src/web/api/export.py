@@ -473,3 +473,12 @@ def _style_panel_axes(ax, pstyle, style, swap, plotted, default_xlabel, panel_ti
             _hide_ticks(ax2, v2_tick_axis)
         if pstyle.get('showY2Label') is not False:
             set_v2_label(pstyle.get('y2label') or '', fontsize=style.get('labelFontSize') or 9)
+
+        # Which line belongs to which axis is otherwise only in the legend --
+        # tinting the axis spine/ticks/label to match makes that visible
+        # right on the figure, mirroring plot.js's own secondaryConfig.color.
+        if pstyle.get('y2color'):
+            color = pstyle['y2color']
+            ax2.spines['top' if swap else 'right'].set_color(color)
+            ax2.tick_params(axis=v2_tick_axis, colors=color)
+            v2_axis.label.set_color(color)

@@ -230,6 +230,16 @@ body {
 }
 .style-row.checkbox { justify-content: flex-start; gap: 6px; }
 .style-row.checkbox label:first-child { flex: 1; }
+.style-row input[type=color] {
+  width: 40px;
+  height: 26px;
+  padding: 1px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: none;
+  cursor: pointer;
+  margin-bottom: 0;
+}
 .style-limit-row { display: flex; gap: 6px; margin-bottom: 8px; }
 .style-limit-row input { width: 100%; padding: 4px 6px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 12px; margin-bottom: 0; }
 .style-panel-select { width: 100%; padding: 5px 6px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 12px; margin-bottom: 12px; }
