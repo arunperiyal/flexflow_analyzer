@@ -394,10 +394,59 @@ body {
   font-family: 'DejaVu Sans Mono', Menlo, Consolas, monospace;
   color: #64748b;
 }
-.trace-swatch { width: 14px; height: 2px; flex: none; }
-.trace-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trace-swatch { width: 14px; height: 2px; flex: none; cursor: pointer; }
+.trace-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
 .trace-remove { cursor: pointer; color: #cbd5e1; }
 .trace-remove:hover { color: #dc2626; }
+
+/* Trace Style popup (traceedit.js), opened from a trace row above */
+.trace-editor-label {
+  font-family: 'DejaVu Sans Mono', Menlo, Consolas, monospace;
+  font-size: 11px;
+  color: #64748b;
+  margin-bottom: 12px;
+  overflow-wrap: break-word;
+}
+.trace-editor-tabs { display: flex; gap: 4px; margin-bottom: 14px; border-bottom: 1px solid #e2e8f0; }
+.trace-editor-tab {
+  padding: 6px 12px;
+  border: none;
+  background: none;
+  font-size: 12px;
+  color: #64748b;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.trace-editor-tab:hover { color: #334155; }
+.trace-editor-tab.active { color: #2563eb; border-bottom-color: #2563eb; font-weight: 700; }
+.trace-editor-body select {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  font-size: 12px;
+}
+.trace-editor-body input[type=color] {
+  width: 100%;
+  height: 34px;
+  padding: 2px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: none;
+  cursor: pointer;
+  margin-bottom: 12px;
+}
+.color-swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+.color-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  border: 1px solid rgba(15, 23, 42, 0.15);
+  cursor: pointer;
+  padding: 0;
+}
+.color-swatch.active { outline: 2px solid #2563eb; outline-offset: 1px; }
 
 .panel-title { cursor: text; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .panel-title-edit {
