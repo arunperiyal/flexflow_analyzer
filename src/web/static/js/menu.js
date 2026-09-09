@@ -303,6 +303,10 @@ const Menu = (() => {
       closeAll();
       DataMenu.openTable();
     });
+    document.getElementById('data-stats').addEventListener('click', () => {
+      closeAll();
+      DataMenu.openStats();
+    });
   }
 
   function wireHelpMenu() {
