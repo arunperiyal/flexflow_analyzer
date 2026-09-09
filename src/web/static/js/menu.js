@@ -294,6 +294,13 @@ const Menu = (() => {
     });
   }
 
+  function wireDataMenu() {
+    document.getElementById('data-info').addEventListener('click', () => {
+      closeAll();
+      DataMenu.openInfo();
+    });
+  }
+
   function wireHelpMenu() {
     document.getElementById('help-flowchart').addEventListener('click', () => {
       closeAll();
@@ -307,6 +314,7 @@ const Menu = (() => {
     wireDeleteDialog();
     wirePlotMenu();
     wireLayoutMenu();
+    wireDataMenu();
     wireSettingsMenu();
     wireHelpMenu();
   }

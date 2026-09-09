@@ -12,6 +12,7 @@ from typing import Optional
 from flask import Flask, render_template
 
 from .api.cases import bp as cases_bp
+from .api.data import bp as data_bp
 from .api.export import bp as export_bp
 from .api.fft import bp as fft_bp
 from .api.history import bp as history_bp
@@ -28,6 +29,7 @@ def create_app(root: Path) -> Flask:
     app.config['WORKSPACE_ROOT'] = root
 
     app.register_blueprint(cases_bp)
+    app.register_blueprint(data_bp)
     app.register_blueprint(maps_bp)
     app.register_blueprint(history_bp)
     app.register_blueprint(fft_bp)
