@@ -109,6 +109,10 @@ const StyleSidebar = (() => {
         <input type="number" id="style-marker-step" value="${g.markerStep ?? ''}" placeholder="every point" min="1" step="1">
       </div>
       <div class="style-row">
+        <label for="style-line-width">Line width</label>
+        <input type="number" id="style-line-width" value="${g.lineWidth ?? ''}" placeholder="auto" min="0.1" step="0.1">
+      </div>
+      <div class="style-row">
         <label for="style-title">Title</label>
         <input type="text" id="style-title" value="${escapeAttr(g.title || '')}" placeholder="none">
       </div>
@@ -236,9 +240,23 @@ const StyleSidebar = (() => {
   // Shown only once at least one trace here actually uses the secondary
   // axis (TraceEditor's Axis tab) -- a panel that doesn't would otherwise
   // carry style controls for an axis it never draws.
+  // Shown only once a panel actually has a secondary-axis trace -- before
+  // that there is only one Y axis, and coloring it apart from itself means
+  // nothing. Y1's own color lives here too rather than up with the rest of
+  // the (always-shown) primary Y fields, for the same reason: pointless
+  // until there is a second axis to tell it apart from.
   function y2Body(panel, s) {
     if (!panel.traces.some(t => t.secondaryAxis)) return '';
     return `
+      <label class="style-subheading">Axis colors</label>
+      <div class="style-row">
+        <label for="style-ycolor">Y1 (primary)</label>
+        <input type="color" id="style-ycolor" value="${s.ycolor || '#000000'}">
+      </div>
+      <div class="style-row">
+        <label for="style-y2color">Y2 (secondary)</label>
+        <input type="color" id="style-y2color" value="${s.y2color || '#444444'}">
+      </div>
       <label class="style-subheading">Y2 (secondary axis)</label>
       <div class="style-row">
         <label for="style-y2label">Y2 label</label>
@@ -263,10 +281,6 @@ const StyleSidebar = (() => {
       <label class="style-row checkbox">
         <input type="checkbox" id="style-show-y2-label" ${s.showY2Label === false ? '' : 'checked'}> Show Y2 label
       </label>
-      <div class="style-row">
-        <label for="style-y2color">Y2 axis color</label>
-        <input type="color" id="style-y2color" value="${s.y2color || '#444444'}">
-      </div>
     `;
   }
 
@@ -298,6 +312,10 @@ const StyleSidebar = (() => {
     document.getElementById('style-marker-step').addEventListener('change', (e) => {
       const v = e.target.value.trim();
       global({ markerStep: v === '' ? null : Math.max(1, Math.round(parseFloat(v))) });
+    });
+    document.getElementById('style-line-width').addEventListener('change', (e) => {
+      const v = e.target.value.trim();
+      global({ lineWidth: v === '' ? null : Math.max(0.1, parseFloat(v)) });
     });
     document.getElementById('style-title').addEventListener('change', (e) => global({ title: e.target.value.trim() }));
     document.getElementById('style-show-legend').addEventListener('change', (e) => global({ showLegend: e.target.checked }));
@@ -434,6 +452,10 @@ const StyleSidebar = (() => {
       });
       document.getElementById('style-y2color').addEventListener('change', (e) => {
         PlotWorkspace.setPanelStyle(panel.id, { y2color: e.target.value });
+        PlotArea.render();
+      });
+      document.getElementById('style-ycolor').addEventListener('change', (e) => {
+        PlotWorkspace.setPanelStyle(panel.id, { ycolor: e.target.value });
         PlotArea.render();
       });
     }

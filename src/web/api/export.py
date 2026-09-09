@@ -168,7 +168,17 @@ def _hide_ticks(ax, physical_axis):
 
 
 def _plot_kwargs(trace, style):
-    kwargs = {'linewidth': 1.0, 'linestyle': _LINESTYLES.get(trace.get('lineStyle'), '-')}
+    # A trace's own width wins; otherwise the Style sidebar's global one;
+    # otherwise this renderer's own baseline (1.0 here, matching what the
+    # export already looked like before either override existed -- distinct
+    # from plot.js's own baseline of 1.4, a pre-existing difference between
+    # the two renderers this doesn't try to unify).
+    width = trace.get('lineWidth')
+    if width is None:
+        width = style.get('lineWidth')
+    if width is None:
+        width = 1.0
+    kwargs = {'linewidth': width, 'linestyle': _LINESTYLES.get(trace.get('lineStyle'), '-')}
     marker = trace.get('marker')
     if marker and marker != 'none':
         kwargs['marker'] = _MARKERS.get(marker, 'o')
@@ -448,6 +458,17 @@ def _style_panel_axes(ax, pstyle, style, swap, plotted, default_xlabel, panel_ti
         set_xlabel(pstyle.get('xlabel') or default_xlabel, fontsize=style.get('labelFontSize') or 8)
     if pstyle.get('showYLabel') is not False:
         set_ylabel(pstyle.get('ylabel') or panel_title or '', fontsize=style.get('labelFontSize') or 9)
+
+    # The primary axis's own color -- offered once a secondary axis exists
+    # (Style sidebar), since only then is there another axis to tell it
+    # apart from. Only its own spine ('left', or 'bottom' if swap moved the
+    # value role onto the physical x-axis) -- the time/position axis and its
+    # spine are untouched, matching plot.js's own ycolor -> logicalYConfig.
+    if pstyle.get('ycolor'):
+        color = pstyle['ycolor']
+        ax.spines['bottom' if swap else 'left'].set_color(color)
+        ax.tick_params(axis=y_tick_axis, colors=color)
+        y_axis.label.set_color(color)
 
     if ax2 is not None:
         # No grid of its own -- ax's is enough, and a second set of

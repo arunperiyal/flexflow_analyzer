@@ -615,6 +615,64 @@ def test_style_panel_axes_leaves_the_twin_axis_default_colored_when_unset():
     plt.close(fig)
 
 
+def test_style_panel_axes_colors_the_primary_axis_spine_ticks_and_label():
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import to_rgba
+    from src.web.api.export import _style_panel_axes
+
+    fig, ax = plt.subplots()
+    ax.plot([0, 1], [0, 1])
+    ax2 = ax.twinx()
+    ax2.plot([0, 1], [100, 200])
+    _style_panel_axes(ax, {'ycolor': '#dc2626', 'ylabel': 'aleDisp_y'}, {}, swap=False, plotted=1,
+                      default_xlabel='time [s]', panel_title='p', font_name=None, ax2=ax2)
+    fig.canvas.draw()
+
+    expected = to_rgba('#dc2626')
+    assert to_rgba(ax.spines['left'].get_edgecolor()) == expected
+    assert to_rgba(ax.yaxis.label.get_color()) == expected
+    assert {to_rgba(t.get_color()) for t in ax.get_yticklabels()} == {expected}
+    # The secondary axis is untouched -- only ax was told to tint itself.
+    assert to_rgba(ax2.yaxis.label.get_color()) != expected
+    plt.close(fig)
+
+
+def test_style_panel_axes_colors_the_primary_bottom_spine_when_swapped():
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import to_rgba
+    from src.web.api.export import _style_panel_axes
+
+    fig, ax = plt.subplots()
+    ax.plot([0, 1], [0, 1])
+    _style_panel_axes(ax, {'ycolor': '#0891b2'}, {}, swap=True, plotted=1,
+                      default_xlabel='position', panel_title='p', font_name=None)
+    fig.canvas.draw()
+
+    assert to_rgba(ax.spines['bottom'].get_edgecolor()) == to_rgba('#0891b2')
+    plt.close(fig)
+
+
+def test_style_panel_axes_leaves_the_primary_axis_default_colored_when_unset():
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    from src.web.api.export import _style_panel_axes
+
+    fig, ax = plt.subplots()
+    ax.plot([0, 1], [0, 1])
+    default_edgecolor = ax.spines['left'].get_edgecolor()
+    _style_panel_axes(ax, {}, {}, swap=False, plotted=1, default_xlabel='time [s]',
+                      panel_title='p', font_name=None)
+    fig.canvas.draw()
+
+    assert ax.spines['left'].get_edgecolor() == default_edgecolor
+    plt.close(fig)
+
+
 # -- style sidebar settings, carried through to the matplotlib render -------
 
 def test_export_honors_global_style(client):
@@ -719,6 +777,34 @@ def test_plot_kwargs_maps_marker_size_and_step_onto_matplotlib_names():
     # step of 1 (or unset) means "every point" -- matches Plotly's step<=1 no-op, not markevery=1.
     kwargs_step1 = _plot_kwargs({'marker': 'circle'}, {'markerStep': 1})
     assert 'markevery' not in kwargs_step1
+
+
+def test_plot_kwargs_line_width_falls_back_trace_then_global_then_default():
+    from src.web.api.export import _plot_kwargs
+
+    assert _plot_kwargs({'lineWidth': 3.0}, {'lineWidth': 2.0})['linewidth'] == 3.0
+    assert _plot_kwargs({}, {'lineWidth': 2.0})['linewidth'] == 2.0
+    assert _plot_kwargs({}, {})['linewidth'] == 1.0
+    # A trace explicitly at 0 is a real (if unusual) width, not "unset".
+    assert _plot_kwargs({'lineWidth': 0.5}, {'lineWidth': 2.0})['linewidth'] == 0.5
+
+
+def test_export_honors_per_trace_and_global_line_width(client, monkeypatch):
+    from matplotlib.axes import Axes
+    captured = []
+    real_plot = Axes.plot
+
+    def spy_plot(self, *args, **kwargs):
+        captured.append(kwargs.get('linewidth'))
+        return real_plot(self, *args, **kwargs)
+    monkeypatch.setattr(Axes, 'plot', spy_plot)
+
+    panels = _panels()
+    panels[0]['traces'][0]['lineWidth'] = 3.5   # per-trace override wins
+    res = client.post('/api/export', json={'panels': panels, 'style': {'lineWidth': 2.0}})
+
+    assert res.status_code == 200
+    assert captured == [3.5, 2.0]
 
 
 def test_matplotlib_font_returns_none_for_no_font_family():

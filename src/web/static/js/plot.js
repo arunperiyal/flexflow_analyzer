@@ -171,8 +171,12 @@ const PlotArea = (() => {
   // not JS's `{k: undefined}` where the key exists but the value doesn't).
   // So the key must be left off entirely, not set to undefined -- these
   // build that instead of inlining it, since it is easy to get wrong twice.
-  function lineFor(t) {
-    const line = { color: t.color, width: 1.4 };
+  // A trace's own width wins; otherwise the Style sidebar's global one;
+  // otherwise this renderer's own baseline (1.4, what every trace already
+  // drew at before either override existed).
+  function lineFor(t, style) {
+    const width = t.lineWidth ?? style.lineWidth ?? 1.4;
+    const line = { color: t.color, width };
     if (t.lineStyle) line.dash = t.lineStyle;
     return line;
   }
@@ -365,7 +369,7 @@ const PlotArea = (() => {
             yaxis: (!swap && onSecondary) ? secondaryRef : yref,
             mode: symbol ? 'lines+markers' : 'lines', type: 'scatter',
             name: labelOf(t, autoLabel(t)),
-            line: lineFor(t),
+            line: lineFor(t, style),
           };
           addMarker(trace, t, symbol, 5, style, logicalX.length);
           traces.push(trace);
@@ -385,7 +389,7 @@ const PlotArea = (() => {
             yaxis: (!swap && onSecondary) ? secondaryRef : yref,
             mode: symbol ? 'lines+markers' : 'lines', type: 'scatter',
             name: labelOf(t, autoLabel(t)),
-            line: lineFor(t),
+            line: lineFor(t, style),
           };
           addMarker(trace, t, symbol, 6, style, logicalX.length);
           traces.push(trace);
@@ -427,6 +431,15 @@ const PlotArea = (() => {
       const logicalYRange = extent(primaryTraces.flatMap(tr => (swap ? tr.x : tr.y)));
       applyAxisStyle(logicalXConfig, style, pStyle.xtick, pStyle.xlim, logicalXRange, pStyle.xtickangle);
       applyAxisStyle(logicalYConfig, style, pStyle.ytick, pStyle.ylim, logicalYRange, pStyle.ytickangle);
+      // The primary (value) axis's own color -- offered once a secondary
+      // axis exists, since only then is there another axis to tell it apart
+      // from. logicalYConfig, not xKey/yKey directly: it is always the
+      // *value*-role config regardless of swap, same as secondaryConfig's
+      // own color just below.
+      if (pStyle.ycolor) {
+        logicalYConfig.color = pStyle.ycolor;
+        logicalYConfig.title = withTitleColor(logicalYConfig.title, pStyle.ycolor);
+      }
 
       layout[xKey] = swap ? logicalYConfig : logicalXConfig;
       layout[yKey] = swap ? logicalXConfig : logicalYConfig;
