@@ -314,6 +314,11 @@ const PlotArea = (() => {
     // from its own pane rect, independent of every other panel's.
     const SCREEN_DPI = 96;
     const traces = [];
+    // Every panel that ends up with a true (unswapped) secondary y-axis --
+    // rightAlignY2Ticks below needs the axis numbers after Plotly has drawn
+    // them, since it patches SVG text Plotly itself doesn't expose a layout
+    // option for.
+    const secondaryYAxisNums = [];
     const layout = {
       margin,
       showlegend: !!style.showLegend,
@@ -499,6 +504,7 @@ const PlotArea = (() => {
           secondaryConfig.title = withTitleColor(secondaryConfig.title, pStyle.y2color);
         }
         layout[secondaryKey] = secondaryConfig;
+        if (!swap) secondaryYAxisNums.push(secondaryNum);
       }
     });
 
@@ -507,7 +513,43 @@ const PlotArea = (() => {
     // just computed gets silently overridden right back to "fill whatever
     // space is available" (the width/height "doesn't properly fit in"
     // symptom from before the canvas was mandatory).
-    await Plotly.newPlot('plotly-panels', traces, layout, { displaylogo: false, responsive: false });
+    const gd = await Plotly.newPlot('plotly-panels', traces, layout, { displaylogo: false, responsive: false });
+    if (secondaryYAxisNums.length) {
+      rightAlignY2Ticks(secondaryYAxisNums);
+      // Plotly redraws its own tick text (back to its own default anchor)
+      // on every relayout -- a modebar zoom/pan/autoscale, not just a style
+      // sidebar edit (which already goes through a fresh render() and so
+      // reapplies this above regardless). #plotly-panels is replaced with a
+      // brand-new node on every render(), so this listener is never
+      // duplicated across renders.
+      gd.on('plotly_relayout', () => rightAlignY2Ticks(secondaryYAxisNums));
+    }
+  }
+
+  // Plotly draws an overlaying axis's tick numbers flush against the axis
+  // line and growing outward (text-anchor "start" for a right-side y2) --
+  // the mirror of the primary axis's own "end"-anchored numbers, and correct
+  // by the usual convention, but it leaves the numbers' *inner* edges
+  // ragged (a short "0" sitting right against the axis, a wide "-6000"
+  // reaching further out) rather than lining up as a column. Not offered as
+  // a layout option, so patched here, on the actual rendered SVG, into a
+  // right-flush column instead: every label in one axis re-anchored to a
+  // shared right edge (the widest label's own reach), the same convention
+  // already applied to the primary axis, mirrored.
+  function rightAlignY2Ticks(axisNums) {
+    const svg = document.querySelector('#plotly-panels svg.main-svg');
+    if (!svg) return;
+    for (const num of axisNums) {
+      const labels = [...svg.querySelectorAll(`g.y${num}tick text`)];
+      if (!labels.length) continue;
+      const startX = parseFloat(labels[0].getAttribute('x'));
+      const maxWidth = Math.max(...labels.map(t => t.getBBox().width));
+      const rightEdge = startX + maxWidth;
+      labels.forEach(t => {
+        t.setAttribute('text-anchor', 'end');
+        t.setAttribute('x', rightEdge);
+      });
+    }
   }
 
   // The logical Y/X range, i.e. what the style sidebar's Y/X fields (and
