@@ -352,16 +352,22 @@ def _trace_values(root, trace):
 def _fft_trace_values(root, trace):
     """(frequencies, amplitude) for one trace's spectrum, or (None, None) if
     it cannot be computed -- reuses _trace_values' own (values, times) read,
-    then compute_fft's shared transform (services/fft.py, the same one
+    windows it to the trace's own t1/t2 (window_mask, same as /spatial's
+    stat mode -- both ends open, unset means the whole series), then
+    compute_fft's shared transform (services/fft.py, the same one
     /api/cases/<name>/fft calls), so the export and the live view compute
-    this exactly the same way. A non-uniform-time-step case is one more
-    reason this can't be read, same silent-skip as every other one here --
-    the live /fft endpoint is where that surfaces as a visible error."""
+    this exactly the same way. A non-uniform-time-step case, or a window
+    with no timesteps in it, is one more reason this can't be read, same
+    silent-skip as every other one here -- the live /fft endpoint is where
+    either surfaces as a visible error."""
     values, times = _trace_values(root, trace)
     if values is None:
         return None, None
+    mask = window_mask(times, trace.get('t1'), trace.get('t2'))
+    if not mask.any():
+        return None, None
     try:
-        return compute_fft(times, values)
+        return compute_fft(times[mask], values[mask])
     except ValueError:
         return None, None
 
@@ -369,11 +375,19 @@ def _fft_trace_values(root, trace):
 def _fft_auto_label(trace):
     """Matches plot.js's own autoLabel for an FFT trace -- the same base
     name (surface or nodal) with an ' FFT' suffix, so a spectrum can never
-    be mistaken for its own signal's time trace in a legend."""
+    be mistaken for its own signal's time trace in a legend, plus a
+    '[t1, t2]' suffix when the trace is windowed (same as PanelTree's own
+    tree-row label) so two spectra of the same signal over different
+    windows -- an early transient next to the steady state, say -- read
+    apart in the legend too."""
     base = (f"{trace.get('case')} {trace.get('block')} {trace.get('col')}"
            if trace.get('source') == 'oisd'
            else f"{trace.get('case')} r{trace.get('row')} {trace.get('col')}")
-    return f"{base} FFT"
+    label = f"{base} FFT"
+    t1, t2 = trace.get('t1'), trace.get('t2')
+    if t1 is not None or t2 is not None:
+        label += f" [{t1 if t1 is not None else 'start'}, {t2 if t2 is not None else 'end'}]"
+    return label
 
 
 def _spatial_trace_values(root, trace):

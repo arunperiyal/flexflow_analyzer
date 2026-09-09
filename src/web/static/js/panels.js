@@ -304,7 +304,13 @@ const PlotWorkspace = (() => {
     return panel;
   }
 
-  function addFFTTrace(caseName, group, rows, nodeOf, column, source, block, targetPanelId) {
+  // opts: { t1, t2 } -- an optional time window the spectrum is computed
+  // over (both ends open, unset means the whole series), same shape as
+  // addSpatialTrace's own opts. Folded into the dedup check below since two
+  // FFT traces of the same signal windowed differently are legitimately
+  // different traces (an early transient next to the steady state, say),
+  // not a re-add of the same one.
+  function addFFTTrace(caseName, group, rows, nodeOf, column, source, block, opts, targetPanelId) {
     const L = active();
     let panel;
     if (targetPanelId === '__new__') {
@@ -316,14 +322,19 @@ const PlotWorkspace = (() => {
     if (!panel) panel = panelForFFT(caseName);
 
     const cs = caseStyleFor(caseName);
+    const t1 = (opts && opts.t1 != null) ? opts.t1 : null;
+    const t2 = (opts && opts.t2 != null) ? opts.t2 : null;
     for (const row of rows) {
       const already = panel.traces.some(t => t.case === caseName && t.group === group && t.row === row
-                                        && t.col === column && (t.source || 'othd') === (source || 'othd'));
+                                        && t.col === column && (t.source || 'othd') === (source || 'othd')
+                                        && (t.t1 ?? null) === t1 && (t.t2 ?? null) === t2);
       if (already) continue;
       const trace = { case: caseName, group, row, node: nodeOf ? nodeOf(row) : null,
                       col: column, source: source || 'othd', kind: 'fft',
                       color: cs.color, lineStyle: cs.lineStyle, marker: cs.marker };
       if (block) trace.block = block;
+      if (t1 != null) trace.t1 = t1;
+      if (t2 != null) trace.t2 = t2;
       panel.traces.push(trace);
     }
     if (!L.activePanelId) L.activePanelId = panel.id;
@@ -582,11 +593,16 @@ const PanelTree = (() => {
   }
 
   function traceLabel(t) {
-    if (!t.points) return `${t.case} r${t.row} ${t.col}`;   // time trace
-    const n = t.points.length;
+    if (t.points) {
+      const n = t.points.length;
+      const range = t.t1 == null && t.t2 == null ? '' : ` [${t.t1 ?? 'start'}, ${t.t2 ?? 'end'}]`;
+      const what = t.mode === 'snapshot' ? `@t=${t.time}` : `${t.stat}${range}`;
+      return `${t.case} ${t.col} ${what} (${n} node${n === 1 ? '' : 's'})`;
+    }
+    const base = `${t.case} r${t.row} ${t.col}`;   // time trace
+    if (t.kind !== 'fft') return base;
     const range = t.t1 == null && t.t2 == null ? '' : ` [${t.t1 ?? 'start'}, ${t.t2 ?? 'end'}]`;
-    const what = t.mode === 'snapshot' ? `@t=${t.time}` : `${t.stat}${range}`;
-    return `${t.case} ${t.col} ${what} (${n} node${n === 1 ? '' : 's'})`;
+    return `${base} FFT${range}`;
   }
 
   function startRename(header, titleEl, panel) {

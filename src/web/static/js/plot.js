@@ -27,6 +27,12 @@ const PlotArea = (() => {
   // /history request neither is right for.
   function groupKey(t) { return `${t.case} ${t.source || 'othd'} ${t.group}`; }
 
+  // An FFT trace's own key also folds in its time window -- two traces of
+  // the same signal windowed differently (an early transient next to the
+  // steady state, say) must never land in one batched /fft request, since
+  // each window gets its own times array and so its own frequency axis.
+  function fftGroupKey(t) { return `${groupKey(t)} ${t.t1 ?? ''} ${t.t2 ?? ''}`; }
+
   async function fetchHistory(caseName, group, rows, columns, source = 'othd') {
     const params = new URLSearchParams({
       group: String(group), columns: columns.join(','), rows: rows.join(','), kind: source,
@@ -37,14 +43,19 @@ const PlotArea = (() => {
     return data;
   }
 
-  // Same batching as fetchHistory (one request per case/group/source) --
-  // the server computes the spectrum from that same time series (services/
+  // Same batching as fetchHistory (one request per case/group/source/window)
+  // -- the server computes the spectrum from that same time series (services/
   // fft.py) rather than the browser doing it, so a non-uniform-time-step
-  // case surfaces as this request's own error rather than a wrong plot.
-  async function fetchFFT(caseName, group, rows, columns, source = 'othd') {
+  // case, or a window with no timesteps in it, surfaces as this request's
+  // own error rather than a wrong plot. t1/t2 (both ends open, null -> the
+  // whole series) restrict the spectrum to a stretch of the signal -- see
+  // fftGroupKey for why traces with a different window never batch together.
+  async function fetchFFT(caseName, group, rows, columns, source = 'othd', t1 = null, t2 = null) {
     const params = new URLSearchParams({
       group: String(group), columns: columns.join(','), rows: rows.join(','), kind: source,
     });
+    if (t1 != null) params.set('t1', String(t1));
+    if (t2 != null) params.set('t2', String(t2));
     const res = await fetch(`/api/cases/${encodeURIComponent(caseName)}/fft?${params}`);
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'fft request failed');
@@ -104,10 +115,15 @@ const PlotArea = (() => {
     // A surface trace's row is always 0 -- "r0" would say nothing a reader
     // could use, unlike a nodal trace's row. The block name identifies it.
     const base = t.source === 'oisd' ? `${t.case} ${t.block} ${t.col}` : `${t.case} r${t.row} ${t.col}`;
+    if (t.kind !== 'fft') return base;
     // Distinguishes a spectrum from its own signal's time trace, which
     // could otherwise land on one legend with an identical name if a user
-    // deliberately overlays both onto the same panel by hand.
-    return t.kind === 'fft' ? `${base} FFT` : base;
+    // deliberately overlays both onto the same panel by hand. The window
+    // suffix (matching PanelTree.traceLabel's own) tells apart two spectra
+    // of the same signal over different windows -- an early transient next
+    // to the steady state, say.
+    const range = t.t1 == null && t.t2 == null ? '' : ` [${t.t1 ?? 'start'}, ${t.t2 ?? 'end'}]`;
+    return `${base} FFT${range}`;
   }
 
   function placeholder(msg) {
@@ -289,11 +305,13 @@ const PlotArea = (() => {
         spatialTraces.push(...panel.traces);
         continue;
       }
-      const targetGroups = panel.kind === 'fft' ? fftGroups : groups;
+      const isFFTPanel = panel.kind === 'fft';
+      const targetGroups = isFFTPanel ? fftGroups : groups;
       for (const t of panel.traces) {
-        const key = groupKey(t);
+        const key = isFFTPanel ? fftGroupKey(t) : groupKey(t);
         if (!targetGroups.has(key)) {
           targetGroups.set(key, { case: t.case, group: t.group, source: t.source || 'othd',
+                                  t1: t.t1 ?? null, t2: t.t2 ?? null,
                                   rows: new Set(), columns: new Set() });
         }
         const g = targetGroups.get(key);
@@ -310,7 +328,7 @@ const PlotArea = (() => {
         results.set(key, await fetchHistory(g.case, g.group, [...g.rows], [...g.columns], g.source));
       }
       for (const [key, g] of fftGroups) {
-        fftResults.set(key, await fetchFFT(g.case, g.group, [...g.rows], [...g.columns], g.source));
+        fftResults.set(key, await fetchFFT(g.case, g.group, [...g.rows], [...g.columns], g.source, g.t1, g.t2));
       }
       for (const t of spatialTraces) {
         const data = await fetchSpatial(t);
@@ -413,7 +431,7 @@ const PlotArea = (() => {
         });
       } else if (isFFT) {
         panel.traces.forEach(t => {
-          const data = fftResults.get(groupKey(t));
+          const data = fftResults.get(fftGroupKey(t));
           const s = data && data.series.find(s => s.row === t.row && s.column === t.col);
           const symbol = markerSymbolFor(t, false);
           const scale = scaleOf(t);

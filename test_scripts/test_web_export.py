@@ -1217,6 +1217,39 @@ def test_fft_trace_values_matches_a_direct_computation(client):
     np.testing.assert_allclose(amplitude, expected_amplitude)
 
 
+def test_fft_trace_values_windows_to_t1_t2(client):
+    import numpy as np
+    from src.web.api.export import _fft_trace_values, _trace_values
+    from src.web.services.fft import compute_fft
+
+    root = client.application.config['WORKSPACE_ROOT']
+    raw_values, raw_times = _trace_values(
+        root, {'case': 'BR0SG0U1P0', 'group': 0, 'row': 0, 'col': 'aleDisp_y', 'source': 'othd'})
+    t1, t2 = float(raw_times[5]), float(raw_times[15])
+    mask = (raw_times >= t1) & (raw_times <= t2)
+    expected_freqs, expected_amplitude = compute_fft(raw_times[mask], raw_values[mask])
+
+    trace = {'case': 'BR0SG0U1P0', 'group': 0, 'row': 0, 'col': 'aleDisp_y', 'source': 'othd',
+             't1': t1, 't2': t2}
+    freqs, amplitude = _fft_trace_values(root, trace)
+    np.testing.assert_allclose(freqs, expected_freqs)
+    np.testing.assert_allclose(amplitude, expected_amplitude)
+
+
+def test_fft_trace_values_returns_none_for_a_window_with_no_timesteps_in_it(client):
+    from src.web.api.export import _fft_trace_values, _trace_values
+
+    root = client.application.config['WORKSPACE_ROOT']
+    _, raw_times = _trace_values(
+        root, {'case': 'BR0SG0U1P0', 'group': 0, 'row': 0, 'col': 'aleDisp_y', 'source': 'othd'})
+    past_the_end = float(raw_times[-1]) + 1000.0
+
+    trace = {'case': 'BR0SG0U1P0', 'group': 0, 'row': 0, 'col': 'aleDisp_y', 'source': 'othd',
+             't1': past_the_end}
+    freqs, amplitude = _fft_trace_values(root, trace)
+    assert freqs is None and amplitude is None
+
+
 def test_fft_trace_values_reads_an_oisd_trace(client):
     from src.web.api.export import _fft_trace_values
 
@@ -1264,6 +1297,19 @@ def test_fft_auto_label_matches_plot_js_naming():
 
     surface = {'case': 'BR0SG0U1P0', 'block': 'cylinder_body', 'col': 'totTrac_x', 'source': 'oisd'}
     assert _fft_auto_label(surface) == 'BR0SG0U1P0 cylinder_body totTrac_x FFT'
+
+
+def test_fft_auto_label_appends_the_window_when_windowed():
+    from src.web.api.export import _fft_auto_label
+
+    both = {'case': 'BR0SG0U1P0', 'row': 12, 'col': 'aleDisp_y', 'source': 'othd', 't1': 1.0, 't2': 2.0}
+    assert _fft_auto_label(both) == 'BR0SG0U1P0 r12 aleDisp_y FFT [1.0, 2.0]'
+
+    t1_only = {'case': 'BR0SG0U1P0', 'row': 12, 'col': 'aleDisp_y', 'source': 'othd', 't1': 1.0}
+    assert _fft_auto_label(t1_only) == 'BR0SG0U1P0 r12 aleDisp_y FFT [1.0, end]'
+
+    t2_only = {'case': 'BR0SG0U1P0', 'row': 12, 'col': 'aleDisp_y', 'source': 'othd', 't2': 2.0}
+    assert _fft_auto_label(t2_only) == 'BR0SG0U1P0 r12 aleDisp_y FFT [start, 2.0]'
 
 
 def test_export_fft_scales_a_trace_and_uses_its_custom_label(client, monkeypatch):
@@ -1349,3 +1395,33 @@ def test_export_fft_panel_with_no_readable_traces_does_not_crash(client):
     res = client.post('/api/export', json={'panels': panels})
     assert res.status_code == 200
     assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
+
+
+def test_export_fft_windowed_trace_matches_a_direct_windowed_computation(client, monkeypatch):
+    import numpy as np
+    from matplotlib.axes import Axes
+    from src.web.api import export as export_mod
+
+    root = client.application.config['WORKSPACE_ROOT']
+    raw_values, raw_times = export_mod._trace_values(
+        root, {'case': 'BR0SG0U1P0', 'group': 0, 'row': 0, 'col': 'aleDisp_y', 'source': 'othd'})
+    t1, t2 = float(raw_times[5]), float(raw_times[15])
+
+    captured = {}
+    real_plot = Axes.plot
+
+    def spy_plot(self, *args, **kwargs):
+        captured['x'] = args[0]
+        captured['label'] = kwargs.get('label')
+        return real_plot(self, *args, **kwargs)
+    monkeypatch.setattr(Axes, 'plot', spy_plot)
+
+    trace = {'case': 'BR0SG0U1P0', 'group': 0, 'row': 0, 'col': 'aleDisp_y', 'source': 'othd',
+             't1': t1, 't2': t2, 'color': '#dc2626'}
+    panels = [{'id': 'p1', 'title': 'FFT', 'kind': 'fft', 'traces': [trace]}]
+    res = client.post('/api/export', json={'panels': panels})
+
+    expected_freqs, _ = export_mod._fft_trace_values(root, trace)
+    assert res.status_code == 200
+    np.testing.assert_allclose(captured['x'], expected_freqs)
+    assert captured['label'] == f'BR0SG0U1P0 r0 aleDisp_y FFT [{t1}, {t2}]'
