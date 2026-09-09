@@ -91,6 +91,9 @@ const TraceEditor = (() => {
       return `
         <label for="te-line">Line style</label>
         <select id="te-line">${StyleSidebar.options(StyleSidebar.LINE_STYLES, trace.lineStyle)}</select>
+        <label for="te-line-width">Line width</label>
+        <input type="number" id="te-line-width" step="0.1" min="0.1" placeholder="global default"
+               value="${trace.lineWidth ?? ''}">
       `;
     }
     if (activeTab === 'marker') {
@@ -159,6 +162,12 @@ const TraceEditor = (() => {
     } else if (activeTab === 'line') {
       document.getElementById('te-line').addEventListener('change', (e) => {
         apply(panel, traceIndex, { lineStyle: e.target.value });
+      });
+      document.getElementById('te-line-width').addEventListener('change', (e) => {
+        const raw = e.target.value.trim();
+        const width = raw === '' ? null : parseFloat(raw);
+        if (raw !== '' && (Number.isNaN(width) || width <= 0)) return;
+        apply(panel, traceIndex, { lineWidth: width });
       });
     } else if (activeTab === 'marker') {
       document.getElementById('te-marker').addEventListener('change', (e) => {
