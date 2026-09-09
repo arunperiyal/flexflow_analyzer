@@ -83,6 +83,13 @@ const PlotArea = (() => {
   // genuine (if unusual) scale of 0 back into 1.
   function scaleOf(t) { return t.scale == null ? 1 : t.scale; }
 
+  // xscale: the same idea as scale, but for an FFT trace's frequency axis --
+  // e.g. dividing by a shedding frequency to plot a Strouhal number instead
+  // of raw Hz. Only meaningful where the X axis is itself plotted data
+  // (a spectrum), not a shared time axis, so it's wired into the FFT branch
+  // alone.
+  function xscaleOf(t) { return t.xscale == null ? 1 : t.xscale; }
+
   // label: overrides the auto-generated trace name (case/row/column, or
   // case/block/column for a surface trace) wherever it's about to be shown
   // -- an empty override falls back to that name rather than showing nothing.
@@ -410,8 +417,9 @@ const PlotArea = (() => {
           const s = data && data.series.find(s => s.row === t.row && s.column === t.col);
           const symbol = markerSymbolFor(t, false);
           const scale = scaleOf(t);
+          const xscale = xscaleOf(t);
           const onSecondary = !!t.secondaryAxis;
-          const logicalX = data ? data.frequencies : [];
+          const logicalX = data ? data.frequencies.map(v => v * xscale) : [];
           const logicalY = s ? s.amplitude.map(v => v * scale) : [];
           const trace = {
             x: swap ? logicalY : logicalX, y: swap ? logicalX : logicalY,

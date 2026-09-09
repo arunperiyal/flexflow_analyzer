@@ -75,11 +75,19 @@ const TraceEditor = (() => {
       `;
     }
     if (activeTab === 'value') {
+      const xscaleField = trace.kind === 'fft' ? `
+        <label for="te-xscale">X scale factor</label>
+        <input type="number" id="te-xscale" step="any" placeholder="1" value="${trace.xscale ?? ''}">
+        <p class="trace-editor-hint">Multiplies every plotted frequency -- e.g. dividing by a
+          shedding frequency to read a Strouhal number instead of Hz. Applies to hover values and
+          the export too, not just this view.</p>
+      ` : '';
       return `
         <label for="te-scale">Scale factor</label>
         <input type="number" id="te-scale" step="any" placeholder="1" value="${trace.scale ?? ''}">
         <p class="trace-editor-hint">Multiplies every plotted value -- e.g. turning a force trace
           into a coefficient. Applies to hover values and the export too, not just this view.</p>
+        ${xscaleField}
         <label for="te-label">Label</label>
         <input type="text" id="te-label" placeholder="${escapeAttr(PlotArea.autoLabel(trace))}"
                value="${escapeAttr(trace.label || '')}">
@@ -180,6 +188,15 @@ const TraceEditor = (() => {
         if (raw !== '' && Number.isNaN(scale)) return;   // leave the invalid text as typed
         apply(panel, traceIndex, { scale });
       });
+      const xscaleInput = document.getElementById('te-xscale');
+      if (xscaleInput) {
+        xscaleInput.addEventListener('change', (e) => {
+          const raw = e.target.value.trim();
+          const xscale = raw === '' ? null : parseFloat(raw);
+          if (raw !== '' && Number.isNaN(xscale)) return;   // leave the invalid text as typed
+          apply(panel, traceIndex, { xscale });
+        });
+      }
       document.getElementById('te-label').addEventListener('change', (e) => {
         apply(panel, traceIndex, { label: e.target.value.trim() });
       });
