@@ -3,7 +3,9 @@
 Same shape as /history (batched over rows and columns for one case/group/
 kind), since the input is exactly the same time series -- this just
 transforms it before responding, via services/fft.py, rather than handing
-back the raw values.
+back the raw values. An optional t1/t2 window (see /spatial's stat mode)
+restricts the spectrum to a stretch of the signal -- comparing an early
+transient against a later steady state, say -- rather than the whole run.
 """
 
 from flask import Blueprint, current_app, jsonify, request
@@ -12,6 +14,7 @@ from ..services import registry
 from ..services.columns import column_map as build_column_map
 from ..services.fft import compute_fft
 from ..services.loader import loader
+from ..services.spatial import window_mask
 
 bp = Blueprint('fft', __name__, url_prefix='/api/cases')
 
@@ -69,6 +72,17 @@ def fft(name):
     if bad_rows:
         return jsonify({'error': f"row(s) out of range (0..{nnodes - 1}): {bad_rows}"}), 400
 
+    # An optional time window, same shape as /spatial's stat mode: both ends
+    # open, None -> the whole series. Windowing before compute_fft (not
+    # inside it) keeps compute_fft itself about "one already-chosen stretch
+    # of samples", not about picking which ones.
+    t1 = request.args.get('t1', type=float)
+    t2 = request.args.get('t2', type=float)
+    mask = window_mask(meta.times, t1, t2)
+    if not mask.any():
+        return jsonify({'error': 'no timesteps in that window'}), 400
+    windowed_times = meta.times[mask]
+
     try:
         # Every (row, column) in one case/group shares the same times, so
         # the frequency axis is computed once -- only the amplitude differs.
@@ -78,10 +92,11 @@ def fft(name):
             var_name, comp = column_map[col]
             arr = arrays[var_name]              # (nsteps, nnodes, ncomp)
             for row in rows:
-                f, amplitude = compute_fft(meta.times, arr[:, row, comp])
+                f, amplitude = compute_fft(windowed_times, arr[mask, row, comp])
                 freqs = f
                 series.append({'row': row, 'column': col, 'amplitude': amplitude.tolist()})
     except ValueError as exc:
         return jsonify({'error': str(exc)}), 400
 
-    return jsonify({'case': name, 'group': group, 'frequencies': freqs.tolist(), 'series': series})
+    return jsonify({'case': name, 'group': group, 'frequencies': freqs.tolist(), 'series': series,
+                    't1': float(windowed_times[0]), 't2': float(windowed_times[-1])})

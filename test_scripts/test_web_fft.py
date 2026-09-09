@@ -97,6 +97,53 @@ def test_fft_kind_oisd_reads_the_surface_series(client):
     assert np.allclose(s['amplitude'], expected_amplitude)
 
 
+# -- time window (t1/t2) ---------------------------------------------------
+
+def test_t1_t2_restricts_the_spectrum_to_that_window(client):
+    times, values = _reference_series(client, 0, 'aleDisp_y')
+    t1, t2 = float(times[5]), float(times[15])
+    mask = (times >= t1) & (times <= t2)
+    expected_freqs, expected_amplitude = compute_fft(times[mask], values[mask])
+
+    res = client.get(f'/api/cases/BR0SG0U1P0/fft'
+                      f'?group=0&columns=aleDisp_y&rows=0&t1={t1}&t2={t2}')
+    assert res.status_code == 200
+    data = res.get_json()
+    assert np.allclose(data['frequencies'], expected_freqs)
+    assert np.allclose(data['series'][0]['amplitude'], expected_amplitude)
+    assert data['t1'] == pytest.approx(float(times[mask][0]))
+    assert data['t2'] == pytest.approx(float(times[mask][-1]))
+
+
+def test_t1_only_windows_from_the_start_of_that_time_to_the_end(client):
+    times, values = _reference_series(client, 0, 'aleDisp_y')
+    t1 = float(times[10])
+    mask = times >= t1
+    expected_freqs, expected_amplitude = compute_fft(times[mask], values[mask])
+
+    res = client.get(f'/api/cases/BR0SG0U1P0/fft?group=0&columns=aleDisp_y&rows=0&t1={t1}')
+    assert res.status_code == 200
+    data = res.get_json()
+    assert np.allclose(data['frequencies'], expected_freqs)
+    assert np.allclose(data['series'][0]['amplitude'], expected_amplitude)
+
+
+def test_no_window_still_reports_t1_t2_as_the_full_series(client):
+    times, _ = _reference_series(client, 0, 'aleDisp_y')
+    res = client.get('/api/cases/BR0SG0U1P0/fft?group=0&columns=aleDisp_y&rows=0')
+    data = res.get_json()
+    assert data['t1'] == pytest.approx(float(times[0]))
+    assert data['t2'] == pytest.approx(float(times[-1]))
+
+
+def test_rejects_a_window_with_no_timesteps_in_it(client):
+    times, _ = _reference_series(client, 0, 'aleDisp_y')
+    past_the_end = float(times[-1]) + 1000.0
+    res = client.get(f'/api/cases/BR0SG0U1P0/fft?columns=aleDisp_y&rows=0&t1={past_the_end}')
+    assert res.status_code == 400
+    assert 'no timesteps' in res.get_json()['error']
+
+
 # -- non-uniform sampling --------------------------------------------------
 
 def test_rejects_non_uniformly_spaced_times(client, workspace, monkeypatch):

@@ -327,6 +327,7 @@ const NewPlot = (() => {
       <label>Variables (${idLabel} ${groupId})</label>
       <div class="var-list">${cols}</div>
       <div id="np-spatial-options"></div>
+      <div id="np-fft-options"></div>
       <label for="np-panel">Panel</label>
       <select id="np-panel"></select>
       <div class="btn-row"><button id="np-add" class="primary" disabled>Add to plot</button></div>
@@ -385,15 +386,33 @@ const NewPlot = (() => {
     }
   }
 
+  // Optional -- unlike spatial's "multi time" frame, there is no stat to
+  // pick and nothing to gate the Add button on: blank means the whole
+  // series, same as leaving spatial's own t1/t2 blank.
+  function renderFFTOptions() {
+    const box = document.getElementById('np-fft-options');
+    if (!box) return;
+    if (currentKind() !== 'fft') { box.innerHTML = ''; return; }
+    box.innerHTML = `
+      <label>Time window (optional)</label>
+      <div class="coord-inputs">
+        <input type="text" id="np-fft-t1" placeholder="t1 (blank = start)">
+        <input type="text" id="np-fft-t2" placeholder="t2 (blank = end)">
+      </div>
+    `;
+  }
+
   function wireVariablesAndAdd(group) {
     document.querySelectorAll('.np-column').forEach(cb => cb.addEventListener('change', updateAddButton));
     document.querySelectorAll('input[name="np-kind"]').forEach(r => r.addEventListener('change', () => {
       renderPanelOptions(currentKind());
       renderSpatialOptions();
+      renderFFTOptions();
       updateAddButton();
     }));
     renderPanelOptions(currentKind());
     renderSpatialOptions();
+    renderFFTOptions();
     const addBtn = document.getElementById('np-add');
     if (addBtn) addBtn.addEventListener('click', () => addToPlot(group));
   }
@@ -441,9 +460,13 @@ const NewPlot = (() => {
         const r = currentMapData.rows.find(rr => rr.row === row);
         return r && r.node != null ? r.node : null;
       };
+      const t1raw = document.getElementById('np-fft-t1').value.trim();
+      const t2raw = document.getElementById('np-fft-t2').value.trim();
+      const t1 = t1raw === '' ? null : parseFloat(t1raw);
+      const t2 = t2raw === '' ? null : parseFloat(t2raw);
       for (const column of columns) {
         PlotWorkspace.addFFTTrace(currentCaseName, groupId, Array.from(selectedRows), nodeOf, column,
-          source, block, panelChoice);
+          source, block, { t1, t2 }, panelChoice);
       }
     } else if (currentKind() === 'spatial') {
       const points = spatialPointsForSelection();
