@@ -9,16 +9,21 @@ terminal color codes, as JSON.
 
 import os
 import re
+import tempfile
 from pathlib import Path
 
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, after_this_request, current_app, jsonify, request, send_file
 
 from ...commands.field.locate import find_plt, list_steps, problem_name
 from ...plt.convert import audit
 from ...plt.fxplt import ZTYPE_VTK, PltFile
 from ..services import registry
+from ..services.field_extract import resolve_steps, run_probe_extract, write_mesh_vtu
+from ..services.jobs import jobs
 
 bp = Blueprint('field', __name__, url_prefix='/api/cases')
+
+MAX_EXTRACT_STEPS = 50
 
 # ztype -> nodes per element, matching info_impl/command.py's own table.
 _NODES_PER_ELEM = {1: 2, 2: 3, 3: 4, 4: 4, 5: 8}
@@ -133,3 +138,90 @@ def field_info(name):
         'case': name, 'basic': basic, 'variables': list(plt.vars),
         'zones': zones, 'checks': checks, 'stats': stats, 'stats_error': stats_error,
     })
+
+
+@bp.post('/<name>/field/extract')
+def field_extract(name):
+    """Probe-point sampling, run as a background job (services/jobs.py --
+    already used for map-writing) since it can touch several large PLT files.
+    Poll the result at the existing GET /api/jobs/<id>."""
+    root = current_app.config['WORKSPACE_ROOT']
+    case_dir, binary_dir, err = _binary_dir_or_error(root, name)
+    if err:
+        return err
+    problem = problem_name(case_dir)
+
+    body = request.get_json(silent=True) or {}
+    zone = body.get('zone')
+    if not zone:
+        return jsonify({'error': 'zone is required'}), 400
+    columns = body.get('columns') or []
+    if not columns:
+        return jsonify({'error': 'columns is required'}), 400
+    points_raw = body.get('points') or []
+    if not points_raw:
+        return jsonify({'error': 'at least one point is required'}), 400
+    try:
+        points = [[float(p['x']), float(p['y']), float(p['z'])] for p in points_raw]
+    except (KeyError, TypeError, ValueError):
+        return jsonify({'error': 'each point needs numeric x, y, z'}), 400
+
+    steps = resolve_steps(binary_dir, problem, body.get('timestep'), body.get('t1'), body.get('t2'))
+    if steps is None:
+        return jsonify({'error': 'give a timestep, or both t1 and t2'}), 400
+    if not steps:
+        return jsonify({'error': 'no PLT files in that timestep range'}), 400
+    if len(steps) > MAX_EXTRACT_STEPS:
+        return jsonify({'error': f'at most {MAX_EXTRACT_STEPS} timesteps per request '
+                                  f'({len(steps)} given)'}), 400
+
+    interpolate = bool(body.get('interpolate'))
+
+    def run():
+        cols, rows, notes = run_probe_extract(binary_dir, problem, zone, columns, points, steps,
+                                              interpolate=interpolate)
+        return {'columns': cols, 'rows': rows, 'notes': notes}
+
+    job_id = jobs.start(run)
+    return jsonify({'job_id': job_id}), 202
+
+
+@bp.get('/<name>/field/mesh.vtu')
+def field_mesh(name):
+    """Download one zone's mesh at one timestep, as a binary .vtu -- opens
+    directly in ParaView. Every variable the zone carries, not a filtered
+    subset (see write_mesh_vtu's own docstring)."""
+    root = current_app.config['WORKSPACE_ROOT']
+    case_dir, binary_dir, err = _binary_dir_or_error(root, name)
+    if err:
+        return err
+    problem = problem_name(case_dir)
+
+    zone = request.args.get('zone')
+    if not zone:
+        return jsonify({'error': 'zone is required'}), 400
+    timestep = request.args.get('timestep', type=int)
+    plt_path = find_plt(binary_dir, problem, timestep)
+    if plt_path is None:
+        msg = f'timestep {timestep} not found' if timestep is not None else 'no PLT files found'
+        return jsonify({'error': msg}), 404
+
+    fd, tmp_path = tempfile.mkstemp(suffix='.vtu')
+    os.close(fd)
+    try:
+        write_mesh_vtu(plt_path, zone, tmp_path)
+    except ValueError as exc:
+        os.unlink(tmp_path)
+        return jsonify({'error': str(exc)}), 400
+
+    @after_this_request
+    def _cleanup(response):
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        return response
+
+    download_name = f'{name}_{zone}_{_step_of(plt_path)}.vtu'
+    return send_file(tmp_path, as_attachment=True, download_name=download_name,
+                     mimetype='application/octet-stream')

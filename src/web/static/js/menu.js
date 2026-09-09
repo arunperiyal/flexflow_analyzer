@@ -314,6 +314,10 @@ const Menu = (() => {
       closeAll();
       FieldMenu.openInfo();
     });
+    document.getElementById('field-extract').addEventListener('click', () => {
+      closeAll();
+      FieldMenu.openExtract();
+    });
   }
 
   function wireHelpMenu() {
