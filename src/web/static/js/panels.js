@@ -159,13 +159,14 @@ const PlotWorkspace = (() => {
   // panel's pane is left unset (fills the canvas -- see defaultPane) until
   // arranged via Layout -> Panes.
   function panelFor(caseName) {
-    // Excludes spatial and surface panels: they share the "same case -> same
-    // panel" instinct, but neither shares an x-axis (spatial) or a sane
-    // shared y-scale (surface, usually a wildly different physical quantity
-    // from a nodal trace -- totArea next to a displacement) with a plain
-    // time trace, so auto-routing must not merge them just because the case matches.
+    // Excludes spatial, surface and fft panels: they share the "same case ->
+    // same panel" instinct, but none of them shares an x-axis (spatial:
+    // position; fft: frequency) or a sane shared y-scale (surface, usually a
+    // wildly different physical quantity from a nodal trace -- totArea next
+    // to a displacement) with a plain time trace, so auto-routing must not
+    // merge them just because the case matches.
     const L = active();
-    let panel = L.panels.find(p => p.kind !== 'spatial' && p.kind !== 'surface'
+    let panel = L.panels.find(p => p.kind !== 'spatial' && p.kind !== 'surface' && p.kind !== 'fft'
                                    && p.traces.some(t => t.case === caseName));
     if (!panel) {
       panel = { id: `p${nextPanelId++}`, title: caseName, traces: [], style: {}, pane: null };
@@ -281,6 +282,52 @@ const PlotWorkspace = (() => {
     if (!L.activePanelId) L.activePanelId = panel.id;
     save();
     return panel;
+  }
+
+  // An FFT trace names the same (case, group, row, column, source) as a
+  // plain time trace -- its spectrum is computed from that same signal,
+  // server-side, fresh at every render (see plot.js's fetchFFT), not baked
+  // in at add time the way a spatial trace's own reduction is. `kind: 'fft'`
+  // marks the trace itself (not just its panel), since autoLabel needs to
+  // tell an FFT of a signal apart from the signal's own time trace even
+  // when both are, in principle, overlaid onto one panel by hand. Its own
+  // panel kind (mirroring surface's own reasoning) keeps a spectrum
+  // (frequency on x) from landing on a time trace's panel (time on x) by
+  // accident -- the two axes mean completely different things.
+  function panelForFFT(caseName) {
+    const L = active();
+    let panel = L.panels.find(p => p.kind === 'fft' && p.traces.some(t => t.case === caseName));
+    if (!panel) {
+      panel = { id: `p${nextPanelId++}`, title: `${caseName} (FFT)`, kind: 'fft', traces: [], style: {}, pane: null };
+      L.panels.push(panel);
+    }
+    return panel;
+  }
+
+  function addFFTTrace(caseName, group, rows, nodeOf, column, source, block, targetPanelId) {
+    const L = active();
+    let panel;
+    if (targetPanelId === '__new__') {
+      panel = { id: `p${nextPanelId++}`, title: `${caseName} (FFT)`, kind: 'fft', traces: [], style: {}, pane: null };
+      L.panels.push(panel);
+    } else if (targetPanelId) {
+      panel = L.panels.find(p => p.id === targetPanelId);
+    }
+    if (!panel) panel = panelForFFT(caseName);
+
+    const cs = caseStyleFor(caseName);
+    for (const row of rows) {
+      const already = panel.traces.some(t => t.case === caseName && t.group === group && t.row === row
+                                        && t.col === column && (t.source || 'othd') === (source || 'othd'));
+      if (already) continue;
+      const trace = { case: caseName, group, row, node: nodeOf ? nodeOf(row) : null,
+                      col: column, source: source || 'othd', kind: 'fft',
+                      color: cs.color, lineStyle: cs.lineStyle, marker: cs.marker };
+      if (block) trace.block = block;
+      panel.traces.push(trace);
+    }
+    if (!L.activePanelId) L.activePanelId = panel.id;
+    save();
   }
 
   function removeTrace(panelId, index) {
@@ -430,7 +477,7 @@ const PlotWorkspace = (() => {
   }
 
   return {
-    state, addTraces, addSpatialTrace, addSurfaceTrace, removeTrace, removePanel, clearPanel, renamePanel,
+    state, addTraces, addSpatialTrace, addSurfaceTrace, addFFTTrace, removeTrace, removePanel, clearPanel, renamePanel,
     setYLock, updateLayout, setPanelPane, setPanelStyle, setGlobalStyle,
     setActivePanel, setTraceStyle,
     listLayouts, activeLayoutId, setActiveLayout, createLayout, renameLayout, deleteLayout,

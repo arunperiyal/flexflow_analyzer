@@ -282,11 +282,14 @@ const NewPlot = (() => {
   }
 
   // Plot kind chooses the x-axis: 'time' (a node's value over time, the
-  // usual case) or 'spatial' (one statistic/snapshot per node, plotted
+  // usual case), 'spatial' (one statistic/snapshot per node, plotted
   // against position along the probe -- e.g. RMS displacement per node,
-  // to see where along the structure the response is largest). A single
+  // to see where along the structure the response is largest), or 'fft'
+  // (the signal's own frequency spectrum, computed server-side). A single
   // row (a point probe) has no "position" axis worth plotting, so spatial
-  // is only offered when allowSpatial is true.
+  // is only offered when allowSpatial is true -- but FFT is a spectrum of
+  // one signal at a time, so it makes sense for any row count, nodal or
+  // surface alike, and is always offered.
   const STATS = [
     ['rms', 'RMS'], ['mean', 'Mean'], ['peak_abs', 'Peak absolute'], ['peak_to_peak', 'Peak-to-peak'],
   ];
@@ -307,13 +310,17 @@ const NewPlot = (() => {
     const cols = group.columns
       .map(c => `<label class="var-check"><input type="checkbox" class="np-column" value="${c}"> ${c}</label>`)
       .join('');
-    const kindRow = allowSpatial ? `
+    const spatialOption = allowSpatial
+      ? `<label class="var-check"><input type="radio" name="np-kind" value="spatial"> Spatial (per-node)</label>`
+      : '';
+    const kindRow = `
       <label>Plot kind</label>
       <div class="plot-kind-row">
         <label class="var-check"><input type="radio" name="np-kind" value="time" checked> Time series</label>
-        <label class="var-check"><input type="radio" name="np-kind" value="spatial"> Spatial (per-node)</label>
+        ${spatialOption}
+        <label class="var-check"><input type="radio" name="np-kind" value="fft"> FFT</label>
       </div>
-    ` : '';
+    `;
     return `
       ${mismatch}
       ${kindRow}
@@ -424,8 +431,21 @@ const NewPlot = (() => {
     if (!columns.length || !selectedRows.size || !group) return;
 
     const panelChoice = document.getElementById('np-panel').value;   // '' | '__new__' | a panel id
+    const isSurface = currentMapData.header.kind === 'surface';
 
-    if (currentKind() === 'spatial') {
+    if (currentKind() === 'fft') {
+      const source = isSurface ? 'oisd' : 'othd';
+      const block = isSurface ? currentMapData.header.block : undefined;
+      const groupId = isSurface ? group.osgId : group.othId;
+      const nodeOf = isSurface ? null : (row) => {
+        const r = currentMapData.rows.find(rr => rr.row === row);
+        return r && r.node != null ? r.node : null;
+      };
+      for (const column of columns) {
+        PlotWorkspace.addFFTTrace(currentCaseName, groupId, Array.from(selectedRows), nodeOf, column,
+          source, block, panelChoice);
+      }
+    } else if (currentKind() === 'spatial') {
       const points = spatialPointsForSelection();
       const axLabel = currentMapData.projection.ax;
       const frame = document.querySelector('input[name="np-frame"]:checked').value;
@@ -447,7 +467,7 @@ const NewPlot = (() => {
           }
         }
       }
-    } else if (currentMapData.header.kind === 'surface') {
+    } else if (isSurface) {
       for (const column of columns) {
         PlotWorkspace.addSurfaceTrace(currentCaseName, group.osgId, currentMapData.header.block,
           column, panelChoice);
