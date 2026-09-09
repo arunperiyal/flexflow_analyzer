@@ -38,7 +38,11 @@
           <div class="menu-option" id="data-stats">Stats&hellip;</div>
         </div>
       </div>
-      <div class="menu-item disabled" title="Later phase">Field</div>
+      <div class="menu-item" data-menu="field">Field
+        <div class="menu-dropdown" id="menu-field">
+          <div class="menu-option" id="field-info">Info&hellip;</div>
+        </div>
+      </div>
       <div class="menu-item disabled" title="Later phase">View</div>
       <div class="menu-item" data-menu="help">Help
         <div class="menu-dropdown" id="menu-help">
@@ -98,6 +102,7 @@
 <script src="{{ url_for('static', filename='js/traceedit.js') }}"></script>
 <script src="{{ url_for('static', filename='js/newplot.js') }}"></script>
 <script src="{{ url_for('static', filename='js/data.js') }}"></script>
+<script src="{{ url_for('static', filename='js/field.js') }}"></script>
 <script src="{{ url_for('static', filename='js/flowchart.js') }}"></script>
 <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>

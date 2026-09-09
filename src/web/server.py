@@ -15,6 +15,7 @@ from .api.cases import bp as cases_bp
 from .api.data import bp as data_bp
 from .api.export import bp as export_bp
 from .api.fft import bp as fft_bp
+from .api.field import bp as field_bp
 from .api.history import bp as history_bp
 from .api.jobs import bp as jobs_bp
 from .api.maps import bp as maps_bp
@@ -33,6 +34,7 @@ def create_app(root: Path) -> Flask:
     app.register_blueprint(maps_bp)
     app.register_blueprint(history_bp)
     app.register_blueprint(fft_bp)
+    app.register_blueprint(field_bp)
     app.register_blueprint(jobs_bp)
     app.register_blueprint(export_bp)
     app.register_blueprint(spatial_bp)
