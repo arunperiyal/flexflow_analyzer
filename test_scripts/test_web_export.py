@@ -553,6 +553,68 @@ def test_style_panel_axes_never_shows_a_grid_on_the_twin_axis():
     plt.close(fig)
 
 
+def test_style_panel_axes_colors_the_twin_axis_spine_ticks_and_label():
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import to_rgba
+    from src.web.api.export import _style_panel_axes
+
+    fig, ax = plt.subplots()
+    ax.plot([0, 1], [0, 1])
+    ax2 = ax.twinx()
+    ax2.plot([0, 1], [100, 200])
+    _style_panel_axes(ax, {'y2color': '#0891b2', 'y2label': 'Cl'}, {}, swap=False, plotted=1,
+                      default_xlabel='time [s]', panel_title='p', font_name=None, ax2=ax2)
+    fig.canvas.draw()
+
+    expected = to_rgba('#0891b2')
+    assert to_rgba(ax2.spines['right'].get_edgecolor()) == expected
+    assert to_rgba(ax2.yaxis.label.get_color()) == expected
+    assert {to_rgba(t.get_color()) for t in ax2.get_yticklabels()} == {expected}
+    # The primary axis is untouched -- only ax2 was told to tint itself.
+    assert to_rgba(ax.yaxis.label.get_color()) != expected
+    plt.close(fig)
+
+
+def test_style_panel_axes_colors_the_top_spine_when_swapped():
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import to_rgba
+    from src.web.api.export import _style_panel_axes
+
+    fig, ax = plt.subplots()
+    ax.plot([0, 1], [0, 1])
+    ax2 = ax.twiny()
+    ax2.plot([100, 200], [0, 1])
+    _style_panel_axes(ax, {'y2color': '#dc2626'}, {}, swap=True, plotted=1,
+                      default_xlabel='position', panel_title='p', font_name=None, ax2=ax2)
+    fig.canvas.draw()
+
+    assert to_rgba(ax2.spines['top'].get_edgecolor()) == to_rgba('#dc2626')
+    plt.close(fig)
+
+
+def test_style_panel_axes_leaves_the_twin_axis_default_colored_when_unset():
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    from src.web.api.export import _style_panel_axes
+
+    fig, ax = plt.subplots()
+    ax.plot([0, 1], [0, 1])
+    ax2 = ax.twinx()
+    ax2.plot([0, 1], [100, 200])
+    default_edgecolor = ax2.spines['right'].get_edgecolor()
+    _style_panel_axes(ax, {}, {}, swap=False, plotted=1, default_xlabel='time [s]',
+                      panel_title='p', font_name=None, ax2=ax2)
+    fig.canvas.draw()
+
+    assert ax2.spines['right'].get_edgecolor() == default_edgecolor
+    plt.close(fig)
+
+
 # -- style sidebar settings, carried through to the matplotlib render -------
 
 def test_export_honors_global_style(client):
