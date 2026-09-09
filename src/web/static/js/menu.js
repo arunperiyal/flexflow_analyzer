@@ -309,6 +309,13 @@ const Menu = (() => {
     });
   }
 
+  function wireFieldMenu() {
+    document.getElementById('field-info').addEventListener('click', () => {
+      closeAll();
+      FieldMenu.openInfo();
+    });
+  }
+
   function wireHelpMenu() {
     document.getElementById('help-flowchart').addEventListener('click', () => {
       closeAll();
@@ -323,6 +330,7 @@ const Menu = (() => {
     wirePlotMenu();
     wireLayoutMenu();
     wireDataMenu();
+    wireFieldMenu();
     wireSettingsMenu();
     wireHelpMenu();
   }
