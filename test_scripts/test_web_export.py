@@ -1181,3 +1181,126 @@ def test_export_honors_ticks_inside(client):
     res = client.post('/api/export', json={'panels': _panels(), 'style': {'ticksInside': True}})
     assert res.status_code == 200
     assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
+
+
+# -- FFT panels -----------------------------------------------------------
+
+def _fft_panels():
+    return [{
+        'id': 'p1', 'title': 'BR0SG0U1P0 (FFT)', 'kind': 'fft',
+        'traces': [
+            {'case': 'BR0SG0U1P0', 'group': 0, 'row': 0, 'col': 'aleDisp_y',
+             'source': 'othd', 'kind': 'fft', 'color': '#dc2626'},
+        ],
+    }]
+
+
+def test_export_renders_an_fft_panel(client):
+    res = client.post('/api/export', json={'panels': _fft_panels()})
+    assert res.status_code == 200
+    assert res.mimetype == 'image/png'
+    assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
+
+
+def test_fft_trace_values_matches_a_direct_computation(client):
+    from src.web.api.export import _fft_trace_values, _trace_values
+    from src.web.services.fft import compute_fft
+
+    root = client.application.config['WORKSPACE_ROOT']
+    trace = {'case': 'BR0SG0U1P0', 'group': 0, 'row': 0, 'col': 'aleDisp_y', 'source': 'othd'}
+    values, times = _trace_values(root, trace)
+    expected_freqs, expected_amplitude = compute_fft(times, values)
+
+    freqs, amplitude = _fft_trace_values(root, trace)
+    import numpy as np
+    np.testing.assert_allclose(freqs, expected_freqs)
+    np.testing.assert_allclose(amplitude, expected_amplitude)
+
+
+def test_fft_trace_values_reads_an_oisd_trace(client):
+    from src.web.api.export import _fft_trace_values
+
+    root = client.application.config['WORKSPACE_ROOT']
+    trace = {'case': 'BR0SG0U1P0', 'group': 0, 'row': 0, 'col': 'totTrac_x', 'source': 'oisd'}
+    freqs, amplitude = _fft_trace_values(root, trace)
+    assert freqs is not None
+    assert len(freqs) == len(amplitude) > 0
+
+
+def test_fft_trace_values_returns_none_for_an_unregistered_case(client):
+    from src.web.api.export import _fft_trace_values
+
+    root = client.application.config['WORKSPACE_ROOT']
+    trace = {'case': 'nope', 'group': 0, 'row': 0, 'col': 'aleDisp_y', 'source': 'othd'}
+    freqs, amplitude = _fft_trace_values(root, trace)
+    assert freqs is None and amplitude is None
+
+
+def test_fft_trace_values_returns_none_for_non_uniform_sampling(client, monkeypatch):
+    """The live /fft endpoint surfaces this as a visible 400 -- export.py's
+    convention is to silently skip an unreadable trace instead, same as every
+    other _*_trace_values helper here."""
+    from src.web.api import export as export_mod
+    from src.web.services import registry
+    from src.web.services.loader import loader
+
+    root = client.application.config['WORKSPACE_ROOT']
+    case_dir = registry.case_path(root, 'BR0SG0U1P0')
+    meta = loader.meta(case_dir, kind='othd')
+    broken = meta.times.copy()
+    broken[len(broken) // 2] += 10.0
+    monkeypatch.setattr(meta, 'times', broken)
+
+    trace = {'case': 'BR0SG0U1P0', 'group': 0, 'row': 0, 'col': 'aleDisp_y', 'source': 'othd'}
+    freqs, amplitude = export_mod._fft_trace_values(root, trace)
+    assert freqs is None and amplitude is None
+
+
+def test_fft_auto_label_matches_plot_js_naming():
+    from src.web.api.export import _fft_auto_label
+
+    nodal = {'case': 'BR0SG0U1P0', 'row': 12, 'col': 'aleDisp_y', 'source': 'othd'}
+    assert _fft_auto_label(nodal) == 'BR0SG0U1P0 r12 aleDisp_y FFT'
+
+    surface = {'case': 'BR0SG0U1P0', 'block': 'cylinder_body', 'col': 'totTrac_x', 'source': 'oisd'}
+    assert _fft_auto_label(surface) == 'BR0SG0U1P0 cylinder_body totTrac_x FFT'
+
+
+def test_export_fft_scales_a_trace_and_uses_its_custom_label(client, monkeypatch):
+    import numpy as np
+    from matplotlib.axes import Axes
+    from src.web.api import export as export_mod
+
+    root = client.application.config['WORKSPACE_ROOT']
+    trace = {'case': 'BR0SG0U1P0', 'group': 0, 'row': 0, 'col': 'aleDisp_y', 'source': 'othd'}
+    raw_freqs, raw_amplitude = export_mod._fft_trace_values(root, trace)
+
+    captured = {}
+    real_plot = Axes.plot
+
+    def spy_plot(self, *args, **kwargs):
+        captured['x'] = args[0]
+        captured['y'] = args[1]
+        captured['label'] = kwargs.get('label')
+        return real_plot(self, *args, **kwargs)
+    monkeypatch.setattr(Axes, 'plot', spy_plot)
+
+    panels = _fft_panels()
+    panels[0]['traces'][0]['scale'] = 2.0
+    panels[0]['traces'][0]['label'] = 'Scaled spectrum'
+    res = client.post('/api/export', json={'panels': panels})
+
+    assert res.status_code == 200
+    assert captured['label'] == 'Scaled spectrum'
+    np.testing.assert_allclose(captured['x'], raw_freqs)
+    np.testing.assert_allclose(captured['y'], raw_amplitude * 2.0)
+
+
+def test_export_fft_panel_with_no_readable_traces_does_not_crash(client):
+    panels = [{
+        'id': 'p1', 'title': 'FFT', 'kind': 'fft',
+        'traces': [{'case': 'nope', 'group': 0, 'row': 0, 'col': 'aleDisp_y', 'source': 'othd'}],
+    }]
+    res = client.post('/api/export', json={'panels': panels})
+    assert res.status_code == 200
+    assert res.data[:8] == b'\x89PNG\r\n\x1a\n'

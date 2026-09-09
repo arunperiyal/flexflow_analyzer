@@ -37,6 +37,20 @@ const PlotArea = (() => {
     return data;
   }
 
+  // Same batching as fetchHistory (one request per case/group/source) --
+  // the server computes the spectrum from that same time series (services/
+  // fft.py) rather than the browser doing it, so a non-uniform-time-step
+  // case surfaces as this request's own error rather than a wrong plot.
+  async function fetchFFT(caseName, group, rows, columns, source = 'othd') {
+    const params = new URLSearchParams({
+      group: String(group), columns: columns.join(','), rows: rows.join(','), kind: source,
+    });
+    const res = await fetch(`/api/cases/${encodeURIComponent(caseName)}/fft?${params}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'fft request failed');
+    return data;
+  }
+
   // Each spatial trace is its own (rows, column, mode) request -- not worth
   // batching further, since a spatial selection is usually a handful of
   // nodes, not the whole case.
@@ -82,7 +96,11 @@ const PlotArea = (() => {
     if (t.points) return spatialTraceName(t);
     // A surface trace's row is always 0 -- "r0" would say nothing a reader
     // could use, unlike a nodal trace's row. The block name identifies it.
-    return t.source === 'oisd' ? `${t.case} ${t.block} ${t.col}` : `${t.case} r${t.row} ${t.col}`;
+    const base = t.source === 'oisd' ? `${t.case} ${t.block} ${t.col}` : `${t.case} r${t.row} ${t.col}`;
+    // Distinguishes a spectrum from its own signal's time trace, which
+    // could otherwise land on one legend with an identical name if a user
+    // deliberately overlays both onto the same panel by hand.
+    return t.kind === 'fft' ? `${base} FFT` : base;
   }
 
   function placeholder(msg) {
@@ -257,29 +275,35 @@ const PlotArea = (() => {
     }
 
     const groups = new Map();
+    const fftGroups = new Map();
     const spatialTraces = [];
     for (const panel of ws.panels) {
       if (panel.kind === 'spatial') {
         spatialTraces.push(...panel.traces);
         continue;
       }
+      const targetGroups = panel.kind === 'fft' ? fftGroups : groups;
       for (const t of panel.traces) {
         const key = groupKey(t);
-        if (!groups.has(key)) {
-          groups.set(key, { case: t.case, group: t.group, source: t.source || 'othd',
-                            rows: new Set(), columns: new Set() });
+        if (!targetGroups.has(key)) {
+          targetGroups.set(key, { case: t.case, group: t.group, source: t.source || 'othd',
+                                  rows: new Set(), columns: new Set() });
         }
-        const g = groups.get(key);
+        const g = targetGroups.get(key);
         g.rows.add(t.row);
         g.columns.add(t.col);
       }
     }
 
     const results = new Map();
+    const fftResults = new Map();
     const spatialResults = new Map();   // trace -> Map(row -> value)
     try {
       for (const [key, g] of groups) {
         results.set(key, await fetchHistory(g.case, g.group, [...g.rows], [...g.columns], g.source));
+      }
+      for (const [key, g] of fftGroups) {
+        fftResults.set(key, await fetchFFT(g.case, g.group, [...g.rows], [...g.columns], g.source));
       }
       for (const t of spatialTraces) {
         const data = await fetchSpatial(t);
@@ -344,6 +368,7 @@ const PlotArea = (() => {
       const xref = n === 1 ? 'x' : `x${n}`;
       const yref = n === 1 ? 'y' : `y${n}`;
       const isSpatial = panel.kind === 'spatial';
+      const isFFT = panel.kind === 'fft';
       const pStyle = panel.style || {};
       const swap = !!pStyle.swapAxes;
       const tracesStart = traces.length;
@@ -377,6 +402,26 @@ const PlotArea = (() => {
             line: lineFor(t, style),
           };
           addMarker(trace, t, symbol, 5, style, logicalX.length);
+          traces.push(trace);
+        });
+      } else if (isFFT) {
+        panel.traces.forEach(t => {
+          const data = fftResults.get(groupKey(t));
+          const s = data && data.series.find(s => s.row === t.row && s.column === t.col);
+          const symbol = markerSymbolFor(t, false);
+          const scale = scaleOf(t);
+          const onSecondary = !!t.secondaryAxis;
+          const logicalX = data ? data.frequencies : [];
+          const logicalY = s ? s.amplitude.map(v => v * scale) : [];
+          const trace = {
+            x: swap ? logicalY : logicalX, y: swap ? logicalX : logicalY,
+            xaxis: (swap && onSecondary) ? secondaryRef : xref,
+            yaxis: (!swap && onSecondary) ? secondaryRef : yref,
+            mode: symbol ? 'lines+markers' : 'lines', type: 'scatter',
+            name: labelOf(t, autoLabel(t)),
+            line: lineFor(t, style),
+          };
+          addMarker(trace, t, symbol, 6, style, logicalX.length);
           traces.push(trace);
         });
       } else {
@@ -417,6 +462,9 @@ const PlotArea = (() => {
       if (isSpatial) {
         const axLabel = (panel.traces[0] && panel.traces[0].axLabel) || 'position';
         logicalXConfig = { title: showXLabel ? (pStyle.xlabel || axLabel) : '', showticklabels: showXTicks };
+        logicalYConfig = { title: showYLabel ? (pStyle.ylabel || panel.title) : '', showticklabels: showYTicks };
+      } else if (isFFT) {
+        logicalXConfig = { title: showXLabel ? (pStyle.xlabel || 'frequency [Hz]') : '', showticklabels: showXTicks };
         logicalYConfig = { title: showYLabel ? (pStyle.ylabel || panel.title) : '', showticklabels: showYTicks };
       } else {
         logicalXConfig = { title: showXLabel ? (pStyle.xlabel || 'time [s]') : '', showticklabels: showXTicks };

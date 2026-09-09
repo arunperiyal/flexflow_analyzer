@@ -25,6 +25,7 @@ from flask import Blueprint, current_app, jsonify, request, send_file
 
 from ..services import registry
 from ..services.columns import column_map as build_column_map
+from ..services.fft import compute_fft
 from ..services.loader import loader
 from ..services.spatial import STATS, nearest_time_index, window_mask
 
@@ -274,6 +275,18 @@ def export_plot():
                                            **_plot_kwargs(trace, style))
                     plotted += 1
                 default_xlabel = ax_label
+            elif panel.get('kind') == 'fft':
+                for trace in panel.get('traces') or []:
+                    freqs, amplitude = _fft_trace_values(root, trace)
+                    if freqs is None:
+                        continue
+                    amplitude = amplitude * _scale_of(trace)
+                    first, second = (amplitude, freqs) if swap else (freqs, amplitude)
+                    label = _label_of(trace, _fft_auto_label(trace))
+                    _target_ax(trace).plot(first, second, color=trace.get('color'), label=label,
+                                           **_plot_kwargs(trace, style))
+                    plotted += 1
+                default_xlabel = 'frequency [Hz]'
             else:
                 for trace in panel.get('traces') or []:
                     values, times = _trace_values(root, trace)
@@ -333,6 +346,33 @@ def _trace_values(root, trace):
         return arrays[var_name][:, row, comp], meta.times
     except (FileNotFoundError, KeyError, IndexError, TypeError):
         return None, None
+
+
+def _fft_trace_values(root, trace):
+    """(frequencies, amplitude) for one trace's spectrum, or (None, None) if
+    it cannot be computed -- reuses _trace_values' own (values, times) read,
+    then compute_fft's shared transform (services/fft.py, the same one
+    /api/cases/<name>/fft calls), so the export and the live view compute
+    this exactly the same way. A non-uniform-time-step case is one more
+    reason this can't be read, same silent-skip as every other one here --
+    the live /fft endpoint is where that surfaces as a visible error."""
+    values, times = _trace_values(root, trace)
+    if values is None:
+        return None, None
+    try:
+        return compute_fft(times, values)
+    except ValueError:
+        return None, None
+
+
+def _fft_auto_label(trace):
+    """Matches plot.js's own autoLabel for an FFT trace -- the same base
+    name (surface or nodal) with an ' FFT' suffix, so a spectrum can never
+    be mistaken for its own signal's time trace in a legend."""
+    base = (f"{trace.get('case')} {trace.get('block')} {trace.get('col')}"
+           if trace.get('source') == 'oisd'
+           else f"{trace.get('case')} r{trace.get('row')} {trace.get('col')}")
+    return f"{base} FFT"
 
 
 def _spatial_trace_values(root, trace):
