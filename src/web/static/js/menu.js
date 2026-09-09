@@ -299,6 +299,10 @@ const Menu = (() => {
       closeAll();
       DataMenu.openInfo();
     });
+    document.getElementById('data-table').addEventListener('click', () => {
+      closeAll();
+      DataMenu.openTable();
+    });
   }
 
   function wireHelpMenu() {
