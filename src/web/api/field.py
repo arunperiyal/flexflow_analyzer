@@ -19,6 +19,8 @@ from ...plt.convert import audit
 from ...plt.fxplt import ZTYPE_VTK, PltFile
 from ..services import registry
 from ..services.field_extract import resolve_steps, run_probe_extract, write_mesh_vtu
+from ..services.field_render import MODES as RENDER_MODES
+from ..services.field_render import render_field
 from ..services.jobs import jobs
 
 bp = Blueprint('field', __name__, url_prefix='/api/cases')
@@ -225,3 +227,101 @@ def field_mesh(name):
     download_name = f'{name}_{zone}_{_step_of(plt_path)}.vtu'
     return send_file(tmp_path, as_attachment=True, download_name=download_name,
                      mimetype='application/octet-stream')
+
+
+def _check_color_range(rng):
+    """None (unset -- render.py picks it from the data), or [min, max] with
+    min < max. Anything else is a 400, matching render_impl/command.py's own
+    _check_range/_check_config guard against a malformed color.range."""
+    if rng is None:
+        return None, None
+    if not (isinstance(rng, (list, tuple)) and len(rng) == 2
+            and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in rng)):
+        return None, f'color range must be [min, max], got {rng!r}'
+    if rng[0] >= rng[1]:
+        return None, f'color range needs min below max, got {rng[0]} and {rng[1]}'
+    return [float(rng[0]), float(rng[1])], None
+
+
+@bp.post('/<name>/field/render')
+def field_render(name):
+    """Iso-surface or slice-plane PNG(s) for one timestep, run as a
+    background job (services/jobs.py) since pyvista rendering takes real
+    wall-clock time. Poll the result at the existing GET /api/jobs/<id>;
+    each PNG in the result's `files` list is then fetched from
+    GET .../field/render/<job_id>/<file>."""
+    root = current_app.config['WORKSPACE_ROOT']
+    case_dir, binary_dir, err = _binary_dir_or_error(root, name)
+    if err:
+        return err
+    problem = problem_name(case_dir)
+
+    body = request.get_json(silent=True) or {}
+    mode = body.get('mode')
+    if mode not in RENDER_MODES:
+        return jsonify({'error': f"mode must be 'iso' or 'slice', got '{mode}'"}), 400
+    timestep = body.get('timestep')
+    if timestep is None:
+        return jsonify({'error': 'timestep is required'}), 400
+    try:
+        timestep = int(timestep)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'timestep must be an integer'}), 400
+
+    zone = body.get('zone') or None   # falsy/absent -> render.py's first volume zone
+    view_names = body.get('views') or []
+
+    color = body.get('color') or {}
+    color_range, range_err = _check_color_range(color.get('range'))
+    if range_err:
+        return jsonify({'error': range_err}), 400
+
+    overrides = {'color': {}}
+    if color.get('variable'):
+        overrides['color']['variable'] = color['variable']
+    if color_range:
+        overrides['color']['range'] = color_range
+
+    if mode == 'iso':
+        contour = body.get('contour') or {}
+        overrides['contour'] = {}
+        if contour.get('variable'):
+            overrides['contour']['variable'] = contour['variable']
+        if contour.get('isosurfaces'):
+            overrides['contour']['isosurfaces'] = contour['isosurfaces']
+    else:
+        slice_cfg = body.get('slice') or {}
+        overrides['slice'] = {}
+        if slice_cfg.get('normal'):
+            overrides['slice']['normal'] = slice_cfg['normal']
+        if slice_cfg.get('origin'):
+            overrides['slice']['origin'] = slice_cfg['origin']
+        if slice_cfg.get('count'):
+            overrides['slice']['count'] = slice_cfg['count']
+
+    # A run always writes into a directory of its own -- never cleaned up
+    # automatically in this v1 (matches an accepted, noted limitation: a
+    # periodic sweep of old flexflow_render_* dirs is a follow-up, not part
+    # of this pass).
+    job_out_dir = tempfile.mkdtemp(prefix='flexflow_render_')
+
+    def run():
+        outs = render_field(binary_dir, problem, zone, mode, timestep, overrides,
+                            view_names, job_out_dir)
+        files = [str(Path(p).relative_to(job_out_dir)) for p in outs]
+        return {'dir': job_out_dir, 'files': files}
+
+    job_id = jobs.start(run)
+    return jsonify({'job_id': job_id}), 202
+
+
+@bp.get('/<name>/field/render/<job_id>/<path:filename>')
+def field_render_image(name, job_id, filename):
+    job = jobs.get(job_id)
+    if job is None or job.status != 'done' or not isinstance(job.result, dict):
+        return jsonify({'error': 'no such completed render job'}), 404
+    directory = job.result.get('dir')
+    files = job.result.get('files') or []
+    if not directory or filename not in files:
+        return jsonify({'error': 'no such file in this render job'}), 404
+    return send_file(Path(directory) / filename, mimetype='image/png')

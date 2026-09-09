@@ -418,5 +418,207 @@ const FieldMenu = (() => {
     URL.revokeObjectURL(url);
   }
 
-  return { openInfo, openExtract };
+  // -- Render ----------------------------------------------------------
+  // Iso-surface / slice-plane PNGs for one timestep, off-screen via pyvista
+  // (the same rendering `field render iso|slice` uses server-side) -- a
+  // gallery of static images, one per camera view, per the plan's confirmed
+  // v1 scope (no live in-browser 3-D viewer; see the plan's own "Deferred"
+  // section for that idea). Runs as a background job since a render takes
+  // real wall-clock time.
+
+  // Matches render.py's own DEFAULTS['views'] / SLICE_VIEWS names exactly --
+  // there is no endpoint for this (it's a fixed, documented default), so it
+  // is named here rather than round-tripped from the server.
+  const DEFAULT_VIEWS = { iso: ['iso', 'xy', 'xz', 'yz'], slice: ['plane'] };
+
+  async function openRender() {
+    const cases = await App.fetchCases();
+    const options = cases
+      .map(c => `<option value="${c.name}">${c.name}${c.exists ? '' : ' (missing)'}</option>`)
+      .join('');
+
+    Menu.openDialog(`
+      <h2>Field &rarr; Render</h2>
+      <label for="fr-case">Case</label>
+      <select id="fr-case">
+        <option value="">Select a case&hellip;</option>
+        ${options}
+      </select>
+      <div id="fr-form"></div>
+      <div id="fr-result"></div>
+      <div class="btn-row"><button id="fr-close">Close</button></div>
+    `, { wide: true });
+
+    document.getElementById('fr-close').addEventListener('click', Menu.closeDialog);
+    document.getElementById('fr-case').addEventListener('change', (e) => onRenderCaseChange(e.target.value));
+  }
+
+  async function onRenderCaseChange(caseName) {
+    const form = document.getElementById('fr-form');
+    document.getElementById('fr-result').innerHTML = '';
+    if (!caseName) { form.innerHTML = ''; return; }
+
+    form.innerHTML = '<div class="empty">Loading&hellip;</div>';
+    const res = await fetch(`/api/cases/${encodeURIComponent(caseName)}/field/info`);
+    const info = await res.json();
+    if (!document.getElementById('fr-form')) return;
+    if (!res.ok) {
+      form.innerHTML = `<div class="error">${escapeHtml(info.error || 'could not load this case')}</div>`;
+      return;
+    }
+    renderRenderForm(caseName, info);
+  }
+
+  function renderRenderForm(caseName, info) {
+    const form = document.getElementById('fr-form');
+    const volumeZones = info.zones.filter(z => !z.shared_from.length);
+    const zoneOptions = volumeZones.map(z =>
+      `<option value="${escapeHtml(z.name)}">${escapeHtml(z.name)} (${z.type})</option>`
+    ).join('');
+    const varOptions = info.variables.map(v =>
+      `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`
+    ).join('');
+
+    form.innerHTML = `
+      <label for="fr-zone">Zone</label>
+      <select id="fr-zone">${zoneOptions}</select>
+      <label for="fr-timestep">Timestep</label>
+      <input type="text" id="fr-timestep" placeholder="timestep">
+      <label>Mode</label>
+      <div class="plot-kind-row">
+        <label class="var-check"><input type="radio" name="fr-mode" value="iso" checked> Iso-surface</label>
+        <label class="var-check"><input type="radio" name="fr-mode" value="slice"> Slice</label>
+      </div>
+      <div id="fr-mode-options"></div>
+      <label for="fr-color-var">Color by</label>
+      <select id="fr-color-var">${varOptions}</select>
+      <label>Color range (optional)</label>
+      <div class="coord-inputs">
+        <input type="text" id="fr-color-min" placeholder="min (blank = auto)">
+        <input type="text" id="fr-color-max" placeholder="max (blank = auto)">
+      </div>
+      <label>Views</label>
+      <div id="fr-views" class="var-list"></div>
+      <div class="btn-row"><button id="fr-go" class="primary" disabled>Render</button></div>
+    `;
+
+    document.getElementById('fr-color-var').value = 'U';
+    document.querySelectorAll('input[name="fr-mode"]').forEach(r =>
+      r.addEventListener('change', () => { renderModeOptions(info); updateRenderGoButton(); }));
+    document.getElementById('fr-timestep').addEventListener('input', updateRenderGoButton);
+    document.getElementById('fr-go').addEventListener('click', () => runRender(caseName));
+    renderModeOptions(info);
+  }
+
+  function currentRenderMode() {
+    const checked = document.querySelector('input[name="fr-mode"]:checked');
+    return checked ? checked.value : 'iso';
+  }
+
+  function renderModeOptions(info) {
+    const mode = currentRenderMode();
+    const box = document.getElementById('fr-mode-options');
+    const varOptions = info.variables.map(v =>
+      `<option value="${escapeHtml(v)}" ${v === 'QCriterion' ? 'selected' : ''}>${escapeHtml(v)}</option>`
+    ).join('');
+
+    box.innerHTML = mode === 'iso' ? `
+      <label for="fr-contour-var">Contour variable</label>
+      <select id="fr-contour-var">${varOptions}</select>
+      <label for="fr-contour-value">Contour value (optional)</label>
+      <input type="text" id="fr-contour-value" placeholder="blank = automatic">
+    ` : `
+      <label for="fr-slice-normal">Normal</label>
+      <select id="fr-slice-normal">
+        <option value="x">x</option><option value="y">y</option><option value="z" selected>z</option>
+      </select>
+      <label for="fr-slice-count">Number of planes</label>
+      <input type="text" id="fr-slice-count" placeholder="1">
+    `;
+
+    const viewsBox = document.getElementById('fr-views');
+    viewsBox.innerHTML = DEFAULT_VIEWS[mode].map((v, i) => `
+      <label class="var-check"><input type="checkbox" class="fr-view" value="${v}" ${i === 0 ? 'checked' : ''}> ${v}</label>
+    `).join('');
+    document.querySelectorAll('.fr-view').forEach(cb => cb.addEventListener('change', updateRenderGoButton));
+    updateRenderGoButton();
+  }
+
+  function updateRenderGoButton() {
+    const btn = document.getElementById('fr-go');
+    if (!btn) return;
+    const ts = document.getElementById('fr-timestep');
+    const validTs = ts && ts.value.trim() !== '' && !Number.isNaN(parseInt(ts.value, 10));
+    const anyView = document.querySelectorAll('.fr-view:checked').length > 0;
+    btn.disabled = !(validTs && anyView);
+  }
+
+  async function pollRenderJob(jobId) {
+    while (true) {
+      const res = await fetch(`/api/jobs/${jobId}`);
+      const data = await res.json();
+      if (data.status === 'done') return { ok: true, result: data.result };
+      if (data.status === 'error') return { ok: false, error: data.error };
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+  }
+
+  async function runRender(caseName) {
+    const result = document.getElementById('fr-result');
+    const mode = currentRenderMode();
+    const zone = document.getElementById('fr-zone').value;
+    const timestep = parseInt(document.getElementById('fr-timestep').value, 10);
+    const views = Array.from(document.querySelectorAll('.fr-view:checked')).map(cb => cb.value);
+
+    const colorMin = document.getElementById('fr-color-min').value.trim();
+    const colorMax = document.getElementById('fr-color-max').value.trim();
+    const color = { variable: document.getElementById('fr-color-var').value };
+    if (colorMin !== '' && colorMax !== '') color.range = [parseFloat(colorMin), parseFloat(colorMax)];
+
+    const body = { mode, zone, timestep, views, color };
+    if (mode === 'iso') {
+      body.contour = { variable: document.getElementById('fr-contour-var').value };
+      const value = document.getElementById('fr-contour-value').value.trim();
+      if (value !== '') body.contour.isosurfaces = [parseFloat(value)];
+    } else {
+      body.slice = { normal: document.getElementById('fr-slice-normal').value };
+      const count = document.getElementById('fr-slice-count').value.trim();
+      if (count !== '') body.slice.count = parseInt(count, 10);
+    }
+
+    result.innerHTML = '<div class="empty">Rendering&hellip; (this can take a few seconds)</div>';
+    const res = await fetch(`/api/cases/${encodeURIComponent(caseName)}/field/render`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    const started = await res.json();
+    if (!document.getElementById('fr-result')) return;
+    if (!res.ok) {
+      result.innerHTML = `<div class="error">${escapeHtml(started.error || 'could not start render')}</div>`;
+      return;
+    }
+
+    const outcome = await pollRenderJob(started.job_id);
+    if (!document.getElementById('fr-result')) return;
+    if (!outcome.ok) {
+      result.innerHTML = `<div class="error">${escapeHtml(outcome.error)}</div>`;
+      return;
+    }
+    result.innerHTML = renderGallery(caseName, started.job_id, outcome.result.files);
+  }
+
+  function renderGallery(caseName, jobId, files) {
+    const base = `/api/cases/${encodeURIComponent(caseName)}/field/render/${jobId}`;
+    return `
+      <div class="render-gallery">
+        ${files.map(f => `
+          <div class="render-tile">
+            <img src="${base}/${f}" alt="${escapeHtml(f)}">
+            <a href="${base}/${f}" download="${escapeHtml(f.replace('/', '_'))}">Download</a>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  return { openInfo, openExtract, openRender };
 })();

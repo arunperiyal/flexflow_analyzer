@@ -318,6 +318,10 @@ const Menu = (() => {
       closeAll();
       FieldMenu.openExtract();
     });
+    document.getElementById('field-render').addEventListener('click', () => {
+      closeAll();
+      FieldMenu.openRender();
+    });
   }
 
   function wireHelpMenu() {
