@@ -222,7 +222,6 @@ const StyleSidebar = (() => {
     `;
 
     box.innerHTML = group('global', 'Global', globalBody)
-      + group('cases', 'Cases', casesHtml(ws))
       + group('panel', 'Panel', panelBody)
       + group('traces', 'Traces', tracesHtml(panel));
 
@@ -231,25 +230,6 @@ const StyleSidebar = (() => {
     });
     wireGlobal();
     wire(panel);
-  }
-
-  // One row per case that has at least one trace in this layout -- set
-  // once here, applied as the default for every trace of that case (see
-  // PlotWorkspace.setCaseStyle) instead of each trace picking its own
-  // independently rotated color.
-  function casesHtml(ws) {
-    const names = Object.keys(ws.caseStyles || {});
-    if (!names.length) return '<div class="empty">Plot a case to style it here</div>';
-    return names.map(name => `
-      <div class="trace-style-block">
-        <div class="trace-style-label" title="${name}">${name}</div>
-        <div class="trace-style-row">
-          <input type="color" class="case-style-color" data-case="${name}" value="${ws.caseStyles[name].color || '#000000'}">
-          <select class="case-style-line" data-case="${name}">${options(LINE_STYLES, ws.caseStyles[name].lineStyle)}</select>
-          <select class="case-style-marker" data-case="${name}">${options(MARKERS, ws.caseStyles[name].marker)}</select>
-        </div>
-      </div>
-    `).join('');
   }
 
   function tracesHtml(panel) {
@@ -393,22 +373,6 @@ const StyleSidebar = (() => {
       PlotArea.render();
     });
 
-    // A case-style edit can touch traces in panels other than the active
-    // one (setCaseStyle reapplies it across the whole layout), so this
-    // refreshes everything rather than just this panel's own render.
-    document.querySelectorAll('.case-style-color').forEach(el => el.addEventListener('change', (e) => {
-      PlotWorkspace.setCaseStyle(e.target.dataset.case, { color: e.target.value });
-      refreshWorkspace();
-    }));
-    document.querySelectorAll('.case-style-line').forEach(el => el.addEventListener('change', (e) => {
-      PlotWorkspace.setCaseStyle(e.target.dataset.case, { lineStyle: e.target.value });
-      refreshWorkspace();
-    }));
-    document.querySelectorAll('.case-style-marker').forEach(el => el.addEventListener('change', (e) => {
-      PlotWorkspace.setCaseStyle(e.target.dataset.case, { marker: e.target.value });
-      refreshWorkspace();
-    }));
-
     // 'change' (fires once, on commit), not 'input' -- PlotArea.render() is
     // a network round-trip, and 'input' fires continuously while dragging
     // inside the native color picker.
@@ -427,5 +391,8 @@ const StyleSidebar = (() => {
     }));
   }
 
-  return { render };
+  // LINE_STYLES/MARKERS/options are also what TraceEditor's Line/Marker tabs
+  // offer, so a trace styled from the tree's popup and one styled from this
+  // sidebar's own Traces group agree on exactly the same set of choices.
+  return { render, LINE_STYLES, MARKERS, options };
 })();

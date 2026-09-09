@@ -138,9 +138,10 @@ const PlotWorkspace = (() => {
   // of it is added to this layout (auto-assigning a color the same way a
   // trace always has) so every later trace of the same case -- in any
   // panel -- starts out looking consistent rather than getting its own
-  // independently rotated color. Still just a *default*: a trace can be
-  // styled away from it afterward via the per-trace controls, same as
-  // always -- see setCaseStyle for how a later case-style edit respects that.
+  // independently rotated color. Still just a *default*: two traces of the
+  // same case landing in one panel (a displacement and a surface total,
+  // say) look identical until told apart, which is exactly what
+  // TraceEditor (opened from a trace row in the PANELS tree) is for.
   function caseStyleFor(caseName) {
     const L = active();
     L.caseStyles = L.caseStyles || {};
@@ -339,30 +340,6 @@ const PlotWorkspace = (() => {
     save();
   }
 
-  // Case -> Style: sets the case's default color/line-style/marker and
-  // reapplies it to every trace of that case (any panel) that is still at
-  // the case's *previous* default -- a trace deliberately styled away from
-  // it (e.g. distinguishing several nodes of one case overlaid in a single
-  // panel, via the per-trace controls) is left alone rather than being
-  // silently snapped back on the next case-style edit.
-  function setCaseStyle(caseName, patch) {
-    const L = active();
-    L.caseStyles = L.caseStyles || {};
-    const prev = L.caseStyles[caseName] || { color: null, lineStyle: '', marker: '' };
-    const next = { ...prev, ...patch };
-    L.caseStyles[caseName] = next;
-
-    for (const panel of L.panels) {
-      for (const t of panel.traces) {
-        if (t.case !== caseName) continue;
-        if ('color' in patch && t.color === prev.color) t.color = next.color;
-        if ('lineStyle' in patch && (t.lineStyle || '') === (prev.lineStyle || '')) t.lineStyle = next.lineStyle;
-        if ('marker' in patch && (t.marker || '') === (prev.marker || '')) t.marker = next.marker;
-      }
-    }
-    save();
-  }
-
   // Per-trace overrides (color, line style, marker) -- distinct from panel
   // style since these describe one line, not the axes it is drawn on.
   function setTraceStyle(panelId, traceIndex, patch) {
@@ -454,9 +431,10 @@ const PlotWorkspace = (() => {
 
   return {
     state, addTraces, addSpatialTrace, addSurfaceTrace, removeTrace, removePanel, clearPanel, renamePanel,
-    setYLock, updateLayout, setPanelPane, setPanelStyle, setGlobalStyle, setCaseStyle,
+    setYLock, updateLayout, setPanelPane, setPanelStyle, setGlobalStyle,
     setActivePanel, setTraceStyle,
     listLayouts, activeLayoutId, setActiveLayout, createLayout, renameLayout, deleteLayout,
+    PALETTE: COLORS,
   };
 })();
 
@@ -528,9 +506,16 @@ const PanelTree = (() => {
         const label = document.createElement('span');
         label.className = 'trace-label';
         label.textContent = traceLabel(t);
+        // Swatch + label open the style editor; the remove "x" stays its own
+        // target so deleting a trace never also opens the editor for the row
+        // that takes its place.
+        const openEditor = () => TraceEditor.open(panel.id, idx);
+        swatch.addEventListener('click', openEditor);
+        label.addEventListener('click', openEditor);
         const del = document.createElement('span');
         del.className = 'trace-remove';
         del.textContent = '×';
+        del.title = 'Remove trace';
         del.addEventListener('click', () => { PlotWorkspace.removeTrace(panel.id, idx); refreshWorkspace(); });
         row.appendChild(swatch);
         row.appendChild(label);
