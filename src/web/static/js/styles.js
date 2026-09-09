@@ -219,6 +219,7 @@ const StyleSidebar = (() => {
       <label class="style-row checkbox">
         <input type="checkbox" id="style-show-y-label" ${s.showYLabel === false ? '' : 'checked'}> Show Y label
       </label>
+      ${y2Body(panel, s)}
     `;
 
     box.innerHTML = group('global', 'Global', globalBody)
@@ -230,6 +231,39 @@ const StyleSidebar = (() => {
     });
     wireGlobal();
     wire(panel);
+  }
+
+  // Shown only once at least one trace here actually uses the secondary
+  // axis (TraceEditor's Axis tab) -- a panel that doesn't would otherwise
+  // carry style controls for an axis it never draws.
+  function y2Body(panel, s) {
+    if (!panel.traces.some(t => t.secondaryAxis)) return '';
+    return `
+      <label class="style-subheading">Y2 (secondary axis)</label>
+      <div class="style-row">
+        <label for="style-y2label">Y2 label</label>
+        <input type="text" id="style-y2label" placeholder="auto" value="${escapeAttr(s.y2label || '')}">
+      </div>
+      <label>Y2 limits</label>
+      <div class="style-limit-row">
+        <input type="number" id="style-y2lim-min" placeholder="min" value="${s.y2lim ? s.y2lim[0] : ''}">
+        <input type="number" id="style-y2lim-max" placeholder="max" value="${s.y2lim ? s.y2lim[1] : ''}">
+      </div>
+      <div class="style-row">
+        <label for="style-y2tick">Y2 tick step</label>
+        <input type="number" id="style-y2tick" placeholder="auto" value="${s.y2tick ?? ''}">
+      </div>
+      <div class="style-row">
+        <label for="style-y2tickangle">Y2 tick angle</label>
+        <input type="number" id="style-y2tickangle" placeholder="auto" value="${s.y2tickangle ?? ''}" min="-90" max="90">
+      </div>
+      <label class="style-row checkbox">
+        <input type="checkbox" id="style-show-y2-ticks" ${s.showY2Ticks === false ? '' : 'checked'}> Show Y2 ticks
+      </label>
+      <label class="style-row checkbox">
+        <input type="checkbox" id="style-show-y2-label" ${s.showY2Label === false ? '' : 'checked'}> Show Y2 label
+      </label>
+    `;
   }
 
   function tracesHtml(panel) {
@@ -372,6 +406,29 @@ const StyleSidebar = (() => {
       PlotWorkspace.setPanelStyle(panel.id, { showYLabel: e.target.checked });
       PlotArea.render();
     });
+
+    // Only rendered (y2Body) once a trace here actually uses the secondary
+    // axis, so only wired then -- the elements simply don't exist otherwise.
+    if (panel.traces.some(t => t.secondaryAxis)) {
+      wireLimit('y2lim', 'style-y2lim-min', 'style-y2lim-max');
+      wireTick('y2tick', 'style-y2tick', 'y2lim', () => PlotArea.currentY2Range(panel.id, isSwapped()));
+      document.getElementById('style-y2label').addEventListener('change', (e) => {
+        PlotWorkspace.setPanelStyle(panel.id, { y2label: e.target.value.trim() });
+        PlotArea.render();
+      });
+      document.getElementById('style-y2tickangle').addEventListener('change', (e) => {
+        PlotWorkspace.setPanelStyle(panel.id, { y2tickangle: numberOrNull(e.target.value) });
+        PlotArea.render();
+      });
+      document.getElementById('style-show-y2-ticks').addEventListener('change', (e) => {
+        PlotWorkspace.setPanelStyle(panel.id, { showY2Ticks: e.target.checked });
+        PlotArea.render();
+      });
+      document.getElementById('style-show-y2-label').addEventListener('change', (e) => {
+        PlotWorkspace.setPanelStyle(panel.id, { showY2Label: e.target.checked });
+        PlotArea.render();
+      });
+    }
 
     // 'change' (fires once, on commit), not 'input' -- PlotArea.render() is
     // a network round-trip, and 'input' fires continuously while dragging
