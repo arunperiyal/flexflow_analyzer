@@ -399,6 +399,160 @@ def test_export_mixed_time_and_spatial_panels(client):
     assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
 
 
+# -- Secondary (Y2) axis --------------------------------------------------
+
+def test_export_no_twin_axis_when_no_trace_is_secondary(client, monkeypatch):
+    from matplotlib.axes import Axes
+    calls = []
+    real_twinx = Axes.twinx
+
+    def spy_twinx(self):
+        calls.append(True)
+        return real_twinx(self)
+    monkeypatch.setattr(Axes, 'twinx', spy_twinx)
+
+    res = client.post('/api/export', json={'panels': _panels()})
+    assert res.status_code == 200
+    assert calls == []
+
+
+def test_export_secondary_trace_lands_on_a_twin_axis_with_its_own_values(client, monkeypatch):
+    import numpy as np
+    from matplotlib.axes import Axes
+    from src.web.api import export as export_mod
+
+    root = client.application.config['WORKSPACE_ROOT']
+    raw_values, _ = export_mod._trace_values(
+        root, {'case': 'BR0SG0U1P0', 'group': 0, 'row': 12, 'col': 'aleDisp_y'})
+
+    twin_axes = []
+    real_twinx = Axes.twinx
+    real_plot = Axes.plot
+    captured = {'primary': [], 'secondary': []}
+
+    def spy_twinx(self):
+        ax2 = real_twinx(self)
+        twin_axes.append(ax2)
+        return ax2
+
+    def spy_plot(self, *args, **kwargs):
+        bucket = 'secondary' if self in twin_axes else 'primary'
+        captured[bucket].append(args[1])
+        return real_plot(self, *args, **kwargs)
+
+    monkeypatch.setattr(Axes, 'twinx', spy_twinx)
+    monkeypatch.setattr(Axes, 'plot', spy_plot)
+
+    panels = _panels()
+    panels[0]['traces'][1]['secondaryAxis'] = True
+    res = client.post('/api/export', json={'panels': panels})
+
+    assert res.status_code == 200
+    assert len(captured['primary']) == 1
+    assert len(captured['secondary']) == 1
+    np.testing.assert_allclose(captured['secondary'][0], raw_values)
+
+
+def test_export_swapped_panel_uses_twiny_for_a_secondary_trace(client, monkeypatch):
+    from matplotlib.axes import Axes
+    calls = {'twinx': 0, 'twiny': 0}
+    real_twiny = Axes.twiny
+
+    def spy_twinx(self):
+        calls['twinx'] += 1
+        raise AssertionError('twinx should not be called for a swapped panel')
+
+    def spy_twiny(self):
+        calls['twiny'] += 1
+        return real_twiny(self)
+    monkeypatch.setattr(Axes, 'twinx', spy_twinx)
+    monkeypatch.setattr(Axes, 'twiny', spy_twiny)
+
+    panels = _panels()
+    panels[0]['style'] = {'swapAxes': True}
+    panels[0]['traces'][1]['secondaryAxis'] = True
+    res = client.post('/api/export', json={'panels': panels})
+
+    assert res.status_code == 200
+    assert calls == {'twinx': 0, 'twiny': 1}
+
+
+def test_export_legend_combines_primary_and_secondary_traces(client, monkeypatch):
+    from matplotlib.axes import Axes
+    captured = {}
+    real_legend = Axes.legend
+
+    def spy_legend(self, *args, **kwargs):
+        captured['labels'] = args[1] if len(args) > 1 else kwargs.get('labels')
+        return real_legend(self, *args, **kwargs)
+    monkeypatch.setattr(Axes, 'legend', spy_legend)
+
+    panels = _panels()
+    panels[0]['traces'][1]['secondaryAxis'] = True
+    panels[0]['traces'][1]['label'] = 'Secondary'
+    res = client.post('/api/export', json={'panels': panels, 'style': {'showLegend': True}})
+
+    assert res.status_code == 200
+    assert 'Secondary' in captured['labels']
+
+
+def test_style_panel_axes_sets_y2_label_limit_and_ticks_on_the_twin_axis():
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    from src.web.api.export import _style_panel_axes
+
+    fig, ax = plt.subplots()
+    ax.plot([0, 1], [0, 1])
+    ax2 = ax.twinx()
+    ax2.plot([0, 1], [100, 200])
+    _style_panel_axes(ax, {'y2label': 'Cl', 'y2lim': [0, 300], 'y2tick': 100}, {}, swap=False,
+                      plotted=1, default_xlabel='time [s]', panel_title='p', font_name=None, ax2=ax2)
+    fig.canvas.draw()
+
+    assert ax2.get_ylabel() == 'Cl'
+    assert ax2.get_ylim() == (0, 300)
+    assert [t for t in ax2.get_yticks() if 0 <= t <= 300] == [0, 100, 200, 300]
+    plt.close(fig)
+
+
+def test_style_panel_axes_hides_the_twin_axis_ticks_and_label_when_asked():
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    from src.web.api.export import _style_panel_axes
+
+    fig, ax = plt.subplots()
+    ax.plot([0, 1], [0, 1])
+    ax2 = ax.twinx()
+    ax2.plot([0, 1], [100, 200])
+    _style_panel_axes(ax, {'showY2Ticks': False, 'showY2Label': False}, {}, swap=False, plotted=1,
+                      default_xlabel='time [s]', panel_title='p', font_name=None, ax2=ax2)
+    fig.canvas.draw()
+
+    assert ax2.get_ylabel() == ''
+    assert not any(t.get_visible() for t in ax2.get_yticklabels())
+    plt.close(fig)
+
+
+def test_style_panel_axes_never_shows_a_grid_on_the_twin_axis():
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    from src.web.api.export import _style_panel_axes
+
+    fig, ax = plt.subplots()
+    ax.plot([0, 1], [0, 1])
+    ax2 = ax.twinx()
+    ax2.plot([0, 1], [100, 200])
+    _style_panel_axes(ax, {}, {'showGrid': True}, swap=False, plotted=1, default_xlabel='time [s]',
+                      panel_title='p', font_name=None, ax2=ax2)
+    fig.canvas.draw()
+
+    assert not any(line.get_visible() for line in ax2.yaxis.get_gridlines())
+    plt.close(fig)
+
+
 # -- style sidebar settings, carried through to the matplotlib render -------
 
 def test_export_honors_global_style(client):

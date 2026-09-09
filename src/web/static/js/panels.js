@@ -512,13 +512,20 @@ const PanelTree = (() => {
         const openEditor = () => TraceEditor.open(panel.id, idx);
         swatch.addEventListener('click', openEditor);
         label.addEventListener('click', openEditor);
+        row.appendChild(swatch);
+        row.appendChild(label);
+        if (t.secondaryAxis) {
+          const axisTag = document.createElement('span');
+          axisTag.className = 'trace-axis-tag';
+          axisTag.textContent = 'Y2';
+          axisTag.title = 'Plotted on the secondary y-axis';
+          row.appendChild(axisTag);
+        }
         const del = document.createElement('span');
         del.className = 'trace-remove';
         del.textContent = '×';
         del.title = 'Remove trace';
         del.addEventListener('click', () => { PlotWorkspace.removeTrace(panel.id, idx); refreshWorkspace(); });
-        row.appendChild(swatch);
-        row.appendChild(label);
         row.appendChild(del);
         node.appendChild(row);
       });

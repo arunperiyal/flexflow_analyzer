@@ -201,6 +201,15 @@ body {
 .style-group-heading:hover { color: #334155; }
 .style-group-arrow { display: inline-block; width: 10px; font-size: 9px; }
 .style-group-body { padding-top: 2px; }
+.style-subheading {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  color: #7c3aed;
+  text-transform: uppercase;
+  margin: 14px 0 8px;
+}
 .style-row {
   display: flex;
   align-items: center;
@@ -447,6 +456,7 @@ body {
   margin-bottom: 4px;
 }
 .trace-editor-hint { font-size: 10.5px; color: #94a3b8; margin: 0 0 12px; line-height: 1.4; }
+.trace-editor-check { display: flex; align-items: center; gap: 6px; font-size: 12px; margin-bottom: 4px; cursor: pointer; }
 .color-swatches { display: flex; flex-wrap: wrap; gap: 6px; }
 .color-swatch {
   width: 22px;
@@ -487,6 +497,15 @@ body {
   border-radius: 3px;
   padding: 1px 5px;
   white-space: nowrap;
+}
+.trace-axis-tag {
+  font-size: 9px;
+  font-weight: 700;
+  color: #7c3aed;
+  background: #f3e8ff;
+  border-radius: 3px;
+  padding: 0 4px;
+  flex: none;
 }
 
 /* Layout -> New/Edit reuses .style-limit-row (side-by-side number inputs)

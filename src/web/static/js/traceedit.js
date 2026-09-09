@@ -51,7 +51,7 @@ const TraceEditor = (() => {
     return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
   }
 
-  const TABS = [['color', 'Color'], ['line', 'Line'], ['marker', 'Marker'], ['value', 'Value']];
+  const TABS = [['color', 'Color'], ['line', 'Line'], ['marker', 'Marker'], ['value', 'Value'], ['axis', 'Axis']];
   let activeTab = 'color';
 
   function open(panelId, traceIndex) {
@@ -62,6 +62,18 @@ const TraceEditor = (() => {
   }
 
   function tabBody(trace) {
+    if (activeTab === 'axis') {
+      return `
+        <label class="trace-editor-check">
+          <input type="checkbox" id="te-secondary" ${trace.secondaryAxis ? 'checked' : ''}>
+          Plot on the secondary (right) y-axis
+        </label>
+        <p class="trace-editor-hint">For a trace on a very different scale from the rest of the
+          panel (a force next to a displacement, say) -- its own independent axis and range,
+          instead of one value flattening the other on a shared scale. Style it in the sidebar's
+          Panel section once at least one trace here uses it.</p>
+      `;
+    }
     if (activeTab === 'value') {
       return `
         <label for="te-scale">Scale factor</label>
@@ -161,6 +173,10 @@ const TraceEditor = (() => {
       });
       document.getElementById('te-label').addEventListener('change', (e) => {
         apply(panel, traceIndex, { label: e.target.value.trim() });
+      });
+    } else if (activeTab === 'axis') {
+      document.getElementById('te-secondary').addEventListener('change', (e) => {
+        apply(panel, traceIndex, { secondaryAxis: e.target.checked });
       });
     }
   }

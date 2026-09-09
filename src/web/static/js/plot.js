@@ -329,16 +329,31 @@ const PlotArea = (() => {
       const swap = !!pStyle.swapAxes;
       const tracesStart = traces.length;
 
+      // A trace's own secondary-axis toggle (TraceEditor's Axis tab) always
+      // means "this trace's *value*, on its own independent scale" -- so it
+      // rides whichever physical axis normally carries the value (X when
+      // swapped, Y otherwise), never the shared time/position one. Numbered
+      // past every panel's own primary slot (1..ws.panels.length) so it can
+      // never collide with another panel's axis, whether or not this panel
+      // ends up using it.
+      const secondaryNum = ws.panels.length + n;
+      const secondaryRef = swap ? `x${secondaryNum}` : `y${secondaryNum}`;
+      const secondaryKey = swap ? `xaxis${secondaryNum}` : `yaxis${secondaryNum}`;
+      const domain = paneDomain(paneRect(ws, panel), ws.layout);
+
       if (isSpatial) {
         panel.traces.forEach(t => {
           const byRow = spatialResults.get(t) || new Map();
           const symbol = markerSymbolFor(t, true);
           const scale = scaleOf(t);
+          const onSecondary = !!t.secondaryAxis;
           const logicalX = t.points.map(p => p.x);
           const logicalY = t.points.map(p => byRow.get(p.row) * scale);
           const trace = {
             x: swap ? logicalY : logicalX, y: swap ? logicalX : logicalY,
-            xaxis: xref, yaxis: yref, mode: symbol ? 'lines+markers' : 'lines', type: 'scatter',
+            xaxis: (swap && onSecondary) ? secondaryRef : xref,
+            yaxis: (!swap && onSecondary) ? secondaryRef : yref,
+            mode: symbol ? 'lines+markers' : 'lines', type: 'scatter',
             name: labelOf(t, autoLabel(t)),
             line: lineFor(t),
           };
@@ -351,11 +366,14 @@ const PlotArea = (() => {
           const s = data && data.series.find(s => s.row === t.row && s.column === t.col);
           const symbol = markerSymbolFor(t, false);
           const scale = scaleOf(t);
+          const onSecondary = !!t.secondaryAxis;
           const logicalX = data ? data.times : [];
           const logicalY = s ? s.values.map(v => v * scale) : [];
           const trace = {
             x: swap ? logicalY : logicalX, y: swap ? logicalX : logicalY,
-            xaxis: xref, yaxis: yref, mode: symbol ? 'lines+markers' : 'lines', type: 'scatter',
+            xaxis: (swap && onSecondary) ? secondaryRef : xref,
+            yaxis: (!swap && onSecondary) ? secondaryRef : yref,
+            mode: symbol ? 'lines+markers' : 'lines', type: 'scatter',
             name: labelOf(t, autoLabel(t)),
             line: lineFor(t),
           };
@@ -389,8 +407,14 @@ const PlotArea = (() => {
       if (!showYTicks) logicalYConfig.ticks = '';
 
       const panelTraces = traces.slice(tracesStart);
+      // The shared time/position axis's range still comes from every trace
+      // (primary and secondary alike ride it) -- only the *value* axis
+      // splits, since that is the one a secondary trace has opted out of.
+      const onSecondary = panel.traces.map(t => !!t.secondaryAxis);
+      const primaryTraces = panelTraces.filter((tr, i) => !onSecondary[i]);
+      const secondaryTraces = panelTraces.filter((tr, i) => onSecondary[i]);
       const logicalXRange = extent(panelTraces.flatMap(tr => (swap ? tr.y : tr.x)));
-      const logicalYRange = extent(panelTraces.flatMap(tr => (swap ? tr.x : tr.y)));
+      const logicalYRange = extent(primaryTraces.flatMap(tr => (swap ? tr.x : tr.y)));
       applyAxisStyle(logicalXConfig, style, pStyle.xtick, pStyle.xlim, logicalXRange, pStyle.xtickangle);
       applyAxisStyle(logicalYConfig, style, pStyle.ytick, pStyle.ylim, logicalYRange, pStyle.ytickangle);
 
@@ -404,7 +428,6 @@ const PlotArea = (() => {
       // the key here is silently accepted (it doesn't match any real axis)
       // and Plotly falls back to some other anchor, which is what put a
       // panel's own tick labels over a completely different subplot.
-      const domain = paneDomain(paneRect(ws, panel), ws.layout);
       layout[xKey].domain = domain.x;
       layout[xKey].anchor = yref;
       layout[yKey].domain = domain.y;
@@ -420,6 +443,28 @@ const PlotArea = (() => {
         layout[yKey].showline = true;
         layout[yKey].mirror = true;
         layout[yKey].linecolor = '#94a3b8';
+      }
+
+      // Only allocated when actually used: a panel with no secondary-axis
+      // trace has nothing at this key, and Plotly never looks for it.
+      // `overlaying` draws it sharing this panel's own plot area (not a new
+      // subplot column); `domain`/`anchor` still have to be given explicitly
+      // for the same multi-panel-contamination reason as the primary axes
+      // above -- an overlay left to Plotly's own default spans the whole
+      // canvas, not just this panel's pane.
+      if (secondaryTraces.length) {
+        const showY2Ticks = pStyle.showY2Ticks !== false;
+        const showY2Label = pStyle.showY2Label !== false;
+        const secondaryRange = extent(secondaryTraces.flatMap(tr => (swap ? tr.x : tr.y)));
+        const secondaryConfig = { title: showY2Label ? (pStyle.y2label || '') : '', showticklabels: showY2Ticks };
+        if (!showY2Ticks) secondaryConfig.ticks = '';
+        applyAxisStyle(secondaryConfig, style, pStyle.y2tick, pStyle.y2lim, secondaryRange, pStyle.y2tickangle);
+        secondaryConfig.overlaying = swap ? xref : yref;
+        secondaryConfig.side = swap ? 'top' : 'right';
+        secondaryConfig.anchor = swap ? yref : xref;
+        secondaryConfig.domain = swap ? domain.x : domain.y;
+        secondaryConfig.showgrid = false;   // the primary axis's own grid is enough
+        layout[secondaryKey] = secondaryConfig;
       }
     });
 
@@ -458,8 +503,23 @@ const PlotArea = (() => {
     return axis && axis.range ? [axis.range[0], axis.range[1]] : null;
   }
 
+  // The secondary (Y2) axis's own current range, for the same tick-step
+  // guard and lock use as currentYRange -- resolved the same way render()
+  // numbers it (past every panel's own primary slot), not read back from
+  // Plotly's own axis-assignment guesses.
+  function currentY2Range(panelId, swap) {
+    const gd = document.getElementById('plotly-panels');
+    if (!gd || !gd.layout) return null;
+    const panels = PlotWorkspace.state().panels;
+    const idx = panels.findIndex(p => p.id === panelId);
+    if (idx === -1) return null;
+    const num = panels.length + (idx + 1);
+    const axis = gd.layout[`${swap ? 'x' : 'y'}axis${num}`];
+    return axis && axis.range ? [axis.range[0], axis.range[1]] : null;
+  }
+
   return {
-    render, placeholder, currentYRange, currentXRange, ensureMathJax, paneRect, autoLabel,
+    render, placeholder, currentYRange, currentXRange, currentY2Range, ensureMathJax, paneRect, autoLabel,
   };
 })();
 

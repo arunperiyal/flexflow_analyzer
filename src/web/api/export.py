@@ -236,6 +236,19 @@ def export_plot():
             # each one lands on, mirroring plot.js's logicalX/logicalY split.
             swap = bool(pstyle.get('swapAxes'))
             plotted = 0
+            # Lazily created: a panel with no secondary-axis trace never
+            # gets a twin axis at all. twiny (not twinx) when swapped -- the
+            # secondary axis is always the *value* one, and swap is what
+            # decides whether that's matplotlib's y (twinx) or x (twiny).
+            ax2 = None
+
+            def _target_ax(trace):
+                nonlocal ax2
+                if not trace.get('secondaryAxis'):
+                    return ax
+                if ax2 is None:
+                    ax2 = ax.twiny() if swap else ax.twinx()
+                return ax2
 
             if panel.get('kind') == 'spatial':
                 traces = panel.get('traces') or []
@@ -247,8 +260,8 @@ def export_plot():
                     ys = [y * _scale_of(trace) for y in ys]
                     first, second = (ys, xs) if swap else (xs, ys)
                     label = _label_of(trace, _spatial_trace_label(trace))
-                    ax.plot(first, second, color=trace.get('color'), label=label,
-                            **_plot_kwargs(trace, style))
+                    _target_ax(trace).plot(first, second, color=trace.get('color'), label=label,
+                                           **_plot_kwargs(trace, style))
                     plotted += 1
                 default_xlabel = ax_label
             else:
@@ -265,12 +278,13 @@ def export_plot():
                                  if trace.get('source') == 'oisd'
                                  else f"{trace.get('case')} r{trace.get('row')} {trace.get('col')}")
                     label = _label_of(trace, auto_label)
-                    ax.plot(first, second, color=trace.get('color'), label=label,
-                            **_plot_kwargs(trace, style))
+                    _target_ax(trace).plot(first, second, color=trace.get('color'), label=label,
+                                           **_plot_kwargs(trace, style))
                     plotted += 1
                 default_xlabel = 'time [s]'
 
-            _style_panel_axes(ax, pstyle, style, swap, plotted, default_xlabel, panel.get('title'), font_name)
+            _style_panel_axes(ax, pstyle, style, swap, plotted, default_xlabel, panel.get('title'),
+                              font_name, ax2=ax2)
 
         if style.get('title'):
             fig.suptitle(style['title'], fontsize=(style.get('labelFontSize') or 9) + 2)
@@ -365,22 +379,32 @@ def _label_of(trace, auto_label):
     return trace.get('label') or auto_label
 
 
-def _style_panel_axes(ax, pstyle, style, swap, plotted, default_xlabel, panel_title, font_name):
+def _style_panel_axes(ax, pstyle, style, swap, plotted, default_xlabel, panel_title, font_name, ax2=None):
     """Grid/legend/limits/ticks/labels shared by every panel kind -- mirrors
     plot.js's applyAxisStyle plus the tick/label config render() builds
     around it, including its Y-label fallback to the panel's own title:
     Plotly never draws that title as a heading above the panel (there is
     no "above the panel" in the browser view at all), only ever as the
     Y-axis label's own default when the panel has no explicit ylabel -- so
-    neither does this, now that it matches the plot area exactly."""
+    neither does this, now that it matches the plot area exactly.
+
+    ax2, when a trace's Axis-tab toggle put it there: the twin axis
+    (ax.twinx(), or ax.twiny() if swap -- always whichever one is the
+    *value* axis, matching plot.js's secondaryAxis/secondaryKey), styled
+    from pstyle's own y2* fields and folded into ax's own legend rather
+    than drawing a second one."""
     ax.tick_params(labelsize=style.get('tickFontSize') or 7,
                    direction='in' if style.get('ticksInside') else 'out')
     ax.grid(style.get('showGrid', True))
     # A static PNG has no colored panel-tree to cross-reference trace
     # colors against (unlike the browser view), so unlike there, a legend
     # is shown by default here.
+    handles, labels = ax.get_legend_handles_labels()
+    if ax2 is not None:
+        h2, l2 = ax2.get_legend_handles_labels()
+        handles, labels = handles + h2, labels + l2
     if plotted and style.get('showLegend', True):
-        ax.legend(fontsize=style.get('legendFontSize') or 6, loc='upper right')
+        ax.legend(handles, labels, fontsize=style.get('legendFontSize') or 6, loc='upper right')
 
     x_axis, y_axis = (ax.yaxis, ax.xaxis) if swap else (ax.xaxis, ax.yaxis)
     set_xlim, set_ylim = (ax.set_ylim, ax.set_xlim) if swap else (ax.set_xlim, ax.set_ylim)
@@ -424,3 +448,28 @@ def _style_panel_axes(ax, pstyle, style, swap, plotted, default_xlabel, panel_ti
         set_xlabel(pstyle.get('xlabel') or default_xlabel, fontsize=style.get('labelFontSize') or 8)
     if pstyle.get('showYLabel') is not False:
         set_ylabel(pstyle.get('ylabel') or panel_title or '', fontsize=style.get('labelFontSize') or 9)
+
+    if ax2 is not None:
+        # No grid of its own -- ax's is enough, and a second set of
+        # gridlines on a different scale reads as noise, not information.
+        ax2.grid(False)
+        ax2.tick_params(labelsize=style.get('tickFontSize') or 7,
+                        direction='in' if style.get('ticksInside') else 'out')
+        v2_axis = ax2.xaxis if swap else ax2.yaxis
+        set_v2_lim = ax2.set_xlim if swap else ax2.set_ylim
+        set_v2_label = ax2.set_xlabel if swap else ax2.set_ylabel
+        v2_tick_axis = 'x' if swap else 'y'
+
+        if pstyle.get('y2lim'):
+            set_v2_lim(pstyle['y2lim'])
+        if pstyle.get('y2tick', 0) > 0:
+            v2_axis.set_major_locator(MultipleLocator(pstyle['y2tick']))
+        if pstyle.get('y2tickangle') is not None:
+            ax2.tick_params(axis=v2_tick_axis, labelrotation=pstyle['y2tickangle'])
+        if font_name:
+            for label in v2_axis.get_ticklabels():
+                label.set_fontfamily(font_name)
+        if pstyle.get('showY2Ticks') is False:
+            _hide_ticks(ax2, v2_tick_axis)
+        if pstyle.get('showY2Label') is not False:
+            set_v2_label(pstyle.get('y2label') or '', fontsize=style.get('labelFontSize') or 9)
