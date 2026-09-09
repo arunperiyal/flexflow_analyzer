@@ -244,8 +244,10 @@ def export_plot():
                     xs, ys = _spatial_trace_values(root, trace)
                     if xs is None:
                         continue
+                    ys = [y * _scale_of(trace) for y in ys]
                     first, second = (ys, xs) if swap else (xs, ys)
-                    ax.plot(first, second, color=trace.get('color'), label=_spatial_trace_label(trace),
+                    label = _label_of(trace, _spatial_trace_label(trace))
+                    ax.plot(first, second, color=trace.get('color'), label=label,
                             **_plot_kwargs(trace, style))
                     plotted += 1
                 default_xlabel = ax_label
@@ -254,13 +256,15 @@ def export_plot():
                     values, times = _trace_values(root, trace)
                     if values is None:
                         continue
+                    values = values * _scale_of(trace)
                     first, second = (values, times) if swap else (times, values)
                     # A surface trace's row is always 0 -- "r0" identifies
                     # nothing a reader could use, unlike a nodal trace's row.
                     # Its block name does instead, matching plot.js.
-                    label = (f"{trace.get('case')} {trace.get('block')} {trace.get('col')}"
-                            if trace.get('source') == 'oisd'
-                            else f"{trace.get('case')} r{trace.get('row')} {trace.get('col')}")
+                    auto_label = (f"{trace.get('case')} {trace.get('block')} {trace.get('col')}"
+                                 if trace.get('source') == 'oisd'
+                                 else f"{trace.get('case')} r{trace.get('row')} {trace.get('col')}")
+                    label = _label_of(trace, auto_label)
                     ax.plot(first, second, color=trace.get('color'), label=label,
                             **_plot_kwargs(trace, style))
                     plotted += 1
@@ -344,6 +348,21 @@ def _spatial_trace_label(trace):
     """Legend text for one spatial trace -- matches plot.js's spatialTraceName."""
     what = f"@t={trace.get('time')}" if trace.get('mode') == 'snapshot' else trace.get('stat')
     return f"{trace.get('case')} {trace.get('col')} {what}"
+
+
+def _scale_of(trace):
+    """A real unit transform (e.g. a force trace turned into a lift
+    coefficient) applied to the plotted values, matching plot.js's scaleOf.
+    Unset means 1, not 0 -- `trace.get('scale') or 1` would silently turn a
+    genuine (if unusual) scale of 0 back into 1."""
+    scale = trace.get('scale')
+    return 1 if scale is None else scale
+
+
+def _label_of(trace, auto_label):
+    """The trace's own label override, matching plot.js's labelOf -- an
+    empty override falls back to `auto_label` rather than showing nothing."""
+    return trace.get('label') or auto_label
 
 
 def _style_panel_axes(ax, pstyle, style, swap, plotted, default_xlabel, panel_title, font_name):

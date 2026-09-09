@@ -62,6 +62,29 @@ const PlotArea = (() => {
     return `${t.case} ${t.col} ${t.mode === 'snapshot' ? `@t=${t.time}` : t.stat}`;
   }
 
+  // scale: a real unit transform (e.g. a force trace turned into a lift
+  // coefficient), applied to the plotted values themselves -- not a visual
+  // trick, so hover values and the exported figure agree with the legend.
+  // null/unset means 1, not 0: `t.scale || 1` would silently turn a
+  // genuine (if unusual) scale of 0 back into 1.
+  function scaleOf(t) { return t.scale == null ? 1 : t.scale; }
+
+  // label: overrides the auto-generated trace name (case/row/column, or
+  // case/block/column for a surface trace) wherever it's about to be shown
+  // -- an empty override falls back to that name rather than showing nothing.
+  function labelOf(t, autoName) { return t.label ? t.label : autoName; }
+
+  // The name a trace gets when its `label` override is unset -- one place,
+  // so the legend, the exported figure (export.py mirrors this exact
+  // format), and TraceEditor's own placeholder (what the Label field falls
+  // back to) can never drift out of agreement with each other.
+  function autoLabel(t) {
+    if (t.points) return spatialTraceName(t);
+    // A surface trace's row is always 0 -- "r0" would say nothing a reader
+    // could use, unlike a nodal trace's row. The block name identifies it.
+    return t.source === 'oisd' ? `${t.case} ${t.block} ${t.col}` : `${t.case} r${t.row} ${t.col}`;
+  }
+
   function placeholder(msg) {
     document.getElementById('plotarea').innerHTML = `<div class="plot-placeholder">${msg}</div>`;
   }
@@ -310,12 +333,13 @@ const PlotArea = (() => {
         panel.traces.forEach(t => {
           const byRow = spatialResults.get(t) || new Map();
           const symbol = markerSymbolFor(t, true);
+          const scale = scaleOf(t);
           const logicalX = t.points.map(p => p.x);
-          const logicalY = t.points.map(p => byRow.get(p.row));
+          const logicalY = t.points.map(p => byRow.get(p.row) * scale);
           const trace = {
             x: swap ? logicalY : logicalX, y: swap ? logicalX : logicalY,
             xaxis: xref, yaxis: yref, mode: symbol ? 'lines+markers' : 'lines', type: 'scatter',
-            name: spatialTraceName(t),
+            name: labelOf(t, autoLabel(t)),
             line: lineFor(t),
           };
           addMarker(trace, t, symbol, 5, style, logicalX.length);
@@ -326,16 +350,13 @@ const PlotArea = (() => {
           const data = results.get(groupKey(t));
           const s = data && data.series.find(s => s.row === t.row && s.column === t.col);
           const symbol = markerSymbolFor(t, false);
+          const scale = scaleOf(t);
           const logicalX = data ? data.times : [];
-          const logicalY = s ? s.values : [];
-          // A surface trace's row is always 0 -- "r0" would say nothing a
-          // reader could use, unlike a nodal trace's row. The block name
-          // (e.g. "cylinder_body") identifies it instead.
-          const name = t.source === 'oisd' ? `${t.case} ${t.block} ${t.col}` : `${t.case} r${t.row} ${t.col}`;
+          const logicalY = s ? s.values.map(v => v * scale) : [];
           const trace = {
             x: swap ? logicalY : logicalX, y: swap ? logicalX : logicalY,
             xaxis: xref, yaxis: yref, mode: symbol ? 'lines+markers' : 'lines', type: 'scatter',
-            name,
+            name: labelOf(t, autoLabel(t)),
             line: lineFor(t),
           };
           addMarker(trace, t, symbol, 6, style, logicalX.length);
@@ -438,7 +459,7 @@ const PlotArea = (() => {
   }
 
   return {
-    render, placeholder, currentYRange, currentXRange, ensureMathJax, paneRect,
+    render, placeholder, currentYRange, currentXRange, ensureMathJax, paneRect, autoLabel,
   };
 })();
 

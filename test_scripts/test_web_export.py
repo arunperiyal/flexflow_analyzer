@@ -263,6 +263,102 @@ def test_spatial_trace_label_matches_plot_js_spatial_trace_name():
         == 'c1 aleDisp_y rms'
 
 
+# -- Trace scale & label (a real unit transform, not a visual trick) ----
+
+def test_scale_of_defaults_to_1_when_unset():
+    from src.web.api.export import _scale_of
+    assert _scale_of({}) == 1
+
+
+def test_scale_of_treats_an_explicit_zero_as_real_not_unset():
+    """`trace.get('scale') or 1` would silently turn a genuine 0 back into 1."""
+    from src.web.api.export import _scale_of
+    assert _scale_of({'scale': 0}) == 0
+
+
+def test_scale_of_returns_the_explicit_value():
+    from src.web.api.export import _scale_of
+    assert _scale_of({'scale': 0.25}) == 0.25
+
+
+def test_label_of_falls_back_to_the_auto_label_when_unset():
+    from src.web.api.export import _label_of
+    assert _label_of({}, 'auto') == 'auto'
+
+
+def test_label_of_falls_back_to_the_auto_label_when_empty():
+    from src.web.api.export import _label_of
+    assert _label_of({'label': ''}, 'auto') == 'auto'
+
+
+def test_label_of_returns_the_explicit_label():
+    from src.web.api.export import _label_of
+    assert _label_of({'label': 'Cl'}, 'auto') == 'Cl'
+
+
+def test_export_scales_a_trace_and_uses_its_custom_label(client, monkeypatch):
+    """End-to-end: the values matplotlib actually draws are scaled, and the
+    legend uses the override -- not just that the request doesn't crash."""
+    import numpy as np
+    from matplotlib.axes import Axes
+    from src.web.api import export as export_mod
+
+    root = client.application.config['WORKSPACE_ROOT']
+    raw_values, _ = export_mod._trace_values(
+        root, {'case': 'BR0SG0U1P0', 'group': 0, 'row': 0, 'col': 'totTrac_x', 'source': 'oisd'})
+
+    captured = {}
+    real_plot = Axes.plot
+
+    def spy_plot(self, *args, **kwargs):
+        captured['y'] = args[1]
+        captured['label'] = kwargs.get('label')
+        return real_plot(self, *args, **kwargs)
+    monkeypatch.setattr(Axes, 'plot', spy_plot)
+
+    panels = _surface_panels()
+    panels[0]['traces'][0]['scale'] = 2.0
+    panels[0]['traces'][0]['label'] = 'Cl'
+    res = client.post('/api/export', json={'panels': panels})
+
+    assert res.status_code == 200
+    assert captured['label'] == 'Cl'
+    np.testing.assert_allclose(captured['y'], np.asarray(raw_values) * 2.0)
+
+
+def test_export_spatial_trace_scale_and_label(client, monkeypatch):
+    from matplotlib.axes import Axes
+    from src.web.api import export as export_mod
+
+    root = client.application.config['WORKSPACE_ROOT']
+    raw_xs, raw_ys = export_mod._spatial_trace_values(
+        root, {'case': 'BR0SG0U1P0', 'group': 0, 'col': 'aleDisp_y', 'mode': 'snapshot', 'time': 0.05,
+               'points': [{'row': 0, 'x': 0.0}]})
+
+    captured = {}
+    real_plot = Axes.plot
+
+    def spy_plot(self, *args, **kwargs):
+        captured['y'] = args[1]
+        captured['label'] = kwargs.get('label')
+        return real_plot(self, *args, **kwargs)
+    monkeypatch.setattr(Axes, 'plot', spy_plot)
+
+    panels = [{
+        'id': 'p1', 'title': 'spatial', 'kind': 'spatial',
+        'traces': [{
+            'case': 'BR0SG0U1P0', 'group': 0, 'col': 'aleDisp_y', 'mode': 'snapshot', 'time': 0.05,
+            'points': [{'row': 0, 'x': 0.0}], 'axLabel': 'position', 'color': '#dc2626',
+            'scale': 3.0, 'label': 'Cd',
+        }],
+    }]
+    res = client.post('/api/export', json={'panels': panels})
+
+    assert res.status_code == 200
+    assert captured['label'] == 'Cd'
+    assert captured['y'] == [y * 3.0 for y in raw_ys]
+
+
 def test_export_renders_actual_spatial_data_not_a_placeholder(client):
     panels = [{
         'id': 'p1', 'title': 'spatial rms', 'kind': 'spatial',
