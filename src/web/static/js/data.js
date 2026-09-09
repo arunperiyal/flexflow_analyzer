@@ -289,5 +289,243 @@ const DataMenu = (() => {
     URL.revokeObjectURL(url);
   }
 
-  return { openInfo, openTable };
+  // -- Stats -------------------------------------------------------------
+  // Reductions (min/max/mean/rms/std/range) over a tsId window, plus the two
+  // "locator" functions that point at *which PLT file* best captures an
+  // extreme or a zero crossing -- the web equivalent of `data stats`
+  // (src/commands/data/stats_impl/command.py), computed by
+  // services/data_stats.py. The window here is tsId-based (not time-based
+  // like Table's), matching data stats --t1/--t2: a locator's answer is
+  // already in the units of a PLT filename, and the window that finds it
+  // should be too.
+
+  const STAT_FUNCS = [
+    ['min', 'Min'], ['max', 'Max'], ['mean', 'Mean'], ['rms', 'RMS'],
+    ['std', 'Std dev'], ['range', 'Range'],
+    ['maxloc', 'Max + PLT frame'], ['minloc', 'Min + PLT frame'],
+    ['zeroloc', 'Zero crossing + PLT frame'],
+  ];
+
+  async function openStats() {
+    const cases = await App.fetchCases();
+    const options = cases
+      .map(c => `<option value="${c.name}">${c.name}${c.exists ? '' : ' (missing)'}</option>`)
+      .join('');
+
+    Menu.openDialog(`
+      <h2>Data &rarr; Stats</h2>
+      <label for="ds-case">Case</label>
+      <select id="ds-case">
+        <option value="">Select a case&hellip;</option>
+        ${options}
+      </select>
+      <div id="ds-form"></div>
+      <div id="ds-result"></div>
+      <div class="btn-row"><button id="ds-close">Close</button></div>
+    `, { wide: true });
+
+    document.getElementById('ds-close').addEventListener('click', Menu.closeDialog);
+    document.getElementById('ds-case').addEventListener('change', (e) => onStatsCaseChange(e.target.value));
+  }
+
+  async function onStatsCaseChange(caseName) {
+    const form = document.getElementById('ds-form');
+    document.getElementById('ds-result').innerHTML = '';
+    if (!caseName) { form.innerHTML = ''; return; }
+
+    form.innerHTML = '<div class="empty">Loading&hellip;</div>';
+    const res = await fetch(`/api/cases/${encodeURIComponent(caseName)}/data/info`);
+    const info = await res.json();
+    if (!document.getElementById('ds-form')) return;
+    if (!res.ok) {
+      form.innerHTML = `<div class="error">${escapeHtml(info.error || 'could not load this case')}</div>`;
+      return;
+    }
+    renderStatsForm(caseName, info);
+  }
+
+  function renderStatsForm(caseName, info) {
+    const form = document.getElementById('ds-form');
+    const kinds = ['othd', 'oisd'].filter(k => info[k]);
+    if (!kinds.length) {
+      form.innerHTML = '<div class="error">No othd/oisd data in this case.</div>';
+      return;
+    }
+    const kindRow = kinds.length > 1 ? `
+      <label>Kind</label>
+      <div class="plot-kind-row">
+        ${kinds.map((k, i) => `
+          <label class="var-check">
+            <input type="radio" name="ds-kind" value="${k}" ${i === 0 ? 'checked' : ''}> ${k.toUpperCase()}
+          </label>
+        `).join('')}
+      </div>
+    ` : `<input type="hidden" id="ds-kind-fixed" value="${kinds[0]}">`;
+
+    form.innerHTML = `${kindRow}<div id="ds-kind-body"></div>`;
+    document.querySelectorAll('input[name="ds-kind"]').forEach(r =>
+      r.addEventListener('change', () => renderStatsKindBody(caseName, info, currentStatsKind())));
+    renderStatsKindBody(caseName, info, currentStatsKind());
+  }
+
+  function currentStatsKind() {
+    const checked = document.querySelector('input[name="ds-kind"]:checked');
+    if (checked) return checked.value;
+    const fixed = document.getElementById('ds-kind-fixed');
+    return fixed ? fixed.value : 'othd';
+  }
+
+  function renderStatsKindBody(caseName, info, kind) {
+    const box = document.getElementById('ds-kind-body');
+    const kindInfo = info[kind];
+    if (!box || !kindInfo) return;
+
+    const groupOptions = kindInfo.groups.map(g => `
+      <option value="${g.group}">${kindInfo.group_label} ${g.group} (${g.nodes} node${g.nodes === 1 ? '' : 's'})</option>
+    `).join('');
+    const funcRow = STAT_FUNCS.map(([id, label]) => `
+      <label class="var-check"><input type="checkbox" class="ds-func" value="${id}"> ${label}</label>
+    `).join('');
+
+    box.innerHTML = `
+      <label for="ds-group">${kindInfo.group_label}</label>
+      <select id="ds-group">${groupOptions}</select>
+      <label for="ds-node">Node</label>
+      <input type="number" id="ds-node" min="0" value="0" step="1">
+      <label>Variables</label>
+      <div id="ds-var-list" class="var-list"></div>
+      <label>Functions</label>
+      <div class="var-list">${funcRow}</div>
+      <label>tsId window (optional)</label>
+      <div class="coord-inputs">
+        <input type="text" id="ds-t1" placeholder="t1 (blank = start)">
+        <input type="text" id="ds-t2" placeholder="t2 (blank = end)">
+      </div>
+      <div class="btn-row"><button id="ds-go" class="primary" disabled>Compute stats</button></div>
+    `;
+
+    document.getElementById('ds-group').addEventListener('change', () => renderStatsVarList(kindInfo));
+    document.querySelectorAll('.ds-func').forEach(cb => cb.addEventListener('change', updateStatsGoButton));
+    document.getElementById('ds-go').addEventListener('click', () =>
+      computeStats(caseName, kind, kindInfo.group_label));
+    renderStatsVarList(kindInfo);
+  }
+
+  function renderStatsVarList(kindInfo) {
+    const groupSel = document.getElementById('ds-group');
+    const list = document.getElementById('ds-var-list');
+    const nodeInput = document.getElementById('ds-node');
+    if (!groupSel || !list) return;
+    const group = kindInfo.groups.find(g => String(g.group) === groupSel.value);
+    if (!group) return;
+    nodeInput.max = String(Math.max(0, group.nodes - 1));
+
+    const cols = group.variables.flatMap(v => v.columns);
+    list.innerHTML = cols.map(c => `
+      <label class="var-check"><input type="checkbox" class="ds-column" value="${c}"> ${c}</label>
+    `).join('');
+    document.querySelectorAll('.ds-column').forEach(cb => cb.addEventListener('change', updateStatsGoButton));
+    updateStatsGoButton();
+  }
+
+  function updateStatsGoButton() {
+    const btn = document.getElementById('ds-go');
+    if (!btn) return;
+    const anyColumn = document.querySelectorAll('.ds-column:checked').length > 0;
+    const anyFunc = document.querySelectorAll('.ds-func:checked').length > 0;
+    btn.disabled = !(anyColumn && anyFunc);
+  }
+
+  async function computeStats(caseName, kind, groupLabel) {
+    const result = document.getElementById('ds-result');
+    const group = document.getElementById('ds-group').value;
+    const node = document.getElementById('ds-node').value;
+    const columns = Array.from(document.querySelectorAll('.ds-column:checked')).map(cb => cb.value);
+    const funcs = Array.from(document.querySelectorAll('.ds-func:checked')).map(cb => cb.value);
+    if (!columns.length || !funcs.length) return;
+
+    result.innerHTML = '<div class="empty">Loading&hellip;</div>';
+    const params = new URLSearchParams({
+      group, node, kind, columns: columns.join(','), funcs: funcs.join(','),
+    });
+    const t1 = document.getElementById('ds-t1').value.trim();
+    const t2 = document.getElementById('ds-t2').value.trim();
+    if (t1 !== '') params.set('t1', t1);
+    if (t2 !== '') params.set('t2', t2);
+
+    const res = await fetch(`/api/cases/${encodeURIComponent(caseName)}/data/stats?${params}`);
+    const data = await res.json();
+    if (!document.getElementById('ds-result')) return;
+    if (!res.ok) {
+      result.innerHTML = `<div class="error">${escapeHtml(data.error || 'could not compute stats')}</div>`;
+      return;
+    }
+    result.innerHTML = renderStatsResult(kind, groupLabel, data);
+  }
+
+  function runnersUp(ranked) {
+    const rest = ranked.slice(1);
+    if (!rest.length) return '-';
+    return rest.map(([ts, v]) => `${ts} (${v.toExponential(3)})`).join(', ');
+  }
+
+  function renderStatsResult(kind, groupLabel, data) {
+    const header = `<div class="empty">${kind} | ${groupLabel} ${data.group} | node ${data.node} | `
+      + `tsId ${data.tsid_min}..${data.tsid_max} (${data.steps} step(s))</div>`;
+
+    let valueTable = '';
+    if (data.values.length && Object.keys(data.values[0]).length > 1) {
+      const funcNames = Object.keys(data.values[0]).filter(k => k !== 'column');
+      valueTable = `
+        <table class="info-table">
+          <tr><th>Variable</th>${funcNames.map(f => `<th>${f}</th>`).join('')}</tr>
+          ${data.values.map(row => `
+            <tr><td>${escapeHtml(row.column)}</td>${funcNames.map(f => `<td>${row[f].toPrecision(6)}</td>`).join('')}</tr>
+          `).join('')}
+        </table>
+      `;
+    }
+
+    const locTable = (rows, word) => rows.length ? `
+      <h3>${word} -- the extreme, and which PLT file comes closest to it</h3>
+      <table class="info-table">
+        <tr><th>Variable</th><th>${word}</th><th>at tsId</th><th>time</th>
+            <th>PLT to open</th><th>value there</th><th>runners-up</th></tr>
+        ${rows.map(r => `
+          <tr>
+            <td>${escapeHtml(r.column)}</td><td>${r.value.toExponential(6)}</td>
+            <td>${r.tsId}</td><td>${r.time.toPrecision(6)}</td>
+            <td>${r.plt_tsId ?? '-'}</td>
+            <td>${r.plt_value != null ? r.plt_value.toExponential(6) : '-'}</td>
+            <td>${runnersUp(r.plt_ranked)}</td>
+          </tr>
+        `).join('')}
+      </table>
+    ` : '';
+
+    const zeroTable = data.zeroloc && data.zeroloc.length ? `
+      <h3>zeroloc -- the zero crossing best caught by a PLT file</h3>
+      <table class="info-table">
+        <tr><th>Variable</th><th>direction</th><th>crossing tsId</th><th>time</th><th>value</th>
+            <th>PLT to open</th><th>value there</th><th>runners-up</th></tr>
+        ${data.zeroloc.map(r => r.count ? `
+          <tr>
+            <td>${escapeHtml(r.column)}</td><td>${r.direction}</td>
+            <td>${r.tsId}</td><td>${r.time.toPrecision(6)}</td><td>${r.value.toExponential(6)}</td>
+            <td>${r.plt_tsId ?? '-'}</td>
+            <td>${r.plt_value != null ? r.plt_value.toExponential(6) : '-'}</td>
+            <td>${runnersUp(r.plt_ranked)}</td>
+          </tr>
+        ` : `
+          <tr><td>${escapeHtml(r.column)}</td><td>${r.direction}</td>
+              <td colspan="6" class="empty">never crosses zero in this window</td></tr>
+        `).join('')}
+      </table>
+    ` : '';
+
+    return header + valueTable + locTable(data.maxloc || [], 'maxloc')
+      + locTable(data.minloc || [], 'minloc') + zeroTable;
+  }
+
+  return { openInfo, openTable, openStats };
 })();
