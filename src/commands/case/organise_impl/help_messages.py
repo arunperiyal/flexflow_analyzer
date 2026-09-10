@@ -22,7 +22,8 @@ Organize and clean up case directories. Pick one subcommand.
 
     {Colors.CYAN}archive{Colors.RESET}
         Move .othd, .oisd (and .rcv if present) from the run directory
-        into othd_files/, oisd_files/, rcv_files/.
+        into othd_files/, oisd_files/, rcv_files/. With --t1/--t2, only
+        files whose timestep range overlaps that window are moved.
         Uses numbered suffixes to avoid overwriting existing files.
         No confirmation required — safe archive operation.
 
@@ -33,6 +34,10 @@ Organize and clean up case directories. Pick one subcommand.
               • Removes subset files (covered by larger files)
               • Keeps files with overlapping ranges
               • Renames remaining files sequentially by time step
+              • Always analyzes the complete archived set — --t1/--t2 do
+                NOT scope --clean; excluding a file could hide the very
+                superset that makes another file redundant, and silently
+                leave it uncleaned
 
     {Colors.CYAN}output{Colors.RESET}
         Remove intermediate .out/.rst files from the run directory:
@@ -63,7 +68,8 @@ Organize and clean up case directories. Pick one subcommand.
     --t1 STEP                 Only target timesteps >= STEP
     --t2 STEP                 Only target timesteps <= STEP
     (either alone is a one-sided bound; both together is an inclusive range)
-    Available on archive, output and plt.
+    Available on the archive move step, output and plt.
+    NOT applied to archive --clean, which always dedupes everything.
 
 {Colors.BOLD}OTHER OPTIONS:{Colors.RESET}
     --dry-run                 Show what would be deleted without deleting anything
@@ -84,6 +90,8 @@ Organize and clean up case directories. Pick one subcommand.
     • archive (without --clean) does not delete anything; it only moves files
     • archive --clean, output and plt show a summary and ask for confirmation
     • --delete-binary is unconditional: it does not check the run dir first
+    • A t1/t2 context left over from something else never silently narrows
+      archive --clean — it always cleans the complete archived set
     • Use --no-confirm to skip confirmation
     • Fails if any OTHD/OISD file cannot be read (prevents data loss)
 
@@ -137,6 +145,8 @@ def print_organise_examples():
 {Colors.BOLD}Deduplicating OTHD/OISD Files:{Colors.RESET}
 
     # Archive, then remove duplicate/subset OTHD and OISD files
+    # --clean always inspects the full archived set, even with a t1/t2
+    # context left over from something else
     flexflow case organise archive CS4SG1U1 --clean
 
     # Skip confirmation
