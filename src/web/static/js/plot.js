@@ -395,6 +395,8 @@ const PlotArea = (() => {
     // rather than threading a swap flag through every line that touches
     // an axis.
     ws.panels.forEach((panel, panelIdx) => {
+      const n = panelIdx + 1;
+
       if (panel.kind === 'render') {
         const domain = paneDomain(paneRect(ws, panel), ws.layout);
         images.push({
@@ -404,10 +406,18 @@ const PlotArea = (() => {
           sizex: domain.x[1] - domain.x[0], sizey: domain.y[1] - domain.y[0],
           xanchor: 'left', yanchor: 'top', sizing: 'contain',
         });
-        return;   // no axis, no traces -- nothing else in this loop applies
+        // Plotly always draws SOME primary x/y axis by default -- even with
+        // zero traces and no explicit config -- whenever a panel lands in
+        // slot 1 (the plain 'x'/'y' Plotly falls back to when nothing else
+        // claims it). A render panel has no data axis to configure, but
+        // still has to explicitly say so, or that default axis (ticks, a
+        // 0-1 range box) shows through around the image.
+        const xKey = n === 1 ? 'xaxis' : `xaxis${n}`;
+        const yKey = n === 1 ? 'yaxis' : `yaxis${n}`;
+        layout[xKey] = { visible: false };
+        layout[yKey] = { visible: false };
+        return;   // no traces -- nothing else in this loop applies
       }
-
-      const n = panelIdx + 1;
       const xref = n === 1 ? 'x' : `x${n}`;
       const yref = n === 1 ? 'y' : `y${n}`;
       const isSpatial = panel.kind === 'spatial';
