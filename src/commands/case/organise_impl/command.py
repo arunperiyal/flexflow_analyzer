@@ -43,18 +43,14 @@ def execute_organise(args):
         print_organise_examples()
         return
 
-    # Show help if no case directory provided
-    if not args.case:
+    # No subcommand (archive/plt/output) → show help
+    subcommand = getattr(args, 'organise_subcommand', None)
+    if not subcommand:
         print_organise_help()
         return
 
-    # No action flags → show help
-    do_archive = getattr(args, 'archive', False)
-    do_organise = getattr(args, 'clean_archive', False)
-    do_clean_output = getattr(args, 'clean_output', False)
-    do_clean_plt = getattr(args, 'clean_plt', False)
-
-    if not do_archive and not do_organise and not do_clean_output and not do_clean_plt:
+    # Show help if no case directory provided
+    if not args.case:
         print_organise_help()
         return
 
@@ -63,8 +59,7 @@ def execute_organise(args):
 
     # Check if wildcard case - if so, iterate over all cases
     if is_wildcard_case(args.case):
-        _execute_organise_on_all_cases(args, logger, console,
-                                       do_archive, do_organise, do_clean_output, do_clean_plt)
+        _execute_organise_on_all_cases(args, logger, console, subcommand)
         return
 
     try:
@@ -77,7 +72,7 @@ def execute_organise(args):
         organizer = CaseOrganizer(case, args, logger, console)
 
         # Run organization
-        organizer.organize()
+        organizer.organize(subcommand)
 
         logger.success("Organise command completed")
 
@@ -89,11 +84,10 @@ def execute_organise(args):
         sys.exit(1)
 
 
-def _execute_organise_on_all_cases(args, logger, console, do_archive, do_organise, 
-                                   do_clean_output, do_clean_plt):
+def _execute_organise_on_all_cases(args, logger, console, subcommand):
     """
     Execute organise on all cases from .cases file.
-    
+
     Parameters:
     -----------
     args : argparse.Namespace
@@ -102,14 +96,8 @@ def _execute_organise_on_all_cases(args, logger, console, do_archive, do_organis
         Logger instance
     console : Console
         Rich console instance
-    do_archive : bool
-        Archive files
-    do_organise : bool
-        Organize/deduplicate files
-    do_clean_output : bool
-        Clean output files
-    do_clean_plt : bool
-        Clean PLT files
+    subcommand : str
+        'archive', 'plt' or 'output'
     """
     import json
     from pathlib import Path
@@ -168,9 +156,9 @@ def _execute_organise_on_all_cases(args, logger, console, do_archive, do_organis
             # Initialize organizer
             from .organizer import CaseOrganizer
             organizer = CaseOrganizer(case, args, logger, console)
-            
+
             # Run organization
-            organizer.organize()
+            organizer.organize(subcommand)
             
             logger.success(f"✓ Completed: {case_name}")
             completed += 1
