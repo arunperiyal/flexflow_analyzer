@@ -127,6 +127,7 @@ const PlotArea = (() => {
   }
 
   function placeholder(msg) {
+    MeshViewer.sync([]);   // dispose any WebGL contexts before their container divs vanish
     document.getElementById('plotarea').innerHTML = `<div class="plot-placeholder">${msg}</div>`;
   }
 
@@ -340,7 +341,24 @@ const PlotArea = (() => {
       return;
     }
 
-    document.getElementById('plotarea').innerHTML = '<div id="plotly-panels"></div>';
+    // #plotly-panels itself is always a brand-new node (see the
+    // plotly_relayout listener below, which relies on that to never be
+    // duplicated across renders). #plot-canvas-wrapper and its
+    // #mesh-panels-overlay child are the opposite: created once and left
+    // alone, so MeshViewer's vtk.js instances (mounted into that overlay)
+    // survive a re-render instead of losing their camera/WebGL context
+    // every time an unrelated style tweak calls render() again.
+    let wrapper = document.getElementById('plot-canvas-wrapper');
+    if (!wrapper) {
+      document.getElementById('plotarea').innerHTML =
+        '<div id="plot-canvas-wrapper" style="position:relative;">' +
+          '<div id="plotly-panels"></div>' +
+          '<div id="mesh-panels-overlay" style="position:absolute;inset:0;pointer-events:none;"></div>' +
+        '</div>';
+      wrapper = document.getElementById('plot-canvas-wrapper');
+    } else {
+      document.getElementById('plotly-panels').replaceWith(Object.assign(document.createElement('div'), { id: 'plotly-panels' }));
+    }
 
     const style = ws.style || {};
     // Covers every path that can end up rendering with latex:true, not
@@ -364,11 +382,6 @@ const PlotArea = (() => {
     // from its own pane rect, independent of every other panel's.
     const SCREEN_DPI = 96;
     const traces = [];
-    // A `render` panel's PNG (Field -> Render), placed via Plotly's own
-    // layout.images rather than as a trace -- it needs no axis at all, just
-    // its pane's rect (paneDomain, the same math every other panel's axis
-    // domain already uses).
-    const images = [];
     // Every panel that ends up with a true (unswapped) secondary y-axis --
     // rightAlignY2Ticks below needs the axis numbers after Plotly has drawn
     // them, since it patches SVG text Plotly itself doesn't expose a layout
@@ -398,20 +411,14 @@ const PlotArea = (() => {
       const n = panelIdx + 1;
 
       if (panel.kind === 'render') {
-        const domain = paneDomain(paneRect(ws, panel), ws.layout);
-        images.push({
-          source: `/api/cases/${encodeURIComponent(panel.case)}/field/render-image/${panel.imageToken}`,
-          xref: 'paper', yref: 'paper',
-          x: domain.x[0], y: domain.y[1],
-          sizex: domain.x[1] - domain.x[0], sizey: domain.y[1] - domain.y[0],
-          xanchor: 'left', yanchor: 'top', sizing: 'contain',
-        });
-        // Plotly always draws SOME primary x/y axis by default -- even with
-        // zero traces and no explicit config -- whenever a panel lands in
-        // slot 1 (the plain 'x'/'y' Plotly falls back to when nothing else
-        // claims it). A render panel has no data axis to configure, but
-        // still has to explicitly say so, or that default axis (ticks, a
-        // 0-1 range box) shows through around the image.
+        // Drawn by MeshViewer (an interactive vtk.js viewport, not Plotly --
+        // see meshviewer.js), positioned in an HTML overlay after this
+        // figure renders. Plotly still always draws SOME primary x/y axis
+        // by default -- even with zero traces and no explicit config --
+        // whenever a panel lands in slot 1 (the plain 'x'/'y' Plotly falls
+        // back to when nothing else claims it), so this panel's own slot is
+        // explicitly hidden or that default axis (ticks, a 0-1 range box)
+        // would show through behind the mesh viewport.
         const xKey = n === 1 ? 'xaxis' : `xaxis${n}`;
         const yKey = n === 1 ? 'yaxis' : `yaxis${n}`;
         layout[xKey] = { visible: false };
@@ -610,8 +617,6 @@ const PlotArea = (() => {
       }
     });
 
-    if (images.length) layout.images = images;
-
     // responsive stretches the plot to fill its container on resize --
     // exactly what a fixed-inches canvas must NOT do, or the pixel size
     // just computed gets silently overridden right back to "fill whatever
@@ -628,6 +633,13 @@ const PlotArea = (() => {
       // duplicated across renders.
       gd.on('plotly_relayout', () => rightAlignY2Ticks(secondaryYAxisNums));
     }
+
+    // MeshViewer diffs against its own previous panel list rather than
+    // remounting everything -- called unconditionally (even with zero
+    // render panels now) so removing the last one still tears down its
+    // WebGL context instead of leaking it. Cheap when nothing changed.
+    const renderPanels = ws.panels.filter(p => p.kind === 'render');
+    await MeshViewer.sync(renderPanels, document.getElementById('mesh-panels-overlay'));
   }
 
   // Plotly draws an overlaying axis's tick numbers flush against the axis
@@ -764,9 +776,16 @@ const Export = (() => {
   async function doExport(format, dpi) {
     const ws = PlotWorkspace.state();
     if (!ws.panels.length) throw new Error('No panels to export -- Plot → New first.');
+    // A `render` panel has no data recipe the server can redraw from -- it's
+    // a live vtk.js viewport, so whatever camera angle it currently shows is
+    // captured client-side and sent up as `capturedImage` (a copy for this
+    // request only; never written back into ws.panels/localStorage).
+    const panels = ws.panels.map(p => p.kind === 'render'
+      ? { ...p, capturedImage: MeshViewer.captureImage(p.id) }
+      : p);
     const res = await fetch('/api/export', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ panels: ws.panels, style: ws.style, layout: ws.layout, format, dpi }),
+      body: JSON.stringify({ panels, style: ws.style, layout: ws.layout, format, dpi }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: 'export failed' }));

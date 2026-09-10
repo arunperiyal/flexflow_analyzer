@@ -341,17 +341,29 @@ const PlotWorkspace = (() => {
     save();
   }
 
-  // A Field -> Render panel: a static PNG (pyvista, rendered server-side and
+  // A Field -> Render panel: an interactive vtk.js viewport (meshviewer.js)
+  // over a mesh extracted server-side (the iso-surface or slice geometry,
   // saved to a persistent cache -- see api/field.py's field_render_save),
   // not a data recipe like every other panel kind here. No targetPanelId:
-  // there's no sensible "overlay" for two images the way traces overlay on
-  // a chart, so this always creates a fresh panel. `traces: []` (not
+  // there's no sensible "overlay" for two 3-D scenes the way traces overlay
+  // on a chart, so this always creates a fresh panel. `traces: []` (not
   // omitted) keeps it working with every bit of generic panel machinery
   // that assumes the field exists (PanelTree.render, normalizeLayoutEntry).
-  function addRenderPanel(caseName, title, imageToken) {
+  //
+  // `variables`/`colorVar` come straight off the render job's own result
+  // (services/field_render.py's render_field_mesh already knows every point
+  // array the mesh carries, and which one --if any-- --color.variable
+  // asked for) -- style.colorVar seeds the Style sidebar's initial
+  // color-by-variable choice; the mesh itself carries every OTHER variable
+  // too, so switching later needs no new server round-trip.
+  function addRenderPanel(caseName, title, meshToken, variables, colorVar) {
     const L = active();
-    const panel = { id: `p${nextPanelId++}`, title, kind: 'render',
-                    case: caseName, imageToken, traces: [], style: {}, pane: null };
+    const panel = {
+      id: `p${nextPanelId++}`, title, kind: 'render', case: caseName, meshToken,
+      variables: variables || [], traces: [], pane: null,
+      style: { colorVar: colorVar || null, colorRange: null, background: [1, 1, 1],
+               showBorder: false, opacity: 1 },
+    };
     L.panels.push(panel);
     if (!L.activePanelId) L.activePanelId = panel.id;
     save();

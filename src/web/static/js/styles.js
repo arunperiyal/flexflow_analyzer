@@ -76,6 +76,18 @@ const StyleSidebar = (() => {
     ).join('');
   }
 
+  // A render panel's background is [r, g, b] floats 0-1 (vtk.js's own
+  // setBackground(r, g, b) convention), but <input type="color"> only
+  // speaks #rrggbb -- converted at the edges, never stored as hex.
+  function rgbToHex(rgb) {
+    const c = (v) => Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16).padStart(2, '0');
+    return `#${c(rgb[0])}${c(rgb[1])}${c(rgb[2])}`;
+  }
+  function hexToRgb(hex) {
+    const n = parseInt(hex.slice(1), 16);
+    return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+  }
+
   const numberOrNull = (v) => (v.trim() === '' ? null : parseFloat(v));
 
   function render() {
@@ -169,14 +181,46 @@ const StyleSidebar = (() => {
       .map(p => `<option value="${p.id}" ${p.id === panel.id ? 'selected' : ''}>${p.title}</option>`)
       .join('');
 
-    // A `render` panel is a static PNG (Field -> Render), not a data recipe
-    // drawn on axes -- none of the X/Y label/tick/limit/swap fields below
-    // apply to it. Just the panel selector, so switching which panel is
-    // active for Layout -> Panes highlighting still works.
+    // A `render` panel is an interactive vtk.js viewport (Field -> Render),
+    // not a data recipe drawn on axes -- none of the X/Y label/tick/limit/
+    // swap fields below apply to it. Its own, much smaller set of controls:
+    // viewport background, camera reset, and live color-by-variable/range
+    // (the mesh already carries every variable, so switching needs no new
+    // server round-trip -- see meshviewer.js's applyStyle).
     if (panel.kind === 'render') {
+      const rs = panel.style || {};
+      const varOptions = (panel.variables || []).map(v =>
+        `<option value="${escapeAttr(v)}" ${v === rs.colorVar ? 'selected' : ''}>${escapeAttr(v)}</option>`
+      ).join('');
       const trimmedBody = `
         <select id="style-panel-select" class="style-panel-select">${panelOptions}</select>
-        <div class="empty">No style options for a render panel yet.</div>
+
+        <div class="style-row">
+          <label for="style-render-bg">Background</label>
+          <input type="color" id="style-render-bg" value="${rgbToHex(rs.background || [1, 1, 1])}">
+        </div>
+        <div class="btn-row" style="justify-content:flex-start">
+          <button id="style-render-reset-camera">Reset camera</button>
+        </div>
+        <div class="style-row">
+          <label for="style-render-colorvar">Color by</label>
+          <select id="style-render-colorvar">
+            <option value="">(none)</option>
+            ${varOptions}
+          </select>
+        </div>
+        <label>Color range (blank = auto)</label>
+        <div class="style-limit-row">
+          <input type="number" id="style-render-range-min" placeholder="min" value="${rs.colorRange ? rs.colorRange[0] : ''}">
+          <input type="number" id="style-render-range-max" placeholder="max" value="${rs.colorRange ? rs.colorRange[1] : ''}">
+        </div>
+        <label class="style-row checkbox">
+          <input type="checkbox" id="style-render-border" ${rs.showBorder ? 'checked' : ''}> Border
+        </label>
+        <div class="style-row">
+          <label for="style-render-opacity">Opacity</label>
+          <input type="range" id="style-render-opacity" min="0" max="1" step="0.05" value="${rs.opacity == null ? 1 : rs.opacity}">
+        </div>
       `;
       box.innerHTML = group('global', 'Global', globalBody) + group('panel', 'Panel', trimmedBody);
       document.querySelectorAll('.style-group-heading').forEach(el => {
@@ -186,6 +230,34 @@ const StyleSidebar = (() => {
       document.getElementById('style-panel-select').addEventListener('change', (e) => {
         PlotWorkspace.setActivePanel(e.target.value);
         refreshWorkspace();
+      });
+      document.getElementById('style-render-bg').addEventListener('input', (e) => {
+        PlotWorkspace.setPanelStyle(panel.id, { background: hexToRgb(e.target.value) });
+        PlotArea.render();
+      });
+      document.getElementById('style-render-reset-camera').addEventListener('click', () => {
+        MeshViewer.resetCamera(panel.id);
+      });
+      document.getElementById('style-render-colorvar').addEventListener('change', (e) => {
+        PlotWorkspace.setPanelStyle(panel.id, { colorVar: e.target.value || null });
+        PlotArea.render();
+      });
+      const commitRenderRange = () => {
+        const minV = document.getElementById('style-render-range-min').value.trim();
+        const maxV = document.getElementById('style-render-range-max').value.trim();
+        const range = (minV === '' || maxV === '') ? null : [parseFloat(minV), parseFloat(maxV)];
+        PlotWorkspace.setPanelStyle(panel.id, { colorRange: range });
+        PlotArea.render();
+      };
+      document.getElementById('style-render-range-min').addEventListener('change', commitRenderRange);
+      document.getElementById('style-render-range-max').addEventListener('change', commitRenderRange);
+      document.getElementById('style-render-border').addEventListener('change', (e) => {
+        PlotWorkspace.setPanelStyle(panel.id, { showBorder: e.target.checked });
+        PlotArea.render();
+      });
+      document.getElementById('style-render-opacity').addEventListener('input', (e) => {
+        PlotWorkspace.setPanelStyle(panel.id, { opacity: numberOrNull(e.target.value) ?? 1 });
+        PlotArea.render();
       });
       return;
     }

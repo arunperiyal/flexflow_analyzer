@@ -110,3 +110,47 @@ def render_field(binary_dir, problem, zone_name, mode, step, overrides, view_nam
     if not outs:
         raise ValueError('nothing rendered -- check the contour variable/value or slice position')
     return outs
+
+
+def render_field_mesh(binary_dir, problem, zone_name, mode, step, overrides, out_dir, nen=None):
+    """The extracted iso-surface/slice geometry for one timestep, as a .vtp
+    (XML PolyData) file under out_dir -- for the Field -> Render dialog's
+    interactive 3-D viewer (meshviewer.js), not a screenshot.
+
+    Unlike render_field, this never builds a pyvista Plotter or takes a
+    screenshot -- render.py's build_surface() already separates extracting
+    the surface from rendering it, so this stops one step earlier and hands
+    the raw pv.PolyData to the browser instead. No GL context needed at all,
+    which also makes this cheaper than render_field.
+
+    `overrides` is the same render.py config shape render_field takes
+    (contour/slice/color/...), minus `views` -- a live, user-driven camera
+    replaces the fixed camera presets the PNG gallery needed.
+
+    Returns {'file': <filename under out_dir>, 'variables': [...every point
+    array the surface carries...], 'colorVar': <overrides.color.variable, if
+    set>} -- 'variables' lets the browser offer every variable for live
+    recoloring, not just the one picked at render time.
+    """
+    if mode not in MODES:
+        raise ValueError(f"mode must be 'iso' or 'slice', got '{mode}'")
+
+    plt_path = find_plt(binary_dir, problem, step)
+    if plt_path is None:
+        raise ValueError(f'no PLT file for timestep {step}')
+    vtu_path = convert_zone_to_vtu(plt_path, zone_name, nen=nen)
+
+    cfg = render.deep_merge(render.default_config(mode), overrides or {})
+    cfg['input']['vtu'] = vtu_path
+
+    cfg, surf = render.build_surface(cfg, mode, log=lambda *a, **k: None, warn=lambda *a, **k: None)
+    if surf.n_points == 0:
+        raise ValueError('nothing extracted -- check the contour variable/value or slice position')
+
+    out_path = Path(out_dir) / f'{mode}_{step}.vtp'
+    surf.save(str(out_path))
+    return {
+        'file': out_path.name,
+        'variables': list(surf.point_data.keys()),
+        'colorVar': (overrides.get('color') or {}).get('variable'),
+    }

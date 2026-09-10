@@ -22,7 +22,7 @@ from ...plt.fxplt import ZTYPE_VTK, PltFile
 from ..services import registry
 from ..services.field_extract import resolve_steps, run_probe_extract, write_mesh_vtu
 from ..services.field_render import MODES as RENDER_MODES
-from ..services.field_render import render_field
+from ..services.field_render import render_field, render_field_mesh
 from ..services.jobs import jobs
 
 bp = Blueprint('field', __name__, url_prefix='/api/cases')
@@ -51,8 +51,9 @@ def _binary_dir_or_error(root, name):
 
 
 def _render_cache_dir(root, case_name):
-    """Persistent, server-side storage for PNGs added to a layout as `render`
-    panels (Field -> Render). Deliberately outside the case's own directory
+    """Persistent, server-side storage for files added to a layout as `render`
+    panels (Field -> Render) -- a .vtp mesh for the interactive viewer, or a
+    PNG for the older snapshot path. Deliberately outside the case's own directory
     (often a read-only/shared scratch mount) and outside the OS temp dir a
     render job first writes into (not guaranteed to survive a reboot), so a
     saved panel keeps working across server restarts and browser reloads --
@@ -256,30 +257,23 @@ def _check_color_range(rng):
     return [float(rng[0]), float(rng[1])], None
 
 
-@bp.post('/<name>/field/render')
-def field_render(name):
-    """Iso-surface or slice-plane PNG(s) for one timestep, run as a
-    background job (services/jobs.py) since pyvista rendering takes real
-    wall-clock time. Poll the result at the existing GET /api/jobs/<id>;
-    each PNG in the result's `files` list becomes a layout panel by POSTing
-    its filename to .../field/render/<job_id>/save (field_render_save)."""
-    root = current_app.config['WORKSPACE_ROOT']
-    case_dir, binary_dir, err = _binary_dir_or_error(root, name)
-    if err:
-        return err
-    problem = problem_name(case_dir)
-
-    body = request.get_json(silent=True) or {}
+def _parse_render_body(body):
+    """Shared by field_render and field_render_mesh: mode/timestep/zone and
+    the render.py-shaped `overrides` dict (color/contour/slice), plus the PNG
+    gallery's `views` (unused by the mesh route, which has a live camera
+    instead of fixed presets). Returns (mode, zone, timestep, overrides,
+    view_names, error) -- error is None on success, else a (response,
+    status) pair to return directly, matching _binary_dir_or_error's shape."""
     mode = body.get('mode')
     if mode not in RENDER_MODES:
-        return jsonify({'error': f"mode must be 'iso' or 'slice', got '{mode}'"}), 400
+        return None, None, None, None, None, (jsonify({'error': f"mode must be 'iso' or 'slice', got '{mode}'"}), 400)
     timestep = body.get('timestep')
     if timestep is None:
-        return jsonify({'error': 'timestep is required'}), 400
+        return None, None, None, None, None, (jsonify({'error': 'timestep is required'}), 400)
     try:
         timestep = int(timestep)
     except (TypeError, ValueError):
-        return jsonify({'error': 'timestep must be an integer'}), 400
+        return None, None, None, None, None, (jsonify({'error': 'timestep must be an integer'}), 400)
 
     zone = body.get('zone') or None   # falsy/absent -> render.py's first volume zone
     view_names = body.get('views') or []
@@ -287,7 +281,7 @@ def field_render(name):
     color = body.get('color') or {}
     color_range, range_err = _check_color_range(color.get('range'))
     if range_err:
-        return jsonify({'error': range_err}), 400
+        return None, None, None, None, None, (jsonify({'error': range_err}), 400)
 
     overrides = {'color': {}}
     if color.get('variable'):
@@ -312,6 +306,27 @@ def field_render(name):
         if slice_cfg.get('count'):
             overrides['slice']['count'] = slice_cfg['count']
 
+    return mode, zone, timestep, overrides, view_names, None
+
+
+@bp.post('/<name>/field/render')
+def field_render(name):
+    """Iso-surface or slice-plane PNG(s) for one timestep, run as a
+    background job (services/jobs.py) since pyvista rendering takes real
+    wall-clock time. Poll the result at the existing GET /api/jobs/<id>;
+    each PNG in the result's `files` list becomes a layout panel by POSTing
+    its filename to .../field/render/<job_id>/save (field_render_save)."""
+    root = current_app.config['WORKSPACE_ROOT']
+    case_dir, binary_dir, err = _binary_dir_or_error(root, name)
+    if err:
+        return err
+    problem = problem_name(case_dir)
+
+    body = request.get_json(silent=True) or {}
+    mode, zone, timestep, overrides, view_names, err = _parse_render_body(body)
+    if err:
+        return err
+
     # A run always writes into a directory of its own -- never cleaned up
     # automatically in this v1 (matches an accepted, noted limitation: a
     # periodic sweep of old flexflow_render_* dirs is a follow-up, not part
@@ -323,6 +338,35 @@ def field_render(name):
                             view_names, job_out_dir)
         files = [str(Path(p).relative_to(job_out_dir)) for p in outs]
         return {'dir': job_out_dir, 'files': files}
+
+    job_id = jobs.start(run)
+    return jsonify({'job_id': job_id}), 202
+
+
+@bp.post('/<name>/field/render-mesh')
+def field_render_mesh(name):
+    """The extracted iso-surface/slice geometry for one timestep, as a .vtp
+    file, for the Field -> Render dialog's interactive 3-D viewer. Same
+    background-job/poll shape as field_render, but no `views` (a live camera
+    replaces fixed presets) and no GL context needed at all -- see
+    services/field_render.py's render_field_mesh."""
+    root = current_app.config['WORKSPACE_ROOT']
+    case_dir, binary_dir, err = _binary_dir_or_error(root, name)
+    if err:
+        return err
+    problem = problem_name(case_dir)
+
+    body = request.get_json(silent=True) or {}
+    mode, zone, timestep, overrides, _view_names, err = _parse_render_body(body)
+    if err:
+        return err
+
+    job_out_dir = tempfile.mkdtemp(prefix='flexflow_render_')
+
+    def run():
+        mesh = render_field_mesh(binary_dir, problem, zone, mode, timestep, overrides, job_out_dir)
+        return {'dir': job_out_dir, 'files': [mesh['file']],
+                'variables': mesh['variables'], 'colorVar': mesh['colorVar']}
 
     job_id = jobs.start(run)
     return jsonify({'job_id': job_id}), 202
@@ -358,13 +402,16 @@ def field_render_save(name, job_id):
     return jsonify({'token': token, 'case': name})
 
 
-@bp.get('/<name>/field/render-image/<token>')
-def field_render_cached_image(name, token):
-    """Serves a PNG saved by field_render_save -- the URL a `render` panel's
-    imageToken resolves to (see plot.js's PlotArea.render and export.py's
-    _render_image_path). Deliberately independent of services/jobs.py's
-    in-memory JobRegistry: this must keep working after a server restart,
-    unlike the job it was originally rendered by."""
+@bp.get('/<name>/field/render-file/<token>')
+def field_render_cached_file(name, token):
+    """Serves a file saved by field_render_save -- a PNG (the old snapshot
+    panel) or a .vtp mesh (the interactive viewer's meshToken, fetched
+    client-side by meshviewer.js's vtkXMLPolyDataReader). Deliberately
+    independent of services/jobs.py's in-memory JobRegistry: this must keep
+    working after a server restart, unlike the job it was originally
+    rendered by. Content-Type is left to Flask/send_file's own guess from
+    the extension rather than hardcoded, since this now serves more than
+    one file type."""
     root = current_app.config['WORKSPACE_ROOT']
     if registry.case_path(root, name) is None:
         return jsonify({'error': f'no such case: {name}'}), 404
@@ -374,4 +421,4 @@ def field_render_cached_image(name, token):
     path = _render_cache_dir(root, name) / token
     if not path.is_file():
         return jsonify({'error': 'no such saved render'}), 404
-    return send_file(path, mimetype='image/png')
+    return send_file(path)
