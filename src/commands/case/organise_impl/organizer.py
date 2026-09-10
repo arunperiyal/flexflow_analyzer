@@ -291,14 +291,19 @@ class CaseOrganizer:
             self.console.print()
 
             # --- ARCHIVE --clean (deduplicate OTHD/OISD) ---
+            # Always analyzes the complete archived set, ignoring --t1/--t2:
+            # dedup depends on comparing every file against every other file,
+            # so excluding files by timestep would hide the very files (e.g. a
+            # superset) that make another file redundant, and silently skip
+            # cleaning it. --t1/--t2 only scope the archive move step above.
             if do_clean:
                 self.console.print("[bold]Step: Deduplicate OTHD/OISD files[/bold]")
                 self.logger.info("Analyzing OTHD files...")
-                othd_files = self._analyze_data_files('othd', t1, t2)
+                othd_files = self._analyze_data_files('othd')
                 self._find_redundant_files(othd_files, 'OTHD')
 
                 self.logger.info("Analyzing OISD files...")
-                oisd_files = self._analyze_data_files('oisd', t1, t2)
+                oisd_files = self._analyze_data_files('oisd')
                 self._find_redundant_files(oisd_files, 'OISD')
 
                 # Warn if OTHD and OISD coverage diverges after deduplication
@@ -361,18 +366,16 @@ class CaseOrganizer:
         # Final summary
         self._show_final_summary(subcommand, do_clean)
 
-    def _analyze_data_files(self, file_type: str, t1: Optional[float] = None,
-                            t2: Optional[float] = None) -> List[FileInfo]:
+    def _analyze_data_files(self, file_type: str) -> List[FileInfo]:
         """
-        Analyze OTHD or OISD files.
+        Analyze OTHD or OISD files. Always reads the complete set — dedup
+        compares every file against every other, so --t1/--t2 never filters
+        this (see the note above the `archive --clean` call site).
 
         Parameters:
         -----------
         file_type : str
             'othd' or 'oisd'
-        t1, t2 : float, optional
-            With --t1/--t2, only files whose timestep range overlaps this
-            window are included — the rest are left untouched by dedup/rename.
 
         Returns:
         --------
@@ -408,9 +411,6 @@ class CaseOrganizer:
 
                 start_step = min(reader.tsIds)
                 end_step = max(reader.tsIds)
-
-                if not self._range_overlaps_bounds(start_step, end_step, t1, t2):
-                    continue
 
                 size = file_path.stat().st_size
                 mtime = file_path.stat().st_mtime
