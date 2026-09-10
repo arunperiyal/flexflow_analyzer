@@ -147,7 +147,7 @@ class FlexFlowCompleter(Completer):
         'case':     ['show', 'create', 'run', 'organise', 'check', 'status', 'add', 'out', 'domain', 'report', 'upload', 'download'],
         'data':     ['show', 'table', 'stats'],
         'field':    ['info', 'extract', 'compute', 'convert', 'render', 'list', 'check'],
-        'def':      ['var'],
+        'def':      ['var', 'time'],
         'run':      ['check', 'pre', 'main', 'post', 'sq', 'sb', 'sc'],
         'template': ['plot', 'case', 'script'],
         'remote':   ['add', 'modify', 'delete', 'list', 'set-path'],
@@ -457,6 +457,12 @@ class FlexFlowCompleter(Completer):
             '--help':  'Show help message',
             '-h':      'Show help message',
         },
+        ('def', 'time'):     {
+            '--case':  'Case directory path (default: current directory)',
+            '-c':      'Case directory path (default: current directory)',
+            '--help':  'Show help message',
+            '-h':      'Show help message',
+        },
 
         # ── run ─────────────────────────────────────────────────────────────
         ('run', None):       {**_COMMON_FLAGS},
@@ -603,6 +609,10 @@ class FlexFlowCompleter(Completer):
             ('main', 'Main simulation script'),
             ('post', 'Post-processing script'),
             ('env',  'Environment config (simflow_env.sh)'),
+        ],
+        ('def', 'time', 0): [
+            ('maxTime', 'maxTimeSteps'),
+            ('inc',     'initialTimeIncrement'),
         ],
     }
 
