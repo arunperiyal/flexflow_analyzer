@@ -36,24 +36,25 @@ def execute_case_check(args):
         print_check_help()
         return
 
-    do_run     = getattr(args, 'run',       False)
-    do_archive = getattr(args, 'archive',   False)
-    do_config  = getattr(args, 'config',    False)
-    do_plt     = getattr(args, 'plt',       False)
-    do_def     = getattr(args, 'check_def', False)
-    do_all     = getattr(args, 'all',       False)
+    subcommand = getattr(args, 'check_subcommand', None)
+    if not subcommand:
+        print_check_help()
+        return
 
-    if do_all:
-        do_run = do_archive = do_config = do_plt = do_def = True
+    do_run     = subcommand in ('run', 'all')
+    do_archive = subcommand in ('archive', 'all')
+    do_config  = subcommand in ('config', 'all')
+    do_plt     = subcommand in ('plt', 'all')
+    do_def     = subcommand in ('def', 'all')
 
     # --freq overrides outFreq from simflow.config. The config says what the run
     # was asked to write; the files say what it wrote, and after a restart at a
     # different frequency those are not the same claim.
     freq = getattr(args, 'freq', None)
-
-    if not (do_run or do_archive or do_config or do_plt or do_def):
-        print_check_help()
-        return
+    # --t1/--t2 restrict the `plt` check to a timestep window (only meaningful
+    # on the `plt` subcommand — `all` runs plt unwindowed).
+    t1 = getattr(args, 't1', None)
+    t2 = getattr(args, 't2', None)
 
     # Get case name from args or interactive context
     case_name = _get_case_name(args)
@@ -62,7 +63,7 @@ def execute_case_check(args):
 
     # Check if wildcard - if so, iterate over all cases
     if is_wildcard_case(case_name):
-        _execute_check_on_all_cases(args, do_run, do_archive, do_config, do_plt, do_def, freq)
+        _execute_check_on_all_cases(args, do_run, do_archive, do_config, do_plt, do_def, freq, t1, t2)
         return
 
     # Single case execution
@@ -70,7 +71,7 @@ def execute_case_check(args):
     if case_dir is None:
         return
 
-    _execute_check_on_case(case_dir, do_run, do_archive, do_config, do_plt, do_def, freq)
+    _execute_check_on_case(case_dir, do_run, do_archive, do_config, do_plt, do_def, freq, t1, t2)
 
 
 def _get_case_name(args) -> Optional[str]:
@@ -85,12 +86,13 @@ def _get_case_name(args) -> Optional[str]:
         return InteractiveShell._instance._current_case
     else:
         print("Error: No case directory specified.")
-        print("Usage:  case check <dir> --run")
-        print("   or:  use case <dir>  then  case check --run")
+        print("Usage:  case check run <dir>")
+        print("   or:  use case <dir>  then  case check run")
         return None
 
 
-def _execute_check_on_all_cases(args, do_run, do_archive, do_config, do_plt, do_def, freq=None):
+def _execute_check_on_all_cases(args, do_run, do_archive, do_config, do_plt, do_def,
+                                freq=None, t1=None, t2=None):
     """Execute check on all cases from .cases file."""
     from src.cli.interactive import InteractiveShell
     
@@ -124,14 +126,15 @@ def _execute_check_on_all_cases(args, do_run, do_archive, do_config, do_plt, do_
             console.print(f"[red]Error:[/red] Case directory not found: {case_path}\n")
             continue
 
-        _execute_check_on_case(case_path, do_run, do_archive, do_config, do_plt, do_def, freq)
+        _execute_check_on_case(case_path, do_run, do_archive, do_config, do_plt, do_def, freq, t1, t2)
 
     console.print(f"[cyan]{'─' * 60}[/cyan]")
     console.print(f"[green]✓ Processed {len(cases)} cases[/green]")
     console.print(f"[cyan]{'─' * 60}[/cyan]\n")
 
 
-def _execute_check_on_case(case_dir: Path, do_run, do_archive, do_config, do_plt, do_def, freq=None):
+def _execute_check_on_case(case_dir: Path, do_run, do_archive, do_config, do_plt, do_def,
+                           freq=None, t1=None, t2=None):
     """Execute check on a single case."""
     logger  = Logger(verbose=False)
     console = Console()
@@ -166,7 +169,7 @@ def _execute_check_on_case(case_dir: Path, do_run, do_archive, do_config, do_plt
         _check_archive(cfg, case_dir, console)
 
     if do_plt:
-        _check_plt(cfg, case_dir, console, freq)
+        _check_plt(cfg, case_dir, console, freq, t1, t2)
 
     console.print()
 
@@ -204,6 +207,15 @@ def _read_data_file_range(file_path: Path) -> Optional[Tuple[int, int]]:
 
 def _fmt_tsid(tsid: int) -> str:
     return f"{tsid:,}"
+
+
+def _step_in_bounds(step: float, t1: Optional[float], t2: Optional[float]) -> bool:
+    """Whether a single timestep falls inside the [t1, t2] window (either bound optional)."""
+    if t1 is not None and step < t1:
+        return False
+    if t2 is not None and step > t2:
+        return False
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -515,7 +527,8 @@ def _check_def(cfg, case_dir: Path, console: Console) -> bool:
 # --plt check
 # ---------------------------------------------------------------------------
 
-def _check_plt(cfg, case_dir: Path, console: Console, freq: Optional[int] = None):
+def _check_plt(cfg, case_dir: Path, console: Console, freq: Optional[int] = None,
+               t1: Optional[float] = None, t2: Optional[float] = None):
     """Check PLT files in binary/ and the run directory against expected set.
 
     `freq` overrides outFreq from simflow.config. The config records what the
@@ -523,6 +536,9 @@ def _check_plt(cfg, case_dir: Path, console: Console, freq: Optional[int] = None
     since, makes that a different claim from what is on disk -- and checking
     against the wrong one reports every file that was never meant to exist as
     missing.
+
+    `t1`/`t2` restrict both the expected and found sets to a timestep window,
+    so the check (and its missing/extra counts) only concern that window.
     """
     console.print("[bold]PLT file check[/bold]")
 
@@ -549,6 +565,11 @@ def _check_plt(cfg, case_dir: Path, console: Console, freq: Optional[int] = None
 
     # Build expected tsId set: outFreq, 2*outFreq, ..., maxTimeSteps
     expected = set(range(out_freq, max_steps + 1, out_freq))
+
+    if t1 is not None or t2 is not None:
+        expected = {t for t in expected if _step_in_bounds(t, t1, t2)}
+        console.print(f"  [dim]Limiting check to timesteps in [{t1}, {t2}][/dim]")
+
     total_expected = len(expected)
 
     # Directories to check: binary/ and run dir
@@ -578,6 +599,9 @@ def _check_plt(cfg, case_dir: Path, console: Console, freq: Optional[int] = None
             m = pattern.match(f.name)
             if m:
                 found[int(m.group(1))] = f
+
+        if t1 is not None or t2 is not None:
+            found = {t: f for t, f in found.items() if _step_in_bounds(t, t1, t2)}
 
         if not found:
             console.print(f"    [dim]No {problem}.*.plt files found[/dim]")

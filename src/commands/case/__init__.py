@@ -168,26 +168,74 @@ class CaseCommand(BaseCommand):
         # case check
         check_parser = case_subparsers.add_parser('check', add_help=False,
                                                   help='Inspect OTHD/OISD ranges and validate config')
-        check_parser.add_argument('case', nargs='?', help='Case directory path')
-        check_parser.add_argument('--run', action='store_true',
-                                  help='Check .othd/.oisd in the active run directory')
-        check_parser.add_argument('--archive', action='store_true',
-                                  help='Check all archived files in othd_files/oisd_files')
-        check_parser.add_argument('--config', action='store_true',
-                                  help='Validate simflow.config consistency')
-        check_parser.add_argument('--plt', action='store_true',
-                                  help='Check PLT files in binary/ and run dir against expected set')
-        check_parser.add_argument('--def', dest='check_def', action='store_true',
-                                  help='Check that all File() references in the .def file exist')
-        check_parser.add_argument('--all', action='store_true',
-                                  help='Run all checks (--run + --archive + --config + --plt + --def)')
-        check_parser.add_argument('--freq', type=int, metavar='N',
-                                  help='PLT output frequency to check against, '
-                                       'overriding outFreq from simflow.config')
-        check_parser.add_argument('-v', '--verbose', action='store_true',
-                                  help='Enable verbose output')
         check_parser.add_argument('-h', '--help', action='store_true',
                                   help='Show help for check command')
+        check_subparsers = check_parser.add_subparsers(dest='check_subcommand',
+                                                        help='Check subcommands')
+
+        # case check run
+        run_check_parser = check_subparsers.add_parser('run', add_help=False,
+                                    help='Check .othd/.oisd in the active run directory')
+        run_check_parser.add_argument('case', nargs='?', help='Case directory path')
+        run_check_parser.add_argument('-v', '--verbose', action='store_true',
+                                    help='Enable verbose output')
+        run_check_parser.add_argument('-h', '--help', action='store_true',
+                                    help='Show help for run command')
+
+        # case check archive
+        archive_check_parser = check_subparsers.add_parser('archive', add_help=False,
+                                    help='Check all archived files in othd_files/oisd_files')
+        archive_check_parser.add_argument('case', nargs='?', help='Case directory path')
+        archive_check_parser.add_argument('-v', '--verbose', action='store_true',
+                                    help='Enable verbose output')
+        archive_check_parser.add_argument('-h', '--help', action='store_true',
+                                    help='Show help for archive command')
+
+        # case check config
+        config_check_parser = check_subparsers.add_parser('config', add_help=False,
+                                    help='Validate simflow.config consistency')
+        config_check_parser.add_argument('case', nargs='?', help='Case directory path')
+        config_check_parser.add_argument('-v', '--verbose', action='store_true',
+                                    help='Enable verbose output')
+        config_check_parser.add_argument('-h', '--help', action='store_true',
+                                    help='Show help for config command')
+
+        # case check plt
+        plt_check_parser = check_subparsers.add_parser('plt', add_help=False,
+                                    help='Check PLT files in binary/ and run dir against expected set')
+        plt_check_parser.add_argument('case', nargs='?', help='Case directory path')
+        plt_check_parser.add_argument('--freq', type=int, metavar='N',
+                                    help='PLT output frequency to check against, '
+                                         'overriding outFreq from simflow.config')
+        plt_check_parser.add_argument('--t1', type=float, metavar='STEP',
+                                    help='Only check timesteps >= STEP')
+        plt_check_parser.add_argument('--t2', type=float, metavar='STEP',
+                                    help='Only check timesteps <= STEP')
+        plt_check_parser.add_argument('-v', '--verbose', action='store_true',
+                                    help='Enable verbose output')
+        plt_check_parser.add_argument('-h', '--help', action='store_true',
+                                    help='Show help for plt command')
+
+        # case check def
+        def_check_parser = check_subparsers.add_parser('def', add_help=False,
+                                    help='Check that all File() references in the .def file exist')
+        def_check_parser.add_argument('case', nargs='?', help='Case directory path')
+        def_check_parser.add_argument('-v', '--verbose', action='store_true',
+                                    help='Enable verbose output')
+        def_check_parser.add_argument('-h', '--help', action='store_true',
+                                    help='Show help for def command')
+
+        # case check all
+        all_check_parser = check_subparsers.add_parser('all', add_help=False,
+                                    help='Run every check (run + archive + config + plt + def)')
+        all_check_parser.add_argument('case', nargs='?', help='Case directory path')
+        all_check_parser.add_argument('--freq', type=int, metavar='N',
+                                    help='PLT output frequency to check against, '
+                                         'overriding outFreq from simflow.config')
+        all_check_parser.add_argument('-v', '--verbose', action='store_true',
+                                    help='Enable verbose output')
+        all_check_parser.add_argument('-h', '--help', action='store_true',
+                                    help='Show help for all command')
 
         # case status
         status_parser = case_subparsers.add_parser('status', add_help=False,
@@ -468,8 +516,9 @@ class CaseCommand(BaseCommand):
         console.print("    flexflow case organise output CS4SG1U1")
         console.print("    flexflow case organise plt CS4SG1U1 --delete-ascii")
         console.print("    flexflow case organise plt CS4SG1U1 --delete-binary --t1 0 --t2 1000")
-        console.print("    flexflow case check CS4SG1U1 --run")
-        console.print("    flexflow case check CS4SG1U1 --all")
+        console.print("    flexflow case check run CS4SG1U1")
+        console.print("    flexflow case check plt CS4SG1U1 --t1 0 --t2 1000")
+        console.print("    flexflow case check all CS4SG1U1")
         console.print("    flexflow case status CS4SG1U1")
         console.print("    flexflow case domain CS4SG1U1 --init")
         console.print("    flexflow case domain body --list")
