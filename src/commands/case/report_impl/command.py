@@ -143,7 +143,7 @@ def _last_othd_timestep_in_dir(directory: Path):
     for fp in files:
         try:
             from ....core.readers.othd_reader import OTHDReader
-            reader = OTHDReader(str(fp))
+            reader = OTHDReader(str(fp), range_only=True)
             if reader.tsIds:
                 ts = max(reader.tsIds)
                 if max_ts is None or ts > max_ts:
