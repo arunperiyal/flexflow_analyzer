@@ -177,6 +177,18 @@ body {
   max-width: 360px;
 }
 
+/* A `render` panel's interactive vtk.js viewport (meshviewer.js), one per
+   panel inside #mesh-panels-overlay -- pointer-events re-enabled per panel
+   (the overlay itself is pointer-events:none) so mouse drag only rotates
+   the camera under the cursor, never a panel underneath/behind it. */
+.mesh-panel {
+  position: absolute;
+  pointer-events: auto;
+  background: #fff;
+  overflow: hidden;
+}
+.mesh-panel-border { outline: 1px solid #94a3b8; outline-offset: -1px; }
+
 #style-sidebar {
   width: 240px;
   flex: none;

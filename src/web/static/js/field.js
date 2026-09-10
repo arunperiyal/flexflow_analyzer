@@ -419,17 +419,15 @@ const FieldMenu = (() => {
   }
 
   // -- Render ----------------------------------------------------------
-  // Iso-surface / slice-plane PNGs for one timestep, off-screen via pyvista
-  // (the same rendering `field render iso|slice` uses server-side) -- one
-  // `render`-kind layout panel per camera view/plane (no live in-browser
-  // 3-D viewer; see PlotWorkspace.addRenderPanel and PlotArea.render's own
-  // 'render' branch). Runs as a background job since a render takes real
-  // wall-clock time.
-
-  // Matches render.py's own DEFAULTS['views'] / SLICE_VIEWS names exactly --
-  // there is no endpoint for this (it's a fixed, documented default), so it
-  // is named here rather than round-tripped from the server.
-  const DEFAULT_VIEWS = { iso: ['iso', 'xy', 'xz', 'yz'], slice: ['plane'] };
+  // Iso-surface/slice geometry for one timestep, extracted server-side via
+  // pyvista (the same extraction `field render iso|slice` uses, stopping
+  // before the screenshot step -- see services/field_render.py's
+  // render_field_mesh) and handed to an interactive vtk.js viewer in the
+  // layout, one `render`-kind panel per Render click (a live, user-driven
+  // camera replaces the old fixed camera-view presets, so there's exactly
+  // one mesh -- and one panel -- per request now; see meshviewer.js and
+  // PlotWorkspace.addRenderPanel). Runs as a background job since the PLT
+  // -> VTU conversion and the extraction itself take real wall-clock time.
 
   async function openRender() {
     const cases = await App.fetchCases();
@@ -497,8 +495,6 @@ const FieldMenu = (() => {
         <input type="text" id="fr-color-min" placeholder="min (blank = auto)">
         <input type="text" id="fr-color-max" placeholder="max (blank = auto)">
       </div>
-      <label>Views</label>
-      <div id="fr-views" class="var-list"></div>
       <div class="btn-row"><button id="fr-go" class="primary" disabled>Render</button></div>
     `;
 
@@ -535,12 +531,6 @@ const FieldMenu = (() => {
       <label for="fr-slice-count">Number of planes</label>
       <input type="text" id="fr-slice-count" placeholder="1">
     `;
-
-    const viewsBox = document.getElementById('fr-views');
-    viewsBox.innerHTML = DEFAULT_VIEWS[mode].map((v, i) => `
-      <label class="var-check"><input type="checkbox" class="fr-view" value="${v}" ${i === 0 ? 'checked' : ''}> ${v}</label>
-    `).join('');
-    document.querySelectorAll('.fr-view').forEach(cb => cb.addEventListener('change', updateRenderGoButton));
     updateRenderGoButton();
   }
 
@@ -549,8 +539,7 @@ const FieldMenu = (() => {
     if (!btn) return;
     const ts = document.getElementById('fr-timestep');
     const validTs = ts && ts.value.trim() !== '' && !Number.isNaN(parseInt(ts.value, 10));
-    const anyView = document.querySelectorAll('.fr-view:checked').length > 0;
-    btn.disabled = !(validTs && anyView);
+    btn.disabled = !validTs;
   }
 
   async function pollRenderJob(jobId) {
@@ -568,14 +557,13 @@ const FieldMenu = (() => {
     const mode = currentRenderMode();
     const zone = document.getElementById('fr-zone').value;
     const timestep = parseInt(document.getElementById('fr-timestep').value, 10);
-    const views = Array.from(document.querySelectorAll('.fr-view:checked')).map(cb => cb.value);
 
     const colorMin = document.getElementById('fr-color-min').value.trim();
     const colorMax = document.getElementById('fr-color-max').value.trim();
     const color = { variable: document.getElementById('fr-color-var').value };
     if (colorMin !== '' && colorMax !== '') color.range = [parseFloat(colorMin), parseFloat(colorMax)];
 
-    const body = { mode, zone, timestep, views, color };
+    const body = { mode, zone, timestep, color };
     if (mode === 'iso') {
       body.contour = { variable: document.getElementById('fr-contour-var').value };
       const value = document.getElementById('fr-contour-value').value.trim();
@@ -586,8 +574,8 @@ const FieldMenu = (() => {
       if (count !== '') body.slice.count = parseInt(count, 10);
     }
 
-    result.innerHTML = '<div class="empty">Rendering&hellip; (this can take a few seconds)</div>';
-    const res = await fetch(`/api/cases/${encodeURIComponent(caseName)}/field/render`, {
+    result.innerHTML = '<div class="empty">Extracting geometry&hellip;</div>';
+    const res = await fetch(`/api/cases/${encodeURIComponent(caseName)}/field/render-mesh`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     });
     const started = await res.json();
@@ -603,35 +591,34 @@ const FieldMenu = (() => {
       result.innerHTML = `<div class="error">${escapeHtml(outcome.error)}</div>`;
       return;
     }
-    await saveRenderToLayout(caseName, started.job_id, outcome.result.files);
+    await saveMeshToLayout(caseName, mode, timestep, started.job_id, outcome.result);
   }
 
-  // Each rendered file becomes its own layout panel (Layout -> New/Panes),
-  // the same "configure, then Add" shape as Plot -> New -- no inline
-  // gallery, no per-file download link. First saved server-side to a
-  // persistent cache (field_render_save) so the panel keeps showing its
-  // image after a page reload or a server restart, neither of which the
-  // job it was rendered by survives (services/jobs.py's JobRegistry is
-  // in-memory only, and the job's own tempdir is not guaranteed to be).
-  async function saveRenderToLayout(caseName, jobId, files) {
+  // The extracted mesh becomes one interactive layout panel (Layout ->
+  // New/Panes), the same "configure, then Add" shape as Plot -> New. First
+  // saved server-side to a persistent cache (field_render_save) so the
+  // panel keeps working after a page reload or a server restart, neither
+  // of which the job it was rendered by survives (services/jobs.py's
+  // JobRegistry is in-memory only, and the job's own tempdir is not
+  // guaranteed to be).
+  async function saveMeshToLayout(caseName, mode, timestep, jobId, jobResult) {
     const result = document.getElementById('fr-result');
     result.innerHTML = '<div class="empty">Adding to layout&hellip;</div>';
-    let added = 0;
-    for (const f of files) {
-      const saveRes = await fetch(`/api/cases/${encodeURIComponent(caseName)}/field/render/${jobId}/save`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filename: f }),
-      });
-      if (!saveRes.ok) continue;
-      const saved = await saveRes.json();
-      const title = `${caseName} — ${f.replace(/\.[a-zA-Z0-9]+$/, '').replace(/_/g, ' ')}`;
-      PlotWorkspace.addRenderPanel(caseName, title, saved.token);
-      added++;
-    }
+    const filename = jobResult.files[0];
+    const saveRes = await fetch(`/api/cases/${encodeURIComponent(caseName)}/field/render/${jobId}/save`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filename }),
+    });
     if (!document.getElementById('fr-result')) return;
+    if (!saveRes.ok) {
+      const err = await saveRes.json().catch(() => ({}));
+      result.innerHTML = `<div class="error">${escapeHtml(err.error || 'could not save the render to the layout')}</div>`;
+      return;
+    }
+    const saved = await saveRes.json();
+    const title = `${caseName} — ${mode} ${timestep}`;
+    PlotWorkspace.addRenderPanel(caseName, title, saved.token, jobResult.variables, jobResult.colorVar);
     refreshWorkspace();
-    result.innerHTML = added
-      ? `<div class="empty">Added ${added} panel${added === 1 ? '' : 's'} to the layout.</div>`
-      : `<div class="error">Rendered, but could not save any images to the layout.</div>`;
+    result.innerHTML = '<div class="empty">Added to the layout.</div>';
   }
 
   return { openInfo, openExtract, openRender };

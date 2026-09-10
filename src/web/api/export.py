@@ -14,8 +14,8 @@ The workspace lives in the browser (§5 of the plan), so the request carries
 the panels/traces to render rather than the server holding any of it.
 """
 
+import base64
 import io
-from pathlib import Path
 
 import matplotlib
 matplotlib.use('Agg')
@@ -87,17 +87,6 @@ def _matplotlib_font(css_family):
         return generic
 
     return requested   # nothing matched -- matplotlib's own fallback/warning takes it from here
-
-
-def _render_image_path(root, case_name, token):
-    """A `render`-kind panel's saved PNG, or None if it can't be resolved --
-    mirrors api/field.py's _render_cache_dir (duplicated rather than shared
-    across the two modules for one path-join helper, matching this file's
-    own habit of small local helpers like _pane_rect just below)."""
-    if not case_name or not token or '/' in token or '..' in token:
-        return None
-    path = Path(root) / '.flexflow_web_renders' / case_name / token
-    return path if path.is_file() else None
 
 
 def _pane_rect(panel, layout):
@@ -251,13 +240,18 @@ def export_plot():
             pane = _pane_rect(panel, layout)
             ax = fig.add_axes(_pane_axes_rect(pane, width_in, height_in, content))
 
-            # A `render` panel is a static PNG (Field -> Render), not a data
-            # recipe -- none of the trace-plotting/axis-styling below applies
-            # to it, just placing the image in this same pane rect.
+            # A `render` panel is a live, in-browser 3-D viewer (Field ->
+            # Render), not a data recipe the server can redraw from a
+            # description -- there's no fixed camera angle to re-render
+            # server-side. The browser captures whatever the viewer's own
+            # <canvas> currently shows (meshviewer.js's captureImage, called
+            # by layout.js's export flow) and sends that PNG up as
+            # `capturedImage`, a data URL, alongside the rest of the panel.
             if panel.get('kind') == 'render':
-                img_path = _render_image_path(root, panel.get('case'), panel.get('imageToken'))
-                if img_path is not None:
-                    ax.imshow(plt.imread(img_path))
+                captured = panel.get('capturedImage') or ''
+                if captured.startswith('data:image'):
+                    raw = base64.b64decode(captured.split(',', 1)[1])
+                    ax.imshow(plt.imread(io.BytesIO(raw)))
                 ax.axis('off')
                 if panel.get('title'):
                     ax.set_title(panel['title'], fontsize=(style.get('labelFontSize') or 8) + 1)
