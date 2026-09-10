@@ -169,6 +169,27 @@ const StyleSidebar = (() => {
       .map(p => `<option value="${p.id}" ${p.id === panel.id ? 'selected' : ''}>${p.title}</option>`)
       .join('');
 
+    // A `render` panel is a static PNG (Field -> Render), not a data recipe
+    // drawn on axes -- none of the X/Y label/tick/limit/swap fields below
+    // apply to it. Just the panel selector, so switching which panel is
+    // active for Layout -> Panes highlighting still works.
+    if (panel.kind === 'render') {
+      const trimmedBody = `
+        <select id="style-panel-select" class="style-panel-select">${panelOptions}</select>
+        <div class="empty">No style options for a render panel yet.</div>
+      `;
+      box.innerHTML = group('global', 'Global', globalBody) + group('panel', 'Panel', trimmedBody);
+      document.querySelectorAll('.style-group-heading').forEach(el => {
+        el.addEventListener('click', () => toggleGroup(el.dataset.group));
+      });
+      wireGlobal();
+      document.getElementById('style-panel-select').addEventListener('change', (e) => {
+        PlotWorkspace.setActivePanel(e.target.value);
+        refreshWorkspace();
+      });
+      return;
+    }
+
     // Pane position/size lives in Layout -> Panes now (a to-scale preview
     // alongside the numbers), not here.
     const panelBody = `

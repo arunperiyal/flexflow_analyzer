@@ -417,17 +417,6 @@ body {
 .coord-inputs button { padding: 6px 10px; border-radius: 4px; border: 1px solid #cbd5e1; background: #fff; font-size: 12px; cursor: pointer; }
 #np-snap-result { font-size: 11px; color: #64748b; margin-top: 4px; }
 
-.render-gallery {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 12px;
-  margin-bottom: 12px;
-}
-.render-tile { border: 1px solid #e2e8f0; border-radius: 4px; padding: 8px; text-align: center; }
-.render-tile img { max-width: 100%; display: block; margin-bottom: 6px; background: #fff; }
-.render-tile a { font-size: 12px; color: #2563eb; text-decoration: none; }
-.render-tile a:hover { text-decoration: underline; }
-
 /* Panel tree */
 .panel-node { margin-bottom: 14px; }
 .panel-node-header {

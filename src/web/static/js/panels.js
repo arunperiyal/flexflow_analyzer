@@ -341,6 +341,23 @@ const PlotWorkspace = (() => {
     save();
   }
 
+  // A Field -> Render panel: a static PNG (pyvista, rendered server-side and
+  // saved to a persistent cache -- see api/field.py's field_render_save),
+  // not a data recipe like every other panel kind here. No targetPanelId:
+  // there's no sensible "overlay" for two images the way traces overlay on
+  // a chart, so this always creates a fresh panel. `traces: []` (not
+  // omitted) keeps it working with every bit of generic panel machinery
+  // that assumes the field exists (PanelTree.render, normalizeLayoutEntry).
+  function addRenderPanel(caseName, title, imageToken) {
+    const L = active();
+    const panel = { id: `p${nextPanelId++}`, title, kind: 'render',
+                    case: caseName, imageToken, traces: [], style: {}, pane: null };
+    L.panels.push(panel);
+    if (!L.activePanelId) L.activePanelId = panel.id;
+    save();
+    return panel;
+  }
+
   function removeTrace(panelId, index) {
     const L = active();
     const panel = L.panels.find(p => p.id === panelId);
@@ -488,7 +505,8 @@ const PlotWorkspace = (() => {
   }
 
   return {
-    state, addTraces, addSpatialTrace, addSurfaceTrace, addFFTTrace, removeTrace, removePanel, clearPanel, renamePanel,
+    state, addTraces, addSpatialTrace, addSurfaceTrace, addFFTTrace, addRenderPanel,
+    removeTrace, removePanel, clearPanel, renamePanel,
     setYLock, updateLayout, setPanelPane, setPanelStyle, setGlobalStyle,
     setActivePanel, setTraceStyle,
     listLayouts, activeLayoutId, setActiveLayout, createLayout, renameLayout, deleteLayout,
@@ -523,7 +541,7 @@ const PanelTree = (() => {
 
       const kindTag = document.createElement('span');
       kindTag.className = 'panel-kind-tag';
-      kindTag.textContent = panel.kind === 'spatial' ? 'spatial' : '';
+      kindTag.textContent = panel.kind === 'spatial' ? 'spatial' : panel.kind === 'render' ? 'render' : '';
 
       const yLim = panel.style && panel.style.ylim;
       const lock = document.createElement('span');
