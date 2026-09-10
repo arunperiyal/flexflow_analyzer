@@ -406,6 +406,65 @@ class DefConfig:
         self._variables[name] = str(value)
         return True
 
+    def set_time_stepping_control(self, key: str, value: Union[str, float, int]) -> bool:
+        """
+        Update a key inside the timeSteppingControl{} block (e.g.
+        ``maxTimeSteps``, ``initialTimeIncrement``) in the .def file.
+
+        Rewrites the ``key = ...`` line in place, preserving the original
+        indentation and alignment before the ``=``.
+
+        Parameters
+        ----------
+        key:
+            The timeSteppingControl{} key to update (case-sensitive, as in
+            the file — e.g. ``maxTimeSteps``, not ``maxTime``).
+        value:
+            The new value to write.
+
+        Returns
+        -------
+        bool
+            True if the key was found and updated, False otherwise.
+        """
+        if not self._path.exists():
+            raise FileNotFoundError(f".def file not found: {self._path}")
+
+        lines = self._path.read_text().splitlines(keepends=True)
+
+        in_block = False
+        found = False
+        pattern = re.compile(rf'^(\s*{re.escape(key)}\s*=\s*)\S+')
+
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+
+            if re.match(r'timeSteppingControl\s*\{', stripped):
+                in_block = True
+                continue
+
+            if in_block and stripped == '}':
+                in_block = False
+                continue
+
+            if in_block:
+                m = pattern.match(line)
+                if m:
+                    newline = '\n' if line.endswith('\n') else ''
+                    lines[i] = f"{m.group(1)}{value}{newline}"
+                    found = True
+
+        if not found:
+            return False
+
+        new_content = ''.join(lines)
+        self._path.write_text(new_content)
+        # Refresh the cached timeSteppingControl values from what was written,
+        # rather than guessing the right cast for `value`.
+        self._tsc = {}
+        self._parse_time_stepping_control(new_content)
+        return True
+
     def update_output_frequency(self, frequency: int) -> None:
         """
         Update outFreq values in outputSimulation and outputRestart blocks.

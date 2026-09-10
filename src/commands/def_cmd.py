@@ -37,6 +37,22 @@ class DefCommand(BaseCommand):
         var_parser.add_argument('-h', '--help', action='store_true',
                                 help='Show help for var command')
 
+        # def time [maxTime|inc] [value]
+        # Not validated with choices= here: argparse's rejection would surface
+        # as "invalid choice", which points at the wrong thing when what's
+        # actually wrong is a typo in the field name, not the subcommand.
+        time_parser = def_subparsers.add_parser('time', add_help=False,
+                                                 help='Show or edit timeSteppingControl values (maxTime, inc)')
+        time_parser.add_argument('kind', nargs='?',
+                                 help="'maxTime' (maxTimeSteps) or 'inc' (initialTimeIncrement); "
+                                      "omit to show all timeSteppingControl values")
+        time_parser.add_argument('value', nargs='?',
+                                 help='New value (provide to edit the field)')
+        time_parser.add_argument('-c', '--case', type=str,
+                                 help='Case directory path (default: current directory)')
+        time_parser.add_argument('-h', '--help', action='store_true',
+                                 help='Show help for time command')
+
         # Main def help flag
         parser.add_argument('-h', '--help', action='store_true',
                             help='Show help for def command')
@@ -60,6 +76,10 @@ class DefCommand(BaseCommand):
         if subcommand == 'var':
             from .def_impl.command import execute_var
             return execute_var(args)
+
+        if subcommand == 'time':
+            from .def_impl.command import execute_time
+            return execute_time(args)
 
         print_def_help()
         return 1

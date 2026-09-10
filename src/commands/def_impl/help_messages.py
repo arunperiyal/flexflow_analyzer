@@ -21,6 +21,7 @@ def print_def_help():
     table.add_column("Subcommand", style="cyan")
     table.add_column("Description", style="white")
     table.add_row("var", "Show or edit define{} block variables")
+    table.add_row("time", "Show or edit timeSteppingControl{} values (maxTime, inc)")
 
     console.print("[bold]SUBCOMMANDS:[/bold]")
     console.print(table)
@@ -30,4 +31,10 @@ def print_def_help():
     console.print("    flexflow def var Ur              # Show the value of Ur")
     console.print("    flexflow def var Ur 2.0          # Set Ur = 2.0 in the .def file")
     console.print("    flexflow def var --case CS4SG1U1 # Operate on a specific case")
+    console.print()
+    console.print("    flexflow def time                     # List maxTimeSteps, initialTimeIncrement, etc.")
+    console.print("    flexflow def time maxTime             # Show maxTimeSteps")
+    console.print("    flexflow def time maxTime 7000        # Set maxTimeSteps = 7000")
+    console.print("    flexflow def time inc                 # Show initialTimeIncrement")
+    console.print("    flexflow def time inc 0.05            # Set initialTimeIncrement = 0.05")
     console.print()

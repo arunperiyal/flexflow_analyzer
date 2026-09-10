@@ -143,3 +143,102 @@ def execute_var(args):
     console.print(table)
     console.print()
     return 0
+
+
+# Maps the short CLI names to the actual timeSteppingControl{} key and the
+# DefConfig property that reads it.
+_TIME_FIELDS = {
+    'maxTime': ('maxTimeSteps', 'max_time_steps'),
+    'inc':     ('initialTimeIncrement', 'initial_time_increment'),
+}
+
+
+def execute_time(args):
+    """
+    Execute `def time [maxTime|inc] [value]`.
+
+    - No kind        -> print all timeSteppingControl{} values as a table.
+    - kind only      -> print the value of that field.
+    - kind + value   -> edit the field's value in the .def file.
+    """
+    console = Console()
+
+    case_path = Path(_resolve_case_path(args)).resolve()
+    if not case_path.exists():
+        console.print(f"[red]Error:[/red] Case directory not found: {case_path}")
+        return 1
+
+    cfg = _resolve_def_config(case_path, console)
+    if cfg is None:
+        return 1
+
+    kind = getattr(args, 'kind', None)
+    value = getattr(args, 'value', None)
+
+    if kind is not None and kind not in _TIME_FIELDS:
+        console.print(
+            f"[red]Error:[/red] Unknown time field [cyan]{kind}[/cyan]. "
+            f"Expected 'maxTime' or 'inc'."
+        )
+        return 1
+
+    # ── Edit: def time <kind> <value> ───────────────────────────────────────
+    if kind and value is not None:
+        key, prop = _TIME_FIELDS[kind]
+        old = getattr(cfg, prop)
+        if old is None:
+            console.print(
+                f"[red]Error:[/red] [cyan]{key}[/cyan] not found in "
+                f"timeSteppingControl{{}} in {cfg.path.name}"
+            )
+            return 1
+        if not cfg.set_time_stepping_control(key, value):
+            console.print(
+                f"[red]Error:[/red] Failed to update [cyan]{key}[/cyan] in "
+                f"{cfg.path.name}"
+            )
+            return 1
+        console.print(
+            f"[green]✓[/green] [cyan]{key}[/cyan]: "
+            f"[yellow]{old}[/yellow] → [bold green]{value}[/bold green]  "
+            f"[dim]({cfg.path.name})[/dim]"
+        )
+        return 0
+
+    # ── Show one: def time <kind> ───────────────────────────────────────────
+    if kind:
+        key, prop = _TIME_FIELDS[kind]
+        current = getattr(cfg, prop)
+        if current is None:
+            console.print(f"[red]Error:[/red] [cyan]{key}[/cyan] not set in {cfg.path.name}")
+            return 1
+        console.print(f"[cyan]{key}[/cyan] = [bold]{current}[/bold]")
+        return 0
+
+    # ── Show all: def time ───────────────────────────────────────────────────
+    rows = [
+        ('maxTimeSteps', cfg.max_time_steps),
+        ('initialTimeIncrement', cfg.initial_time_increment),
+        ('order', cfg.order),
+        ('highFrequencyDampingFactor', cfg.high_frequency_damping),
+    ]
+    if all(val is None for _, val in rows):
+        console.print(f"[yellow]No timeSteppingControl{{}} block found in {cfg.path.name}[/yellow]")
+        return 0
+
+    table = Table(
+        title=f"timeSteppingControl{{}} — {cfg.path.name}",
+        box=box.SIMPLE,
+        show_header=True,
+        header_style="bold yellow",
+        title_style="bold cyan",
+    )
+    table.add_column("Field", style="cyan")
+    table.add_column("Value", style="white")
+    for field, val in rows:
+        table.add_row(field, '(not set)' if val is None else str(val))
+
+    console.print()
+    console.print(table)
+    console.print()
+    return 0
