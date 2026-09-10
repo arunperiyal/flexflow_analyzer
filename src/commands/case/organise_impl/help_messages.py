@@ -10,47 +10,62 @@ def print_organise_help():
     print(f"""
 {Colors.BOLD}FLEXFLOW CASE ORGANISE{Colors.RESET}
 
-Organize and clean up case directories. Must specify at least one action flag.
+Organize and clean up case directories. Pick one subcommand.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    flexflow case organise [{Colors.YELLOW}case_directory{Colors.RESET}] --<flag> [options]
+    flexflow case organise <{Colors.YELLOW}subcommand{Colors.RESET}> [{Colors.YELLOW}case_directory{Colors.RESET}] [options]
 
 {Colors.BOLD}ARGUMENTS:{Colors.RESET}
     {Colors.YELLOW}case_directory{Colors.RESET}        Path to case directory (optional if context is set)
 
-{Colors.BOLD}ACTION FLAGS:{Colors.RESET}
+{Colors.BOLD}SUBCOMMANDS:{Colors.RESET}
 
-    {Colors.CYAN}--archive{Colors.RESET}
+    {Colors.CYAN}archive{Colors.RESET}
         Move .othd, .oisd (and .rcv if present) from the run directory
         into othd_files/, oisd_files/, rcv_files/.
         Uses numbered suffixes to avoid overwriting existing files.
         No confirmation required — safe archive operation.
 
-    {Colors.CYAN}--clean-archive{Colors.RESET}
-        Deduplicate and clean redundant OTHD/OISD files in othd_files/
-        and oisd_files/:
-          • Removes duplicate files (same time step range)
-          • Removes subset files (covered by larger files)
-          • Keeps files with overlapping ranges
-          • Renames remaining files sequentially by time step
+        {Colors.CYAN}--clean{Colors.RESET}
+            After archiving, deduplicate and clean redundant OTHD/OISD
+            files in othd_files/ and oisd_files/:
+              • Removes duplicate files (same time step range)
+              • Removes subset files (covered by larger files)
+              • Keeps files with overlapping ranges
+              • Renames remaining files sequentially by time step
 
-    {Colors.CYAN}--clean-output{Colors.RESET}
-        Remove intermediate .out/.rst/.plt files from the run directory:
-          • Keeps .out/.rst files at multiples of freq * keep_every
-          • Deletes ASCII .plt files if binary version exists in binary/
+    {Colors.CYAN}output{Colors.RESET}
+        Remove intermediate .out/.rst files from the run directory:
+          • Keeps files at multiples of freq * keep_every
           • Uses outFreq from simflow.config or auto-detects
 
-    {Colors.CYAN}--clean-plt{Colors.RESET}
-        Delete PLT files from the run directory where binary/ has a
-        corresponding file (exact filename match) with a newer mtime:
-          • Safe: only deletes if the binary copy is confirmed newer
-          • Skips files with no binary copy (prints with —)
-          • Skips files where the binary copy is same age or older (prints with ⚠)
-          • Shows a per-file table before asking confirmation
+        {Colors.CYAN}--keep-every N{Colors.RESET}
+            Keep every Nth output (default: 10, means freq*10)
 
-{Colors.BOLD}OPTIONS:{Colors.RESET}
-    --keep-every N            Keep every Nth output (default: 10, means freq*10)
-    --upto TSID               Only clean output files up to this timestep (inclusive)
+    {Colors.CYAN}plt{Colors.RESET}
+        Pass at least one of --delete-ascii / --delete-binary.
+
+        {Colors.CYAN}--delete-ascii{Colors.RESET}
+            Delete PLT files from the run directory where binary/ has a
+            corresponding file (exact filename match) with a newer mtime:
+              • Safe: only deletes if the binary copy is confirmed newer
+              • Skips files with no binary copy (prints with —)
+              • Skips files where the binary copy is same age or older (prints with ⚠)
+              • Shows a per-file table before asking confirmation
+
+        {Colors.CYAN}--delete-binary{Colors.RESET}
+            Delete PLT files from binary/ within --t1/--t2.
+              • Unconditional — no check against the run directory
+              • Omitting both --t1 and --t2 deletes every PLT file in binary/
+              • Can leave no surviving copy of that timestep's PLT data
+
+{Colors.BOLD}TARGETING BY TIMESTEP:{Colors.RESET}
+    --t1 STEP                 Only target timesteps >= STEP
+    --t2 STEP                 Only target timesteps <= STEP
+    (either alone is a one-sided bound; both together is an inclusive range)
+    Available on archive, output and plt.
+
+{Colors.BOLD}OTHER OPTIONS:{Colors.RESET}
     --dry-run                 Show what would be deleted without deleting anything
     --log                     Create log file of all deletions
     --no-confirm              Skip confirmation prompts
@@ -60,33 +75,40 @@ Organize and clean up case directories. Must specify at least one action flag.
 
 {Colors.BOLD}CONTEXT:{Colors.RESET}
     Set case context:     use case CS4SG1U1
-    Then run:             case organise --archive
+    Then run:             case organise archive
+
+    Set timestep context: use t1:0 t2:1000
+    Then run:              case organise output
 
 {Colors.BOLD}SAFETY:{Colors.RESET}
-    • --archive does not delete anything; it only moves files
-    • --clean-archive, --clean-output and --clean-plt show summary and ask for confirmation
+    • archive (without --clean) does not delete anything; it only moves files
+    • archive --clean, output and plt show a summary and ask for confirmation
+    • --delete-binary is unconditional: it does not check the run dir first
     • Use --no-confirm to skip confirmation
     • Fails if any OTHD/OISD file cannot be read (prevents data loss)
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
     # Archive run output (move .othd/.oisd/.rcv to archive dirs)
-    flexflow case organise CS4SG1U1 --archive
+    flexflow case organise archive CS4SG1U1
 
-    # Deduplicate/clean OTHD and OISD files
-    flexflow case organise CS4SG1U1 --clean-archive
+    # Archive, then deduplicate/clean OTHD and OISD files
+    flexflow case organise archive CS4SG1U1 --clean
 
     # Remove intermediate output files
-    flexflow case organise CS4SG1U1 --clean-output
+    flexflow case organise output CS4SG1U1
 
     # Delete PLT files from run dir where binary/ has a newer copy
-    flexflow case organise CS4SG1U1 --clean-plt
+    flexflow case organise plt CS4SG1U1 --delete-ascii
 
-    # Full workflow: archive first, then clean-archive, then clean output and PLT
-    flexflow case organise CS4SG1U1 --archive --clean-archive --clean-output --clean-plt
+    # Delete PLT files from binary/ for a timestep range
+    flexflow case organise plt CS4SG1U1 --delete-binary --t1 0 --t2 1000
+
+    # Only target a timestep range
+    flexflow case organise output CS4SG1U1 --t1 0 --t2 1000
 
     # Use context
     use case CS4SG1U1
-    case organise --archive
+    case organise archive
 
 {Colors.BOLD}SEE ALSO:{Colors.RESET}
     case show    - Display case information
@@ -102,39 +124,51 @@ def print_organise_examples():
 {Colors.BOLD}Archiving Run Output:{Colors.RESET}
 
     # Move .othd/.oisd/.rcv from run dir to archive directories
-    flexflow case organise CS4SG1U1 --archive
+    flexflow case organise archive CS4SG1U1
 
     # Files are numbered automatically:
     #   riser.othd  → othd_files/riser1.othd
     #   riser.oisd  → oisd_files/riser1.oisd
     #   riser.rcv   → rcv_files/riser1.rcv (if present)
 
+    # Only archive files whose timestep range overlaps [0, 1000]
+    flexflow case organise archive CS4SG1U1 --t1 0 --t2 1000
+
 {Colors.BOLD}Deduplicating OTHD/OISD Files:{Colors.RESET}
 
-    # Remove duplicate/subset OTHD and OISD files
-    flexflow case organise CS4SG1U1 --clean-archive
+    # Archive, then remove duplicate/subset OTHD and OISD files
+    flexflow case organise archive CS4SG1U1 --clean
 
     # Skip confirmation
-    flexflow case organise CS4SG1U1 --clean-archive --no-confirm
+    flexflow case organise archive CS4SG1U1 --clean --no-confirm
 
 {Colors.BOLD}Cleaning Output Directory:{Colors.RESET}
 
-    # Remove intermediate .out/.rst/.plt files (keeps every freq*10)
-    flexflow case organise CS4SG1U1 --clean-output
+    # Remove intermediate .out/.rst files (keeps every freq*10)
+    flexflow case organise output CS4SG1U1
 
     # Custom retention interval (keep every freq*5)
-    flexflow case organise CS4SG1U1 --clean-output --keep-every 5
+    flexflow case organise output CS4SG1U1 --keep-every 5
+
+    # Only clean up to timestep 5000
+    flexflow case organise output CS4SG1U1 --t2 5000
 
     # Create log file of deletions
-    flexflow case organise CS4SG1U1 --clean-output --log
+    flexflow case organise output CS4SG1U1 --log
 
-{Colors.BOLD}Combined Operations:{Colors.RESET}
+{Colors.BOLD}Cleaning PLT Files:{Colors.RESET}
 
-    # Run all three in sequence
-    flexflow case organise CS4SG1U1 --archive --clean-archive --clean-output
+    # Delete run-dir PLT files that have a newer copy in binary/
+    flexflow case organise plt CS4SG1U1 --delete-ascii
 
-    # Archive and clean-archive only
-    flexflow case organise CS4SG1U1 --archive --clean-archive
+    # Only within a timestep window
+    flexflow case organise plt CS4SG1U1 --delete-ascii --t1 1000 --t2 2000
+
+    # Unconditionally delete PLT files from binary/ for a timestep window
+    flexflow case organise plt CS4SG1U1 --delete-binary --t1 1000 --t2 2000
+
+    # Both directions in one call
+    flexflow case organise plt CS4SG1U1 --delete-ascii --delete-binary --t1 1000 --t2 2000
 
 {Colors.BOLD}Using Context:{Colors.RESET}
 
@@ -142,11 +176,16 @@ def print_organise_examples():
     use case CS4SG1U1
 
     # Run operations
-    case organise --archive
-    case organise --clean-archive
-    case organise --clean-output
+    case organise archive
+    case organise archive --clean
+    case organise output
 
-{Colors.BOLD}What --clean-archive Does:{Colors.RESET}
+    # Set a timestep window and reuse it across subcommands
+    use t1:0 t2:1000
+    case organise output
+    case organise plt --delete-ascii
+
+{Colors.BOLD}What archive --clean Does:{Colors.RESET}
 
     Before:
     • riser1.othd [0-1000]    → Keep (unique range)
@@ -158,16 +197,25 @@ def print_organise_examples():
     After cleanup, files are renamed sequentially:
     riser1.othd [0-1000], riser2.othd [1000-2000], riser3.othd [500-1500]
 
-{Colors.BOLD}What --clean-output Does (freq=50, keep_every=10):{Colors.RESET}
+{Colors.BOLD}What output Does (freq=50, keep_every=10):{Colors.RESET}
 
     • riser.50_1.out       → Delete (not multiple of 500)
     • riser.100_1.out      → Delete
     • riser.500_1.out      → Keep  (500 % 500 == 0)
     • riser.1000_1.out     → Keep  (1000 % 500 == 0)
-    • riser.500.plt        → Delete (binary/riser.500.plt exists)
+
+{Colors.BOLD}What plt --delete-ascii Does:{Colors.RESET}
+
+    • riser.500.plt (run dir)    → Delete (binary/riser.500.plt exists and is newer)
+
+{Colors.BOLD}What plt --delete-binary Does (--t1 1000 --t2 2000):{Colors.RESET}
+
+    • binary/riser.1500.plt      → Delete (in range, regardless of run dir)
+    • binary/riser.3000.plt      → Keep   (outside range)
 
 {Colors.BOLD}Notes:{Colors.RESET}
-    • --archive runs immediately, no confirmation needed
-    • --clean-archive and --clean-output ask for confirmation unless --no-confirm
-    • Binary PLT files in binary/ are never deleted
+    • archive (without --clean) runs immediately, no confirmation needed
+    • archive --clean, output and plt ask for confirmation unless --no-confirm
+    • --delete-ascii never touches binary/; --delete-binary never touches the run dir
+    • --delete-binary with no --t1/--t2 deletes every PLT file in binary/
 """)

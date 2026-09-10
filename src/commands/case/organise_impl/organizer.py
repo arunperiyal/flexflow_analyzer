@@ -94,6 +94,8 @@ class CaseOrganizer:
             'output_space_freed': 0,
             'plt_clean_deleted': 0,
             'plt_clean_space_freed': 0,
+            'plt_binary_deleted': 0,
+            'plt_binary_space_freed': 0,
         }
 
         # Files to delete/rename
@@ -117,10 +119,56 @@ class CaseOrganizer:
             output_dir_path = Path(output_dir_str)
         return output_dir_path if output_dir_path.exists() else None
 
-    def _archive_run_data_files(self):
+    def _t1_t2(self) -> Tuple[Optional[float], Optional[float]]:
+        """Read --t1/--t2 from args."""
+        return getattr(self.args, 't1', None), getattr(self.args, 't2', None)
+
+    @staticmethod
+    def _step_in_bounds(step: float, t1: Optional[float], t2: Optional[float]) -> bool:
+        """Whether a single timestep falls inside the [t1, t2] window (either bound optional)."""
+        if t1 is not None and step < t1:
+            return False
+        if t2 is not None and step > t2:
+            return False
+        return True
+
+    @staticmethod
+    def _range_overlaps_bounds(start: float, end: float, t1: Optional[float],
+                               t2: Optional[float]) -> bool:
+        """Whether a file's [start, end] timestep range overlaps the [t1, t2] window."""
+        if t1 is not None and end < t1:
+            return False
+        if t2 is not None and start > t2:
+            return False
+        return True
+
+    def _filter_by_range(self, files: List[Path], reader_class,
+                         t1: Optional[float], t2: Optional[float]) -> List[Path]:
+        """Keep only files whose timestep range (from their reader) overlaps [t1, t2].
+        A file that fails to read is kept, so filtering never silently drops it."""
+        kept = []
+        for f in files:
+            try:
+                reader = reader_class(str(f))
+                if len(reader.tsIds) == 0:
+                    kept.append(f)
+                    continue
+                start, end = min(reader.tsIds), max(reader.tsIds)
+            except Exception:
+                kept.append(f)
+                continue
+            if self._range_overlaps_bounds(start, end, t1, t2):
+                kept.append(f)
+        return kept
+
+    def _archive_run_data_files(self, t1: Optional[float] = None, t2: Optional[float] = None):
         """
-        --archive: Move .othd, .oisd (and .rcv if present) from the run
+        archive: Move .othd, .oisd (and .rcv if present) from the run
         directory into othd_files/, oisd_files/, rcv_files/.
+
+        With --t1/--t2, only files whose timestep range overlaps that window
+        are moved. RCV files have no reader to determine their range, so they
+        are always moved in full.
         """
         run_dir = self._get_run_dir_path()
         if not run_dir:
@@ -132,6 +180,10 @@ class CaseOrganizer:
         othd_files_found = list(run_dir.glob('*.othd'))
         oisd_files_found = list(run_dir.glob('*.oisd'))
         rcv_files_found = list(run_dir.glob('*.rcv'))
+
+        if t1 is not None or t2 is not None:
+            othd_files_found = self._filter_by_range(othd_files_found, OTHDReader, t1, t2)
+            oisd_files_found = self._filter_by_range(oisd_files_found, OISDReader, t1, t2)
 
         if not othd_files_found and not oisd_files_found and not rcv_files_found:
             self.console.print("[dim]  No .othd/.oisd/.rcv files found in run directory[/dim]")
@@ -208,12 +260,17 @@ class CaseOrganizer:
         next_num = max_num + 1
         return dest_dir / f'{base_name}{next_num}.{extension}'
 
-    def organize(self):
-        """Main organization workflow."""
-        do_archive = getattr(self.args, 'archive', False)
-        do_organise = getattr(self.args, 'clean_archive', False)
-        do_clean_output = getattr(self.args, 'clean_output', False)
-        do_clean_plt = getattr(self.args, 'clean_plt', False)
+    def organize(self, subcommand: str):
+        """
+        Main organization workflow for one subcommand.
+
+        Parameters:
+        -----------
+        subcommand : str
+            'archive', 'output' or 'plt'
+        """
+        t1, t2 = self._t1_t2()
+        do_clean = subcommand == 'archive' and getattr(self.args, 'clean', False)
 
         self.console.print()
         self.console.print(Panel(
@@ -224,48 +281,61 @@ class CaseOrganizer:
         ))
         self.console.print()
 
+        othd_files: List[FileInfo] = []
+        oisd_files: List[FileInfo] = []
+
         # --- ARCHIVE ---
-        if do_archive:
+        if subcommand == 'archive':
             self.console.print("[bold]Step: Archive run data files[/bold]")
-            self._archive_run_data_files()
+            self._archive_run_data_files(t1, t2)
             self.console.print()
 
-        # --- ORGANISE (deduplicate OTHD/OISD) ---
-        othd_files = []
-        oisd_files = []
+            # --- ARCHIVE --clean (deduplicate OTHD/OISD) ---
+            if do_clean:
+                self.console.print("[bold]Step: Deduplicate OTHD/OISD files[/bold]")
+                self.logger.info("Analyzing OTHD files...")
+                othd_files = self._analyze_data_files('othd', t1, t2)
+                self._find_redundant_files(othd_files, 'OTHD')
 
-        if do_organise:
-            self.console.print("[bold]Step: Deduplicate OTHD/OISD files[/bold]")
-            self.logger.info("Analyzing OTHD files...")
-            othd_files = self._analyze_data_files('othd')
-            self._find_redundant_files(othd_files, 'OTHD')
+                self.logger.info("Analyzing OISD files...")
+                oisd_files = self._analyze_data_files('oisd', t1, t2)
+                self._find_redundant_files(oisd_files, 'OISD')
 
-            self.logger.info("Analyzing OISD files...")
-            oisd_files = self._analyze_data_files('oisd')
-            self._find_redundant_files(oisd_files, 'OISD')
+                # Warn if OTHD and OISD coverage diverges after deduplication
+                self._check_cross_type_consistency(othd_files, oisd_files)
+                self.console.print()
 
-            # Warn if OTHD and OISD coverage diverges after deduplication
-            self._check_cross_type_consistency(othd_files, oisd_files)
-            self.console.print()
-
-        # --- CLEAN OUTPUT ---
-        if do_clean_output:
+        # --- OUTPUT ---
+        elif subcommand == 'output':
             self.console.print("[bold]Step: Clean output directory[/bold]")
-            self._analyze_output_directory()
+            self._analyze_output_directory(t1, t2)
             self.console.print()
 
-        # --- CLEAN PLT ---
-        if do_clean_plt:
-            self.console.print("[bold]Step: Clean PLT files from run directory[/bold]")
-            self._analyze_clean_plt()
-            self.console.print()
+        # --- PLT ---
+        elif subcommand == 'plt':
+            delete_ascii = getattr(self.args, 'delete_ascii', False)
+            delete_binary = getattr(self.args, 'delete_binary', False)
+            if not delete_ascii and not delete_binary:
+                self.console.print(
+                    "[yellow]Nothing to do — pass --delete-ascii and/or "
+                    "--delete-binary[/yellow]"
+                )
+                return
+            if delete_ascii:
+                self.console.print("[bold]Step: Delete ASCII PLT files from run directory[/bold]")
+                self._analyze_clean_plt(t1, t2)
+                self.console.print()
+            if delete_binary:
+                self.console.print("[bold]Step: Delete PLT files from binary/[/bold]")
+                self._analyze_delete_binary_plt(t1, t2)
+                self.console.print()
 
-        # Nothing to do beyond archiving (which runs without confirmation)
+        # Plain archive (no --clean) moves files without confirmation, same as before
         has_deletions = len(self.files_to_delete) > 0
-
         dry_run = getattr(self.args, 'dry_run', False)
+        needs_confirmation = subcommand in ('output', 'plt') or do_clean
 
-        if do_organise or do_clean_output or do_clean_plt:
+        if needs_confirmation:
             # Show summary before asking confirmation
             self._show_summary()
 
@@ -285,13 +355,14 @@ class CaseOrganizer:
                 self._perform_deletions()
 
         # Rename OTHD/OISD files sequentially after deduplication
-        if do_organise:
+        if do_clean:
             self._rename_files(othd_files, oisd_files)
 
         # Final summary
-        self._show_final_summary(do_archive, do_organise, do_clean_output, do_clean_plt)
+        self._show_final_summary(subcommand, do_clean)
 
-    def _analyze_data_files(self, file_type: str) -> List[FileInfo]:
+    def _analyze_data_files(self, file_type: str, t1: Optional[float] = None,
+                            t2: Optional[float] = None) -> List[FileInfo]:
         """
         Analyze OTHD or OISD files.
 
@@ -299,6 +370,9 @@ class CaseOrganizer:
         -----------
         file_type : str
             'othd' or 'oisd'
+        t1, t2 : float, optional
+            With --t1/--t2, only files whose timestep range overlaps this
+            window are included — the rest are left untouched by dedup/rename.
 
         Returns:
         --------
@@ -334,6 +408,10 @@ class CaseOrganizer:
 
                 start_step = min(reader.tsIds)
                 end_step = max(reader.tsIds)
+
+                if not self._range_overlaps_bounds(start_step, end_step, t1, t2):
+                    continue
+
                 size = file_path.stat().st_size
                 mtime = file_path.stat().st_mtime
 
@@ -450,11 +528,66 @@ class CaseOrganizer:
                 f"{_fmt_tsid(oisd_cov[0])}–{_fmt_tsid(oisd_cov[1])}"
             )
 
-    def _analyze_clean_plt(self):
+    def _analyze_delete_binary_plt(self, t1: Optional[float] = None, t2: Optional[float] = None):
         """
-        --clean-plt: Mark PLT files in the run directory for deletion where
+        plt --delete-binary: Unconditionally delete PLT files from binary/
+        within the --t1/--t2 window. There is no check against the run
+        directory — if the ASCII copy is already gone, this removes the last
+        surviving copy of that timestep's PLT data. Omitting both --t1 and
+        --t2 deletes every PLT file in binary/.
+        """
+        binary_dir = self.case_dir / 'binary'
+        if not binary_dir.exists():
+            self.console.print("  [dim]—[/dim]  binary/ directory not found — nothing to delete")
+            return
+
+        problem = self.case.problem_name
+        if not problem:
+            self.console.print("  [yellow]⚠[/yellow]  'problem' not set — cannot determine PLT file names")
+            return
+
+        pattern = re.compile(rf'^{re.escape(problem)}\.(\d+)\.plt$')
+
+        to_delete = []
+        for binary_plt in sorted(binary_dir.glob(f'{problem}.*.plt')):
+            match = pattern.match(binary_plt.name)
+            if not match:
+                continue
+            step = int(match.group(1))
+            if not self._step_in_bounds(step, t1, t2):
+                continue
+            to_delete.append(binary_plt)
+
+        if not to_delete:
+            self.console.print(f"  [dim]No {problem}.*.plt files found in binary/ for the given range[/dim]")
+            return
+
+        if t1 is None and t2 is None:
+            self.console.print(
+                "  [yellow]⚠[/yellow]  No --t1/--t2 given — this deletes ALL PLT files in binary/"
+            )
+
+        from rich.table import Table as _Table
+        tbl = _Table(box=box.SIMPLE, show_header=True, header_style="bold")
+        tbl.add_column("", width=2)
+        tbl.add_column("File", style="cyan")
+        tbl.add_column("Action")
+        for f in to_delete:
+            tbl.add_row("[red]✗[/red]", f.name, "[red]will delete (binary/, unconditional)[/red]")
+        self.console.print(tbl)
+
+        for f in to_delete:
+            self.files_to_delete.append(f)
+            self.stats['plt_binary_deleted'] += 1
+            self.stats['plt_binary_space_freed'] += f.stat().st_size
+
+    def _analyze_clean_plt(self, t1: Optional[float] = None, t2: Optional[float] = None):
+        """
+        plt --delete-ascii: Mark PLT files in the run directory for deletion where
         binary/ has a corresponding file (same name) with a newer mtime.
         Skips files with no binary copy or where the binary copy is older.
+        With --t1/--t2, only PLT files whose timestep falls in that window
+        are considered; the rest are left untouched.
         """
         run_dir = self._get_run_dir_path()
         if not run_dir:
@@ -478,7 +611,11 @@ class CaseOrganizer:
         skip_older      = []   # run PLT files where binary copy is same age or older
 
         for run_plt in sorted(run_dir.glob(f'{problem}.*.plt')):
-            if not pattern.match(run_plt.name):
+            match = pattern.match(run_plt.name)
+            if not match:
+                continue
+            step = int(match.group(1))
+            if not self._step_in_bounds(step, t1, t2):
                 continue
             binary_plt = binary_dir / run_plt.name
             if not binary_plt.exists():
@@ -515,7 +652,7 @@ class CaseOrganizer:
             self.stats['plt_clean_deleted'] += 1
             self.stats['plt_clean_space_freed'] += f.stat().st_size
 
-    def _analyze_output_directory(self):
+    def _analyze_output_directory(self, t1: Optional[float] = None, t2: Optional[float] = None):
         """Analyze output directory and find files to delete."""
         # Get frequency
         freq = self._get_frequency()
@@ -532,9 +669,8 @@ class CaseOrganizer:
         keep_interval = freq * keep_every
         self.logger.info(f"Using freq={freq}, keep_every={keep_every}, keep_interval={keep_interval}")
 
-        upto = getattr(self.args, 'upto', None)
-        if upto is not None:
-            self.logger.info(f"Limiting cleanup to timesteps <= {upto}")
+        if t1 is not None or t2 is not None:
+            self.logger.info(f"Limiting cleanup to timesteps in [{t1}, {t2}]")
 
         # Find output directories
         output_dirs = self._find_output_directories()
@@ -547,7 +683,7 @@ class CaseOrganizer:
 
         # Analyze each directory
         for output_dir in output_dirs:
-            self._analyze_single_output_dir(output_dir, problem, freq, keep_interval, upto)
+            self._analyze_single_output_dir(output_dir, problem, freq, keep_interval, t1, t2)
 
     def _find_output_directories(self) -> List[Path]:
         """Find output directories from simflow.config."""
@@ -557,9 +693,10 @@ class CaseOrganizer:
         return [run_dir]
 
     def _analyze_single_output_dir(self, output_dir: Path, problem: str, freq: int,
-                                   keep_interval: int, upto: int = None):
+                                   keep_interval: int, t1: Optional[float] = None,
+                                   t2: Optional[float] = None):
         """Analyze a single output directory."""
-        # Find out and rst files (plt files are handled by --clean-plt, not --clean-output)
+        # Find out and rst files (plt files are handled by `plt --delete-ascii`/`--delete-binary`, not `output`)
         out_pattern = f'{problem}.*_*.out'
         rst_pattern = f'{problem}.*_*.rst'
 
@@ -575,8 +712,8 @@ class CaseOrganizer:
             if step is None:
                 continue
 
-            # Skip files beyond --upto (leave them untouched)
-            if upto is not None and step > upto:
+            # Skip files outside --t1/--t2 (leave them untouched)
+            if not self._step_in_bounds(step, t1, t2):
                 continue
 
             # Keep if multiple of keep_interval
@@ -594,7 +731,7 @@ class CaseOrganizer:
                 if self.args.verbose:
                     self.logger.info(f"  Delete: {file.name} (step {step} not multiple of {keep_interval})")
 
-        # PLT files are handled exclusively by --clean-plt, not --clean-output
+        # PLT files are handled exclusively by `plt --delete-ascii`/`--delete-binary`, not `output`
 
     def _analyze_plt_files(self, plt_files: List[Path], problem: str):
         """
@@ -778,6 +915,13 @@ class CaseOrganizer:
                 self._format_size(self.stats['plt_clean_space_freed'])
             )
 
+        if self.stats['plt_binary_deleted'] > 0:
+            table.add_row(
+                "PLT files to delete (binary/)",
+                str(self.stats['plt_binary_deleted']),
+                self._format_size(self.stats['plt_binary_space_freed'])
+            )
+
         if self.stats['output_space_freed'] > 0:
             table.add_row(
                 "Output space to free",
@@ -785,10 +929,7 @@ class CaseOrganizer:
                 self._format_size(self.stats['output_space_freed'])
             )
 
-        total_space = (self.stats['othd_space_freed'] +
-                      self.stats['oisd_space_freed'] +
-                      self.stats['output_space_freed'] +
-                      self.stats['plt_clean_space_freed'])
+        total_space = self._total_space_freed()
 
         table.add_row(
             "[bold]Total space to free[/bold]",
@@ -800,13 +941,17 @@ class CaseOrganizer:
         self.console.print(table)
         self.console.print()
 
+    def _total_space_freed(self) -> int:
+        return (self.stats['othd_space_freed'] +
+                self.stats['oisd_space_freed'] +
+                self.stats['output_space_freed'] +
+                self.stats['plt_clean_space_freed'] +
+                self.stats['plt_binary_space_freed'])
+
     def _confirm_deletion(self) -> bool:
         """Ask user to confirm deletion."""
         total_files = len(self.files_to_delete)
-        total_space = (self.stats['othd_space_freed'] +
-                      self.stats['oisd_space_freed'] +
-                      self.stats['output_space_freed'] +
-                      self.stats['plt_clean_space_freed'])
+        total_space = self._total_space_freed()
 
         self.console.print(
             f"[bold yellow]Delete {total_files} files "
@@ -886,30 +1031,34 @@ class CaseOrganizer:
             log_handle.close()
             self.console.print(f"\n[dim]Log saved to: {self.log_file}[/dim]")
 
-    def _show_final_summary(self, do_archive: bool, do_organise: bool, do_clean_output: bool,
-                            do_clean_plt: bool = False):
+    def _show_final_summary(self, subcommand: str, do_clean: bool = False):
         """Show final summary after cleanup."""
         self.console.print()
 
         lines = []
-        if do_archive:
+        if subcommand == 'archive':
             total_archived = (self.stats['archived_othd'] + self.stats['archived_oisd'] +
                               self.stats['archived_rcv'])
             lines.append(f"Archived: {self.stats['archived_othd']} OTHD, "
                          f"{self.stats['archived_oisd']} OISD, "
                          f"{self.stats['archived_rcv']} RCV  (total {total_archived} files)")
-        if do_organise:
-            lines.append(f"Deduplicated: {self.stats['othd_redundant']} OTHD, "
-                         f"{self.stats['oisd_redundant']} OISD removed  "
-                         f"({self._format_size(self.stats['othd_space_freed'] + self.stats['oisd_space_freed'])} freed)")
-        if do_clean_output:
+            if do_clean:
+                lines.append(f"Deduplicated: {self.stats['othd_redundant']} OTHD, "
+                             f"{self.stats['oisd_redundant']} OISD removed  "
+                             f"({self._format_size(self.stats['othd_space_freed'] + self.stats['oisd_space_freed'])} freed)")
+        if subcommand == 'output':
             total_out = self.stats['out_deleted'] + self.stats['rst_deleted'] + self.stats['plt_deleted']
             lines.append(f"Output cleaned: {total_out} files removed  "
                          f"({self._format_size(self.stats['output_space_freed'])} freed)")
-        if do_clean_plt:
-            n = self.stats['plt_clean_deleted']
-            lines.append(f"PLT cleaned: {n} file{'s' if n != 1 else ''} removed from run dir  "
-                         f"({self._format_size(self.stats['plt_clean_space_freed'])} freed)")
+        if subcommand == 'plt':
+            if getattr(self.args, 'delete_ascii', False):
+                n = self.stats['plt_clean_deleted']
+                lines.append(f"PLT deleted (run dir): {n} file{'s' if n != 1 else ''} removed  "
+                             f"({self._format_size(self.stats['plt_clean_space_freed'])} freed)")
+            if getattr(self.args, 'delete_binary', False):
+                n = self.stats['plt_binary_deleted']
+                lines.append(f"PLT deleted (binary/): {n} file{'s' if n != 1 else ''} removed  "
+                             f"({self._format_size(self.stats['plt_binary_space_freed'])} freed)")
 
         summary_text = "\n".join(lines) if lines else "Nothing to do"
 

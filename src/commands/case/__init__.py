@@ -86,30 +86,83 @@ class CaseCommand(BaseCommand):
         # case organise
         organise_parser = case_subparsers.add_parser('organise', add_help=False,
                                                      help='Organize and clean up case directory')
-        organise_parser.add_argument('case', nargs='?', help='Case directory path')
-        organise_parser.add_argument('--archive', action='store_true',
-                                    help='Move .othd/.oisd/.rcv from run dir to archive dirs')
-        organise_parser.add_argument('--clean-archive', action='store_true',
-                                    help='Deduplicate and clean redundant OTHD/OISD files')
-        organise_parser.add_argument('--clean-output', action='store_true',
-                                    help='Remove intermediate .out/.rst/.plt files from run dir')
-        organise_parser.add_argument('--clean-plt', action='store_true',
-                                    help='Delete PLT files from run dir where binary/ has a newer copy')
-        organise_parser.add_argument('--keep-every', type=int,
-                                    help='Keep every Nth output (default: 10 * freq)')
-        organise_parser.add_argument('--upto', type=int, metavar='TSID',
-                                    help='Only clean output files up to this timestep (inclusive)')
-        organise_parser.add_argument('--log', action='store_true',
-                                    help='Create log file of deletions')
-        organise_parser.add_argument('--no-confirm', action='store_true',
-                                    help='Skip confirmation prompts')
-        organise_parser.add_argument('--dry-run', action='store_true',
-                                    help='Show what would be deleted without deleting anything')
-        organise_parser.add_argument('-v', '--verbose', action='store_true',
-                                    help='Enable verbose output')
         organise_parser.add_argument('-h', '--help', action='store_true',
                                     help='Show help for organise command')
         organise_parser.add_argument('--examples', action='store_true',
+                                    help='Show usage examples')
+        organise_subparsers = organise_parser.add_subparsers(dest='organise_subcommand',
+                                                             help='Organise subcommands')
+
+        # case organise archive
+        archive_parser = organise_subparsers.add_parser('archive', add_help=False,
+                                    help='Move .othd/.oisd/.rcv from run dir to archive dirs')
+        archive_parser.add_argument('case', nargs='?', help='Case directory path')
+        archive_parser.add_argument('--clean', action='store_true',
+                                    help='Deduplicate and clean redundant OTHD/OISD files after archiving')
+        archive_parser.add_argument('--t1', type=float, metavar='STEP',
+                                    help='Only target timesteps >= STEP')
+        archive_parser.add_argument('--t2', type=float, metavar='STEP',
+                                    help='Only target timesteps <= STEP')
+        archive_parser.add_argument('--log', action='store_true',
+                                    help='Create log file of deletions')
+        archive_parser.add_argument('--no-confirm', action='store_true',
+                                    help='Skip confirmation prompts')
+        archive_parser.add_argument('--dry-run', action='store_true',
+                                    help='Show what would be deleted without deleting anything')
+        archive_parser.add_argument('-v', '--verbose', action='store_true',
+                                    help='Enable verbose output')
+        archive_parser.add_argument('-h', '--help', action='store_true',
+                                    help='Show help for archive command')
+        archive_parser.add_argument('--examples', action='store_true',
+                                    help='Show usage examples')
+
+        # case organise output
+        output_parser = organise_subparsers.add_parser('output', add_help=False,
+                                    help='Remove intermediate .out/.rst files from run dir')
+        output_parser.add_argument('case', nargs='?', help='Case directory path')
+        output_parser.add_argument('--keep-every', type=int,
+                                    help='Keep every Nth output (default: 10 * freq)')
+        output_parser.add_argument('--t1', type=float, metavar='STEP',
+                                    help='Only target timesteps >= STEP')
+        output_parser.add_argument('--t2', type=float, metavar='STEP',
+                                    help='Only target timesteps <= STEP')
+        output_parser.add_argument('--log', action='store_true',
+                                    help='Create log file of deletions')
+        output_parser.add_argument('--no-confirm', action='store_true',
+                                    help='Skip confirmation prompts')
+        output_parser.add_argument('--dry-run', action='store_true',
+                                    help='Show what would be deleted without deleting anything')
+        output_parser.add_argument('-v', '--verbose', action='store_true',
+                                    help='Enable verbose output')
+        output_parser.add_argument('-h', '--help', action='store_true',
+                                    help='Show help for output command')
+        output_parser.add_argument('--examples', action='store_true',
+                                    help='Show usage examples')
+
+        # case organise plt
+        plt_parser = organise_subparsers.add_parser('plt', add_help=False,
+                                    help='Delete PLT files in the run dir and/or binary/')
+        plt_parser.add_argument('case', nargs='?', help='Case directory path')
+        plt_parser.add_argument('--delete-ascii', action='store_true',
+                                    help='Delete PLT files from run dir where binary/ has a newer copy')
+        plt_parser.add_argument('--delete-binary', action='store_true',
+                                    help='Delete PLT files from binary/ within --t1/--t2 '
+                                         '(unconditional; omitting both deletes all)')
+        plt_parser.add_argument('--t1', type=float, metavar='STEP',
+                                    help='Only target timesteps >= STEP')
+        plt_parser.add_argument('--t2', type=float, metavar='STEP',
+                                    help='Only target timesteps <= STEP')
+        plt_parser.add_argument('--log', action='store_true',
+                                    help='Create log file of deletions')
+        plt_parser.add_argument('--no-confirm', action='store_true',
+                                    help='Skip confirmation prompts')
+        plt_parser.add_argument('--dry-run', action='store_true',
+                                    help='Show what would be deleted without deleting anything')
+        plt_parser.add_argument('-v', '--verbose', action='store_true',
+                                    help='Enable verbose output')
+        plt_parser.add_argument('-h', '--help', action='store_true',
+                                    help='Show help for plt command')
+        plt_parser.add_argument('--examples', action='store_true',
                                     help='Show usage examples')
 
         # case check
@@ -410,9 +463,11 @@ class CaseCommand(BaseCommand):
         console.print("    flexflow case create myCase --problem-name test")
         console.print("    flexflow case run CS4SG1U1")
         console.print("    flexflow case run CS4SG1U1 --no-monitor")
-        console.print("    flexflow case organise CS4SG1U1 --archive")
-        console.print("    flexflow case organise CS4SG1U1 --clean-archive")
-        console.print("    flexflow case organise CS4SG1U1 --clean-output")
+        console.print("    flexflow case organise archive CS4SG1U1")
+        console.print("    flexflow case organise archive CS4SG1U1 --clean")
+        console.print("    flexflow case organise output CS4SG1U1")
+        console.print("    flexflow case organise plt CS4SG1U1 --delete-ascii")
+        console.print("    flexflow case organise plt CS4SG1U1 --delete-binary --t1 0 --t2 1000")
         console.print("    flexflow case check CS4SG1U1 --run")
         console.print("    flexflow case check CS4SG1U1 --all")
         console.print("    flexflow case status CS4SG1U1")

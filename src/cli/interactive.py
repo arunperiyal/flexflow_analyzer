@@ -190,17 +190,34 @@ class FlexFlowCompleter(Completer):
             '--from-step':  'Restart from specific timestep',
             '--dry-run':    'Show what would be done',
         },
-        ('case', 'organise'): {
+        ('case', 'organise'): {**_COMMON_FLAGS},
+        ('case', 'organise', 'archive'): {
             **_COMMON_FLAGS,
-            '--archive':      'Move .othd/.oisd/.rcv from run dir to archive dirs',
-            '--clean-plt':    'Delete PLT files from run dir where binary/ has a newer copy',
-            '--clean-archive': 'Deduplicate and clean redundant OTHD/OISD files',
-            '--clean-output': 'Remove intermediate .out/.rst/.plt files',
-            '--keep-every':   'Keep every Nth output (default: 10)',
-            '--upto':         'Only clean output files up to this timestep (inclusive)',
-            '--dry-run':      'Show what would be deleted without deleting anything',
-            '--log':          'Create log file of all deletions',
-            '--no-confirm':   'Skip confirmation prompts',
+            '--clean':      'Deduplicate and clean redundant OTHD/OISD files after archiving',
+            '--t1':         'Only target timesteps >= STEP',
+            '--t2':         'Only target timesteps <= STEP',
+            '--dry-run':    'Show what would be deleted without deleting anything',
+            '--log':        'Create log file of all deletions',
+            '--no-confirm': 'Skip confirmation prompts',
+        },
+        ('case', 'organise', 'output'): {
+            **_COMMON_FLAGS,
+            '--keep-every': 'Keep every Nth output (default: 10)',
+            '--t1':         'Only target timesteps >= STEP',
+            '--t2':         'Only target timesteps <= STEP',
+            '--dry-run':    'Show what would be deleted without deleting anything',
+            '--log':        'Create log file of all deletions',
+            '--no-confirm': 'Skip confirmation prompts',
+        },
+        ('case', 'organise', 'plt'): {
+            **_COMMON_FLAGS,
+            '--delete-ascii':  'Delete PLT files from run dir where binary/ has a newer copy',
+            '--delete-binary': 'Delete PLT files from binary/ within --t1/--t2 (unconditional)',
+            '--t1':         'Only target timesteps >= STEP',
+            '--t2':         'Only target timesteps <= STEP',
+            '--dry-run':    'Show what would be deleted without deleting anything',
+            '--log':        'Create log file of all deletions',
+            '--no-confirm': 'Skip confirmation prompts',
         },
         ('case', 'check'):   {
             '--freq':        'PLT frequency to check against, overriding outFreq',
@@ -561,6 +578,11 @@ class FlexFlowCompleter(Completer):
         # so both are offered: the target names are exact, a case is anything else.
         ('case', 'domain', 0): [('body', 'Bodies in the domain'),
                                 ('field', 'The continuum they sit in')],
+        ('case', 'organise', 0): [
+            ('archive', 'Move .othd/.oisd/.rcv from run dir to archive dirs'),
+            ('output',  'Remove intermediate .out/.rst files from run dir'),
+            ('plt',     'Delete PLT files in the run dir and/or binary/'),
+        ],
         ('template', 'plot',   0): [('simple', 'Simple time-series'), ('multi', 'Multi-node plot')],
         ('template', 'case',   0): [('basic', 'Basic case config'), ('full', 'Full case config')],
         ('template', 'script', 0): [
@@ -662,8 +684,15 @@ class FlexFlowCompleter(Completer):
     # Internal helpers
     # ---------------------------------------------------------------------------
 
-    def _flags_for(self, cmd: str, subcmd: Optional[str]) -> Dict[str, str]:
-        """Return the flag dict for (cmd, subcmd), falling back to (cmd, None)."""
+    def _flags_for(self, cmd: str, subcmd: Optional[str],
+                   subsubcmd: Optional[str] = None) -> Dict[str, str]:
+        """Return the flag dict for (cmd, subcmd, subsubcmd), falling back
+        progressively to (cmd, subcmd) then (cmd, None). subsubcmd covers
+        commands with a second subcommand level, e.g. `case organise archive`."""
+        if subsubcmd is not None:
+            key = (cmd, subcmd, subsubcmd)
+            if key in self._SUBCMD_FLAGS:
+                return self._SUBCMD_FLAGS[key]
         key = (cmd, subcmd)
         if key in self._SUBCMD_FLAGS:
             return self._SUBCMD_FLAGS[key]
@@ -919,7 +948,9 @@ class FlexFlowCompleter(Completer):
 
             # Otherwise complete flags
             if current_word.startswith('-') or ends_with_space:
-                yield from self._yield_flags(self._flags_for(cmd_name, subcmd_name), current_word)
+                subsubcmd_name = words[2] if len(words) > 2 else None
+                yield from self._yield_flags(
+                    self._flags_for(cmd_name, subcmd_name, subsubcmd_name), current_word)
 
         else:
             # No subcommands — complete flags directly
@@ -4360,8 +4391,10 @@ class InteractiveShell:
 
         # Commands that take a case as their second or third argument
         case_commands = {
-            'case': {'show': 2, 'run': 2, 'organise': 2, 'check': 2, 'status': 2, 'upload': 2, 'download': 2,
-                     'out': 2},  # case show <case>
+            # `case organise archive|output|plt <case>` puts the case after the
+            # archive/output/plt token, like `field compute <quantity> <case>`.
+            'case': {'show': 2, 'run': 2, 'organise': 3, 'check': 2, 'status': 2, 'upload': 2,
+                     'download': 2, 'out': 2},  # case show <case>
             'data': {'show': 2, 'table': 2, 'stats': 2},  # data show <case>
             'field': {'info': 2, 'extract': 2, 'compute': 3, 'render': 3},  # field compute <quantity> <case>
             'run': {'check': 2, 'pre': 2, 'main': 2, 'post': 2},  # run check <case>
@@ -4466,6 +4499,22 @@ class InteractiveShell:
             if (self._current_time is not None
                     and '--t1' not in args and '--t2' not in args):
                 # No --timestep here, so a single time is the window [t, t].
+                args += ['--t1', str(self._current_time),
+                         '--t2', str(self._current_time)]
+                context_added.append(f"time: {self._current_time}")
+            if self._current_t1 is not None and '--t1' not in args:
+                args.append('--t1'); args.append(str(self._current_t1))
+                context_added.append(f"t1: {self._current_t1}")
+            if self._current_t2 is not None and '--t2' not in args:
+                args.append('--t2'); args.append(str(self._current_t2))
+                context_added.append(f"t2: {self._current_t2}")
+
+        # t1/t2 context -> case organise archive/output/plt, which all take
+        # --t1/--t2 to target files by timestep.
+        if (cmd == 'case' and len(args) >= 3
+                and args[1] == 'organise' and args[2] in ('archive', 'output', 'plt')):
+            if (self._current_time is not None
+                    and '--t1' not in args and '--t2' not in args):
                 args += ['--t1', str(self._current_time),
                          '--t2', str(self._current_time)]
                 context_added.append(f"time: {self._current_time}")
