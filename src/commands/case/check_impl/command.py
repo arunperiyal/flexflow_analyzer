@@ -194,10 +194,10 @@ def _read_data_file_range(file_path: Path) -> Optional[Tuple[int, int]]:
     try:
         if file_path.suffix == '.othd':
             from ....core.readers.othd_reader import OTHDReader
-            reader = OTHDReader(str(file_path))
+            reader = OTHDReader(str(file_path), range_only=True)
         else:
             from ....core.readers.oisd_reader import OISDReader
-            reader = OISDReader(str(file_path))
+            reader = OISDReader(str(file_path), range_only=True)
         if not reader.tsIds:
             return None
         return (min(reader.tsIds), max(reader.tsIds))

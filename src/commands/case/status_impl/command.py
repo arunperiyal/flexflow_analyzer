@@ -302,7 +302,7 @@ def get_timesteps_from_data_files(case_path: Path) -> Set[int]:
 
     for othd_file in othd_files:
         try:
-            reader = OTHDReader(str(othd_file))
+            reader = OTHDReader(str(othd_file), range_only=True)
             all_steps.update(reader.tsIds)
         except Exception:
             continue
@@ -360,7 +360,7 @@ def check_output_directory_progress(
     othd_steps = set()
     for othd_file in othd_files:
         try:
-            reader = OTHDReader(str(othd_file))
+            reader = OTHDReader(str(othd_file), range_only=True)
             othd_steps.update(reader.tsIds)
         except Exception:
             continue
@@ -372,7 +372,7 @@ def check_output_directory_progress(
     oisd_steps = set()
     for oisd_file in oisd_files:
         try:
-            reader = OISDReader(str(oisd_file))
+            reader = OISDReader(str(oisd_file), range_only=True)
             oisd_steps.update(reader.tsIds)
         except Exception:
             continue
@@ -447,7 +447,7 @@ def check_othd_files(case_path: Path, expected_steps: Set[int]) -> Tuple[bool, f
 
     for othd_file in othd_files:
         try:
-            reader = OTHDReader(str(othd_file))
+            reader = OTHDReader(str(othd_file), range_only=True)
             covered_steps.update(reader.tsIds)
         except Exception:
             # Skip files that can't be read
@@ -484,7 +484,7 @@ def check_oisd_files(case_path: Path, expected_steps: Set[int]) -> Tuple[bool, f
 
     for oisd_file in oisd_files:
         try:
-            reader = OISDReader(str(oisd_file))
+            reader = OISDReader(str(oisd_file), range_only=True)
             covered_steps.update(reader.tsIds)
         except Exception:
             # Skip files that can't be read

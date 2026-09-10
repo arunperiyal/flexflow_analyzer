@@ -11,10 +11,10 @@ import numpy as np
 class OISDReader:
     """Class for reading and analyzing OISD files."""
     
-    def __init__(self, filenames, tsId_filter=None):
+    def __init__(self, filenames, tsId_filter=None, range_only=False):
         """
         Initialize OISD reader and load data.
-        
+
         Parameters:
         -----------
         filenames : str or list of str
@@ -22,13 +22,19 @@ class OISDReader:
             Files will be processed in order, with later files overwriting data at duplicate times.
         tsId_filter : int or list of int, optional
             Filter to only read specific time series IDs. If None, reads all.
+        range_only : bool, optional
+            Skip parsing traction/moment/area/pressure values — only tsIds and
+            times are populated. Cheaper than the OTHD case (no per-node loop)
+            but still saves a few float() calls and dict writes per timestep
+            for callers that only need the tsId range.
         """
         # Convert single filename to list for uniform processing
         if isinstance(filenames, str):
             self.filenames = [filenames]
         else:
             self.filenames = filenames
-            
+
+        self.range_only = range_only
         self.times = []
         self.tot_trac = {}  # Total traction vectors
         self.tot_moment = {}  # Total moment vectors
@@ -82,9 +88,10 @@ class OISDReader:
                             self.time_to_index[current_time] = timestep_idx
                         
                         # Store totArea
-                        tot_area = float(line.split()[1])
-                        self.tot_area[timestep_idx] = tot_area
-                        
+                        if not self.range_only:
+                            tot_area = float(line.split()[1])
+                            self.tot_area[timestep_idx] = tot_area
+
                 i += 1
                 continue
             
@@ -95,10 +102,11 @@ class OISDReader:
                         
                         # Read totTrac data (next line contains 3 components)
                         i += 1
-                        trac_line = lines[i].strip().split()
-                        tx, ty, tz = float(trac_line[0]), float(trac_line[1]), float(trac_line[2])
-                        self.tot_trac[timestep_idx] = [tx, ty, tz]
-                        
+                        if not self.range_only:
+                            trac_line = lines[i].strip().split()
+                            tx, ty, tz = float(trac_line[0]), float(trac_line[1]), float(trac_line[2])
+                            self.tot_trac[timestep_idx] = [tx, ty, tz]
+
                 i += 1
                 continue
             
@@ -109,10 +117,11 @@ class OISDReader:
                         
                         # Read totMoment data (next line contains 3 components)
                         i += 1
-                        moment_line = lines[i].strip().split()
-                        mx, my, mz = float(moment_line[0]), float(moment_line[1]), float(moment_line[2])
-                        self.tot_moment[timestep_idx] = [mx, my, mz]
-                        
+                        if not self.range_only:
+                            moment_line = lines[i].strip().split()
+                            mx, my, mz = float(moment_line[0]), float(moment_line[1]), float(moment_line[2])
+                            self.tot_moment[timestep_idx] = [mx, my, mz]
+
                 i += 1
                 continue
             
@@ -120,9 +129,10 @@ class OISDReader:
                 if current_time is not None:
                     if self.tsId_filter is None or current_tsId in (self.tsId_filter if isinstance(self.tsId_filter, list) else [self.tsId_filter]):
                         timestep_idx = self.time_to_index[current_time]
-                        ave_pres = float(line.split()[1])
-                        self.ave_pres[timestep_idx] = ave_pres
-                        
+                        if not self.range_only:
+                            ave_pres = float(line.split()[1])
+                            self.ave_pres[timestep_idx] = ave_pres
+
                 i += 1
                 continue
             

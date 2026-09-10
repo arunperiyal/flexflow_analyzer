@@ -21,7 +21,7 @@ class OTHDReader:
     never declares one (the ordinary, single-group case is unaffected).
     """
 
-    def __init__(self, filenames, tsId_filter=None, group=None):
+    def __init__(self, filenames, tsId_filter=None, group=None, range_only=False):
         """
         Initialize OTHD reader and load data.
 
@@ -35,6 +35,14 @@ class OTHDReader:
         group : int, optional
             Which `othId` group's displacements to expose. Defaults to the
             lowest `othId` present (0 for a file with no `othId` lines at all).
+        range_only : bool, optional
+            Skip parsing displacement/pendulum values entirely — only tsIds,
+            times, groups and num_nodes are populated. `get_node_displacements`
+            and `get_pendulum_data` raise if called after this. For a wide
+            problem, most of an OTHD file's parse cost is float-parsing every
+            node's displacement at every timestep; callers that only need the
+            tsId range (dedup, archive checks, progress/coverage checks) skip
+            all of that with this flag.
         """
         # Convert single filename to list for uniform processing
         if isinstance(filenames, str):
@@ -42,6 +50,7 @@ class OTHDReader:
         else:
             self.filenames = filenames
 
+        self.range_only = range_only
         self.times = []
         self.displacements = {}          # (oth_id, timestep_idx, node_idx) -> [dx, dy, dz]
         self.pendulum_data = {}  # Store pendulum displacement, velocity, acceleration
@@ -122,11 +131,14 @@ class OTHDReader:
                         if current_oth_id not in self._num_nodes_by_group:
                             self._num_nodes_by_group[current_oth_id] = num_nodes
 
-                        for node_idx in range(num_nodes):
-                            i += 1
-                            disp_line = lines[i].strip().split()
-                            dx, dy, dz = float(disp_line[0]), float(disp_line[1]), float(disp_line[2])
-                            self.displacements[(current_oth_id, current_timestep_idx, node_idx)] = [dx, dy, dz]
+                        if self.range_only:
+                            i += num_nodes
+                        else:
+                            for node_idx in range(num_nodes):
+                                i += 1
+                                disp_line = lines[i].strip().split()
+                                dx, dy, dz = float(disp_line[0]), float(disp_line[1]), float(disp_line[2])
+                                self.displacements[(current_oth_id, current_timestep_idx, node_idx)] = [dx, dy, dz]
                     else:
                         # Skip this aleDisp section
                         parts = line.split()
@@ -139,6 +151,9 @@ class OTHDReader:
             
             # Read pendulum data fields
             if line.startswith('pendDisp ') or line.startswith('pendVel ') or line.startswith('pendAccel '):
+                if self.range_only:
+                    i += 2  # field line + its value line
+                    continue
                 if current_timestep_idx is not None:
                     field_type = line.split()[0]  # pendDisp, pendVel, or pendAccel
                     i += 1

@@ -149,7 +149,7 @@ class CaseOrganizer:
         kept = []
         for f in files:
             try:
-                reader = reader_class(str(f))
+                reader = reader_class(str(f), range_only=True)
                 if len(reader.tsIds) == 0:
                     kept.append(f)
                     continue
@@ -404,7 +404,7 @@ class CaseOrganizer:
         for file_path in data_files:
             try:
                 # Read file to get time step range
-                reader = reader_class(str(file_path))
+                reader = reader_class(str(file_path), range_only=True)
 
                 if len(reader.tsIds) == 0:
                     raise ValueError(f"No time steps found in {file_path.name}")
