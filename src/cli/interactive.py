@@ -219,15 +219,20 @@ class FlexFlowCompleter(Completer):
             '--log':        'Create log file of all deletions',
             '--no-confirm': 'Skip confirmation prompts',
         },
-        ('case', 'check'):   {
-            '--freq':        'PLT frequency to check against, overriding outFreq',
+        ('case', 'check'):   {'--help': 'Show help message', '-h': 'Show help message'},
+        ('case', 'check', 'run'):     {**_COMMON_FLAGS},
+        ('case', 'check', 'archive'): {**_COMMON_FLAGS},
+        ('case', 'check', 'config'):  {**_COMMON_FLAGS},
+        ('case', 'check', 'plt'):     {
             **_COMMON_FLAGS,
-            '--run':     'Check .othd/.oisd in the active run directory',
-            '--archive': 'Check all archived files in othd_files/oisd_files',
-            '--config':  'Validate simflow.config consistency',
-            '--plt':     'Check PLT files against expected set (outFreq/maxTimeSteps)',
-            '--def':     'Check that all File() references in the .def file exist',
-            '--all':     'Run all checks (--run + --archive + --config + --plt + --def)',
+            '--freq': 'PLT frequency to check against, overriding outFreq',
+            '--t1':   'Only check timesteps >= STEP',
+            '--t2':   'Only check timesteps <= STEP',
+        },
+        ('case', 'check', 'def'):     {**_COMMON_FLAGS},
+        ('case', 'check', 'all'):     {
+            **_COMMON_FLAGS,
+            '--freq': 'PLT frequency to check against, overriding outFreq',
         },
         ('case', 'add'):    {
             **_COMMON_FLAGS,
@@ -582,6 +587,14 @@ class FlexFlowCompleter(Completer):
             ('archive', 'Move .othd/.oisd/.rcv from run dir to archive dirs'),
             ('output',  'Remove intermediate .out/.rst files from run dir'),
             ('plt',     'Delete PLT files in the run dir and/or binary/'),
+        ],
+        ('case', 'check', 0): [
+            ('run',     'Check .othd/.oisd in the active run directory'),
+            ('archive', 'Check all archived files in othd_files/oisd_files'),
+            ('config',  'Validate simflow.config consistency'),
+            ('plt',     'Check PLT files in binary/ and run dir against expected set'),
+            ('def',     'Check that all File() references in the .def file exist'),
+            ('all',     'Run every check'),
         ],
         ('template', 'plot',   0): [('simple', 'Simple time-series'), ('multi', 'Multi-node plot')],
         ('template', 'case',   0): [('basic', 'Basic case config'), ('full', 'Full case config')],
@@ -4391,9 +4404,10 @@ class InteractiveShell:
 
         # Commands that take a case as their second or third argument
         case_commands = {
-            # `case organise archive|output|plt <case>` puts the case after the
-            # archive/output/plt token, like `field compute <quantity> <case>`.
-            'case': {'show': 2, 'run': 2, 'organise': 3, 'check': 2, 'status': 2, 'upload': 2,
+            # `case organise archive|output|plt <case>` and
+            # `case check run|archive|config|plt|def|all <case>` put the case
+            # after that token, like `field compute <quantity> <case>`.
+            'case': {'show': 2, 'run': 2, 'organise': 3, 'check': 3, 'status': 2, 'upload': 2,
                      'download': 2, 'out': 2},  # case show <case>
             'data': {'show': 2, 'table': 2, 'stats': 2},  # data show <case>
             'field': {'info': 2, 'extract': 2, 'compute': 3, 'render': 3},  # field compute <quantity> <case>
@@ -4525,15 +4539,31 @@ class InteractiveShell:
                 args.append('--t2'); args.append(str(self._current_t2))
                 context_added.append(f"t2: {self._current_t2}")
 
-        # freq context -> --freq for `case check --plt`, which compares what is
-        # on disk against every Nth step. simflow.config is the default, but it
-        # records what the run was *asked* to write; when the two disagree the
-        # context is the one the user just stated.
-        if (cmd == 'case' and len(args) >= 2 and args[1] == 'check'
+        # freq context -> --freq for `case check plt`/`case check all`, which
+        # compare what is on disk against every Nth step. simflow.config is
+        # the default, but it records what the run was *asked* to write; when
+        # the two disagree the context is the one the user just stated.
+        if (cmd == 'case' and len(args) >= 3 and args[1] == 'check'
+                and args[2] in ('plt', 'all')
                 and self._current_freq is not None and '--freq' not in args):
             args.append('--freq')
             args.append(str(self._current_freq))
             context_added.append(f"freq: {self._current_freq}")
+
+        # t1/t2 context -> case check plt, to window which timesteps get checked.
+        if (cmd == 'case' and len(args) >= 3
+                and args[1] == 'check' and args[2] == 'plt'):
+            if (self._current_time is not None
+                    and '--t1' not in args and '--t2' not in args):
+                args += ['--t1', str(self._current_time),
+                         '--t2', str(self._current_time)]
+                context_added.append(f"time: {self._current_time}")
+            if self._current_t1 is not None and '--t1' not in args:
+                args.append('--t1'); args.append(str(self._current_t1))
+                context_added.append(f"t1: {self._current_t1}")
+            if self._current_t2 is not None and '--t2' not in args:
+                args.append('--t2'); args.append(str(self._current_t2))
+                context_added.append(f"t2: {self._current_t2}")
 
         # freq context -> --freq for `run post`
         if (cmd == 'run' and len(args) >= 2 and args[1] == 'post'
