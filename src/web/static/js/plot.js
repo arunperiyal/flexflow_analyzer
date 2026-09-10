@@ -301,6 +301,7 @@ const PlotArea = (() => {
     const fftGroups = new Map();
     const spatialTraces = [];
     for (const panel of ws.panels) {
+      if (panel.kind === 'render') continue;   // a static image, not a data recipe -- see below
       if (panel.kind === 'spatial') {
         spatialTraces.push(...panel.traces);
         continue;
@@ -363,6 +364,11 @@ const PlotArea = (() => {
     // from its own pane rect, independent of every other panel's.
     const SCREEN_DPI = 96;
     const traces = [];
+    // A `render` panel's PNG (Field -> Render), placed via Plotly's own
+    // layout.images rather than as a trace -- it needs no axis at all, just
+    // its pane's rect (paneDomain, the same math every other panel's axis
+    // domain already uses).
+    const images = [];
     // Every panel that ends up with a true (unswapped) secondary y-axis --
     // rightAlignY2Ticks below needs the axis numbers after Plotly has drawn
     // them, since it patches SVG text Plotly itself doesn't expose a layout
@@ -389,6 +395,18 @@ const PlotArea = (() => {
     // rather than threading a swap flag through every line that touches
     // an axis.
     ws.panels.forEach((panel, panelIdx) => {
+      if (panel.kind === 'render') {
+        const domain = paneDomain(paneRect(ws, panel), ws.layout);
+        images.push({
+          source: `/api/cases/${encodeURIComponent(panel.case)}/field/render-image/${panel.imageToken}`,
+          xref: 'paper', yref: 'paper',
+          x: domain.x[0], y: domain.y[1],
+          sizex: domain.x[1] - domain.x[0], sizey: domain.y[1] - domain.y[0],
+          xanchor: 'left', yanchor: 'top', sizing: 'contain',
+        });
+        return;   // no axis, no traces -- nothing else in this loop applies
+      }
+
       const n = panelIdx + 1;
       const xref = n === 1 ? 'x' : `x${n}`;
       const yref = n === 1 ? 'y' : `y${n}`;
@@ -581,6 +599,8 @@ const PlotArea = (() => {
         if (!swap) secondaryYAxisNums.push(secondaryNum);
       }
     });
+
+    if (images.length) layout.images = images;
 
     // responsive stretches the plot to fill its container on resize --
     // exactly what a fixed-inches canvas must NOT do, or the pixel size

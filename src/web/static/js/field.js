@@ -420,11 +420,11 @@ const FieldMenu = (() => {
 
   // -- Render ----------------------------------------------------------
   // Iso-surface / slice-plane PNGs for one timestep, off-screen via pyvista
-  // (the same rendering `field render iso|slice` uses server-side) -- a
-  // gallery of static images, one per camera view, per the plan's confirmed
-  // v1 scope (no live in-browser 3-D viewer; see the plan's own "Deferred"
-  // section for that idea). Runs as a background job since a render takes
-  // real wall-clock time.
+  // (the same rendering `field render iso|slice` uses server-side) -- one
+  // `render`-kind layout panel per camera view/plane (no live in-browser
+  // 3-D viewer; see PlotWorkspace.addRenderPanel and PlotArea.render's own
+  // 'render' branch). Runs as a background job since a render takes real
+  // wall-clock time.
 
   // Matches render.py's own DEFAULTS['views'] / SLICE_VIEWS names exactly --
   // there is no endpoint for this (it's a fixed, documented default), so it
@@ -603,21 +603,35 @@ const FieldMenu = (() => {
       result.innerHTML = `<div class="error">${escapeHtml(outcome.error)}</div>`;
       return;
     }
-    result.innerHTML = renderGallery(caseName, started.job_id, outcome.result.files);
+    await saveRenderToLayout(caseName, started.job_id, outcome.result.files);
   }
 
-  function renderGallery(caseName, jobId, files) {
-    const base = `/api/cases/${encodeURIComponent(caseName)}/field/render/${jobId}`;
-    return `
-      <div class="render-gallery">
-        ${files.map(f => `
-          <div class="render-tile">
-            <img src="${base}/${f}" alt="${escapeHtml(f)}">
-            <a href="${base}/${f}" download="${escapeHtml(f.replace('/', '_'))}">Download</a>
-          </div>
-        `).join('')}
-      </div>
-    `;
+  // Each rendered file becomes its own layout panel (Layout -> New/Panes),
+  // the same "configure, then Add" shape as Plot -> New -- no inline
+  // gallery, no per-file download link. First saved server-side to a
+  // persistent cache (field_render_save) so the panel keeps showing its
+  // image after a page reload or a server restart, neither of which the
+  // job it was rendered by survives (services/jobs.py's JobRegistry is
+  // in-memory only, and the job's own tempdir is not guaranteed to be).
+  async function saveRenderToLayout(caseName, jobId, files) {
+    const result = document.getElementById('fr-result');
+    result.innerHTML = '<div class="empty">Adding to layout&hellip;</div>';
+    let added = 0;
+    for (const f of files) {
+      const saveRes = await fetch(`/api/cases/${encodeURIComponent(caseName)}/field/render/${jobId}/save`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filename: f }),
+      });
+      if (!saveRes.ok) continue;
+      const saved = await saveRes.json();
+      const title = `${caseName} — ${f.replace(/\.[a-zA-Z0-9]+$/, '').replace(/_/g, ' ')}`;
+      PlotWorkspace.addRenderPanel(caseName, title, saved.token);
+      added++;
+    }
+    if (!document.getElementById('fr-result')) return;
+    refreshWorkspace();
+    result.innerHTML = added
+      ? `<div class="empty">Added ${added} panel${added === 1 ? '' : 's'} to the layout.</div>`
+      : `<div class="error">Rendered, but could not save any images to the layout.</div>`;
   }
 
   return { openInfo, openExtract, openRender };

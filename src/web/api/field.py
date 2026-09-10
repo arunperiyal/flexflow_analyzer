@@ -9,7 +9,9 @@ terminal color codes, as JSON.
 
 import os
 import re
+import shutil
 import tempfile
+import uuid
 from pathlib import Path
 
 from flask import Blueprint, after_this_request, current_app, jsonify, request, send_file
@@ -46,6 +48,17 @@ def _binary_dir_or_error(root, name):
     if not binary_dir.is_dir():
         return None, None, (jsonify({'error': f'no binary/ directory in this case'}), 404)
     return case_dir, binary_dir, None
+
+
+def _render_cache_dir(root, case_name):
+    """Persistent, server-side storage for PNGs added to a layout as `render`
+    panels (Field -> Render). Deliberately outside the case's own directory
+    (often a read-only/shared scratch mount) and outside the OS temp dir a
+    render job first writes into (not guaranteed to survive a reboot), so a
+    saved panel keeps working across server restarts and browser reloads --
+    unlike a job's own tempdir, which `services/jobs.py`'s in-memory
+    JobRegistry stops being able to resolve after a restart anyway."""
+    return Path(root) / '.flexflow_web_renders' / case_name
 
 
 @bp.get('/<name>/field/steps')
@@ -248,8 +261,8 @@ def field_render(name):
     """Iso-surface or slice-plane PNG(s) for one timestep, run as a
     background job (services/jobs.py) since pyvista rendering takes real
     wall-clock time. Poll the result at the existing GET /api/jobs/<id>;
-    each PNG in the result's `files` list is then fetched from
-    GET .../field/render/<job_id>/<file>."""
+    each PNG in the result's `files` list becomes a layout panel by POSTing
+    its filename to .../field/render/<job_id>/save (field_render_save)."""
     root = current_app.config['WORKSPACE_ROOT']
     case_dir, binary_dir, err = _binary_dir_or_error(root, name)
     if err:
@@ -315,13 +328,50 @@ def field_render(name):
     return jsonify({'job_id': job_id}), 202
 
 
-@bp.get('/<name>/field/render/<job_id>/<path:filename>')
-def field_render_image(name, job_id, filename):
+@bp.post('/<name>/field/render/<job_id>/save')
+def field_render_save(name, job_id):
+    """Copy one file from a completed render job's tempdir into this case's
+    persistent render cache, for a Field -> Render panel to reference. Runs
+    server-side (no HTTP hop through a "fetch the job's own file" route --
+    there isn't one anymore, this is the only thing that ever read a job's
+    output) so the job's in-memory registry only needs to be reachable once,
+    right now, not every time the resulting panel is displayed later."""
+    root = current_app.config['WORKSPACE_ROOT']
+    if registry.case_path(root, name) is None:
+        return jsonify({'error': f'no such case: {name}'}), 404
+
     job = jobs.get(job_id)
     if job is None or job.status != 'done' or not isinstance(job.result, dict):
         return jsonify({'error': 'no such completed render job'}), 404
     directory = job.result.get('dir')
     files = job.result.get('files') or []
+    body = request.get_json(silent=True) or {}
+    filename = body.get('filename')
     if not directory or filename not in files:
         return jsonify({'error': 'no such file in this render job'}), 404
-    return send_file(Path(directory) / filename, mimetype='image/png')
+
+    dest_dir = _render_cache_dir(root, name)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    token = f'{uuid.uuid4().hex}{Path(filename).suffix}'
+    shutil.copyfile(Path(directory) / filename, dest_dir / token)
+
+    return jsonify({'token': token, 'case': name})
+
+
+@bp.get('/<name>/field/render-image/<token>')
+def field_render_cached_image(name, token):
+    """Serves a PNG saved by field_render_save -- the URL a `render` panel's
+    imageToken resolves to (see plot.js's PlotArea.render and export.py's
+    _render_image_path). Deliberately independent of services/jobs.py's
+    in-memory JobRegistry: this must keep working after a server restart,
+    unlike the job it was originally rendered by."""
+    root = current_app.config['WORKSPACE_ROOT']
+    if registry.case_path(root, name) is None:
+        return jsonify({'error': f'no such case: {name}'}), 404
+    if '/' in token or '..' in token:
+        return jsonify({'error': 'invalid token'}), 400
+
+    path = _render_cache_dir(root, name) / token
+    if not path.is_file():
+        return jsonify({'error': 'no such saved render'}), 404
+    return send_file(path, mimetype='image/png')
