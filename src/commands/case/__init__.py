@@ -225,9 +225,22 @@ class CaseCommand(BaseCommand):
         def_check_parser.add_argument('-h', '--help', action='store_true',
                                     help='Show help for def command')
 
+        # case check out
+        out_check_parser = check_subparsers.add_parser('out', add_help=False,
+                                    help='List timesteps for which .out/.rst files are present in the run directory')
+        out_check_parser.add_argument('case', nargs='?', help='Case directory path')
+        out_check_parser.add_argument('--t1', type=float, metavar='STEP',
+                                    help='Only check timesteps >= STEP')
+        out_check_parser.add_argument('--t2', type=float, metavar='STEP',
+                                    help='Only check timesteps <= STEP')
+        out_check_parser.add_argument('-v', '--verbose', action='store_true',
+                                    help='Enable verbose output')
+        out_check_parser.add_argument('-h', '--help', action='store_true',
+                                    help='Show help for out command')
+
         # case check all
         all_check_parser = check_subparsers.add_parser('all', add_help=False,
-                                    help='Run every check (run + archive + config + plt + def)')
+                                    help='Run every check (run + archive + config + plt + def + out)')
         all_check_parser.add_argument('case', nargs='?', help='Case directory path')
         all_check_parser.add_argument('--freq', type=int, metavar='N',
                                     help='PLT output frequency to check against, '
@@ -518,6 +531,7 @@ class CaseCommand(BaseCommand):
         console.print("    flexflow case organise plt CS4SG1U1 --delete-binary --t1 0 --t2 1000")
         console.print("    flexflow case check run CS4SG1U1")
         console.print("    flexflow case check plt CS4SG1U1 --t1 0 --t2 1000")
+        console.print("    flexflow case check out CS4SG1U1")
         console.print("    flexflow case check all CS4SG1U1")
         console.print("    flexflow case status CS4SG1U1")
         console.print("    flexflow case domain CS4SG1U1 --init")

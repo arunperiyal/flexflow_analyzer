@@ -65,10 +65,18 @@ Pick one subcommand.
           • Lists each referenced file as present (✓) or missing (✗)
           • Reports how many referenced files are present / missing
 
+    {Colors.CYAN}out{Colors.RESET}
+        List timesteps for which .out and .rst files are present in the
+        active run directory (resolved from simflow.config 'dir' field):
+          • Shows a table of tsId → .out present / .rst present
+          • {Colors.YELLOW}--t1{Colors.RESET}/{Colors.YELLOW}--t2{Colors.RESET} restrict the listing to a timestep window (either
+            alone is a one-sided bound); usable via context too:
+            {Colors.DIM}use t1:0 t2:1000{Colors.RESET}
+
     {Colors.CYAN}all{Colors.RESET}
-        Run every check in order: config, def, run, archive, plt.
+        Run every check in order: config, def, run, archive, plt, out.
         Takes --freq (passed through to the plt check); not --t1/--t2 — use
-        the `plt` subcommand directly for a windowed check.
+        the `plt`/`out` subcommands directly for a windowed check.
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
     -v, --verbose     Show detailed output
@@ -95,6 +103,10 @@ Pick one subcommand.
 
     # Check .def File() references exist
     case check def CS4SG1U1
+
+    # List timesteps with .out/.rst files in the run directory
+    case check out CS4SG1U1
+    case check out CS4SG1U1 --t1 0 --t2 1000
 
     # Run everything
     case check all CS4SG1U1

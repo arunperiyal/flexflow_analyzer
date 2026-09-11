@@ -46,6 +46,7 @@ def execute_case_check(args):
     do_config  = subcommand in ('config', 'all')
     do_plt     = subcommand in ('plt', 'all')
     do_def     = subcommand in ('def', 'all')
+    do_out     = subcommand in ('out', 'all')
 
     # --freq overrides outFreq from simflow.config. The config says what the run
     # was asked to write; the files say what it wrote, and after a restart at a
@@ -63,7 +64,7 @@ def execute_case_check(args):
 
     # Check if wildcard - if so, iterate over all cases
     if is_wildcard_case(case_name):
-        _execute_check_on_all_cases(args, do_run, do_archive, do_config, do_plt, do_def, freq, t1, t2)
+        _execute_check_on_all_cases(args, do_run, do_archive, do_config, do_plt, do_def, do_out, freq, t1, t2)
         return
 
     # Single case execution
@@ -71,7 +72,7 @@ def execute_case_check(args):
     if case_dir is None:
         return
 
-    _execute_check_on_case(case_dir, do_run, do_archive, do_config, do_plt, do_def, freq, t1, t2)
+    _execute_check_on_case(case_dir, do_run, do_archive, do_config, do_plt, do_def, do_out, freq, t1, t2)
 
 
 def _get_case_name(args) -> Optional[str]:
@@ -91,7 +92,7 @@ def _get_case_name(args) -> Optional[str]:
         return None
 
 
-def _execute_check_on_all_cases(args, do_run, do_archive, do_config, do_plt, do_def,
+def _execute_check_on_all_cases(args, do_run, do_archive, do_config, do_plt, do_def, do_out,
                                 freq=None, t1=None, t2=None):
     """Execute check on all cases from .cases file."""
     from src.cli.interactive import InteractiveShell
@@ -126,14 +127,14 @@ def _execute_check_on_all_cases(args, do_run, do_archive, do_config, do_plt, do_
             console.print(f"[red]Error:[/red] Case directory not found: {case_path}\n")
             continue
 
-        _execute_check_on_case(case_path, do_run, do_archive, do_config, do_plt, do_def, freq, t1, t2)
+        _execute_check_on_case(case_path, do_run, do_archive, do_config, do_plt, do_def, do_out, freq, t1, t2)
 
     console.print(f"[cyan]{'─' * 60}[/cyan]")
     console.print(f"[green]✓ Processed {len(cases)} cases[/green]")
     console.print(f"[cyan]{'─' * 60}[/cyan]\n")
 
 
-def _execute_check_on_case(case_dir: Path, do_run, do_archive, do_config, do_plt, do_def,
+def _execute_check_on_case(case_dir: Path, do_run, do_archive, do_config, do_plt, do_def, do_out,
                            freq=None, t1=None, t2=None):
     """Execute check on a single case."""
     logger  = Logger(verbose=False)
@@ -170,6 +171,9 @@ def _execute_check_on_case(case_dir: Path, do_run, do_archive, do_config, do_plt
 
     if do_plt:
         _check_plt(cfg, case_dir, console, freq, t1, t2)
+
+    if do_out:
+        _check_out(cfg, case_dir, console, t1, t2)
 
     console.print()
 
@@ -653,3 +657,69 @@ def _check_plt(cfg, case_dir: Path, console: Console, freq: Optional[int] = None
             )
 
         console.print()
+
+
+# ---------------------------------------------------------------------------
+# --out check
+# ---------------------------------------------------------------------------
+
+def _check_out(cfg, case_dir: Path, console: Console,
+               t1: Optional[float] = None, t2: Optional[float] = None):
+    """List timesteps for which .out/.rst files are present in the run directory."""
+    console.print("[bold]Out/Rst file check[/bold]")
+
+    problem = cfg.problem
+    if not problem:
+        console.print("  [yellow]⚠[/yellow]  'problem' not set in simflow.config — cannot determine .out/.rst file names")
+        console.print()
+        return
+
+    run_dir = cfg.run_dir(case_dir)
+    if not run_dir or not run_dir.exists():
+        where = f": {cfg.run_dir_str}" if cfg.run_dir_str else " ('dir' not set in simflow.config)"
+        console.print(f"  [yellow]⚠[/yellow]  Run directory does not exist{where}")
+        console.print()
+        return
+
+    import re as _re
+    # Pattern: {problem}.{tsId}_<rank>.out or {problem}.{tsId}_<rank>.rst
+    pattern = _re.compile(rf'^{_re.escape(problem)}\.(\d+)_.*\.(out|rst)$')
+
+    out_steps: dict = {}
+    rst_steps: dict = {}
+    for f in run_dir.iterdir():
+        m = pattern.match(f.name)
+        if not m:
+            continue
+        step = int(m.group(1))
+        (out_steps if m.group(2) == 'out' else rst_steps)[step] = f
+
+    if t1 is not None or t2 is not None:
+        out_steps = {s: f for s, f in out_steps.items() if _step_in_bounds(s, t1, t2)}
+        rst_steps = {s: f for s, f in rst_steps.items() if _step_in_bounds(s, t1, t2)}
+        console.print(f"  [dim]Limiting to timesteps in [{t1}, {t2}][/dim]")
+
+    all_steps = sorted(set(out_steps) | set(rst_steps))
+
+    if not all_steps:
+        console.print(f"  [dim]No {problem}.*_*.out or .rst files found in "
+                       f"{cfg.run_dir_str or run_dir}[/dim]")
+        console.print()
+        return
+
+    tbl = Table(box=box.SIMPLE, show_header=True, header_style="bold yellow")
+    tbl.add_column("tsId", justify="right", style="cyan")
+    tbl.add_column(".out", justify="center")
+    tbl.add_column(".rst", justify="center")
+
+    for step in all_steps:
+        out_icon = '[green]✓[/green]' if step in out_steps else '[dim]—[/dim]'
+        rst_icon = '[green]✓[/green]' if step in rst_steps else '[dim]—[/dim]'
+        tbl.add_row(_fmt_tsid(step), out_icon, rst_icon)
+
+    console.print(tbl)
+    console.print(
+        f"  {len(out_steps)} .out file(s), {len(rst_steps)} .rst file(s)  "
+        f"([cyan]{_fmt_tsid(all_steps[0])}[/cyan] → [cyan]{_fmt_tsid(all_steps[-1])}[/cyan])"
+    )
+    console.print()
