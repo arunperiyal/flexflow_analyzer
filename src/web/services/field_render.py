@@ -130,7 +130,10 @@ def render_field_mesh(binary_dir, problem, zone_name, mode, step, overrides, out
     Returns {'file': <filename under out_dir>, 'variables': [...every point
     array the surface carries...], 'colorVar': <overrides.color.variable, if
     set>} -- 'variables' lets the browser offer every variable for live
-    recoloring, not just the one picked at render time.
+    recoloring, not just the one picked at render time. In iso mode, also
+    'contourVariable' and 'contourValue' -- the isovalue actually used, which
+    for an unset (automatic) contour.isosurfaces the caller has no other way
+    to learn.
     """
     if mode not in MODES:
         raise ValueError(f"mode must be 'iso' or 'slice', got '{mode}'")
@@ -149,8 +152,15 @@ def render_field_mesh(binary_dir, problem, zone_name, mode, step, overrides, out
 
     out_path = Path(out_dir) / f'{mode}_{step}.vtp'
     surf.save(str(out_path))
-    return {
+    result = {
         'file': out_path.name,
         'variables': list(surf.point_data.keys()),
         'colorVar': (overrides.get('color') or {}).get('variable'),
     }
+    # cfg['contour']['isosurfaces'] is resolved by build_surface (via
+    # _iso_surface) even when the caller left it null for "automatic" -- so
+    # this reports the value actually used, not just what was asked for.
+    if mode == 'iso':
+        result['contourVariable'] = cfg['contour']['variable']
+        result['contourValue'] = cfg['contour']['isosurfaces'][0]
+    return result

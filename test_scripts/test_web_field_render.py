@@ -7,6 +7,7 @@ takes a couple of seconds per call even with the PLT->VTU sidecar cache warm,
 so this file keeps the render count deliberately small.
 """
 
+import base64
 import json
 import shutil
 import time
@@ -140,3 +141,37 @@ def test_image_404_for_a_filename_not_in_the_job(client):
     assert job['status'] == 'done'
     res2 = client.get(f'/api/cases/BR0SG0U1P0/field/render/{job_id}/not_a_real_file.png')
     assert res2.status_code == 404
+
+
+# A 1x1 white PNG -- the exact bytes don't matter, only that field_snapshot_save
+# decodes and stores whatever data:image/png;base64 payload the Render
+# configuration window's client-side capture hands it.
+_TINY_PNG_B64 = (
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+)
+
+
+def test_snapshot_save_and_serve_round_trip(client):
+    res = client.post('/api/cases/BR0SG0U1P0/field/snapshot', json={
+        'image': f'data:image/png;base64,{_TINY_PNG_B64}',
+    })
+    assert res.status_code == 200
+    token = res.get_json()['token']
+    assert token.endswith('.png')
+
+    served = client.get(f'/api/cases/BR0SG0U1P0/field/render-file/{token}')
+    assert served.status_code == 200
+    assert served.data[:8] == _PNG_MAGIC
+    assert served.data == base64.b64decode(_TINY_PNG_B64)
+
+
+def test_snapshot_save_rejects_a_non_png_data_url(client):
+    res = client.post('/api/cases/BR0SG0U1P0/field/snapshot', json={'image': 'not a data url'})
+    assert res.status_code == 400
+
+
+def test_snapshot_save_404_for_unregistered_case(client):
+    res = client.post('/api/cases/NOPE/field/snapshot', json={
+        'image': f'data:image/png;base64,{_TINY_PNG_B64}',
+    })
+    assert res.status_code == 404

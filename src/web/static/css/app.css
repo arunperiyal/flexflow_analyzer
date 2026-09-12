@@ -177,10 +177,10 @@ body {
   max-width: 360px;
 }
 
-/* A `render` panel's interactive vtk.js viewport (meshviewer.js), one per
-   panel inside #mesh-panels-overlay -- pointer-events re-enabled per panel
-   (the overlay itself is pointer-events:none) so mouse drag only rotates
-   the camera under the cursor, never a panel underneath/behind it. */
+/* The live vtk.js viewport (meshviewer.js) inside Field -> Render's
+   configuration window (.render-config-viewport, below) -- the only place
+   one of these ever mounts now; a finalized layout panel is a static
+   snapshot PNG, drawn by Plotly itself (see plot.js's layout.images). */
 .mesh-panel {
   position: absolute;
   pointer-events: auto;
@@ -188,6 +188,38 @@ body {
   overflow: hidden;
 }
 .mesh-panel-border { outline: 1px solid #94a3b8; outline-offset: -1px; }
+
+/* Field -> Render's configuration window: a live vtk.js viewport beside a
+   sidebar of every style/camera/contour control, open only until "Add to
+   Layout" bakes a snapshot -- see field.js's openRenderConfig. */
+#dialog.render-config { width: 1400px; max-width: 95vw; }
+.render-config-body { display: flex; gap: 16px; align-items: flex-start; }
+.render-config-viewport-wrap {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 600px;
+}
+.render-config-viewport {
+  /* width/height set inline, in px, from the sidebar's own Panel size
+     (inches) fields -- see field.js's applyViewportSize. This wrapper just
+     centers whatever size that computes to within the space available. */
+  position: relative;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+}
+.render-config-sidebar {
+  width: 300px;
+  flex: 0 0 300px;
+  max-height: 600px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.render-config-sidebar h3 { margin: 14px 0 6px; font-size: 12px; color: #1e293b; }
+.render-config-sidebar h3:first-child { margin-top: 0; }
 
 #style-sidebar {
   width: 240px;

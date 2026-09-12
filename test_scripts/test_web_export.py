@@ -85,6 +85,53 @@ def test_export_renders_a_surface_trace_panel(client):
     assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
 
 
+# 1x1 PNG -- a stand-in for a Field -> Render configuration window's
+# finalized snapshot; only its presence at the expected path matters here.
+_TINY_PNG = (
+    b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01'
+    b'\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0bIDATx\x9cc\xf8\xcf\xc0'
+    b'\x00\x00\x03\x01\x01\x00\x18\xdd\x8d\xb4\x00\x00\x00\x00IEND\xaeB`\x82'
+)
+
+
+def _seed_render_snapshot(root, case_name='BR0SG0U1P0', token='snap1.png'):
+    cache_dir = Path(root) / '.flexflow_web_renders' / case_name
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    (cache_dir / token).write_bytes(_TINY_PNG)
+    return token
+
+
+def test_export_renders_a_render_panel_from_its_saved_snapshot(client):
+    root = client.application.config['WORKSPACE_ROOT']
+    token = _seed_render_snapshot(root)
+    panels = [{
+        'id': 'p1', 'title': 'BR0SG0U1P0 -- iso 100', 'kind': 'render',
+        'case': 'BR0SG0U1P0', 'imageToken': token,
+    }]
+    res = client.post('/api/export', json={'panels': panels})
+    assert res.status_code == 200
+    assert res.mimetype == 'image/png'
+    assert res.data[:8] == b'\x89PNG\r\n\x1a\n'
+
+
+def test_export_render_panel_with_missing_snapshot_does_not_crash(client):
+    panels = [{
+        'id': 'p1', 'title': 'gone', 'kind': 'render',
+        'case': 'BR0SG0U1P0', 'imageToken': 'does-not-exist.png',
+    }]
+    res = client.post('/api/export', json={'panels': panels})
+    assert res.status_code == 200
+    assert res.mimetype == 'image/png'
+
+
+def test_render_image_path_rejects_a_traversal_token():
+    from src.web.api.export import _render_image_path
+    assert _render_image_path('/tmp', 'BR0SG0U1P0', '../../etc/passwd') is None
+    assert _render_image_path('/tmp', 'BR0SG0U1P0', 'a/b.png') is None
+    assert _render_image_path('/tmp', None, 'a.png') is None
+    assert _render_image_path('/tmp', 'BR0SG0U1P0', None) is None
+
+
 def test_export_with_no_panels_is_a_400(client):
     res = client.post('/api/export', json={'panels': []})
     assert res.status_code == 400
@@ -151,10 +198,12 @@ def test_export_rejects_a_non_numeric_dpi(client):
     assert 'error' in res.get_json()
 
 
-def test_export_ignores_dpi_for_pdf_rather_than_erroring(client):
-    # dpi is meaningless for a vector format -- accepted and ignored,
-    # not rejected, since the dialog only shows the field for PNG and a
-    # stray value here shouldn't block an otherwise-valid PDF export.
+def test_export_clamps_rather_than_errors_on_an_extreme_dpi_for_pdf(client):
+    # A PDF's own lines/text stay vector regardless of dpi, but dpi still
+    # matters for a PDF that embeds a Field -> Render panel's raster PNG
+    # (savefig applies it to those regardless of page format) -- so an
+    # extreme value is clamped the same way it is for PNG (_MAX_DPI),
+    # not rejected.
     res = client.post('/api/export', json={'panels': _panels(), 'format': 'pdf', 'dpi': 999999})
     assert res.status_code == 200
     assert res.mimetype == 'application/pdf'
