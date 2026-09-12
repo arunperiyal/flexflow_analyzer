@@ -865,8 +865,27 @@ const FieldMenu = (() => {
     Menu.openDialog(`
       <h2>Field &rarr; Render &mdash; ${escapeHtml(caseName)} (${escapeHtml(mode)} ${escapeHtml(String(timestep))})</h2>
       <div class="render-config-body">
-        <div class="render-config-viewport-wrap">
-          <div class="render-config-viewport" id="rc-viewport"></div>
+        <div class="render-config-viewport-col">
+          <div class="render-config-toolbar">
+            <div class="rc-toolbar-group">
+              <span class="rc-toolbar-label">View</span>
+              <button type="button" class="rc-view-btn" data-plane="xy" title="Look down the Z axis at the X-Y plane">X-Y</button>
+              <button type="button" class="rc-view-btn" data-plane="xz" title="Look down the Y axis at the X-Z plane">X-Z</button>
+              <button type="button" class="rc-view-btn" data-plane="yz" title="Look down the X axis at the Y-Z plane">Y-Z</button>
+            </div>
+            <div class="rc-toolbar-group">
+              <span class="rc-toolbar-label">Rotate</span>
+              <button type="button" class="rc-rot-btn" data-axis="x" data-dir="-1" title="Rotate around the X axis">X&minus;</button>
+              <button type="button" class="rc-rot-btn" data-axis="x" data-dir="1" title="Rotate around the X axis">X+</button>
+              <button type="button" class="rc-rot-btn" data-axis="y" data-dir="-1" title="Rotate around the Y axis">Y&minus;</button>
+              <button type="button" class="rc-rot-btn" data-axis="y" data-dir="1" title="Rotate around the Y axis">Y+</button>
+              <button type="button" class="rc-rot-btn" data-axis="z" data-dir="-1" title="Rotate around the Z axis">Z&minus;</button>
+              <button type="button" class="rc-rot-btn" data-axis="z" data-dir="1" title="Rotate around the Z axis">Z+</button>
+            </div>
+          </div>
+          <div class="render-config-viewport-wrap">
+            <div class="render-config-viewport" id="rc-viewport"></div>
+          </div>
         </div>
         <div class="render-config-sidebar" id="rc-sidebar"></div>
       </div>
@@ -898,6 +917,23 @@ const FieldMenu = (() => {
       closeOpenRenderConfig = null;
       Menu.closeDialog();
     });
+
+    // Toolbar "View"/"Rotate" buttons, above the viewport -- an axis-aligned
+    // plane view supersedes anything "Load camera" set (same as picking a
+    // fresh fit any other way), so it clears cameraCustom; a rotate nudge
+    // doesn't, same as a mouse drag never has.
+    document.querySelectorAll('.rc-view-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        MeshViewer.setViewPlane(CFG_ID, btn.dataset.plane);
+        cfg.cameraCustom = false;
+      });
+    });
+    document.querySelectorAll('.rc-rot-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        MeshViewer.rotateView(CFG_ID, btn.dataset.axis, parseInt(btn.dataset.dir, 10));
+      });
+    });
+
     document.getElementById('rc-add').addEventListener('click', async () => {
       const btn = document.getElementById('rc-add');
       btn.disabled = true;

@@ -430,6 +430,90 @@ const MeshViewer = (() => {
     inst.renderWindow.render();
   }
 
+  // Rodrigues' rotation formula -- v rotated by angleRad around unit vector
+  // axis. Used by rotateView below to turn the camera's position and
+  // viewUp around a fixed WORLD axis (X/Y/Z), as opposed to vtk.js's own
+  // camera.azimuth/elevation/roll, which rotate around the camera's own
+  // current up/right vectors instead -- not what "rotate around the X
+  // axis" means when X is one of the model's own coordinate axes.
+  function rotateVector(v, axis, angleRad) {
+    const cos = Math.cos(angleRad);
+    const sin = Math.sin(angleRad);
+    const dot = v[0] * axis[0] + v[1] * axis[1] + v[2] * axis[2];
+    const cross = [
+      axis[1] * v[2] - axis[2] * v[1],
+      axis[2] * v[0] - axis[0] * v[2],
+      axis[0] * v[1] - axis[1] * v[0],
+    ];
+    return [
+      v[0] * cos + cross[0] * sin + axis[0] * dot * (1 - cos),
+      v[1] * cos + cross[1] * sin + axis[1] * dot * (1 - cos),
+      v[2] * cos + cross[2] * sin + axis[2] * dot * (1 - cos),
+    ];
+  }
+
+  const AXES = { x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1] };
+  const ROTATE_STEP_DEG = 15;
+
+  // The configuration window's toolbar "Rotate" buttons: spins the camera's
+  // position (and viewUp, so "up" turns along with it rather than flipping
+  // once it crosses the axis) around the focal point by a fixed step, about
+  // a world axis rather than the view-relative axes camera.azimuth/
+  // elevation/roll use. Distance to the focal point is preserved by
+  // construction (rotation doesn't change vector length), so this never
+  // needs a re-fit -- same as a mouse drag, it doesn't touch initialCamera
+  // either, so "Reset camera" still undoes it.
+  function rotateView(panelId, axis, direction) {
+    const inst = instances.get(panelId);
+    const axisVec = AXES[axis];
+    if (!inst || !axisVec) return;
+    const camera = inst.renderer.getActiveCamera();
+    const angleRad = (direction < 0 ? -1 : 1) * ROTATE_STEP_DEG * Math.PI / 180;
+    const fp = camera.getFocalPoint();
+    const pos = camera.getPosition();
+    const rel = [pos[0] - fp[0], pos[1] - fp[1], pos[2] - fp[2]];
+    const newRel = rotateVector(rel, axisVec, angleRad);
+    const newUp = rotateVector(camera.getViewUp(), axisVec, angleRad);
+    camera.setPosition(fp[0] + newRel[0], fp[1] + newRel[1], fp[2] + newRel[2]);
+    camera.setViewUp(newUp[0], newUp[1], newUp[2]);
+    inst.renderer.resetCameraClippingRange();
+    inst.renderWindow.render();
+  }
+
+  // The configuration window's toolbar "View" buttons: looks straight down
+  // one world axis at the plane spanned by the other two, then reuses
+  // fitTight (see above) to frame it -- same tight fit "Panel size" already
+  // gets, just for a chosen canonical direction instead of the mesh's own
+  // initial one. Becomes the new "Reset camera" pose, same as fitCamera:
+  // picking a plane view is a deliberate framing choice to keep, not a
+  // transient nudge like rotateView above.
+  const PLANE_VIEWS = {
+    xy: { forward: [0, 0, -1], up: [0, 1, 0] },
+    xz: { forward: [0, -1, 0], up: [0, 0, 1] },
+    yz: { forward: [-1, 0, 0], up: [0, 0, 1] },
+  };
+
+  function setViewPlane(panelId, plane) {
+    const inst = instances.get(panelId);
+    const view = PLANE_VIEWS[plane];
+    if (!inst || !view) return;
+    const camera = inst.renderer.getActiveCamera();
+    const fp = camera.getFocalPoint();
+    // Placed an arbitrary unit distance back along the chosen direction --
+    // fitTight (called next) only cares about the direction it establishes
+    // (forward = normalize(focalPoint - position)) and recomputes the real
+    // distance itself, for the current viewport aspect.
+    camera.setPosition(fp[0] - view.forward[0], fp[1] - view.forward[1], fp[2] - view.forward[2]);
+    camera.setViewUp(view.up[0], view.up[1], view.up[2]);
+    fitTight(inst.renderer, inst.container);
+    inst.initialCamera = {
+      position: camera.getPosition(),
+      focalPoint: camera.getFocalPoint(),
+      viewUp: camera.getViewUp(),
+    };
+    inst.renderWindow.render();
+  }
+
   // Save Camera (Field menu) -- the live pose, in the same shape
   // resetCamera/reloadMesh already keep as initialCamera, for field.js to
   // write out as YAML. null when there's no instance to read (the
@@ -516,5 +600,5 @@ const MeshViewer = (() => {
     return promise;
   }
 
-  return { sync, resetCamera, fitCamera, getCamera, setCamera, reloadMesh, captureImage };
+  return { sync, resetCamera, fitCamera, getCamera, setCamera, reloadMesh, captureImage, rotateView, setViewPlane };
 })();
