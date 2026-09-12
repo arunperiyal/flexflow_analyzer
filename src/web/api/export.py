@@ -14,8 +14,8 @@ The workspace lives in the browser (§5 of the plan), so the request carries
 the panels/traces to render rather than the server holding any of it.
 """
 
-import base64
 import io
+from pathlib import Path
 
 import matplotlib
 matplotlib.use('Agg')
@@ -89,6 +89,18 @@ def _matplotlib_font(css_family):
     return requested   # nothing matched -- matplotlib's own fallback/warning takes it from here
 
 
+def _render_image_path(root, case_name, token):
+    """A `render`-kind panel's saved snapshot PNG, or None if it can't be
+    resolved -- mirrors api/field.py's _render_cache_dir (duplicated rather
+    than shared across the two modules for one path-join helper, matching
+    this file's own habit of small local helpers like _pane_rect just
+    below)."""
+    if not case_name or not token or '/' in token or '..' in token:
+        return None
+    path = Path(root) / '.flexflow_web_renders' / case_name / token
+    return path if path.is_file() else None
+
+
 def _pane_rect(panel, layout):
     """A panel's own pane (x, y, w, h -- inches, from Layout -> Panes), or
     the canvas-filling default when it hasn't been placed yet. Python
@@ -127,6 +139,34 @@ def _content_area_in(width_in, height_in, style):
         'w': max(width_in - margin_l - margin_r, 0.01),
         'h': max(height_in - margin_t - margin_b, 0.01),
     }
+
+
+def _pane_axes_rect_full(pane, width_in, height_in):
+    """A pane's inches rect -> a matplotlib add_axes rect, mapped directly
+    onto the full canvas (figure-fraction [0,1]) with no margin inset.
+    Render panels only: a render panel's image is placed in plot.js's live
+    layout via Plotly's `images` with xref/yref='paper', which ignores
+    layout.margin entirely -- unlike _pane_axes_rect below (used for every
+    other panel), whose whole point is fitting inside that margin so a
+    data panel's own tick labels don't clip at the page edge. A render
+    panel has no ticks or axis label to make room for, and Panel size is a
+    promise of exact placement -- routing it through the same margin inset
+    left the exported PDF's panel (and, before it drew here too, its
+    border) sitting somewhere else than the live layout ever showed."""
+    fx0 = pane['x'] / width_in
+    fx1 = (pane['x'] + pane['w']) / width_in
+    fy_top = pane['y'] / height_in
+    fy_bottom = (pane['y'] + pane['h']) / height_in
+
+    left = min(max(fx0, 0), 1)
+    right = min(max(fx1, 0), 1)
+    bottom = min(max(1 - fy_bottom, 0), 1)
+    top = min(max(1 - fy_top, 0), 1)
+    if right <= left:
+        right = min(1, left + 0.01)
+    if top <= bottom:
+        top = min(1, bottom + 0.01)
+    return [left, bottom, right - left, top - bottom]
 
 
 def _pane_axes_rect(pane, width_in, height_in, content):
@@ -238,23 +278,39 @@ def export_plot():
         # needed since panes are independent (mirrors plot.js's paneDomain).
         for panel in panels:
             pane = _pane_rect(panel, layout)
-            ax = fig.add_axes(_pane_axes_rect(pane, width_in, height_in, content))
+            is_render = panel.get('kind') == 'render'
+            rect = (_pane_axes_rect_full(pane, width_in, height_in) if is_render
+                    else _pane_axes_rect(pane, width_in, height_in, content))
+            ax = fig.add_axes(rect)
 
-            # A `render` panel is a live, in-browser 3-D viewer (Field ->
-            # Render), not a data recipe the server can redraw from a
-            # description -- there's no fixed camera angle to re-render
-            # server-side. The browser captures whatever the viewer's own
-            # <canvas> currently shows (meshviewer.js's captureImage, called
-            # by layout.js's export flow) and sends that PNG up as
-            # `capturedImage`, a data URL, alongside the rest of the panel.
-            if panel.get('kind') == 'render':
-                captured = panel.get('capturedImage') or ''
-                if captured.startswith('data:image'):
-                    raw = base64.b64decode(captured.split(',', 1)[1])
-                    ax.imshow(plt.imread(io.BytesIO(raw)))
-                ax.axis('off')
-                if panel.get('title'):
-                    ax.set_title(panel['title'], fontsize=(style.get('labelFontSize') or 8) + 1)
+            # A `render` panel (Field -> Render) is a snapshot PNG finalized
+            # in its own configuration window -- the camera/style choices
+            # that produced it are baked into the image already, so there is
+            # no data recipe or live view to redraw here, just the file
+            # itself, read directly server-side (imageToken, saved by
+            # field_snapshot_save).
+            if is_render:
+                img_path = _render_image_path(root, panel.get('case'), panel.get('imageToken'))
+                if img_path is not None:
+                    ax.imshow(plt.imread(img_path))
+                # No title: the panel's own title (case/mode/timestep) is
+                # bookkeeping for the sidebar/Save Style/Save Camera, not
+                # something drawn on the image anywhere else -- printing it
+                # here only would make an exported figure look unlike both
+                # the live layout and the configuration window it came from.
+                #
+                # The render config sidebar's own "Border" toggle is app-only
+                # view chrome, never baked into the snapshot PNG itself, so
+                # it has to be drawn here to match plot.js's live layout at
+                # all -- ax.axis('off') would hide it same as everything else.
+                if (panel.get('style') or {}).get('showBorder'):
+                    ax.set_xticks([])
+                    ax.set_yticks([])
+                    for spine in ax.spines.values():
+                        spine.set_visible(True)
+                        spine.set_color('#94a3b8')
+                else:
+                    ax.axis('off')
                 continue
 
             pstyle = panel.get('style') or {}

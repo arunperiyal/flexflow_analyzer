@@ -54,7 +54,6 @@ const StyleSidebar = (() => {
     ['', 'Default'], ['none', 'None'], ['circle', 'Circle'], ['square', 'Square'],
     ['diamond', 'Diamond'], ['cross', 'Cross'], ['x', 'X'], ['triangle-up', 'Triangle'],
   ];
-
   function activePanel(ws) {
     return ws.panels.find(p => p.id === ws.activePanelId) || ws.panels[0];
   }
@@ -76,30 +75,18 @@ const StyleSidebar = (() => {
     ).join('');
   }
 
-  // A render panel's background is [r, g, b] floats 0-1 (vtk.js's own
-  // setBackground(r, g, b) convention), but <input type="color"> only
-  // speaks #rrggbb -- converted at the edges, never stored as hex.
-  function rgbToHex(rgb) {
-    const c = (v) => Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16).padStart(2, '0');
-    return `#${c(rgb[0])}${c(rgb[1])}${c(rgb[2])}`;
-  }
-  function hexToRgb(hex) {
-    const n = parseInt(hex.slice(1), 16);
-    return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
-  }
-
   const numberOrNull = (v) => (v.trim() === '' ? null : parseFloat(v));
 
-  function render() {
-    const ws = PlotWorkspace.state();
-    const box = document.getElementById('style-body');
-    const g = ws.style || {};
-
-    const globalBody = `
-      <div class="style-row">
-        <label for="style-font-family">Font</label>
-        <select id="style-font-family">${options(FONTS, g.fontFamily)}</select>
-      </div>
+  // Font/title/margins are figure-wide -- meaningful no matter what a
+  // layout holds. Everything else here (axis label/tick/legend sizing,
+  // marker/line style, legend, gridlines, LaTeX, panel border/ticks) only
+  // ever reaches Plotly-drawn panels (plot.js returns before touching any
+  // of it for a `render`/Field panel's hidden axes -- see the `panel.kind
+  // === 'render'` early-return there). Dropped from a layout whose panels
+  // are all `render`, rather than left showing controls that quietly do
+  // nothing.
+  function globalBodyHtml(g, fieldOnly) {
+    const plotFields = fieldOnly ? '' : `
       <div class="style-row">
         <label for="style-label-size">Label size</label>
         <input type="number" id="style-label-size" value="${g.labelFontSize ?? ''}" placeholder="auto" min="6" max="36">
@@ -124,10 +111,8 @@ const StyleSidebar = (() => {
         <label for="style-line-width">Line width</label>
         <input type="number" id="style-line-width" value="${g.lineWidth ?? ''}" placeholder="auto" min="0.1" step="0.1">
       </div>
-      <div class="style-row">
-        <label for="style-title">Title</label>
-        <input type="text" id="style-title" value="${escapeAttr(g.title || '')}" placeholder="none">
-      </div>
+    `;
+    const plotToggleFields = fieldOnly ? '' : `
       <label class="style-row checkbox">
         <input type="checkbox" id="style-show-legend" ${g.showLegend ? 'checked' : ''}> Show legend
       </label>
@@ -151,6 +136,18 @@ const StyleSidebar = (() => {
       <label class="style-row checkbox">
         <input type="checkbox" id="style-ticks-inside" ${g.ticksInside ? 'checked' : ''}> Tick marks inside
       </label>
+    `;
+    return `
+      <div class="style-row">
+        <label for="style-font-family">Font</label>
+        <select id="style-font-family">${options(FONTS, g.fontFamily)}</select>
+      </div>
+      ${plotFields}
+      <div class="style-row">
+        <label for="style-title">Title</label>
+        <input type="text" id="style-title" value="${escapeAttr(g.title || '')}" placeholder="none">
+      </div>
+      ${plotToggleFields}
       <label>Margins (px)</label>
       <div class="style-limit-row">
         <input type="number" id="style-margin-top" placeholder="top" min="0" value="${g.marginTop ?? ''}">
@@ -161,6 +158,19 @@ const StyleSidebar = (() => {
         <input type="number" id="style-margin-left" placeholder="left" min="0" value="${g.marginLeft ?? ''}">
       </div>
     `;
+  }
+
+  function render() {
+    const ws = PlotWorkspace.state();
+    const box = document.getElementById('style-body');
+    const g = ws.style || {};
+
+    // A layout is Field-only once every panel in it is a `render` (Field
+    // -> Render mesh viewport) panel -- an empty layout (no panels yet)
+    // doesn't count as either, so it keeps the full Plot form until a
+    // panel actually commits it one way or the other.
+    const fieldOnly = ws.panels.length > 0 && ws.panels.every(p => p.kind === 'render');
+    const globalBody = globalBodyHtml(g, fieldOnly);
 
     // Global figure style (spacing/margins/box included) is meaningful
     // before any panel exists -- a fresh layout tab shouldn't hide it all
@@ -181,83 +191,50 @@ const StyleSidebar = (() => {
       .map(p => `<option value="${p.id}" ${p.id === panel.id ? 'selected' : ''}>${p.title}</option>`)
       .join('');
 
-    // A `render` panel is an interactive vtk.js viewport (Field -> Render),
-    // not a data recipe drawn on axes -- none of the X/Y label/tick/limit/
-    // swap fields below apply to it. Its own, much smaller set of controls:
-    // viewport background, camera reset, and live color-by-variable/range
-    // (the mesh already carries every variable, so switching needs no new
-    // server round-trip -- see meshviewer.js's applyStyle).
+    // A `render` panel is a static snapshot PNG, finalized in Field ->
+    // Render's own configuration window (field.js's openRenderConfig) --
+    // every choice that went into it (camera, color, contour, surface
+    // appearance) was made and baked in there, live, before it ever became
+    // a layout panel. There is nothing left here to edit: changing any of
+    // that means opening a new configuration window from scratch, not
+    // touching this one -- Field -> Save Style / Save Camera export what
+    // was used, for a quick start on reproducing it. This is a read-only
+    // record of that, not a form.
     if (panel.kind === 'render') {
       const rs = panel.style || {};
-      const varOptions = (panel.variables || []).map(v =>
-        `<option value="${escapeAttr(v)}" ${v === rs.colorVar ? 'selected' : ''}>${escapeAttr(v)}</option>`
-      ).join('');
+      const rows = [
+        ['Case', panel.case],
+        ['Zone', panel.zone],
+        ['Timestep', panel.timestep],
+        ['Mode', panel.mode],
+      ];
+      if (panel.contourVariable) {
+        rows.push(['Contour', `${panel.contourVariable} = ${Number(panel.contourValue).toPrecision(6)}`]);
+      }
+      if (rs.colorVar) {
+        rows.push(['Color by', rs.colorVar + (rs.colorRange ? ` [${rs.colorRange[0]}, ${rs.colorRange[1]}]` : '')]);
+      }
+      if (rs.preset) rows.push(['Colormap', rs.preset]);
+      const summaryRows = rows.filter(([, v]) => v != null && v !== '')
+        .map(([k, v]) => `<div class="style-row"><label>${escapeAttr(k)}</label><div>${escapeAttr(String(v))}</div></div>`)
+        .join('');
       const trimmedBody = `
         <select id="style-panel-select" class="style-panel-select">${panelOptions}</select>
-
-        <div class="style-row">
-          <label for="style-render-bg">Background</label>
-          <input type="color" id="style-render-bg" value="${rgbToHex(rs.background || [1, 1, 1])}">
-        </div>
-        <div class="btn-row" style="justify-content:flex-start">
-          <button id="style-render-reset-camera">Reset camera</button>
-        </div>
-        <div class="style-row">
-          <label for="style-render-colorvar">Color by</label>
-          <select id="style-render-colorvar">
-            <option value="">(none)</option>
-            ${varOptions}
-          </select>
-        </div>
-        <label>Color range (blank = auto)</label>
-        <div class="style-limit-row">
-          <input type="number" id="style-render-range-min" placeholder="min" value="${rs.colorRange ? rs.colorRange[0] : ''}">
-          <input type="number" id="style-render-range-max" placeholder="max" value="${rs.colorRange ? rs.colorRange[1] : ''}">
-        </div>
-        <label class="style-row checkbox">
-          <input type="checkbox" id="style-render-border" ${rs.showBorder ? 'checked' : ''}> Border
-        </label>
-        <div class="style-row">
-          <label for="style-render-opacity">Opacity</label>
-          <input type="range" id="style-render-opacity" min="0" max="1" step="0.05" value="${rs.opacity == null ? 1 : rs.opacity}">
-        </div>
+        ${summaryRows}
+        <div class="empty">Finalized -- use Field &rarr; Render to create a new panel,
+          or Field &rarr; Save Style/Save Camera to reuse what made this one.</div>
       `;
-      box.innerHTML = group('global', 'Global', globalBody) + group('panel', 'Panel', trimmedBody);
+      // A Field-only layout has no use for Global at all -- font/title/margins
+      // included -- so the group itself is dropped rather than left showing
+      // with nothing underneath it worth setting (see globalBodyHtml).
+      box.innerHTML = (fieldOnly ? '' : group('global', 'Global', globalBody)) + group('panel', 'Panel', trimmedBody);
       document.querySelectorAll('.style-group-heading').forEach(el => {
         el.addEventListener('click', () => toggleGroup(el.dataset.group));
       });
-      wireGlobal();
+      if (!fieldOnly) wireGlobal();
       document.getElementById('style-panel-select').addEventListener('change', (e) => {
         PlotWorkspace.setActivePanel(e.target.value);
         refreshWorkspace();
-      });
-      document.getElementById('style-render-bg').addEventListener('input', (e) => {
-        PlotWorkspace.setPanelStyle(panel.id, { background: hexToRgb(e.target.value) });
-        PlotArea.render();
-      });
-      document.getElementById('style-render-reset-camera').addEventListener('click', () => {
-        MeshViewer.resetCamera(panel.id);
-      });
-      document.getElementById('style-render-colorvar').addEventListener('change', (e) => {
-        PlotWorkspace.setPanelStyle(panel.id, { colorVar: e.target.value || null });
-        PlotArea.render();
-      });
-      const commitRenderRange = () => {
-        const minV = document.getElementById('style-render-range-min').value.trim();
-        const maxV = document.getElementById('style-render-range-max').value.trim();
-        const range = (minV === '' || maxV === '') ? null : [parseFloat(minV), parseFloat(maxV)];
-        PlotWorkspace.setPanelStyle(panel.id, { colorRange: range });
-        PlotArea.render();
-      };
-      document.getElementById('style-render-range-min').addEventListener('change', commitRenderRange);
-      document.getElementById('style-render-range-max').addEventListener('change', commitRenderRange);
-      document.getElementById('style-render-border').addEventListener('change', (e) => {
-        PlotWorkspace.setPanelStyle(panel.id, { showBorder: e.target.checked });
-        PlotArea.render();
-      });
-      document.getElementById('style-render-opacity').addEventListener('input', (e) => {
-        PlotWorkspace.setPanelStyle(panel.id, { opacity: numberOrNull(e.target.value) ?? 1 });
-        PlotArea.render();
       });
       return;
     }
@@ -396,34 +373,39 @@ const StyleSidebar = (() => {
   // there are no panels yet to make a "panel" argument meaningful for.
   function wireGlobal() {
     const global = (patch) => { PlotWorkspace.setGlobalStyle(patch); PlotArea.render(); };
+    // Plot-only fields (label/tick/legend size, marker/line, legend,
+    // gridlines, LaTeX, panel border/ticks) are omitted from the DOM
+    // entirely for a Field-only layout (see globalBodyHtml) -- guarded
+    // rather than assumed present.
+    const on = (id, evt, fn) => { const el = document.getElementById(id); if (el) el.addEventListener(evt, fn); };
 
-    document.getElementById('style-font-family').addEventListener('change', (e) => global({ fontFamily: e.target.value }));
-    document.getElementById('style-label-size').addEventListener('change', (e) => global({ labelFontSize: numberOrNull(e.target.value) }));
-    document.getElementById('style-tick-size').addEventListener('change', (e) => global({ tickFontSize: numberOrNull(e.target.value) }));
-    document.getElementById('style-legend-size').addEventListener('change', (e) => global({ legendFontSize: numberOrNull(e.target.value) }));
-    document.getElementById('style-marker-size').addEventListener('change', (e) => global({ markerSize: numberOrNull(e.target.value) }));
-    document.getElementById('style-marker-step').addEventListener('change', (e) => {
+    on('style-font-family', 'change', (e) => global({ fontFamily: e.target.value }));
+    on('style-label-size', 'change', (e) => global({ labelFontSize: numberOrNull(e.target.value) }));
+    on('style-tick-size', 'change', (e) => global({ tickFontSize: numberOrNull(e.target.value) }));
+    on('style-legend-size', 'change', (e) => global({ legendFontSize: numberOrNull(e.target.value) }));
+    on('style-marker-size', 'change', (e) => global({ markerSize: numberOrNull(e.target.value) }));
+    on('style-marker-step', 'change', (e) => {
       const v = e.target.value.trim();
       global({ markerStep: v === '' ? null : Math.max(1, Math.round(parseFloat(v))) });
     });
-    document.getElementById('style-line-width').addEventListener('change', (e) => {
+    on('style-line-width', 'change', (e) => {
       const v = e.target.value.trim();
       global({ lineWidth: v === '' ? null : Math.max(0.1, parseFloat(v)) });
     });
-    document.getElementById('style-title').addEventListener('change', (e) => global({ title: e.target.value.trim() }));
-    document.getElementById('style-show-legend').addEventListener('change', (e) => global({ showLegend: e.target.checked }));
-    document.getElementById('style-legend-pos').addEventListener('change', (e) => global({ legendPosition: e.target.value }));
-    document.getElementById('style-show-grid').addEventListener('change', (e) => global({ showGrid: e.target.checked }));
+    on('style-title', 'change', (e) => global({ title: e.target.value.trim() }));
+    on('style-show-legend', 'change', (e) => global({ showLegend: e.target.checked }));
+    on('style-legend-pos', 'change', (e) => global({ legendPosition: e.target.value }));
+    on('style-show-grid', 'change', (e) => global({ showGrid: e.target.checked }));
     // PlotArea.render() itself notices style.latex and loads MathJax if
     // needed (also covers a page reload restoring latex:true, which never
     // fires this change event at all), so this just flips the flag.
-    document.getElementById('style-latex').addEventListener('change', (e) => global({ latex: e.target.checked }));
-    document.getElementById('style-panel-border').addEventListener('change', (e) => global({ showPanelBorder: e.target.checked }));
-    document.getElementById('style-ticks-inside').addEventListener('change', (e) => global({ ticksInside: e.target.checked }));
-    document.getElementById('style-margin-top').addEventListener('change', (e) => global({ marginTop: numberOrNull(e.target.value) }));
-    document.getElementById('style-margin-right').addEventListener('change', (e) => global({ marginRight: numberOrNull(e.target.value) }));
-    document.getElementById('style-margin-bottom').addEventListener('change', (e) => global({ marginBottom: numberOrNull(e.target.value) }));
-    document.getElementById('style-margin-left').addEventListener('change', (e) => global({ marginLeft: numberOrNull(e.target.value) }));
+    on('style-latex', 'change', (e) => global({ latex: e.target.checked }));
+    on('style-panel-border', 'change', (e) => global({ showPanelBorder: e.target.checked }));
+    on('style-ticks-inside', 'change', (e) => global({ ticksInside: e.target.checked }));
+    on('style-margin-top', 'change', (e) => global({ marginTop: numberOrNull(e.target.value) }));
+    on('style-margin-right', 'change', (e) => global({ marginRight: numberOrNull(e.target.value) }));
+    on('style-margin-bottom', 'change', (e) => global({ marginBottom: numberOrNull(e.target.value) }));
+    on('style-margin-left', 'change', (e) => global({ marginLeft: numberOrNull(e.target.value) }));
   }
 
   function wire(panel) {

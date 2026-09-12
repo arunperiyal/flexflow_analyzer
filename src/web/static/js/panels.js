@@ -341,28 +341,39 @@ const PlotWorkspace = (() => {
     save();
   }
 
-  // A Field -> Render panel: an interactive vtk.js viewport (meshviewer.js)
-  // over a mesh extracted server-side (the iso-surface or slice geometry,
-  // saved to a persistent cache -- see api/field.py's field_render_save),
-  // not a data recipe like every other panel kind here. No targetPanelId:
-  // there's no sensible "overlay" for two 3-D scenes the way traces overlay
-  // on a chart, so this always creates a fresh panel. `traces: []` (not
-  // omitted) keeps it working with every bit of generic panel machinery
-  // that assumes the field exists (PanelTree.render, normalizeLayoutEntry).
+  // A Field -> Render panel: a static PNG snapshot (field.js's Render
+  // configuration window -- see openRenderConfig) of a mesh extracted
+  // server-side, not a live viewport and not a data recipe like every
+  // other panel kind here. The interactive part -- rotating the camera,
+  // picking a colormap, editing the contour -- all happens in that window,
+  // before this is ever called; once created, a render panel's image is
+  // fixed (Style sidebar shows a read-only summary, nothing editable --
+  // see styles.js). No targetPanelId: there's no sensible "overlay" for two
+  // images the way traces overlay on a chart, so this always creates a
+  // fresh panel. `traces: []` (not omitted) keeps it working with every bit
+  // of generic panel machinery that assumes the field exists (PanelTree
+  // .render, normalizeLayoutEntry).
   //
-  // `variables`/`colorVar` come straight off the render job's own result
-  // (services/field_render.py's render_field_mesh already knows every point
-  // array the mesh carries, and which one --if any-- --color.variable
-  // asked for) -- style.colorVar seeds the Style sidebar's initial
-  // color-by-variable choice; the mesh itself carries every OTHER variable
-  // too, so switching later needs no new server round-trip.
-  function addRenderPanel(caseName, title, meshToken, variables, colorVar) {
+  // mode/zone/timestep/variables/contourVariable/contourValue/style/camera
+  // are all kept purely as a record of what produced this image -- Field ->
+  // Save Style/Save Camera read them back out as YAML, and the sidebar
+  // summary displays them, but nothing here re-applies them to anything.
+  function addRenderPanel(caseName, title, imageToken, info) {
+    info = info || {};
     const L = active();
     const panel = {
-      id: `p${nextPanelId++}`, title, kind: 'render', case: caseName, meshToken,
-      variables: variables || [], traces: [], pane: null,
-      style: { colorVar: colorVar || null, colorRange: null, background: [1, 1, 1],
-               showBorder: false, opacity: 1 },
+      id: `p${nextPanelId++}`, title, kind: 'render', case: caseName, imageToken,
+      // The Render configuration window's own "Panel size" fields (in.) --
+      // set at creation time, from what the live preview was actually
+      // shaped to, rather than defaulting to fill-the-whole-canvas the way
+      // every other new panel does; Layout -> Panes can still move/resize
+      // it like any other pane afterward.
+      variables: info.variables || [], traces: [], pane: info.pane || null,
+      mode: info.mode || null, zone: info.zone || null, timestep: info.timestep,
+      contourVariable: info.contourVariable || null,
+      contourValue: info.contourValue == null ? null : info.contourValue,
+      style: info.style || {},
+      camera: info.camera || null,
     };
     L.panels.push(panel);
     if (!L.activePanelId) L.activePanelId = panel.id;

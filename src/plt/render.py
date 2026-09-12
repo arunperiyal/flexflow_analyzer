@@ -424,6 +424,11 @@ def _iso_surface(mesh, cfg, log=print, warn=None):
         # bare number as "this many levels, evenly spaced", which is not what
         # anyone writing a single value means.
         values = [values]
+    # Written back onto cfg so a caller that asked for the automatic value can
+    # still read what it resolved to (build_surface returns this same cfg) --
+    # the same reasoning _render's state['color_range'] follows for an
+    # automatic color range.
+    cfg["contour"]["isosurfaces"] = values
     surf = mesh.contour(isosurfaces=list(values), scalars=cvar)
     log("isosurface: %d points, %d cells" % (surf.n_points, surf.n_cells))
     return surf

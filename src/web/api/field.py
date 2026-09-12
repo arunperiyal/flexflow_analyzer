@@ -7,6 +7,8 @@ license needed -- see that module's own header note). `field/steps` and
 terminal color codes, as JSON.
 """
 
+import base64
+import binascii
 import os
 import re
 import shutil
@@ -366,7 +368,9 @@ def field_render_mesh(name):
     def run():
         mesh = render_field_mesh(binary_dir, problem, zone, mode, timestep, overrides, job_out_dir)
         return {'dir': job_out_dir, 'files': [mesh['file']],
-                'variables': mesh['variables'], 'colorVar': mesh['colorVar']}
+                'variables': mesh['variables'], 'colorVar': mesh['colorVar'],
+                'contourVariable': mesh.get('contourVariable'),
+                'contourValue': mesh.get('contourValue')}
 
     job_id = jobs.start(run)
     return jsonify({'job_id': job_id}), 202
@@ -402,14 +406,50 @@ def field_render_save(name, job_id):
     return jsonify({'token': token, 'case': name})
 
 
+@bp.post('/<name>/field/snapshot')
+def field_snapshot_save(name):
+    """Saves a Field -> Render configuration window's captured PNG into the
+    same persistent render cache field_render_save uses (served back by the
+    same field_render_cached_file route below), so the resulting snapshot
+    panel keeps working after a page reload or server restart.
+
+    Unlike field_render_save there is no job to copy a file from: the
+    configuration window's camera and style are set live, in the browser, by
+    rotating/restyling a vtk.js view of the extracted mesh -- the bytes here
+    are a rasterization of whatever that view showed when the user was done
+    (meshviewer.js's captureImage), not something the server ever rendered
+    itself."""
+    root = current_app.config['WORKSPACE_ROOT']
+    if registry.case_path(root, name) is None:
+        return jsonify({'error': f'no such case: {name}'}), 404
+
+    body = request.get_json(silent=True) or {}
+    data_url = body.get('image') or ''
+    match = re.match(r'^data:image/png;base64,(.+)$', data_url, re.DOTALL)
+    if not match:
+        return jsonify({'error': 'image must be a data:image/png;base64,... URL'}), 400
+    try:
+        raw = base64.b64decode(match.group(1))
+    except (binascii.Error, ValueError):
+        return jsonify({'error': 'could not decode image data'}), 400
+
+    dest_dir = _render_cache_dir(root, name)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    token = f'{uuid.uuid4().hex}.png'
+    (dest_dir / token).write_bytes(raw)
+
+    return jsonify({'token': token, 'case': name})
+
+
 @bp.get('/<name>/field/render-file/<token>')
 def field_render_cached_file(name, token):
-    """Serves a file saved by field_render_save -- a PNG (the old snapshot
-    panel) or a .vtp mesh (the interactive viewer's meshToken, fetched
-    client-side by meshviewer.js's vtkXMLPolyDataReader). Deliberately
-    independent of services/jobs.py's in-memory JobRegistry: this must keep
-    working after a server restart, unlike the job it was originally
-    rendered by. Content-Type is left to Flask/send_file's own guess from
+    """Serves a file saved by field_render_save or field_snapshot_save -- a
+    finalized panel's PNG snapshot, or (while its configuration window is
+    still open) the .vtp mesh behind the live vtk.js view that snapshot came
+    from. Deliberately independent of services/jobs.py's in-memory
+    JobRegistry: this must keep working after a server restart, unlike the
+    job it was originally rendered by. Content-Type is left to Flask/
+    send_file's own guess from
     the extension rather than hardcoded, since this now serves more than
     one file type."""
     root = current_app.config['WORKSPACE_ROOT']

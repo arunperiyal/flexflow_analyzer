@@ -127,7 +127,6 @@ const PlotArea = (() => {
   }
 
   function placeholder(msg) {
-    MeshViewer.sync([]);   // dispose any WebGL contexts before their container divs vanish
     document.getElementById('plotarea').innerHTML = `<div class="plot-placeholder">${msg}</div>`;
   }
 
@@ -343,17 +342,19 @@ const PlotArea = (() => {
 
     // #plotly-panels itself is always a brand-new node (see the
     // plotly_relayout listener below, which relies on that to never be
-    // duplicated across renders). #plot-canvas-wrapper and its
-    // #mesh-panels-overlay child are the opposite: created once and left
-    // alone, so MeshViewer's vtk.js instances (mounted into that overlay)
-    // survive a re-render instead of losing their camera/WebGL context
-    // every time an unrelated style tweak calls render() again.
+    // duplicated across renders); #plot-canvas-wrapper is left alone once
+    // created, purely as a stable parent for it to be replaced within.
+    // (A `render` panel used to need this same persistence for a different
+    // reason -- an interactive vtk.js viewport mounted in a sibling overlay,
+    // which had to survive an unrelated style tweak's re-render or lose its
+    // camera. It's a static snapshot PNG now, drawn by Plotly's own
+    // layout.images below like any other panel content, so that overlay is
+    // gone along with the reason for it.)
     let wrapper = document.getElementById('plot-canvas-wrapper');
     if (!wrapper) {
       document.getElementById('plotarea').innerHTML =
         '<div id="plot-canvas-wrapper" style="position:relative;">' +
           '<div id="plotly-panels"></div>' +
-          '<div id="mesh-panels-overlay" style="position:absolute;inset:0;pointer-events:none;"></div>' +
         '</div>';
       wrapper = document.getElementById('plot-canvas-wrapper');
     } else {
@@ -382,6 +383,21 @@ const PlotArea = (() => {
     // from its own pane rect, independent of every other panel's.
     const SCREEN_DPI = 96;
     const traces = [];
+    // A `render` panel's PNG (Field -> Render), placed via Plotly's own
+    // layout.images rather than as a trace -- it needs no axis at all, just
+    // its pane's rect (paneDomain, the same math every other panel's axis
+    // domain already uses).
+    const images = [];
+    // A render panel's border (below): drawn as a paper-relative shape, not
+    // an axis's showline/mirror -- an axis `domain` fraction is relative to
+    // the margin-inset plot area (layout.margin shrinks it first), while
+    // `images` above places the actual PNG in paper fractions (0..1 against
+    // the literal canvas edges, margin ignored entirely -- Panel size is
+    // "how this panel will actually be sized in the layout", a promise an
+    // axis-domain border broke by landing somewhere else whenever any
+    // margin was non-zero). Same domain.x/domain.y numbers as the image
+    // itself, so the two can never drift apart.
+    const shapes = [];
     // Every panel that ends up with a true (unswapped) secondary y-axis --
     // rightAlignY2Ticks below needs the axis numbers after Plotly has drawn
     // them, since it patches SVG text Plotly itself doesn't expose a layout
@@ -411,18 +427,40 @@ const PlotArea = (() => {
       const n = panelIdx + 1;
 
       if (panel.kind === 'render') {
-        // Drawn by MeshViewer (an interactive vtk.js viewport, not Plotly --
-        // see meshviewer.js), positioned in an HTML overlay after this
-        // figure renders. Plotly still always draws SOME primary x/y axis
-        // by default -- even with zero traces and no explicit config --
-        // whenever a panel lands in slot 1 (the plain 'x'/'y' Plotly falls
-        // back to when nothing else claims it), so this panel's own slot is
-        // explicitly hidden or that default axis (ticks, a 0-1 range box)
-        // would show through behind the mesh viewport.
+        const domain = paneDomain(paneRect(ws, panel), ws.layout);
+        images.push({
+          source: `/api/cases/${encodeURIComponent(panel.case)}/field/render-file/${panel.imageToken}`,
+          xref: 'paper', yref: 'paper',
+          x: domain.x[0], y: domain.y[1],
+          sizex: domain.x[1] - domain.x[0], sizey: domain.y[1] - domain.y[0],
+          xanchor: 'left', yanchor: 'top', sizing: 'contain',
+        });
+        // Plotly still always draws SOME primary x/y axis by default -- even
+        // with zero traces and no explicit config -- whenever a panel lands
+        // in slot 1 (the plain 'x'/'y' Plotly falls back to when nothing
+        // else claims it), so this panel's own slot is explicitly hidden or
+        // that default axis (ticks, a 0-1 range box) would show through
+        // behind the image.
+        //
+        // The render config sidebar's own "Border" toggle (style.showBorder)
+        // is baked into nothing -- it's app-only view chrome, not part of
+        // the snapshot PNG -- so it has to be drawn here, the one place a
+        // render panel's placement in the actual layout is known. A paper-
+        // relative shape (see the `shapes` comment above), not the visible-
+        // axis showline+mirror a data panel's border uses -- an axis domain
+        // would land this rectangle wherever layout.margin's inset happens
+        // to put it, not where the image (paper-relative) actually is.
         const xKey = n === 1 ? 'xaxis' : `xaxis${n}`;
         const yKey = n === 1 ? 'yaxis' : `yaxis${n}`;
         layout[xKey] = { visible: false };
         layout[yKey] = { visible: false };
+        if (panel.style && panel.style.showBorder) {
+          shapes.push({
+            type: 'rect', xref: 'paper', yref: 'paper',
+            x0: domain.x[0], x1: domain.x[1], y0: domain.y[0], y1: domain.y[1],
+            line: { color: '#94a3b8', width: 1 },
+          });
+        }
         return;   // no traces -- nothing else in this loop applies
       }
       const xref = n === 1 ? 'x' : `x${n}`;
@@ -617,6 +655,9 @@ const PlotArea = (() => {
       }
     });
 
+    if (images.length) layout.images = images;
+    if (shapes.length) layout.shapes = shapes;
+
     // responsive stretches the plot to fill its container on resize --
     // exactly what a fixed-inches canvas must NOT do, or the pixel size
     // just computed gets silently overridden right back to "fill whatever
@@ -633,13 +674,6 @@ const PlotArea = (() => {
       // duplicated across renders.
       gd.on('plotly_relayout', () => rightAlignY2Ticks(secondaryYAxisNums));
     }
-
-    // MeshViewer diffs against its own previous panel list rather than
-    // remounting everything -- called unconditionally (even with zero
-    // render panels now) so removing the last one still tears down its
-    // WebGL context instead of leaking it. Cheap when nothing changed.
-    const renderPanels = ws.panels.filter(p => p.kind === 'render');
-    await MeshViewer.sync(renderPanels, document.getElementById('mesh-panels-overlay'));
   }
 
   // Plotly draws an overlaying axis's tick numbers flush against the axis
@@ -747,24 +781,33 @@ const Export = (() => {
     renderFormatOptions();
   }
 
+  // A PDF's own lines and text stay vector -- sharp at any zoom, no DPI to
+  // set for those -- but a Field -> Render panel is a raster PNG embedded
+  // into that PDF (see export.py's `fig.savefig(..., dpi=dpi)`, applied
+  // regardless of format), so DPI still matters there and used to be
+  // silently fixed at DEFAULT_DPI with no way to raise or lower it. Shown
+  // for both formats now, with PDF's note explaining what it actually
+  // affects instead of claiming there's nothing to set.
   function renderFormatOptions() {
     const box = document.getElementById('export-format-options');
     const format = document.getElementById('export-format').value;
-    box.innerHTML = format === 'png'
-      ? `<div class="style-row">
-           <label for="export-dpi">DPI</label>
-           <input type="number" id="export-dpi" value="${DEFAULT_DPI}" min="50" max="1200" step="1">
-         </div>`
-      : `<div class="empty">PDF is a vector format -- lines and text stay sharp at any zoom, so there's no DPI to set.</div>`;
+    const note = format === 'pdf'
+      ? `<div class="empty">PDF text and lines stay sharp at any zoom regardless -- `
+        + `this only sets how sharp a Field &rarr; Render panel's embedded image looks.</div>`
+      : '';
+    box.innerHTML = `
+      <div class="style-row">
+        <label for="export-dpi">DPI</label>
+        <input type="number" id="export-dpi" value="${DEFAULT_DPI}" min="50" max="1200" step="1">
+      </div>
+      ${note}
+    `;
   }
 
   async function runExport() {
     const format = document.getElementById('export-format').value;
-    let dpi = DEFAULT_DPI;
-    if (format === 'png') {
-      const raw = parseInt(document.getElementById('export-dpi').value, 10);
-      dpi = Number.isFinite(raw) ? Math.max(50, Math.min(1200, raw)) : DEFAULT_DPI;
-    }
+    const raw = parseInt(document.getElementById('export-dpi').value, 10);
+    const dpi = Number.isFinite(raw) ? Math.max(50, Math.min(1200, raw)) : DEFAULT_DPI;
     try {
       await doExport(format, dpi);
       Menu.closeDialog();
@@ -776,16 +819,13 @@ const Export = (() => {
   async function doExport(format, dpi) {
     const ws = PlotWorkspace.state();
     if (!ws.panels.length) throw new Error('No panels to export -- Plot → New first.');
-    // A `render` panel has no data recipe the server can redraw from -- it's
-    // a live vtk.js viewport, so whatever camera angle it currently shows is
-    // captured client-side and sent up as `capturedImage` (a copy for this
-    // request only; never written back into ws.panels/localStorage).
-    const panels = ws.panels.map(p => p.kind === 'render'
-      ? { ...p, capturedImage: MeshViewer.captureImage(p.id) }
-      : p);
+    // A `render` panel is a snapshot PNG (Field -> Render) the server
+    // already has on disk (imageToken) -- unlike the panels below it, there
+    // is nothing to capture or recompute here, just its id, same as every
+    // other kind.
     const res = await fetch('/api/export', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ panels, style: ws.style, layout: ws.layout, format, dpi }),
+      body: JSON.stringify({ panels: ws.panels, style: ws.style, layout: ws.layout, format, dpi }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: 'export failed' }));
