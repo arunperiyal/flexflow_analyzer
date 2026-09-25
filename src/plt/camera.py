@@ -16,6 +16,17 @@ import re
 import xml.etree.ElementTree as ET
 
 
+def _build_frame(vec, scal):
+    """Assemble the six-key frame dict from a source's own vec()/scal() lookups."""
+    par = scal("CameraParallelProjection")
+    return {"position": vec("CameraPosition"),
+            "focal": vec("CameraFocalPoint"),
+            "up": vec("CameraViewUp"),
+            "parallel": bool(par) if par is not None else False,
+            "parallel_scale": scal("CameraParallelScale"),
+            "view_angle": scal("CameraViewAngle")}
+
+
 def _from_pvsm(path):
     root = ET.parse(path).getroot()
     for proxy in root.iter("Proxy"):
@@ -29,13 +40,7 @@ def _from_pvsm(path):
                 def scal(n):
                     return float(props[n][0]) if props.get(n) else None
 
-                par = scal("CameraParallelProjection")
-                return {"position": vec("CameraPosition"),
-                        "focal": vec("CameraFocalPoint"),
-                        "up": vec("CameraViewUp"),
-                        "parallel": bool(par) if par is not None else False,
-                        "parallel_scale": scal("CameraParallelScale"),
-                        "view_angle": scal("CameraViewAngle")}
+                return _build_frame(vec, scal)
     raise ValueError("no RenderView camera found in %s" % path)
 
 
@@ -52,13 +57,7 @@ def _from_pystate(path):
 
     if vec("CameraPosition") is None:
         raise ValueError("no CameraPosition found in %s" % path)
-    par = scal("CameraParallelProjection")
-    return {"position": vec("CameraPosition"),
-            "focal": vec("CameraFocalPoint"),
-            "up": vec("CameraViewUp"),
-            "parallel": bool(par) if par is not None else False,
-            "parallel_scale": scal("CameraParallelScale"),
-            "view_angle": scal("CameraViewAngle")}
+    return _build_frame(vec, scal)
 
 
 # Sections that only ever appear in a render config, never in a camera frame.

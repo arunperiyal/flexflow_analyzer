@@ -1,6 +1,7 @@
 """Helpers to locate PLT files / zones within a case (shared by field subcommands)."""
 
 import re
+import sys
 from pathlib import Path
 
 
@@ -43,6 +44,16 @@ def zone_index(plt, zone_name):
     return None
 
 
+def resolve_zone_or_exit(plt, zone_name, plt_path, logger):
+    """Resolve a zone name to its index, or exit listing what the file holds."""
+    zi = zone_index(plt, zone_name)
+    if zi is None:
+        logger.error(f"Zone '{zone_name}' not found in {Path(plt_path).name}. Available: "
+                     f"{', '.join(z['name'] for z in plt.zones)}")
+        sys.exit(1)
+    return zi
+
+
 def resolve_steps(args, binary_dir, problem):
     """Decide which timesteps a command should act on. Returns (steps, mode).
 
@@ -64,6 +75,27 @@ def resolve_steps(args, binary_dir, problem):
     if t2 is not None:
         return [int(t2)], "single"
     return None, None
+
+
+def write_table_csv(path, header, rows, comments=(), int_columns=()):
+    """Write a '#'-commented table CSV: `int_columns` as plain integers, else %.8e."""
+    as_int = [name in int_columns for name in header]
+    lines = [f"# {c}" for c in comments] + [",".join(header)]
+    for row in rows:
+        lines.append(",".join(str(int(v)) if is_int else f"{v:.8e}"
+                              for v, is_int in zip(row, as_int)))
+    Path(path).write_text("\n".join(lines) + "\n")
+
+
+def write_pvd(path, entries):
+    """Write a ParaView .pvd collection: entries = [(timestep, filename), ...]."""
+    lines = ['<?xml version="1.0"?>',
+             '<VTKFile type="Collection" version="0.1" byte_order="LittleEndian">',
+             '  <Collection>']
+    lines += [f'    <DataSet timestep="{ts}" group="" part="0" file="{fn}"/>'
+              for ts, fn in entries]
+    lines += ['  </Collection>', '</VTKFile>']
+    Path(path).write_text("\n".join(lines) + "\n")
 
 
 def list_steps(binary_dir, problem=None):

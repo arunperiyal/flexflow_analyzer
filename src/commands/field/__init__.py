@@ -5,6 +5,16 @@ Subcommands: info, extract, compute, convert, render, check
 
 from ..base import BaseCommand
 
+_BOX_CROP_ARGS = [('xmin', 'Minimum X coordinate'), ('xmax', 'Maximum X coordinate'),
+                  ('ymin', 'Minimum Y coordinate'), ('ymax', 'Maximum Y coordinate'),
+                  ('zmin', 'Minimum Z coordinate'), ('zmax', 'Maximum Z coordinate')]
+
+
+def _add_box_crop_args(parser):
+    """--xmin/--xmax/--ymin/--ymax/--zmin/--zmax: an axis-aligned crop box."""
+    for flag, help_text in _BOX_CROP_ARGS:
+        parser.add_argument(f'--{flag}', type=float, help=help_text)
+
 
 class FieldCommand(BaseCommand):
     """Field data operations from PLT files (info, extract)"""
@@ -71,18 +81,7 @@ class FieldCommand(BaseCommand):
         extract_parser.add_argument('--output', '--output-file', dest='output_file', type=str,
                                    help='REQUIRED output: .csv / .vtu/.vtk (mesh) / .pvd (series), '
                                         'or a bare NAME -> a directory NAME/ (relative -> under the case dir)')
-        extract_parser.add_argument('--xmin', type=float,
-                                   help='Minimum X coordinate')
-        extract_parser.add_argument('--xmax', type=float,
-                                   help='Maximum X coordinate')
-        extract_parser.add_argument('--ymin', type=float,
-                                   help='Minimum Y coordinate')
-        extract_parser.add_argument('--ymax', type=float,
-                                   help='Maximum Y coordinate')
-        extract_parser.add_argument('--zmin', type=float,
-                                   help='Minimum Z coordinate')
-        extract_parser.add_argument('--zmax', type=float,
-                                   help='Maximum Z coordinate')
+        _add_box_crop_args(extract_parser)
         extract_parser.add_argument('--probe', action='append', metavar='X,Y,Z',
                                    help='Sample at a point (nearest node); repeatable, '
                                         'or several separated by ";". Output is .csv '
@@ -164,9 +163,7 @@ class FieldCommand(BaseCommand):
                                     help='Output .vtu path')
         convert_parser.add_argument('--audit-only', action='store_true',
                                     help='Report element type / size consistency only')
-        for _ax in ('xmin', 'xmax', 'ymin', 'ymax', 'zmin', 'zmax'):
-            convert_parser.add_argument(f'--{_ax}', type=float,
-                                        help=f'{_ax[0].upper()}{_ax[1:]} for box crop')
+        _add_box_crop_args(convert_parser)
 
         # field render <mode> (images via pyvista: iso, slice)
         render_parser = field_subparsers.add_parser('render', add_help=False,

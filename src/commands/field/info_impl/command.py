@@ -8,8 +8,9 @@ from pathlib import Path
 
 from ....utils.logger import Logger
 from ....utils.colors import Colors
-from ....plt.fxplt import PltFile, ZTYPE_VTK
+from ....plt.fxplt import PltFile, ZTYPE_VTK, NPE
 from ....plt.convert import audit
+from .. import locate
 
 
 def _hdr(text):
@@ -18,20 +19,10 @@ def _hdr(text):
 
 def _pick_plt(binary_dir, problem, sample_file):
     """Choose which PLT file to inspect (a given step, else the latest)."""
-    plt_files = sorted(binary_dir.glob("*.plt"))
-    if not plt_files:
-        return None, plt_files
-    if sample_file is not None:
-        for f in plt_files:
-            m = re.search(r"\.(\d+)\.plt$", f.name)
-            if m and int(m.group(1)) == sample_file:
-                return f, plt_files
-        return None, plt_files
-    # latest timestep
-    def step(f):
-        m = re.search(r"\.(\d+)\.plt$", f.name)
-        return int(m.group(1)) if m else -1
-    return max(plt_files, key=step), plt_files
+    all_plt = sorted(Path(binary_dir).glob("*.plt"))
+    if not all_plt:
+        return None, all_plt
+    return locate.find_plt(binary_dir, problem, sample_file), all_plt
 
 
 def execute_info(args):
@@ -93,7 +84,7 @@ def execute_info(args):
     if show("zones"):
         _hdr("Zones")
         for zi, z in enumerate(plt.zones):
-            npe = {1: 2, 2: 3, 3: 4, 4: 4, 5: 8}.get(z["ztype"], 8)
+            npe = NPE.get(z["ztype"], 8)
             print(f"  {Colors.BOLD}{z['name']}{Colors.RESET}: "
                   f"{ZTYPE_VTK.get(z['ztype'], 'type%d' % z['ztype'])}, "
                   f"{npe} nodes/elem, nodes={z['npts']:,}, elements={z['nelem']:,}")

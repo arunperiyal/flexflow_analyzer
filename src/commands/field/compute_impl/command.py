@@ -20,9 +20,9 @@ import numpy as np
 
 from ....utils.logger import Logger
 from ....utils.progress import progress_enabled, spinner, step_bar
-from ....plt.fxplt import PltFile, VOLUME_ZTYPES
+from ....plt.fxplt import PltFile, VOLUME_ZTYPES, SURFACE_ZTYPES
 from ....plt import surface
-from ..locate import problem_name, find_plt, zone_index, resolve_steps
+from ..locate import problem_name, find_plt, zone_index, resolve_steps, write_pvd, write_table_csv
 from . import coefficients, separation as sep, wall_shear as shear
 
 QUANTITIES = ("force", "force_coeff", "wall_shear", "separation", "lambda2")
@@ -33,7 +33,6 @@ SURFACE_QUANTITIES = ("force", "force_coeff", "wall_shear")
 # `separation` reads what wall_shear wrote rather than a PLT, so it needs neither
 # a timestep range nor the mesh -- only the tables and the case's own declarations.
 TABLE_QUANTITIES = ("separation",)
-SURFACE_ZTYPES = (2, 3)          # FETRIANGLE, FEQUADRILATERAL
 COLUMNS = ["element", "x", "y", "z", "area", "nx", "ny", "nz"]
 SUMMARY_COLUMNS = ["timestep", "elements", "area", "Fx", "Fy", "Fz"]
 SHEAR_SUMMARY_COLUMNS = ["timestep", "elements", "area", "Cf_mean", "Cf_max",
@@ -252,12 +251,7 @@ INT_COLUMNS = ("timestep", "element", "elements", "section", "theta_bin")
 
 def _write_csv(path, header, rows, comments):
     """Write the element table, keeping the identifying columns as plain integers."""
-    as_int = [name in INT_COLUMNS for name in header]
-    lines = [f"# {c}" for c in comments] + [",".join(header)]
-    for row in rows:
-        lines.append(",".join(str(int(v)) if is_int else f"{v:.8e}"
-                              for v, is_int in zip(row, as_int)))
-    Path(path).write_text("\n".join(lines) + "\n")
+    write_table_csv(path, header, rows, comments, INT_COLUMNS)
 
 
 def _write_mesh(path, pts, conn, cell_data):
@@ -273,16 +267,6 @@ def _write_mesh(path, pts, conn, cell_data):
     name = "quad" if conn.shape[1] == 4 else "triangle"
     meshio.Mesh(points=np.asarray(pts[used], dtype=float), cells=[(name, remap[conn])],
                 cell_data={k: [v] for k, v in cell_data.items()}).write(str(path), binary=True)
-
-
-def _write_pvd(path, entries):
-    lines = ['<?xml version="1.0"?>',
-             '<VTKFile type="Collection" version="0.1" byte_order="LittleEndian">',
-             '  <Collection>']
-    lines += [f'    <DataSet timestep="{ts}" group="" part="0" file="{fn}"/>'
-              for ts, fn in entries]
-    lines += ['  </Collection>', '</VTKFile>']
-    Path(path).write_text("\n".join(lines) + "\n")
 
 
 def _output_name(args, quantity, body):
@@ -918,7 +902,7 @@ def execute_compute(args):
         print(f"Wrote {sum(len(r) for r in rows):,} element row(s) x {len(header)} cols "
               f"-> {out_path}")
     elif ext == ".pvd":
-        _write_pvd(out_path, entries)
+        write_pvd(out_path, entries)
         print(f"Wrote surface series: {len(entries)} mesh file(s) + {out_path}")
     else:
         print(f"Wrote surface mesh with per-element force -> {out_path}")
