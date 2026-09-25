@@ -1,4 +1,1 @@
-"""CLI module for FlexFlow."""
-
-from .help_messages import *
-from .parser import *
+"""FlexFlow CLI: the app declaration (app.py), its contexts and builtins."""

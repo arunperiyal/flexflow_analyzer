@@ -116,6 +116,15 @@ install_dependencies() {
     # Use conda environment's pip explicitly
     "$ENV_PATH/bin/pip" install "${PACKAGES[@]}"
 
+    # shellkit (the interactive shell framework) is a sibling project, not on
+    # PyPI. Editable, so updating the checkout updates FlexFlow's shell.
+    SHELLKIT_DIR="${SHELLKIT_DIR:-$FLEXFLOW_DIR/../shellkit}"
+    if [ ! -f "$SHELLKIT_DIR/pyproject.toml" ]; then
+        print_error "shellkit not found at $SHELLKIT_DIR (set SHELLKIT_DIR to its checkout)"
+        exit 1
+    fi
+    "$ENV_PATH/bin/pip" install -e "$SHELLKIT_DIR"
+
     print_success "All dependencies installed"
 }
 

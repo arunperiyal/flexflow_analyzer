@@ -75,12 +75,8 @@ class DomainCommandError(Exception):
 
 def _current_context_case():
     """The case set with `use case:<name>` in the interactive shell, if any."""
-    try:
-        from src.cli.interactive import InteractiveShell
-        shell = getattr(InteractiveShell, '_instance', None)
-        return shell._current_case if shell else None
-    except Exception:
-        return None
+    from src.cli.context import current_case
+    return current_case()
 
 
 def resolve_target_and_case(args):

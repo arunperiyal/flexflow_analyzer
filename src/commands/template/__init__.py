@@ -4,6 +4,7 @@ Subcommands: plot, case
 """
 
 from ..base import BaseCommand
+from src.cli.context import case_arg
 
 
 class TemplateCommand(BaseCommand):
@@ -61,8 +62,8 @@ class TemplateCommand(BaseCommand):
         script_parser.add_argument('script_type', nargs='?',
                                    choices=['pre', 'main', 'post', 'env'],
                                    help='Script type: pre, main, post, or env')
-        script_parser.add_argument('case_dir', nargs='?', type=str,
-                                  help='Case directory to create scripts in (optional)')
+        case_arg(script_parser, dest='case_dir', type=str,
+                 help='Case directory to create scripts in (optional)')
         script_parser.add_argument('--simflow-home', type=str, metavar='PATH',
                                   help='Set SIMFLOW_HOME path in the generated simflow_env.sh')
         script_parser.add_argument('--partition', type=str, metavar='NAME',

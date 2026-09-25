@@ -668,11 +668,8 @@ class CaseUploadCommand:
 
     def _get_cases_base_dir(self) -> Path:
         """Return directory used to resolve .cases for wildcard mode."""
-        from src.cli.interactive import InteractiveShell
-
-        if hasattr(InteractiveShell, "_instance") and InteractiveShell._instance:
-            return InteractiveShell._instance._current_dir
-        return Path.cwd()
+        from src.cli.context import current_dir
+        return current_dir()
 
     def validate_case_path(self, case_path: str) -> Optional[str]:
         """

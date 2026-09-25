@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+### ♻️ The interactive shell now runs on shellkit
+
+- The shell (prompt, history, aliases, `;` chaining, `|` pipes, `use`/`unuse`,
+  `set`, tab completion, the file builtins) moved out into **shellkit**, a
+  separate package FlexFlow and other tools share. `src/cli/interactive.py`,
+  `registry.py`, `parser.py` and `help_messages.py` are gone; `src/cli/app.py`
+  now only declares FlexFlow's commands, contexts and builtins.
+- **Contexts are taken where the argument is declared.** `case_arg(parser)`,
+  `node_arg`, `freq_arg`, `time_window`, `timestep_arg` and `context_flag`
+  (`src/cli/context.py`) replace the token-insertion tables in the old
+  `_inject_*_context`. Each command's parser now says which context fills
+  which argument, including the derived ones (a single `time` as the
+  `--t1/--t2` window, as `--timestep` for `field`, `t1` as `field convert`'s
+  step, transfers' times only with `--binary`).
+- **Tab completion is generated from the parsers**, so every subcommand and
+  flag completes, with its help text, without a hand-kept list.
+- Code that read `InteractiveShell._instance` uses `current_case()`,
+  `current_dir()` and `current_rundir()` from `src/cli/context.py`.
+- **`ff <command> ...` runs that one command and exits**; `ff` alone starts
+  the shell as before.
+- Pipes: every segment after the first runs in the OS shell, so
+  `ls | grep plt` uses the real grep; commands that `print()` pipe too.
+- `set prompt --level N` is now `set prompt_level N`; `set` alone lists
+  every setting. `set debug on` shows tracebacks.
+- The session timeout no longer cuts off a command that is still running;
+  the shell exits once it finishes.
+- History, aliases and settings stay in `~/.flexflow` with the same files.
+- `install.sh` installs shellkit from `../shellkit` (or `$SHELLKIT_DIR`).
+
 ### ✨ Plot -> New builds panels from oisd.<name>.map too
 
 - An outputSurface's data is a single aggregate time series for the whole

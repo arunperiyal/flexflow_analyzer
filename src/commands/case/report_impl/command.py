@@ -11,13 +11,8 @@ from rich import box
 
 def _get_context_rundir() -> 'str | None':
     """Return the rundir set via 'use rundir' in the interactive shell, or None."""
-    try:
-        from src.cli.interactive import InteractiveShell
-        if hasattr(InteractiveShell, '_instance') and InteractiveShell._instance:
-            return InteractiveShell._instance._current_rundir
-    except Exception:
-        pass
-    return None
+    from src.cli.context import current_rundir
+    return current_rundir()
 
 
 def execute_report(args):

@@ -4,6 +4,7 @@ Commands: plot, compare
 """
 
 from ..base import BaseCommand
+from src.cli.context import case_arg, node_arg, time_window
 
 
 class PlotCommand(BaseCommand):
@@ -21,9 +22,9 @@ class PlotCommand(BaseCommand):
             help=self.description
         )
         # Required arguments
-        parser.add_argument('case', nargs='?', help='Case directory path')
+        case_arg(parser, help='Case directory path')
         parser.add_argument('--input-file', type=str, help='YAML input file')
-        parser.add_argument('--node', type=int, help='Node number to plot')
+        node_arg(parser, help='Node number to plot')
         parser.add_argument('--data-type', type=str, choices=['displacement', 'force', 'pendulum'],
                           help='Data type to plot')
 
@@ -33,8 +34,8 @@ class PlotCommand(BaseCommand):
                           help='Plot type')
         parser.add_argument('--component', type=str, nargs='+',
                           help='Components to plot (x, y, z)')
-        parser.add_argument('--start-time', type=float, help='Start time')
-        parser.add_argument('--end-time', type=float, help='End time')
+        time_window(parser, '--start-time', '--end-time',
+                    t1_kwargs=dict(help='Start time'), t2_kwargs=dict(help='End time'))
         parser.add_argument('--start-step', type=int, help='Start timestep')
         parser.add_argument('--end-step', type=int, help='End timestep')
 

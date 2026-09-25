@@ -5,6 +5,7 @@ Handles .def operations: var (more subcommands to follow).
 """
 
 from .base import BaseCommand
+from src.cli.completers import described
 
 
 class DefCommand(BaseCommand):
@@ -45,7 +46,9 @@ class DefCommand(BaseCommand):
                                                  help='Show or edit timeSteppingControl values (maxTime, inc)')
         time_parser.add_argument('kind', nargs='?',
                                  help="'maxTime' (maxTimeSteps) or 'inc' (initialTimeIncrement); "
-                                      "omit to show all timeSteppingControl values")
+                                      "omit to show all timeSteppingControl values"
+                                 ).completer = described(('maxTime', 'maxTimeSteps'),
+                                                         ('inc', 'initialTimeIncrement'))
         time_parser.add_argument('value', nargs='?',
                                  help='New value (provide to edit the field)')
         time_parser.add_argument('-c', '--case', type=str,
