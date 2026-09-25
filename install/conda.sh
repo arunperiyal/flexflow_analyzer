@@ -88,8 +88,6 @@ install_dependencies() {
 
     conda activate "$CONDA_ENV_NAME"
 
-    print_info "Installing required packages from requirements.txt..."
-
     # Get the actual environment path (works for both system and user conda)
     ENV_PATH=$(conda env list | grep "^$CONDA_ENV_NAME " | awk '{print $NF}')
 
@@ -100,12 +98,13 @@ install_dependencies() {
 
     print_info "Environment location: $ENV_PATH"
 
-    # Use conda environment's pip explicitly. requirements.txt is the one list
-    # of what FlexFlow needs, shellkit included (from its GitHub repo).
-    "$ENV_PATH/bin/pip" install -r "$FLEXFLOW_DIR/requirements.txt"
+    # requirements.txt is the one list of what is needed, shellkit included
+    # (from its GitHub repo, which needs GitHub access: a token or SSH key).
+    local requirements="$FLEXFLOW_DIR/requirements.txt"
 
-    # SHELLKIT_DIR=../shellkit ./install.sh: use a local shellkit checkout,
-    # editable, so changes to it show up in FlexFlow without reinstalling.
+    # SHELLKIT_DIR=../shellkit ./install.sh: use a local shellkit checkout
+    # instead -- editable, so changes to it show up without reinstalling, and
+    # nothing is fetched from GitHub (e.g. on a server without access to it).
     if [ -n "$SHELLKIT_DIR" ]; then
         if [ ! -f "$SHELLKIT_DIR/pyproject.toml" ]; then
             print_error "SHELLKIT_DIR is not a shellkit checkout: $SHELLKIT_DIR"
@@ -113,7 +112,12 @@ install_dependencies() {
         fi
         print_info "Using local shellkit checkout (editable): $SHELLKIT_DIR"
         "$ENV_PATH/bin/pip" install -e "$SHELLKIT_DIR"
+        requirements="$(mktemp)"
+        grep -v '^shellkit' "$FLEXFLOW_DIR/requirements.txt" > "$requirements"
     fi
+
+    print_info "Installing required packages from requirements.txt..."
+    "$ENV_PATH/bin/pip" install -r "$requirements"
 
     print_success "All dependencies installed"
 }
