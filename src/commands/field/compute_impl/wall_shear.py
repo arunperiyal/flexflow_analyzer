@@ -71,6 +71,15 @@ def wall_shear_stress(omega, normal, mu_eff):
     return mu_eff[:, None] * np.cross(omega, normal)
 
 
+def _ring_mean(inverse, ngroups, area, values):
+    """Area-weighted mean of a vector field within each ring group `inverse` indexes."""
+    weight = np.bincount(inverse, weights=area, minlength=ngroups)
+    weight[weight == 0] = 1.0
+    return np.column_stack([
+        np.bincount(inverse, weights=area * values[:, i], minlength=ngroups) / weight
+        for i in range(values.shape[1])])
+
+
 def axis_displacement(station, disp, area, logger):
     """How far the body's axis has moved, at each element's station.
 
@@ -100,11 +109,7 @@ def axis_displacement(station, disp, area, logger):
     else:
         logger.info(f"axis displacement averaged over {len(groups):,} element ring(s)")
 
-    weight = np.bincount(inverse, weights=area, minlength=len(groups))
-    weight[weight == 0] = 1.0
-    mean = np.column_stack([
-        np.bincount(inverse, weights=area * disp[:, i], minlength=len(groups)) / weight
-        for i in range(3)])
+    mean = _ring_mean(inverse, len(groups), area, disp)
     return np.column_stack([np.interp(station, groups, mean[:, i]) for i in range(3)])
 
 
@@ -136,11 +141,7 @@ def ring_centres(centroid, station, area, disp, reference, logger, warned):
     # Fall back to the ring mean of coordinates, perpendicular to the span.
     key = np.round(station, 6)
     groups, inverse = np.unique(key, return_inverse=True)
-    weight = np.bincount(inverse, weights=area, minlength=len(groups))
-    weight[weight == 0] = 1.0
-    mean = np.column_stack([
-        np.bincount(inverse, weights=area * centroid[:, i], minlength=len(groups))
-        / weight for i in range(3)])
+    mean = _ring_mean(inverse, len(groups), area, centroid)
     centre = mean[inverse]
     # Keep the station exactly where the element is; only the off-axis part is
     # being estimated.

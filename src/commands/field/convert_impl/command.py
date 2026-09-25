@@ -8,7 +8,7 @@ from pathlib import Path
 from ....utils.logger import Logger
 from ....plt.fxplt import PltFile
 from ....plt.convert import audit, to_vtu
-from ..locate import problem_name, find_plt, zone_index
+from ..locate import problem_name, find_plt, resolve_zone_or_exit
 
 
 def execute_convert(args):
@@ -35,10 +35,7 @@ def execute_convert(args):
     plt = PltFile(plt_path)
     zi = plt.first_volume_zone()
     if getattr(args, "zone", None):
-        zi = zone_index(plt, args.zone)
-        if zi is None:
-            logger.error(f"Zone '{args.zone}' not found. Available: "
-                         f"{', '.join(z['name'] for z in plt.zones)}"); sys.exit(1)
+        zi = resolve_zone_or_exit(plt, args.zone, plt_path, logger)
 
     nen = getattr(args, "nen", None)
 

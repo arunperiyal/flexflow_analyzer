@@ -24,8 +24,9 @@ import numpy as np
 from ....utils.logger import Logger
 from ....utils.progress import progress_enabled, spinner, step_bar
 from ....plt.fxplt import PltFile
-from ....plt.convert import cell_name, crop_mesh, has_domain
-from ..locate import problem_name, find_plt, zone_index, resolve_steps as _resolve_steps
+from ....plt.convert import cell_name, crop_mesh, has_domain, node_in_box
+from ..locate import (problem_name, find_plt, resolve_zone_or_exit, write_pvd,
+                      resolve_steps as _resolve_steps)
 from . import interp
 from . import probe as probe_util
 
@@ -91,20 +92,10 @@ def _resolve_cols(plt, columns, requested, logger, zone=None):
     return cols
 
 
-def _zone_or_exit(plt, zone, plt_path, logger):
-    """Resolve a zone name to its index, or exit listing what the file holds."""
-    zi = zone_index(plt, zone)
-    if zi is None:
-        logger.error(f"Zone '{zone}' not found in {Path(plt_path).name}. Available: "
-                     f"{', '.join(z['name'] for z in plt.zones)}")
-        sys.exit(1)
-    return zi
-
-
 def _load_step(plt_path, zone, logger, want_conn, nen=None):
     """Load a zone; return (plt, zi, pts, conn, pdata). Exits on bad zone/shared data."""
     plt = PltFile(plt_path)
-    zi = _zone_or_exit(plt, zone, plt_path, logger)
+    zi = resolve_zone_or_exit(plt, zone, plt_path, logger)
     pts, conn, pdata, info = plt.load_zone(zi, nen=nen)
     if not pdata:
         logger.error(f"Zone '{zone}' has no variable data at all (every variable is passive).")
@@ -122,16 +113,6 @@ def _load_step(plt_path, zone, logger, want_conn, nen=None):
     return plt, zi, pts, conn, pdata, info
 
 
-def _node_mask(pts, domain):
-    mask = np.ones(len(pts), dtype=bool)
-    for name, axis, op in (("xmin", 0, "ge"), ("xmax", 0, "le"), ("ymin", 1, "ge"),
-                           ("ymax", 1, "le"), ("zmin", 2, "ge"), ("zmax", 2, "le")):
-        v = domain.get(name)
-        if v is not None:
-            mask &= (pts[:, axis] >= v) if op == "ge" else (pts[:, axis] <= v)
-    return mask
-
-
 def _write_mesh(plt_path, zone, requested, domain, out_vtu, logger, nen=None):
     """Write one trimmed mesh (cells + selected non-coordinate vars) to out_vtu."""
     import meshio
@@ -146,17 +127,6 @@ def _write_mesh(plt_path, zone, requested, domain, out_vtu, logger, nen=None):
     cname = cell_name(info["npe"], info["ztype"])
     meshio.Mesh(points=pts, cells=[(cname, conn)], point_data=data).write(out_vtu, binary=True)
     return len(pts), len(conn), list(data.keys())
-
-
-def _write_pvd(path, entries):
-    """Write a ParaView .pvd collection: entries = [(timestep, filename), ...]."""
-    lines = ['<?xml version="1.0"?>',
-             '<VTKFile type="Collection" version="0.1" byte_order="LittleEndian">',
-             '  <Collection>']
-    for ts, fn in entries:
-        lines.append(f'    <DataSet timestep="{ts}" group="" part="0" file="{fn}"/>')
-    lines += ['  </Collection>', '</VTKFile>']
-    Path(path).write_text("\n".join(lines) + "\n")
 
 
 def _feedback(args, steps):
@@ -188,7 +158,7 @@ def _extract_csv(steps, mode, binary_dir, problem, args, requested, out_path, lo
                 coord_names = set(plt.vars[:3])
                 cols = _resolve_cols(plt, columns, requested, logger, args.zone)
                 acc_cols = {c: [] for c in cols}
-            mask = _node_mask(pts, domain)
+            mask = node_in_box(pts, domain)
             acc_pts.append(pts[mask])
             acc_ts.append(np.full(int(mask.sum()), ts, dtype=np.int64))
             for c in cols:
@@ -227,7 +197,7 @@ def _probe_precheck(binary_dir, problem, steps, zone, points, axes, tol, logger)
     if not plt_path:
         logger.error("Nothing to probe (no matching PLT files)."); sys.exit(1)
     plt = PltFile(plt_path)
-    bounds = probe_util.header_bounds(plt, _zone_or_exit(plt, zone, plt_path, logger))
+    bounds = probe_util.header_bounds(plt, resolve_zone_or_exit(plt, zone, plt_path, logger))
     if bounds is None:
         return None
     probe_util.check_inside(points, axes, bounds[0], bounds[1], zone, logger, tol=tol)
@@ -476,6 +446,6 @@ def execute_extract(args):
                 bar.advance()
         if not entries:
             logger.error("Nothing written (no matching PLT files)."); sys.exit(1)
-        _write_pvd(out_path, entries)
+        write_pvd(out_path, entries)
         logger.success(f"Wrote time series: {len(entries)} mesh file(s) + {out_path}")
         return

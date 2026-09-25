@@ -20,6 +20,10 @@ from pathlib import Path
 
 import numpy as np
 
+from ..locate import write_table_csv
+
+SEPARATION_INT_COLUMNS = ("section", "theta_bin", "elements", "timestep", "crossings")
+
 AZIMUTHAL_COLUMNS = ["section", "station", "theta_bin", "theta", "Cf_theta",
                      "Cf_axial", "Cp", "area", "elements"]
 SEPARATION_COLUMNS = ["timestep", "section", "station", "theta_sep_pos",
@@ -215,13 +219,7 @@ def reduce_step(table, sections, n_bins, q):
 
 def write_csv(path, header, rows, comments):
     """A table with its '#' block, matching what the rest of field compute writes."""
-    lines = [f"# {line}" for line in comments] + [",".join(header)]
-    for row in rows:
-        lines.append(",".join(
-            str(int(v)) if name in ("section", "theta_bin", "elements", "timestep",
-                                    "crossings")
-            else f"{v:.8e}" for name, v in zip(header, row)))
-    Path(path).write_text("\n".join(lines) + "\n")
+    write_table_csv(path, header, rows, comments, SEPARATION_INT_COLUMNS)
 
 
 def write_csv_dict(path, header, rows, comments):

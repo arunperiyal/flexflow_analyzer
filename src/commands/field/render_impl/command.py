@@ -19,7 +19,7 @@ from ....utils.logger import Logger
 from ....plt import render
 from ....plt.convert import to_vtu
 from ...case_iteration import is_wildcard_case, load_cases_from_directory
-from ..locate import problem_name, find_plt, zone_index, resolve_steps
+from ..locate import problem_name, find_plt, resolve_zone_or_exit, resolve_steps
 from .templates import TEMPLATES
 
 
@@ -123,6 +123,32 @@ def _check_range(pair, logger):
     return [lo, hi]
 
 
+def _load_config(mode, base_cfg, path, logger, sections_hint):
+    """Load --config, merge over base_cfg, or exit with a clear message.
+
+    Same contract as --camera: a bad config should stop the run with a sentence,
+    not a traceback -- and the way to get one is --write-template.
+    """
+    import yaml
+
+    if not Path(path).exists():
+        logger.error(f"config file not found: {path}\n"
+                     f"        write a starting point with "
+                     f"`field render {mode} --write-template {path}`")
+        sys.exit(1)
+    try:
+        with open(path) as f:
+            user_cfg = yaml.safe_load(f) or {}
+    except yaml.YAMLError as e:
+        logger.error(f"--config {path}: {e}")
+        sys.exit(1)
+    if not isinstance(user_cfg, dict):
+        logger.error(f"--config {path}: expected a mapping of sections "
+                     f"({sections_hint}), got {type(user_cfg).__name__}")
+        sys.exit(1)
+    return render.deep_merge(base_cfg, user_cfg), user_cfg
+
+
 def _resolve_colorbar_output(args, logger):
     """--output for `colorbar`: one file, named directly -- not a directory
     of camera views, so it does not go through _resolve_output/_output_dir."""
@@ -161,24 +187,7 @@ def _render_colorbar(args, logger):
     cfg = render.default_config("colorbar")
     user_cfg = {}
     if getattr(args, "config", None):
-        import yaml
-        path = args.config
-        if not Path(path).exists():
-            logger.error(f"config file not found: {path}\n"
-                         f"        write a starting point with "
-                         f"`field render colorbar --write-template {path}`")
-            sys.exit(1)
-        try:
-            with open(path) as f:
-                user_cfg = yaml.safe_load(f) or {}
-        except yaml.YAMLError as e:
-            logger.error(f"--config {path}: {e}")
-            sys.exit(1)
-        if not isinstance(user_cfg, dict):
-            logger.error(f"--config {path}: expected a mapping of sections "
-                         f"(color:, image:), got {type(user_cfg).__name__}")
-            sys.exit(1)
-        cfg = render.deep_merge(cfg, user_cfg)
+        cfg, user_cfg = _load_config("colorbar", cfg, args.config, logger, "color:, image:")
 
     if getattr(args, "color", None):
         cfg["color"]["variable"] = args.color
@@ -338,13 +347,7 @@ def _resolve_zone(plt_path, zone_name, logger):
     from ....plt.fxplt import PltFile
 
     plt = PltFile(str(plt_path))
-    idx = zone_index(plt, zone_name)
-    if idx is None:
-        names = ", ".join(z["name"] for z in plt.zones)
-        logger.error(f"Zone '{zone_name}' not found in {Path(plt_path).name}. "
-                     f"Available: {names}")
-        sys.exit(1)
-    return idx
+    return resolve_zone_or_exit(plt, zone_name, plt_path, logger)
 
 
 def _apply_overrides(args, cfg, mode):
@@ -587,27 +590,7 @@ def _render_one_case(args, mode, logger, shared=None):
     user_cfg = {}
     cfg = render.default_config(mode)
     if getattr(args, "config", None):
-        import yaml
-        path = args.config
-        # Same contract as --camera: a bad config should stop the run with a
-        # sentence, not a traceback -- and the way to get one is --write-template.
-        if not Path(path).exists():
-            logger.error(f"config file not found: {path}\n"
-                         f"        write a starting point with "
-                         f"`field render {mode} --write-template {path}`")
-            sys.exit(1)
-        try:
-            with open(path) as f:
-                user_cfg = yaml.safe_load(f) or {}
-        except yaml.YAMLError as e:
-            logger.error(f"--config {path}: {e}")
-            sys.exit(1)
-        if not isinstance(user_cfg, dict):
-            logger.error(f"--config {path}: expected a mapping of sections "
-                         f"(input:, iso:, views: ...), got "
-                         f"{type(user_cfg).__name__}")
-            sys.exit(1)
-        cfg = render.deep_merge(cfg, user_cfg)
+        cfg, user_cfg = _load_config(mode, cfg, args.config, logger, "input:, iso:, views: ...")
     other = "slice" if mode == "iso" else "contour"
     if other in user_cfg:
         logger.warning(f"config has a '{other}:' section, which `field render "
