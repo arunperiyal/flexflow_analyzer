@@ -14,6 +14,14 @@ print_header() {
     echo
 }
 
+# The rc file of the user's login shell ($SHELL), not of the bash running this
+shell_rc_file() {
+    case "$(basename "${SHELL:-bash}")" in
+        zsh) echo "$HOME/.zshrc" ;;
+        *)   echo "$HOME/.bashrc" ;;
+    esac
+}
+
 print_step() {
     echo -e "\n${BLUE}==>${NC} ${GREEN}$1${NC}\n"
 }
@@ -78,11 +86,7 @@ print_summary() {
     case $INSTALL_TYPE in
         alias|both)
             echo "1. Reload your shell:"
-            if [ -n "$ZSH_VERSION" ]; then
-                echo "   source ~/.zshrc"
-            else
-                echo "   source ~/.bashrc"
-            fi
+            echo "   source $(shell_rc_file)"
             echo
             echo "2. Test FlexFlow:"
             echo "   ff -v                    # Fast version (0.4s)"

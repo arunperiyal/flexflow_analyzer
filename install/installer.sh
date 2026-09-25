@@ -50,14 +50,9 @@ choose_installation_type() {
 install_alias() {
     print_step "Installing fast alias"
     
-    # Detect shell
-    if [ -n "$ZSH_VERSION" ]; then
-        SHELL_RC="$HOME/.zshrc"
-    elif [ -n "$BASH_VERSION" ]; then
-        SHELL_RC="$HOME/.bashrc"
-    else
-        SHELL_RC="$HOME/.bashrc"
-    fi
+    # Detect the user's login shell. $ZSH_VERSION cannot tell: this script
+    # always runs under bash, whatever shell it was started from.
+    SHELL_RC="$(shell_rc_file)"
     
     print_info "Detected shell config: $SHELL_RC"
     
@@ -164,11 +159,7 @@ EOF
             print_warning "~/.local/bin is not in your PATH"
             
             if ask_yes_no "Add it to PATH now?"; then
-                if [ -n "$ZSH_VERSION" ]; then
-                    echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.zshrc"
-                else
-                    echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
-                fi
+                echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$(shell_rc_file)"
                 print_success "Added to PATH"
             fi
         fi

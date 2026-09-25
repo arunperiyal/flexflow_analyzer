@@ -88,20 +88,7 @@ install_dependencies() {
 
     conda activate "$CONDA_ENV_NAME"
 
-    print_info "Installing required packages..."
-
-    # Core dependencies
-    PACKAGES=(
-        "numpy"
-        "matplotlib"
-        "pandas"
-        "pyyaml"
-        "rich"
-        "tqdm"
-        "pytecplot"
-        "prompt_toolkit"
-        "markdown"
-    )
+    print_info "Installing required packages from requirements.txt..."
 
     # Get the actual environment path (works for both system and user conda)
     ENV_PATH=$(conda env list | grep "^$CONDA_ENV_NAME " | awk '{print $NF}')
@@ -113,17 +100,20 @@ install_dependencies() {
 
     print_info "Environment location: $ENV_PATH"
 
-    # Use conda environment's pip explicitly
-    "$ENV_PATH/bin/pip" install "${PACKAGES[@]}"
+    # Use conda environment's pip explicitly. requirements.txt is the one list
+    # of what FlexFlow needs, shellkit included (from its GitHub repo).
+    "$ENV_PATH/bin/pip" install -r "$FLEXFLOW_DIR/requirements.txt"
 
-    # shellkit (the interactive shell framework) is a sibling project, not on
-    # PyPI. Editable, so updating the checkout updates FlexFlow's shell.
-    SHELLKIT_DIR="${SHELLKIT_DIR:-$FLEXFLOW_DIR/../shellkit}"
-    if [ ! -f "$SHELLKIT_DIR/pyproject.toml" ]; then
-        print_error "shellkit not found at $SHELLKIT_DIR (set SHELLKIT_DIR to its checkout)"
-        exit 1
+    # SHELLKIT_DIR=../shellkit ./install.sh: use a local shellkit checkout,
+    # editable, so changes to it show up in FlexFlow without reinstalling.
+    if [ -n "$SHELLKIT_DIR" ]; then
+        if [ ! -f "$SHELLKIT_DIR/pyproject.toml" ]; then
+            print_error "SHELLKIT_DIR is not a shellkit checkout: $SHELLKIT_DIR"
+            exit 1
+        fi
+        print_info "Using local shellkit checkout (editable): $SHELLKIT_DIR"
+        "$ENV_PATH/bin/pip" install -e "$SHELLKIT_DIR"
     fi
-    "$ENV_PATH/bin/pip" install -e "$SHELLKIT_DIR"
 
     print_success "All dependencies installed"
 }

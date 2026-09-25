@@ -43,6 +43,9 @@ main() {
         echo "Environment:"
         echo "  Conda Environment: $CONDA_ENV_NAME"
         echo "  Python Version:    $PYTHON_VERSION"
+        echo "  Dependencies:      requirements.txt (shellkit from GitHub)"
+        echo
+        echo "  SHELLKIT_DIR=../shellkit ./install.sh   use a local shellkit checkout (editable)"
         echo
         echo "For more information, see INSTALL.md"
         exit 0
