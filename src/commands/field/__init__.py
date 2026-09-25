@@ -4,6 +4,8 @@ Subcommands: info, extract, compute, convert, render, check
 """
 
 from ..base import BaseCommand
+from src.cli.context import case_arg, context_flag, freq_arg, timestep_arg
+from src.cli.completers import described, file_flags
 
 _BOX_CROP_ARGS = [('xmin', 'Minimum X coordinate'), ('xmax', 'Maximum X coordinate'),
                   ('ymin', 'Minimum Y coordinate'), ('ymax', 'Maximum Y coordinate'),
@@ -38,7 +40,7 @@ class FieldCommand(BaseCommand):
         # field info (was: tecplot info)
         info_parser = field_subparsers.add_parser('info', add_help=False,
                                                  help='Show PLT file information')
-        info_parser.add_argument('case', nargs='?', help='Case directory path')
+        case_arg(info_parser, help='Case directory path')
         info_parser.add_argument('-v', '--verbose', action='store_true',
                                 help='Enable verbose output')
         info_parser.add_argument('-h', '--help', action='store_true',
@@ -61,23 +63,22 @@ class FieldCommand(BaseCommand):
         # field extract (was: tecplot extract)
         extract_parser = field_subparsers.add_parser('extract', add_help=False,
                                                     help='Extract data from PLT files')
-        extract_parser.add_argument('case', nargs='?', help='Case directory path')
+        case_arg(extract_parser, help='Case directory path')
         extract_parser.add_argument('-v', '--verbose', action='store_true',
                                    help='Enable verbose output')
         extract_parser.add_argument('-h', '--help', action='store_true',
                                    help='Show help for extract command')
-        extract_parser.add_argument('--variables', type=str,
-                                   help='Comma-separated list of variables to extract')
-        extract_parser.add_argument('--zone', type=str,
-                                   help='Zone name to extract from')
-        extract_parser.add_argument('--timestep', type=int,
-                                   help='Single timestep to extract')
-        extract_parser.add_argument('--t1', type=float,
-                                   help='Start step (alone: that step; with --t2: range start)')
-        extract_parser.add_argument('--t2', type=float,
-                                   help='End step of a range (consolidated into one output)')
-        extract_parser.add_argument('--freq', type=int,
-                                   help='With --t1/--t2: keep only steps that are multiples of FREQ')
+        context_flag(extract_parser, 'var', '--variables', type=str,
+                     help='Comma-separated list of variables to extract')
+        context_flag(extract_parser, 'zone', '--zone', type=str,
+                     help='Zone name to extract from')
+        timestep_arg(extract_parser, help='Single timestep to extract')
+        context_flag(extract_parser, 't1', '--t1', type=float,
+                     help='Start step (alone: that step; with --t2: range start)')
+        context_flag(extract_parser, 't2', '--t2', type=float,
+                     help='End step of a range (consolidated into one output)')
+        freq_arg(extract_parser,
+                 help='With --t1/--t2: keep only steps that are multiples of FREQ')
         extract_parser.add_argument('--output', '--output-file', dest='output_file', type=str,
                                    help='REQUIRED output: .csv / .vtu/.vtk (mesh) / .pvd (series), '
                                         'or a bare NAME -> a directory NAME/ (relative -> under the case dir)')
@@ -104,19 +105,25 @@ class FieldCommand(BaseCommand):
                                                      help='Compute quantities on a surface zone')
         compute_parser.add_argument('quantity', nargs='?',
                                     help='Quantity to compute (force, force_coeff, '
-                                         'wall_shear, separation, lambda2)')
-        compute_parser.add_argument('case', nargs='?', help='Case directory path')
+                                         'wall_shear, separation, lambda2)'
+                                    ).completer = described(
+            ('force', 'Per-element pressure force'),
+            ('force_coeff', 'Cd/Cl for the body, and per section'),
+            ('wall_shear', 'Viscous wall shear, from the vorticity'),
+            ('separation', 'Separation angle per section, per step'),
+            ('lambda2', 'Vortex criterion, as a nodal field'))
+        case_arg(compute_parser, help='Case directory path')
         compute_parser.add_argument('-v', '--verbose', action='store_true',
                                     help='Enable verbose output')
         compute_parser.add_argument('-h', '--help', action='store_true',
                                     help='Show help for compute command')
-        compute_parser.add_argument('--zone', type=str,
-                                    help='Surface zone to integrate over (e.g. cyl)')
-        compute_parser.add_argument('--timestep', type=int, help='Single timestep')
-        compute_parser.add_argument('--t1', type=float, help='Start step (or a single step)')
-        compute_parser.add_argument('--t2', type=float, help='End step of a range')
-        compute_parser.add_argument('--freq', type=int,
-                                    help='With --t1/--t2: keep steps that are multiples of FREQ')
+        context_flag(compute_parser, 'zone', '--zone', type=str,
+                     help='Surface zone to integrate over (e.g. cyl)')
+        timestep_arg(compute_parser, help='Single timestep')
+        context_flag(compute_parser, 't1', '--t1', type=float, help='Start step (or a single step)')
+        context_flag(compute_parser, 't2', '--t2', type=float, help='End step of a range')
+        freq_arg(compute_parser,
+                 help='With --t1/--t2: keep steps that are multiples of FREQ')
         compute_parser.add_argument('--output', '--output-file', dest='output_file',
                                     nargs='?', const=True, default=None, metavar='NAME',
                                     help='Bare NAME -> a directory of per-timestep element '
@@ -153,10 +160,10 @@ class FieldCommand(BaseCommand):
                                     help='Enable verbose output')
         convert_parser.add_argument('-h', '--help', action='store_true',
                                     help='Show help for convert command')
-        convert_parser.add_argument('--timestep', type=int,
-                                    help='Timestep to convert (default: latest)')
-        convert_parser.add_argument('--zone', type=str,
-                                    help='Zone to export (default: first volume zone)')
+        timestep_arg(convert_parser, from_t1=True,
+                     help='Timestep to convert (default: latest)')
+        context_flag(convert_parser, 'zone', '--zone', type=str,
+                     help='Zone to export (default: first volume zone)')
         convert_parser.add_argument('--nen', type=int,
                                     help='Force nodes-per-element (e.g. 8 for bricks)')
         convert_parser.add_argument('--output', type=str,
@@ -169,10 +176,12 @@ class FieldCommand(BaseCommand):
         render_parser = field_subparsers.add_parser('render', add_help=False,
                                                     help='Render images (iso, slice, colorbar)')
         render_parser.add_argument('mode', nargs='?',
-                                   help='What to render (iso, slice, colorbar)')
-        render_parser.add_argument('case', nargs='?',
-                                   help='Case directory path, or * for every '
-                                        'case in the .cases registry')
+                                   help='What to render (iso, slice, colorbar)'
+                                   ).completer = described(
+            ('iso', 'Isosurface of a scalar'), ('slice', 'A cut plane, or a series of them'),
+            ('colorbar', 'The colour scale on its own'))
+        case_arg(render_parser, help='Case directory path, or * for every '
+                                     'case in the .cases registry')
         render_parser.add_argument('-v', '--verbose', action='store_true',
                                    help='Enable verbose output')
         render_parser.add_argument('-h', '--help', action='store_true',
@@ -189,15 +198,14 @@ class FieldCommand(BaseCommand):
                                         'save it to FILE for --camera. Needs a display')
         render_parser.add_argument('--write-template', type=str, metavar='PATH',
                                    help="Write this mode's YAML config template and exit")
-        render_parser.add_argument('--timestep', type=int,
-                                   help='A single timestep (default: latest)')
-        render_parser.add_argument('--t1', type=float,
-                                   help='Start step (alone: that step; with --t2: range start)')
-        render_parser.add_argument('--t2', type=float,
-                                   help='End step of a range: one figure per step in it')
-        render_parser.add_argument('--freq', type=int,
-                                   help='With --t1/--t2: keep only steps that are multiples of FREQ')
-        render_parser.add_argument('--zone', type=str, help='Zone to render')
+        timestep_arg(render_parser, help='A single timestep (default: latest)')
+        context_flag(render_parser, 't1', '--t1', type=float,
+                     help='Start step (alone: that step; with --t2: range start)')
+        context_flag(render_parser, 't2', '--t2', type=float,
+                     help='End step of a range: one figure per step in it')
+        freq_arg(render_parser,
+                 help='With --t1/--t2: keep only steps that are multiples of FREQ')
+        context_flag(render_parser, 'zone', '--zone', type=str, help='Zone to render')
         render_parser.add_argument('--nen', type=int,
                                    help='Force nodes-per-element when converting')
         render_parser.add_argument('--color', type=str, help='Scalar to colour by')
@@ -256,6 +264,18 @@ class FieldCommand(BaseCommand):
         # Main field help flags
         parser.add_argument('-h', '--help', action='store_true',
                            help='Show help for field command')
+
+        # Tab offers files of these kinds after each flag
+        file_flags(render_parser, {
+            '--config': ('.yml', '.yaml'),
+            '--write-template': ('.yml', '.yaml'),
+            '--camera': ('.yml', '.yaml', '.pvsm', '.py'),
+            '--pick-camera': ('.yml', '.yaml'),
+            '--vtu': ('.vtu',),
+        })
+        file_flags(convert_parser, {'--output': ('.vtu',)})
+        file_flags(extract_parser, {'--output-file': ('.csv', '.dat', '.txt')})
+        file_flags(check_parser, {'file': ('.vtu', '.vtk', '.vtp')})
 
         return parser
 

@@ -9,17 +9,8 @@ from rich import box
 
 def get_case_name_and_base_dir():
     """Get current case name and base directory from interactive context."""
-    from src.cli.interactive import InteractiveShell
-    
-    case_name = None
-    base_dir = Path.cwd()
-    
-    if hasattr(InteractiveShell, '_instance') and InteractiveShell._instance:
-        shell = InteractiveShell._instance
-        case_name = shell._current_case
-        base_dir = shell._current_dir
-    
-    return case_name, base_dir
+    from src.cli.context import current_case, current_dir
+    return current_case(), current_dir()
 
 
 def is_wildcard_case(case_name: Optional[str]) -> bool:

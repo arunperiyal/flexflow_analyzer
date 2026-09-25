@@ -2,12 +2,13 @@
 """
 FlexFlow - Main entry point.
 
-This is the application entry point. All application logic
-is in src/cli/app.py to keep this file minimal and clean.
+This is the application entry point. The app is declared in src/cli/app.py;
+the shell itself is shellkit's.
 
 Usage:
     python main.py [--cli | --ui] [options]
-    ff [--cli | --ui] [options]
+    ff                       # interactive shell
+    ff case show CS4SG1U1    # run one command and exit
 """
 
 import argparse
@@ -17,14 +18,14 @@ import os
 # Add current directory to path for development mode
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from src.cli.app import FlexFlowApp
+from src.cli.app import create_app
 
 
 def _parse_launch_mode(argv):
     """Split --cli/--ui (and the web app's own options) off argv.
 
-    Everything else is left untouched so the interactive shell's own
-    argument handling is unaffected.
+    Everything else is left for the app: a command to run once, or nothing
+    for the interactive shell.
     """
     parser = argparse.ArgumentParser(add_help=False)
     group = parser.add_mutually_exclusive_group()
@@ -52,8 +53,12 @@ def main() -> int:
         run_web(root=launch.root, host=launch.host, port=launch.port)
         return 0
 
-    app = FlexFlowApp()
-    return app.run()
+    if rest and rest[0] in ('--version', '-V'):
+        from __version__ import get_full_version_info
+        print(get_full_version_info())
+        return 0
+
+    return create_app().run(rest)
 
 
 if __name__ == '__main__':

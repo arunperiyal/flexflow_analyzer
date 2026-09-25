@@ -1,270 +1,96 @@
 """
-FlexFlow application class.
+FlexFlow application, built on shellkit.
 
-Contains the main application logic, command registration,
-argument parsing, and execution flow.
+This module declares what FlexFlow is -- its commands, contexts, builtins and
+banner. The shell itself (prompt, history, completion, `use`, pipes, ...)
+is shellkit's.
 """
 
-import sys
-import argparse
-from typing import List, Optional
+from rich import box
+from rich.panel import Panel
 
-from src.cli.registry import registry
-from src.cli.help_messages import print_main_help, print_main_examples
-from src.utils.colors import Colors
+from shellkit import App
 
-
-class FlexFlowParser(argparse.ArgumentParser):
-    """
-    Custom argument parser with better error messages.
-
-    Provides enhanced error reporting and help message formatting
-    for the FlexFlow CLI.
-    """
-
-    def error(self, message: str) -> None:
-        """
-        Handle parser errors with custom formatting.
-
-        Args:
-            message: Error message from argparse
-        """
-        if 'invalid choice' in message:
-            import re
-
-            # Try to extract the invalid choice and what parser it's for
-            match = re.search(r"invalid choice: '(\w+)'", message)
-            if match:
-                invalid_choice = match.group(1)
-
-                # Check if this is a subcommand error by looking at sys.argv or the message
-                # If the message mentions specific subcommands, it's a subcommand error
-                if 'case_subcommand' in message or (len(sys.argv) > 1 and sys.argv[1] == 'case'):
-                    # This is a case subcommand error
-                    from src.commands.case import CaseCommand
-                    print(
-                        f"\n{Colors.RED}✗ Error: Unknown subcommand '{invalid_choice}' for 'case'"
-                        f"{Colors.RESET}\n",
-                        file=sys.stderr
-                    )
-                    CaseCommand().show_help()
-                    sys.exit(2)
-                elif 'data_subcommand' in message or (len(sys.argv) > 1 and sys.argv[1] == 'data'):
-                    # This is a data subcommand error
-                    from src.commands.data import DataCommand
-                    print(
-                        f"\n{Colors.RED}✗ Error: Unknown subcommand '{invalid_choice}' for 'data'"
-                        f"{Colors.RESET}\n",
-                        file=sys.stderr
-                    )
-                    DataCommand().show_help()
-                    sys.exit(2)
-                elif 'field_subcommand' in message or (len(sys.argv) > 1 and sys.argv[1] == 'field'):
-                    # This is a field subcommand error
-                    from src.commands.field import FieldCommand
-                    print(
-                        f"\n{Colors.RED}✗ Error: Unknown subcommand '{invalid_choice}' for 'field'"
-                        f"{Colors.RESET}\n",
-                        file=sys.stderr
-                    )
-                    FieldCommand().show_help()
-                    sys.exit(2)
-                elif 'def_subcommand' in message or (len(sys.argv) > 1 and sys.argv[1] == 'def'):
-                    # This is a def subcommand error
-                    from src.commands.def_cmd import DefCommand
-                    print(
-                        f"\n{Colors.RED}✗ Error: Unknown subcommand '{invalid_choice}' for 'def'"
-                        f"{Colors.RESET}\n",
-                        file=sys.stderr
-                    )
-                    DefCommand().show_help()
-                    sys.exit(2)
-                else:
-                    # This is a main command error
-                    print(
-                        f"\n{Colors.RED}✗ Error: Unknown command '{invalid_choice}'"
-                        f"{Colors.RESET}\n",
-                        file=sys.stderr
-                    )
-                    print_main_help()
-                    sys.exit(2)
-        super().error(message)
+from src.cli import builtins as ff_builtins
+from src.cli.context import CONTEXTS
 
 
-class FlexFlowApp:
-    """
-    Main FlexFlow application.
+def _banner(rt):
+    from __version__ import __version__
+    rt.console.print()
+    rt.console.print(Panel(
+        f"[bold cyan]FlexFlow Interactive Shell[/bold cyan] [dim]v{__version__}[/dim]\n\n"
+        "Fast and efficient simulation analysis tool\n\n"
+        "[yellow]Quick Start:[/yellow]\n"
+        "  • Type [cyan]help[/cyan] or [cyan]?[/cyan] for available commands\n"
+        "  • Use [cyan]ls[/cyan], [cyan]cd[/cyan], [cyan]find[/cyan] to browse\n"
+        "  • Use [cyan]Tab[/cyan] for autocompletion\n"
+        "  • Use [cyan]↑/↓[/cyan] for command history\n"
+        "  • Chain commands with [cyan];[/cyan] (e.g., [cyan]use case:C1; data show[/cyan])\n"
+        "  • Pipe commands with [cyan]|[/cyan] (e.g., [cyan]case show | grep status[/cyan])\n\n"
+        "[yellow]Set Context:[/yellow]\n"
+        "  [cyan]use case:Case015 node:24 t1:50.0 t2:100.0[/cyan]\n"
+        "  Set multiple contexts at once with [bold]context:value[/bold] syntax\n\n"
+        "[dim]Type [cyan]exit[/cyan] or [cyan]quit[/cyan] to exit[/dim]",
+        border_style="cyan", box=box.ROUNDED))
+    rt.console.print()
 
-    Handles command registration, argument parsing, and command execution.
-    This class contains all application logic that was previously in main.py.
 
-    Attributes:
-        parser: Argument parser for CLI
-    """
+HELP_HEADER = (
+    "[yellow]Context:[/yellow]   [cyan]use case:Case015 node:24 t1:50.0 t2:100.0[/cyan]  "
+    "[dim](`use list` shows them all)[/dim]\n"
+    "[yellow]Chaining:[/yellow]  [cyan]use case:Case005; data show; plot --data-type pendulum[/cyan]\n"
+    "[yellow]Piping:[/yellow]    [cyan]case show | head -10[/cyan]   "
+    "[cyan]data show | grep -i status[/cyan]"
+)
 
-    def __init__(self) -> None:
-        """Initialize FlexFlow application."""
-        self.parser: Optional[argparse.ArgumentParser] = None
-        self._register_commands()
 
-    def _register_commands(self) -> None:
-        """Register all available commands with the registry."""
-        # Import all command classes
-        from src.commands.case import CaseCommand
-        from src.commands.data import DataCommand
-        from src.commands.field import FieldCommand
-        from src.commands.def_cmd import DefCommand
-        from src.commands.check import CheckCommand
-        from src.commands.visualization import PlotCommand, CompareCommand
-        from src.commands.template import TemplateCommand
-        from src.commands.utils import DocsCommand
-        from src.commands.run import RunCommand
-        from src.commands.remote import RemoteCommand
+def _register_commands(app):
+    from src.commands.case import CaseCommand
+    from src.commands.data import DataCommand
+    from src.commands.field import FieldCommand
+    from src.commands.def_cmd import DefCommand
+    from src.commands.check import CheckCommand
+    from src.commands.visualization import PlotCommand, CompareCommand
+    from src.commands.template import TemplateCommand
+    from src.commands.utils import DocsCommand
+    from src.commands.run import RunCommand
+    from src.commands.remote import RemoteCommand
 
-        # Register all commands
-        command_classes = [
-            # Domain commands
-            CaseCommand,
-            DataCommand,
-            FieldCommand,
-            DefCommand,
-            # Execution commands
-            RunCommand,
-            # File inspection
-            CheckCommand,
-            # Visualization commands
-            PlotCommand,
-            CompareCommand,
-            # Configuration commands
-            RemoteCommand,
-            # Utility commands
-            TemplateCommand,
-            DocsCommand,
-        ]
+    app.register(
+        # Domain commands
+        CaseCommand, DataCommand, FieldCommand, DefCommand,
+        # Execution commands
+        RunCommand,
+        # File inspection
+        CheckCommand,
+        # Visualization commands
+        PlotCommand, CompareCommand,
+        # Configuration commands
+        RemoteCommand,
+        # Utility commands
+        TemplateCommand, DocsCommand,
+    )
 
-        for cmd_class in command_classes:
-            registry.register(cmd_class)
 
-    def _create_parser(self) -> argparse.ArgumentParser:
-        """
-        Create argument parser with registry pattern.
+def create_app() -> App:
+    """The FlexFlow shellkit App, with every command registered."""
+    from __version__ import __version__
 
-        Returns:
-            Configured argument parser
-        """
-        parser = FlexFlowParser(
-            description='FlexFlow - Analyze and visualize FlexFlow simulation data',
-            add_help=False
-        )
-
-        # Global options
-        parser.add_argument(
-            '--examples',
-            action='store_true',
-            help='Show comprehensive usage examples'
-        )
-        parser.add_argument(
-            '--version', '-v',
-            action='store_true',
-            help='Show version information'
-        )
-        parser.add_argument(
-            '-h', '--help',
-            action='store_true',
-            help='Show help message'
-        )
-
-        # Create subparsers for commands
-        subparsers = parser.add_subparsers(
-            dest='command',
-            help='Available commands'
-        )
-
-        # Let each registered command add its parser
-        for command in registry.all():
-            command.setup_parser(subparsers)
-
-        return parser
-
-    def _handle_global_flags(self, args: argparse.Namespace) -> bool:
-        """
-        Handle global flags (--version, --help, etc.).
-
-        Args:
-            args: Parsed command-line arguments
-
-        Returns:
-            True if a global flag was handled and app should exit,
-            False otherwise
-        """
-        if hasattr(args, 'examples') and args.examples:
-            # Only show main examples if NOT a subcommand
-            if not hasattr(args, 'case_subcommand'):
-                print_main_examples()
-                return True
-
-        if args.version:
-            from __version__ import get_full_version_info
-            print(get_full_version_info())
-            return True
-
-        if not args.command:
-            print_main_help()
-            return True
-
-        return False
-
-    def _execute_command(self, args: argparse.Namespace) -> None:
-        """
-        Execute the command specified in args.
-
-        Args:
-            args: Parsed command-line arguments
-        """
-        command = registry.get(args.command)
-        if command:
-            command.execute(args)
-        else:
-            print(
-                f"{Colors.RED}✗ Error: Unknown command '{args.command}'"
-                f"{Colors.RESET}",
-                file=sys.stderr
-            )
-            print("\nRun 'flexflow --help' for available commands")
-            sys.exit(1)
-
-    def run(self, argv: Optional[List[str]] = None) -> int:
-        """
-        Run the FlexFlow application in interactive mode.
-
-        The application now always runs in interactive shell mode,
-        providing fast command execution without startup overhead.
-
-        Args:
-            argv: Command-line arguments (default: None, runs interactive)
-
-        Returns:
-            Exit code (0 for success, non-zero for error)
-        """
-        try:
-            # Create parser (needed for command execution in interactive mode)
-            self.parser = self._create_parser()
-
-            # Always run in interactive mode
-            from src.cli.interactive import InteractiveShell
-            shell = InteractiveShell(app=self)
-            return shell.run()
-
-        except KeyboardInterrupt:
-            print("\n\nInterrupted by user", file=sys.stderr)
-            return 130  # Standard exit code for SIGINT
-
-        except Exception as e:
-            print(f"{Colors.RED}Error: {e}{Colors.RESET}", file=sys.stderr)
-
-            # Show traceback in debug mode
-            if '--debug' in sys.argv or '-d' in sys.argv:
-                import traceback
-                traceback.print_exc()
-
-            return 1
+    app = App(
+        'flexflow',
+        version=__version__,
+        description='FlexFlow - Analyze and visualize FlexFlow simulation data',
+        storage='~/.flexflow',
+        contexts=CONTEXTS,
+        builtins=('core', 'files'),
+        banner=_banner,
+        goodbye="\n[cyan]Thanks for using FlexFlow! Goodbye![/cyan]\n",
+        help_header=HELP_HEADER,
+        session_timeout=15,
+        file_style=ff_builtins.file_style,
+    )
+    for builtin in ff_builtins.builtins():
+        app.add_builtin(builtin)
+    _register_commands(app)
+    return app

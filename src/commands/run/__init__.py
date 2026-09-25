@@ -4,6 +4,7 @@ Commands: check, pre, main, post, sq, sb, sc
 """
 
 from ..base import BaseCommand
+from src.cli.context import case_arg, freq_arg
 
 
 class RunCommand(BaseCommand):
@@ -33,7 +34,7 @@ class RunCommand(BaseCommand):
             add_help=False,
             help='Validate case directory structure'
         )
-        check_parser.add_argument('case', nargs='?', help='Case directory')
+        case_arg(check_parser, help='Case directory')
         check_parser.add_argument('--headers', action='store_true', help='Show SBATCH header info (partition, tasks, walltime) for job scripts')
         check_parser.add_argument('-v', '--verbose', action='store_true', help='Verbose output')
         check_parser.add_argument('-h', '--help', action='store_true', help='Show help')
@@ -44,7 +45,7 @@ class RunCommand(BaseCommand):
             add_help=False,
             help='Submit preprocessing job'
         )
-        pre_parser.add_argument('case', nargs='?', help='Case directory')
+        case_arg(pre_parser, help='Case directory')
         pre_parser.add_argument('--gmsh', type=str, metavar='PATH', help='Override gmsh executable path (passed to sbatch, does not modify script)')
         pre_parser.add_argument('--convert', action='store_true', help='Skip gmsh meshing; run only simGmshCnvt (mesh must already exist)')
         pre_parser.add_argument('--partition', type=str, metavar='NAME', help='Apply partition header to script')
@@ -61,7 +62,7 @@ class RunCommand(BaseCommand):
             add_help=False,
             help='Submit main simulation job'
         )
-        main_parser.add_argument('case', nargs='?', help='Case directory')
+        case_arg(main_parser, help='Case directory')
         main_parser.add_argument('--restart', type=int, metavar='TSID', help='Restart from specific timestep')
         main_parser.add_argument('--reset', action='store_true', help='Comment out restartFlag/restartTsId and start fresh')
         main_parser.add_argument('-n', '--np', type=int, metavar='N', help='Set #SBATCH -n/--ntasks in script before submission')
@@ -81,10 +82,10 @@ class RunCommand(BaseCommand):
             add_help=False,
             help='Submit postprocessing job'
         )
-        post_parser.add_argument('case', nargs='?', help='Case directory')
+        case_arg(post_parser, help='Case directory')
         post_parser.add_argument('--start', type=int, metavar='TSID', help='Process from this timestep (default: 0)')
         post_parser.add_argument('--upto', type=int, metavar='TSID', help='Process up to this timestep')
-        post_parser.add_argument('--freq', type=int, metavar='N', help='Override output frequency')
+        freq_arg(post_parser, metavar='N', help='Override output frequency')
         post_parser.add_argument('--convert', action='store_true', help='Run simPlt2Bin only (skip simPlt)')
         post_parser.add_argument('--dependency', type=str, metavar='JOB_ID', help='Job dependency')
         post_parser.add_argument('--partition', type=str, metavar='NAME', help='Apply partition header to script')

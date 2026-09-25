@@ -5,6 +5,13 @@ Subcommands: show, create, run, domain, ...
 
 import sys
 from ..base import BaseCommand
+from src.cli.completers import described, file_flags
+from src.cli.context import case_arg, context_flag, freq_arg, time_window
+
+
+def _binary(args):
+    """The t1/t2/time contexts select steps inside binary/, so they only apply with --binary."""
+    return getattr(args, 'binary', False)
 
 
 class CaseCommand(BaseCommand):
@@ -29,7 +36,7 @@ class CaseCommand(BaseCommand):
         # case show (was: info)
         show_parser = case_subparsers.add_parser('show', add_help=False,
                                                  help='Show case information')
-        show_parser.add_argument('case', nargs='?', help='Case directory path')
+        case_arg(show_parser, help='Case directory path')
         show_parser.add_argument('-v', '--verbose', action='store_true',
                                 help='Enable verbose output')
         show_parser.add_argument('-h', '--help', action='store_true',
@@ -67,7 +74,7 @@ class CaseCommand(BaseCommand):
         # case run
         run_parser = case_subparsers.add_parser('run', add_help=False,
                                                help='Submit and monitor SLURM jobs')
-        run_parser.add_argument('case', nargs='?', help='Case directory path')
+        case_arg(run_parser, help='Case directory path')
         run_parser.add_argument('--no-monitor', action='store_true',
                                help='Submit jobs without monitoring')
         run_parser.add_argument('--clean', action='store_true',
@@ -96,13 +103,12 @@ class CaseCommand(BaseCommand):
         # case organise archive
         archive_parser = organise_subparsers.add_parser('archive', add_help=False,
                                     help='Move .othd/.oisd/.rcv from run dir to archive dirs')
-        archive_parser.add_argument('case', nargs='?', help='Case directory path')
+        case_arg(archive_parser, help='Case directory path')
         archive_parser.add_argument('--clean', action='store_true',
                                     help='Deduplicate and clean redundant OTHD/OISD files after archiving')
-        archive_parser.add_argument('--t1', type=float, metavar='STEP',
-                                    help='Only target timesteps >= STEP')
-        archive_parser.add_argument('--t2', type=float, metavar='STEP',
-                                    help='Only target timesteps <= STEP')
+        time_window(archive_parser, 
+                    t1_kwargs=dict(metavar='STEP', help='Only target timesteps >= STEP'),
+                    t2_kwargs=dict(metavar='STEP', help='Only target timesteps <= STEP'))
         archive_parser.add_argument('--log', action='store_true',
                                     help='Create log file of deletions')
         archive_parser.add_argument('--no-confirm', action='store_true',
@@ -119,13 +125,12 @@ class CaseCommand(BaseCommand):
         # case organise output
         output_parser = organise_subparsers.add_parser('output', add_help=False,
                                     help='Remove intermediate .out/.rst files from run dir')
-        output_parser.add_argument('case', nargs='?', help='Case directory path')
+        case_arg(output_parser, help='Case directory path')
         output_parser.add_argument('--keep-every', type=int,
                                     help='Keep every Nth output (default: 10 * freq)')
-        output_parser.add_argument('--t1', type=float, metavar='STEP',
-                                    help='Only target timesteps >= STEP')
-        output_parser.add_argument('--t2', type=float, metavar='STEP',
-                                    help='Only target timesteps <= STEP')
+        time_window(output_parser, 
+                    t1_kwargs=dict(metavar='STEP', help='Only target timesteps >= STEP'),
+                    t2_kwargs=dict(metavar='STEP', help='Only target timesteps <= STEP'))
         output_parser.add_argument('--log', action='store_true',
                                     help='Create log file of deletions')
         output_parser.add_argument('--no-confirm', action='store_true',
@@ -142,16 +147,15 @@ class CaseCommand(BaseCommand):
         # case organise plt
         plt_parser = organise_subparsers.add_parser('plt', add_help=False,
                                     help='Delete PLT files in the run dir and/or binary/')
-        plt_parser.add_argument('case', nargs='?', help='Case directory path')
+        case_arg(plt_parser, help='Case directory path')
         plt_parser.add_argument('--delete-ascii', action='store_true',
                                     help='Delete PLT files from run dir where binary/ has a newer copy')
         plt_parser.add_argument('--delete-binary', action='store_true',
                                     help='Delete PLT files from binary/ within --t1/--t2 '
                                          '(unconditional; omitting both deletes all)')
-        plt_parser.add_argument('--t1', type=float, metavar='STEP',
-                                    help='Only target timesteps >= STEP')
-        plt_parser.add_argument('--t2', type=float, metavar='STEP',
-                                    help='Only target timesteps <= STEP')
+        time_window(plt_parser, 
+                    t1_kwargs=dict(metavar='STEP', help='Only target timesteps >= STEP'),
+                    t2_kwargs=dict(metavar='STEP', help='Only target timesteps <= STEP'))
         plt_parser.add_argument('--log', action='store_true',
                                     help='Create log file of deletions')
         plt_parser.add_argument('--no-confirm', action='store_true',
@@ -176,7 +180,7 @@ class CaseCommand(BaseCommand):
         # case check run
         run_check_parser = check_subparsers.add_parser('run', add_help=False,
                                     help='Check .othd/.oisd in the active run directory')
-        run_check_parser.add_argument('case', nargs='?', help='Case directory path')
+        case_arg(run_check_parser, help='Case directory path')
         run_check_parser.add_argument('-v', '--verbose', action='store_true',
                                     help='Enable verbose output')
         run_check_parser.add_argument('-h', '--help', action='store_true',
@@ -185,7 +189,7 @@ class CaseCommand(BaseCommand):
         # case check archive
         archive_check_parser = check_subparsers.add_parser('archive', add_help=False,
                                     help='Check all archived files in othd_files/oisd_files')
-        archive_check_parser.add_argument('case', nargs='?', help='Case directory path')
+        case_arg(archive_check_parser, help='Case directory path')
         archive_check_parser.add_argument('-v', '--verbose', action='store_true',
                                     help='Enable verbose output')
         archive_check_parser.add_argument('-h', '--help', action='store_true',
@@ -194,7 +198,7 @@ class CaseCommand(BaseCommand):
         # case check config
         config_check_parser = check_subparsers.add_parser('config', add_help=False,
                                     help='Validate simflow.config consistency')
-        config_check_parser.add_argument('case', nargs='?', help='Case directory path')
+        case_arg(config_check_parser, help='Case directory path')
         config_check_parser.add_argument('-v', '--verbose', action='store_true',
                                     help='Enable verbose output')
         config_check_parser.add_argument('-h', '--help', action='store_true',
@@ -203,14 +207,13 @@ class CaseCommand(BaseCommand):
         # case check plt
         plt_check_parser = check_subparsers.add_parser('plt', add_help=False,
                                     help='Check PLT files in binary/ and run dir against expected set')
-        plt_check_parser.add_argument('case', nargs='?', help='Case directory path')
-        plt_check_parser.add_argument('--freq', type=int, metavar='N',
-                                    help='PLT output frequency to check against, '
-                                         'overriding outFreq from simflow.config')
-        plt_check_parser.add_argument('--t1', type=float, metavar='STEP',
-                                    help='Only check timesteps >= STEP')
-        plt_check_parser.add_argument('--t2', type=float, metavar='STEP',
-                                    help='Only check timesteps <= STEP')
+        case_arg(plt_check_parser, help='Case directory path')
+        freq_arg(plt_check_parser, metavar='N',
+                 help='PLT output frequency to check against, '
+                      'overriding outFreq from simflow.config')
+        time_window(plt_check_parser, 
+                    t1_kwargs=dict(metavar='STEP', help='Only check timesteps >= STEP'),
+                    t2_kwargs=dict(metavar='STEP', help='Only check timesteps <= STEP'))
         plt_check_parser.add_argument('-v', '--verbose', action='store_true',
                                     help='Enable verbose output')
         plt_check_parser.add_argument('-h', '--help', action='store_true',
@@ -219,7 +222,7 @@ class CaseCommand(BaseCommand):
         # case check def
         def_check_parser = check_subparsers.add_parser('def', add_help=False,
                                     help='Check that all File() references in the .def file exist')
-        def_check_parser.add_argument('case', nargs='?', help='Case directory path')
+        case_arg(def_check_parser, help='Case directory path')
         def_check_parser.add_argument('-v', '--verbose', action='store_true',
                                     help='Enable verbose output')
         def_check_parser.add_argument('-h', '--help', action='store_true',
@@ -228,7 +231,7 @@ class CaseCommand(BaseCommand):
         # case check out
         out_check_parser = check_subparsers.add_parser('out', add_help=False,
                                     help='List timesteps for which .out/.rst files are present in the run directory')
-        out_check_parser.add_argument('case', nargs='?', help='Case directory path')
+        case_arg(out_check_parser, help='Case directory path')
         out_check_parser.add_argument('--t1', type=float, metavar='STEP',
                                     help='Only check timesteps >= STEP')
         out_check_parser.add_argument('--t2', type=float, metavar='STEP',
@@ -241,10 +244,10 @@ class CaseCommand(BaseCommand):
         # case check all
         all_check_parser = check_subparsers.add_parser('all', add_help=False,
                                     help='Run every check (run + archive + config + plt + def + out)')
-        all_check_parser.add_argument('case', nargs='?', help='Case directory path')
-        all_check_parser.add_argument('--freq', type=int, metavar='N',
-                                    help='PLT output frequency to check against, '
-                                         'overriding outFreq from simflow.config')
+        case_arg(all_check_parser, help='Case directory path')
+        freq_arg(all_check_parser, metavar='N',
+                 help='PLT output frequency to check against, '
+                      'overriding outFreq from simflow.config')
         all_check_parser.add_argument('-v', '--verbose', action='store_true',
                                     help='Enable verbose output')
         all_check_parser.add_argument('-h', '--help', action='store_true',
@@ -253,7 +256,7 @@ class CaseCommand(BaseCommand):
         # case status
         status_parser = case_subparsers.add_parser('status', add_help=False,
                                                    help='Check case data file completeness')
-        status_parser.add_argument('case', nargs='?', help='Case directory path')
+        case_arg(status_parser, help='Case directory path')
         status_parser.add_argument('-v', '--verbose', action='store_true',
                                   help='Enable verbose output')
         status_parser.add_argument('-h', '--help', action='store_true',
@@ -272,7 +275,7 @@ class CaseCommand(BaseCommand):
         # case out
         write_parser = case_subparsers.add_parser('out', add_help=False,
                                                   help='Inspect a case\'s declared outputs and map them')
-        write_parser.add_argument('case', nargs='?', help='Case directory path')
+        case_arg(write_parser, help='Case directory path')
         write_parser.add_argument('--list', action='store_true',
                                   help='Table of the outputTimeHistory blocks: name, input '
                                        'file, predicted othId, type, map file and probe')
@@ -306,7 +309,9 @@ class CaseCommand(BaseCommand):
             'domain', add_help=False,
             help="Declare what the case's domain is made of, in domain.yml")
         domain_parser.add_argument('target', nargs='?', metavar='TARGET',
-                                   help='body or field; omit for a summary of both')
+                                   help='body or field; omit for a summary of both'
+                                   ).completer = described(
+            ('body', 'Bodies in the domain'), ('field', 'The continuum they sit in'))
         domain_parser.add_argument('case', nargs='?', help='Case directory path')
         domain_parser.add_argument('--init', action='store_true',
                                    help='Write domain.yml from the case .def and PLT zones')
@@ -369,7 +374,7 @@ class CaseCommand(BaseCommand):
         # case upload
         upload_parser = case_subparsers.add_parser('upload', add_help=False,
                                                    help='Upload case directories from local to remote server')
-        upload_parser.add_argument('case', nargs='?', help='Local case directory path')
+        case_arg(upload_parser, help='Local case directory path')
         upload_parser.add_argument('--dir', type=str, metavar='DIRS',
                                   help='Directories to upload (comma-separated, default: othd_files,oisd_files,binary)')
         upload_parser.add_argument('--files', nargs='?', const=True, default=None,
@@ -378,17 +383,15 @@ class CaseCommand(BaseCommand):
                                        '(comma-separated globs; default: '
                                        'simflow.config,*.def,*.geo,*.map). Given without '
                                        '--dir it uploads only those files')
-        upload_parser.add_argument('--to', type=str, required=False, metavar='REMOTE',
-                                  help='Remote machine name (or use context with "use remote:name")')
+        context_flag(upload_parser, 'remote', '--to', type=str, metavar='REMOTE',
+                     help='Remote machine name (or use context with "use remote:name")')
         upload_parser.add_argument('--remote-path', type=str, metavar='PATH',
                                   help='Override remote base path (default: use remote config)')
         upload_parser.add_argument('--binary', action='store_true',
                                   help='Upload binary/ only. With --t1/--t2 it carries just the timesteps in that range, instead of the whole directory')
-        upload_parser.add_argument('--t1', type=float, metavar='STEP',
-                                  help='With --binary: first timestep to upload '
-                                       '(alone: only that step)')
-        upload_parser.add_argument('--t2', type=float, metavar='STEP',
-                                  help='With --binary: last timestep to upload')
+        time_window(upload_parser, when=_binary, 
+                    t1_kwargs=dict(metavar='STEP', help='With --binary: first timestep to upload (alone: only that step)'),
+                    t2_kwargs=dict(metavar='STEP', help='With --binary: last timestep to upload'))
         upload_parser.add_argument('--force', action='store_true',
                                   help='Create remote directories if they do not exist')
         upload_parser.add_argument('--resume', action='store_true',
@@ -401,7 +404,7 @@ class CaseCommand(BaseCommand):
         # case download
         download_parser = case_subparsers.add_parser('download', add_help=False,
                                                      help='Download case directories from remote to local')
-        download_parser.add_argument('case', nargs='?', help='Local case directory path (destination)')
+        case_arg(download_parser, help='Local case directory path (destination)')
         download_parser.add_argument('--dir', type=str, metavar='DIRS',
                                     help='Directories to download (comma-separated, default: othd_files,oisd_files,binary)')
         download_parser.add_argument('--files', nargs='?', const=True, default=None,
@@ -410,17 +413,16 @@ class CaseCommand(BaseCommand):
                                          '(comma-separated globs; default: '
                                          'simflow.config,*.def,*.geo,*.map). Given without '
                                          '--dir it downloads only those files')
-        download_parser.add_argument('--from', dest='from_remote', type=str, required=False, metavar='REMOTE',
-                                    help='Remote machine name (or use context with "use remote:name")')
+        context_flag(download_parser, 'remote', '--from', dest='from_remote', type=str,
+                     metavar='REMOTE',
+                     help='Remote machine name (or use context with "use remote:name")')
         download_parser.add_argument('--remote-path', type=str, metavar='PATH',
                                     help='Override remote base path (default: use remote config)')
         download_parser.add_argument('--binary', action='store_true',
                                   help='Download binary/ only. With --t1/--t2 it carries just the timesteps in that range, instead of the whole directory')
-        download_parser.add_argument('--t1', type=float, metavar='STEP',
-                                  help='With --binary: first timestep to download '
-                                       '(alone: only that step)')
-        download_parser.add_argument('--t2', type=float, metavar='STEP',
-                                  help='With --binary: last timestep to download')
+        time_window(download_parser, when=_binary, 
+                    t1_kwargs=dict(metavar='STEP', help='With --binary: first timestep to download (alone: only that step)'),
+                    t2_kwargs=dict(metavar='STEP', help='With --binary: last timestep to download'))
         download_parser.add_argument('--force', action='store_true',
                                     help='Create the local case directory if it does not exist')
         download_parser.add_argument('--resume', action='store_true',
@@ -429,6 +431,8 @@ class CaseCommand(BaseCommand):
                                     help='Show help for download command')
         download_parser.add_argument('--examples', action='store_true',
                                     help='Show usage examples')
+
+        file_flags(create_parser, {'--ref-case': (), '--from-config': ('.yml', '.yaml')})
 
         # Main case help flags
         parser.add_argument('-h', '--help', action='store_true',

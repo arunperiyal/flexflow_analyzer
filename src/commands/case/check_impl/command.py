@@ -78,14 +78,12 @@ def execute_case_check(args):
 
 def _get_case_name(args) -> Optional[str]:
     """Get case name from args or interactive context."""
-    from src.cli.interactive import InteractiveShell
+    from src.cli.context import current_case
 
     if hasattr(args, 'case') and args.case:
         return args.case
-    elif (hasattr(InteractiveShell, '_instance') and
-          InteractiveShell._instance and
-          InteractiveShell._instance._current_case):
-        return InteractiveShell._instance._current_case
+    elif current_case():
+        return current_case()
     else:
         print("Error: No case directory specified.")
         print("Usage:  case check run <dir>")
@@ -96,13 +94,9 @@ def _get_case_name(args) -> Optional[str]:
 def _execute_check_on_all_cases(args, do_run, do_archive, do_config, do_plt, do_def, do_out,
                                 freq=None, t1=None, t2=None):
     """Execute check on all cases from .cases file."""
-    from src.cli.interactive import InteractiveShell
-    
-    # Get base directory
-    if (hasattr(InteractiveShell, '_instance') and InteractiveShell._instance):
-        base_dir = InteractiveShell._instance._current_dir
-    else:
-        base_dir = Path.cwd()
+    from src.cli.context import current_dir
+
+    base_dir = current_dir()
     
     # Load cases
     cases = load_cases_from_directory(base_dir)

@@ -164,7 +164,7 @@ def _get_case_info(args):
 
 def get_case_directory(args):
     """Get and validate case directory from args or context."""
-    from src.cli.interactive import InteractiveShell
+    from src.cli.context import current_case
 
     case_dir = None
 
@@ -172,10 +172,8 @@ def get_case_directory(args):
     if hasattr(args, 'case') and args.case:
         case_dir = Path(args.case)
     # Try to get from context (if in interactive mode)
-    elif hasattr(InteractiveShell, '_instance') and InteractiveShell._instance:
-        shell = InteractiveShell._instance
-        if shell._current_case:
-            case_dir = Path(shell._current_case)
+    elif current_case():
+        case_dir = Path(current_case())
 
     if not case_dir:
         print("Error: Case directory not specified")

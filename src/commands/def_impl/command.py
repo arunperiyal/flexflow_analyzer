@@ -28,15 +28,10 @@ def _resolve_case_path(args):
     if case_arg:
         return case_arg
 
-    try:
-        from src.cli.interactive import InteractiveShell
-        if (hasattr(InteractiveShell, '_instance') and
-                InteractiveShell._instance and
-                InteractiveShell._instance._current_case and
-                InteractiveShell._instance._current_case != '*'):
-            return InteractiveShell._instance._current_case
-    except Exception:
-        pass
+    from src.cli.context import current_case
+    case = current_case()
+    if case and case != '*':
+        return case
 
     return os.getcwd()
 
