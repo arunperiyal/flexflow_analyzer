@@ -9,6 +9,7 @@ import os
 import glob
 
 from .readers.othd_reader import OTHDReader
+from ..utils.file_utils import natural_sort_key
 from .readers.oisd_reader import OISDReader
 from .simflow_config import SimflowConfig
 from .def_config import DefConfig
@@ -105,7 +106,7 @@ class FlexFlowCase:
                 self._othd_files = []
             else:
                 search_path = os.path.join(self.othd_dir, pattern)
-                self._othd_files = sorted(glob.glob(search_path))
+                self._othd_files = sorted(glob.glob(search_path), key=natural_sort_key)
         
         return self._othd_files
     
@@ -127,7 +128,7 @@ class FlexFlowCase:
                 self._oisd_files = []
             else:
                 search_path = os.path.join(self.oisd_dir, pattern)
-                self._oisd_files = sorted(glob.glob(search_path))
+                self._oisd_files = sorted(glob.glob(search_path), key=natural_sort_key)
         
         return self._oisd_files
     

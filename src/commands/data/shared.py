@@ -18,6 +18,7 @@ import numpy as np
 
 from ...core.readers import series
 from ...utils.colors import Colors
+from ...utils.file_utils import natural_sort_key
 
 KINDS = ("othd", "oisd")
 
@@ -167,11 +168,11 @@ def for_each_case(args, logger, run_one):
 
 
 def find_files(case_dir, kind):
-    """The othd or oisd files of a case, in name order."""
+    """The othd or oisd files of a case, in run order (riser2 before riser10)."""
     directory = Path(case_dir) / f"{kind}_files"
     if not directory.is_dir():
         return []
-    return sorted(glob.glob(str(directory / f"*.{kind}")))
+    return sorted(glob.glob(str(directory / f"*.{kind}")), key=natural_sort_key)
 
 
 def out_freq(case_dir):

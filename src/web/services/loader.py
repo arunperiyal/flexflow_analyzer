@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Optional
 
 from src.core.readers import series
+from src.utils.file_utils import natural_sort_key
 
 DEFAULT_MAX_CASES = 3
 
@@ -46,7 +47,8 @@ class Loader:
     def _paths(case_dir: Path, kind: str) -> list:
         case_dir = Path(case_dir)
         flat, archived = _GLOBS[kind]
-        return sorted(case_dir.glob(flat)) + sorted(case_dir.glob(archived))
+        return (sorted(case_dir.glob(flat), key=natural_sort_key)
+                + sorted(case_dir.glob(archived), key=natural_sort_key))
 
     @staticmethod
     def _newest_mtime(paths: list) -> float:

@@ -16,6 +16,7 @@ from rich import box
 
 from ....utils.logger import Logger
 from ....utils.colors import Colors
+from ....utils.file_utils import natural_sort_key
 from ....core.simflow_config import SimflowConfig
 from ...case_iteration import is_wildcard_case, load_cases_from_directory
 
@@ -358,7 +359,7 @@ def _check_run(cfg: dict, case_dir: Path, console: Console) -> bool:
             console.print(f"  [dim]—[/dim]  No .{ext} file found in {run_dir_str}")
             continue
 
-        for file_path in sorted(candidates):
+        for file_path in sorted(candidates, key=natural_sort_key):
             found_any = True
             rng = _read_data_file_range(file_path)
             if rng is None:
@@ -421,7 +422,7 @@ def _check_archive(cfg: dict, case_dir: Path, console: Console):
             console.print(f"  [dim]—[/dim]  {subdir_name}/ not found")
             continue
 
-        files = sorted(subdir.glob(f'*.{ext}'))
+        files = sorted(subdir.glob(f'*.{ext}'), key=natural_sort_key)
         if not files:
             console.print(f"  [dim]—[/dim]  No .{ext} files in {subdir_name}/")
             continue
