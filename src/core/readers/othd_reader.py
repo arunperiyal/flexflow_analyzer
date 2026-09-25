@@ -73,7 +73,26 @@ class OTHDReader:
         """Read OTHD file(s) and extract displacement data."""
         for filename in self.filenames:
             self._load_single_file(filename)
-    
+        self._sort_by_time()
+
+    def _sort_by_time(self):
+        """Put timesteps in time order, whatever order the files came in.
+
+        Indices are handed out as timesteps are first seen, so files given
+        out of run order (riser10 before riser2) would otherwise leave the
+        series jumping back and forth in time.
+        """
+        order = sorted(range(len(self.times)), key=self.times.__getitem__)
+        if order == list(range(len(order))):
+            return
+        new_index = {old: new for new, old in enumerate(order)}
+        self.times = [self.times[i] for i in order]
+        self.tsIds = [self.tsIds[i] for i in order]
+        self.time_to_index = {t: i for i, t in enumerate(self.times)}
+        self.displacements = {(g, new_index[t], n): v
+                              for (g, t, n), v in self.displacements.items()}
+        self.pendulum_data = {new_index[t]: v for t, v in self.pendulum_data.items()}
+
     def _load_single_file(self, filename):
         """Read a single OTHD file and extract displacement data."""
         with open(filename, 'r') as f:
