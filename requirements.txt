@@ -16,8 +16,7 @@ pyvista>=0.43.0           # Isosurface rendering (field iso); pulls in vtk
 #                                   # (the browser-orbitable page); PNGs need none
 #                                   # of it, so it stays out of the default install
 prompt_toolkit>=3.0.43    # Interactive shell with autocompletion and history
-# shellkit                 # The shell framework: a sibling checkout, not on PyPI --
-#                          #   pip install -e ../shellkit  (install.sh does this)
+shellkit @ git+https://github.com/arunperiyal/shellkit.git@v0.1.0  # The shell framework
 paramiko>=3.0.0           # SSH/SFTP for remote file transfer
 Flask>=3.1.0              # Web UI (src/web) -- python main.py --ui
 

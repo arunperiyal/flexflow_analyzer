@@ -11,7 +11,7 @@ export CYAN='\033[0;36m'
 export NC='\033[0m' # No Color
 
 # Configuration
-export CONDA_ENV_NAME="flexflow_env"
+export CONDA_ENV_NAME="${CONDA_ENV_NAME:-flexflow_env}"
 export PYTHON_VERSION="3.12"
 export INSTALL_DIR_LOCAL="$HOME/.local/share/flexflow"
 export INSTALL_DIR_SYSTEM="/usr/local/share/flexflow"
