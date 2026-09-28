@@ -123,6 +123,14 @@ domain:                          # crop to a box before cutting; null = no limit
   ymax: null                     # and rendered all the same. Cropping also
   zmin: null                     # frames the camera on what is left.
   zmax: null
+  relative_to: null              # a surface zone (e.g. cyl) the box follows:
+                                 # the bounds of the `follow` axes become
+                                 # offsets from the zone's centre, found anew
+                                 # each timestep -- a moving body stays in frame
+                                 # without editing the box per step. The centre
+                                 # is taken over the zone's points inside the
+                                 # other axes' bounds, i.e. the local section.
+  follow: null                   # e.g. [y]; null = all of x, y, z
 
 threshold:                       # keep cells with scalar in [min,max]; null disables
   variable: null

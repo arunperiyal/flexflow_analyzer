@@ -101,8 +101,11 @@ DEFAULTS = {
                 "show_scalar_bar": True, "text_color": [0.0, 0.0, 0.0],
                 # colorbar mode only: which way the standalone legend runs.
                 "orientation": "vertical"},
+    # relative_to: a surface zone the box follows. The bounds of the axes in
+    # `follow` (all three when null) are then offsets from that zone's centre,
+    # found afresh each timestep. See follow_body.
     "domain":  {"xmin": None, "xmax": None, "ymin": None, "ymax": None,
-                "zmin": None, "zmax": None},
+                "zmin": None, "zmax": None, "relative_to": None, "follow": None},
     "threshold": {"variable": None, "min": None, "max": None},
     # Shading. Everything below opacity/show_edges is left to pyvista unless
     # set, so a config that says nothing renders exactly as it always did.
@@ -270,6 +273,59 @@ def _apply_domain_clip(mesh, dom):
         origin["xyz".index(axis)] = val
         mesh = mesh.clip(normal=axis, origin=origin, invert=invert)
     return mesh
+
+
+def followed_axes(dom):
+    """The axes whose domain bounds are offsets from the body, as a string."""
+    follow = dom.get("follow")
+    if follow is None:
+        return "xyz"
+    if isinstance(follow, str):
+        follow = [follow]
+    axes = "".join(str(a).lower() for a in follow)
+    bad = [a for a in axes if a not in "xyz"]
+    if bad or not axes:
+        raise ValueError("domain.follow must name axes among x, y, z -- got %r"
+                         % (dom.get("follow"),))
+    return axes
+
+
+def follow_body(dom, points):
+    """The domain box moved onto the body: (absolute domain, body centre).
+
+    `points` are the body's (N, 3) coordinates at this timestep. The centre is
+    taken over only the points inside the box's absolute bounds -- the axes not
+    followed -- so a slice through a bending beam is centred on the beam's
+    section at that station, not on the mean of the whole span. It is the
+    middle of those points' extent rather than their mean: a mesh graded
+    finer on one side would drag a mean towards it, a bounding box does not.
+    """
+    import numpy as np
+
+    axes = followed_axes(dom)
+    pts = np.asarray(points, dtype=float).reshape(-1, 3)
+    keep = np.ones(len(pts), dtype=bool)
+    for i, a in enumerate("xyz"):
+        if a in axes:
+            continue
+        lo, hi = dom.get(a + "min"), dom.get(a + "max")
+        if lo is not None:
+            keep &= pts[:, i] >= lo
+        if hi is not None:
+            keep &= pts[:, i] <= hi
+    pts = pts[keep]
+    if not len(pts):
+        raise ValueError("domain.relative_to: no point of the body lies inside "
+                         "the box's fixed bounds, so there is nothing to centre on")
+    centre = (pts.min(axis=0) + pts.max(axis=0)) / 2
+    out = {k: v for k, v in dom.items() if k not in ("relative_to", "follow")}
+    for i, a in enumerate("xyz"):
+        if a not in axes:
+            continue
+        for key in (a + "min", a + "max"):
+            if out.get(key) is not None:
+                out[key] = float(centre[i] + out[key])
+    return out, [float(c) for c in centre]
 
 
 def _apply_threshold(mesh, th):

@@ -419,6 +419,77 @@ class TestBody:
         assert body.bounds[0] >= -1e-9
 
 
+class TestFollowBody:
+    """domain.relative_to: the box moves with the body, one timestep at a time."""
+
+    # A beam along x, bent: its section sits at y = 0 near x = 0 and at y = 1
+    # near x = 6. A ring of points per station, radius 0.5.
+    @staticmethod
+    def _beam():
+        t = np.linspace(0, 2 * np.pi, 16, endpoint=False)
+        pts = []
+        for x, yc in ((0.0, 0.0), (6.0, 1.0), (12.0, 0.0)):
+            pts += [(x, yc + 0.5 * np.cos(a), 0.5 * np.sin(a)) for a in t]
+        return np.array(pts)
+
+    def _dom(self, **over):
+        dom = render.default_config("slice")["domain"]
+        dom.update(over)
+        return dom
+
+    def test_followed_bounds_are_offsets_from_the_local_section(self):
+        dom = self._dom(relative_to="cyl", follow=["y"], xmin=5, xmax=7,
+                        ymin=-0.2, ymax=0.8, zmin=-0.5, zmax=0.5)
+        out, centre = render.follow_body(dom, self._beam())
+        # Centred on the section at x = 6 (y = 1), not the whole-beam mean.
+        assert centre[1] == pytest.approx(1.0)
+        assert out["ymin"] == pytest.approx(0.8)
+        assert out["ymax"] == pytest.approx(1.8)
+        # Axes not followed stay absolute; the follow keys are gone.
+        assert (out["xmin"], out["xmax"], out["zmin"], out["zmax"]) == (5, 7, -0.5, 0.5)
+        assert "relative_to" not in out and "follow" not in out
+
+    def test_null_bounds_stay_unbounded(self):
+        dom = self._dom(relative_to="cyl", follow="y", xmin=5, xmax=7, ymin=-1)
+        out, _ = render.follow_body(dom, self._beam())
+        assert out["ymin"] == pytest.approx(0.0) and out["ymax"] is None
+
+    def test_follow_null_means_every_axis(self):
+        dom = self._dom(relative_to="cyl", xmin=-1, xmax=1)
+        out, centre = render.follow_body(dom, self._beam())
+        assert centre[0] == pytest.approx(6.0)
+        assert (out["xmin"], out["xmax"]) == (pytest.approx(5.0), pytest.approx(7.0))
+
+    def test_no_body_inside_the_fixed_bounds_is_an_error(self):
+        dom = self._dom(relative_to="cyl", follow=["y"], xmin=50, xmax=60)
+        with pytest.raises(ValueError, match="nothing to centre on"):
+            render.follow_body(dom, self._beam())
+
+    @pytest.mark.parametrize("follow", [["w"], [], "q"])
+    def test_bad_follow_is_rejected(self, follow):
+        with pytest.raises(ValueError, match="domain.follow"):
+            render.followed_axes({"follow": follow})
+
+    def test_bad_follow_stops_the_run_early(self):
+        cfg = render.default_config("slice")
+        cfg["domain"]["follow"] = ["w"]
+        with pytest.raises(SystemExit):
+            render_cmd._check_config(cfg, _Logger())
+
+    def test_relative_to_needs_a_case(self):
+        cfg = render.default_config("slice")
+        cfg["domain"]["relative_to"] = "cyl"
+        with pytest.raises(SystemExit):
+            render_cmd._follow_body_for_step(cfg, None, None, None, args(),
+                                             _Logger())
+
+    def test_without_relative_to_the_domain_is_untouched(self):
+        cfg = render.default_config("slice")
+        cfg["domain"]["ymin"] = -1
+        assert render_cmd._follow_body_for_step(cfg, 5, "b", "p", args(),
+                                                _Logger()) is cfg["domain"]
+
+
 class TestColours:
     """0-1 fractions, always floats: pyvista reads an int triple as 0-255."""
 
