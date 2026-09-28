@@ -274,6 +274,41 @@ def _body_vtu_for_step(cfg, step, binary_dir, problem, args, logger):
     return _convert_zone(plt_path, zone_name, args, logger)
 
 
+def _follow_body_for_step(cfg, step, binary_dir, problem, args, logger):
+    """The domain box for this timestep, moved onto domain.relative_to's zone.
+
+    Per timestep for the same reason as the body: the body moves, and a box set
+    once in absolute coordinates is left behind by it. The body.zone conversion
+    is reused when it is the same zone, so following the drawn body is free.
+    """
+    dom = cfg["domain"]
+    zone_name = dom.get("relative_to")
+    if not zone_name:
+        return dom
+    if not binary_dir:
+        logger.error(f"domain.relative_to '{zone_name}' needs a case to read the "
+                     f"zone from; it cannot be used with --vtu input")
+        sys.exit(1)
+    if zone_name == cfg.get("body", {}).get("zone") and cfg["body"].get("vtu"):
+        vtu = cfg["body"]["vtu"]
+    else:
+        plt_path = find_plt(binary_dir, problem, step)
+        if not plt_path:
+            logger.error(f"No PLT file for timestep {step} in {binary_dir}")
+            sys.exit(1)
+        vtu = _convert_zone(plt_path, zone_name, args, logger)
+    import pyvista as pv
+    try:
+        out, centre = render.follow_body(dom, pv.read(vtu).points)
+    except ValueError as e:
+        where = f" (timestep {step})" if step is not None else ""
+        logger.error(f"{e}{where}")
+        sys.exit(1)
+    logger.info(f"domain follows '{zone_name}', centred at "
+                f"[{centre[0]:.4g}, {centre[1]:.4g}, {centre[2]:.4g}]")
+    return out
+
+
 def _vtu_for_step(args, cfg, step, binary_dir, problem, logger):
     """The .vtu for one timestep: explicit --vtu / config, or a converted PLT."""
     vtu = args.vtu or cfg["input"].get("vtu")
@@ -399,6 +434,11 @@ def _check_config(cfg, logger):
     numbers, and it surfaces much later as an IndexError out of pyvista with
     nothing pointing back at the file.
     """
+    try:
+        render.followed_axes(cfg.get("domain", {}))
+    except ValueError as e:
+        logger.error(str(e))
+        sys.exit(1)
     rng = cfg["color"].get("range")
     if rng is None:
         return
@@ -447,6 +487,8 @@ def _pick_camera(args, cfg, mode, steps, binary_dir, problem, path, logger):
     step = steps[0]
     cfg = copy.deepcopy(cfg)
     cfg["input"]["vtu"] = _vtu_for_step(args, cfg, step, binary_dir, problem, logger)
+    cfg["domain"] = _follow_body_for_step(cfg, step, binary_dir, problem, args,
+                                          logger)
     if step is not None:
         logger.info(f"picking a camera on timestep {step}")
 
@@ -637,6 +679,8 @@ def _render_one_case(args, mode, logger, shared=None):
                                                  problem, logger)
         step_cfg["body"]["vtu"] = _body_vtu_for_step(cfg, step, binary_dir,
                                                      problem, args, logger)
+        step_cfg["domain"] = _follow_body_for_step(step_cfg, step, binary_dir,
+                                                   problem, args, logger)
         base = str(out_dir / (stem if step is None else f"{stem}_{step}"))
         if ext in GEOMETRY_EXT:
             step_cfg["output"]["geometry"] = base + ext
