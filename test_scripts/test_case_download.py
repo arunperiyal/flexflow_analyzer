@@ -543,3 +543,56 @@ class TestCaseDownloadCommand:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestBinaryFreq:
+    """--freq with --binary: keep only the steps that are multiples of N."""
+
+    NAMES = ["riser.500.plt", "riser.1000.plt", "riser.1000.z1.vtu",
+             "riser.1500.plt", "riser.2000.plt", "post.py"]
+
+    def test_freq_alone_thins_every_step(self):
+        from src.commands.case.download_impl.command import select_steps
+        kept, no_step = select_steps(self.NAMES, None, 1000)
+        assert kept == ["riser.1000.plt", "riser.1000.z1.vtu", "riser.2000.plt"]
+        assert no_step == ["post.py"]
+
+    def test_freq_within_a_window(self):
+        from src.commands.case.download_impl.command import select_steps
+        kept, _ = select_steps(self.NAMES, (1000.0, 1500.0), 500)
+        assert kept == ["riser.1000.plt", "riser.1000.z1.vtu", "riser.1500.plt"]
+
+    def test_neither_keeps_everything(self):
+        from src.commands.case.download_impl.command import select_steps
+        kept, no_step = select_steps(self.NAMES, None, None)
+        assert kept == sorted(self.NAMES) and no_step == []
+
+    def test_freq_is_recorded_for_resume(self):
+        state = CaseDownloadCommand()._build_transfer_state(
+            'download', 'srv', '/base', 'c', [], ['binary'], False, False,
+            step_freq=500)
+        assert state['step_freq'] == 500
+
+    def test_download_binary_range_applies_freq(self, tmp_path):
+        ssh = MagicMock()
+        ssh.remote_path_exists.return_value = True
+        ssh.remote_is_dir.return_value = True
+        ssh.list_remote_dir.return_value = self.NAMES
+        ok = CaseDownloadCommand().download_binary_range(
+            ssh, "/r/case", str(tmp_path), None, freq=1000)
+        assert ok
+        fetched = [c.args[0].rsplit("/", 1)[1] for c in ssh.download_file.call_args_list]
+        assert fetched == ["riser.1000.plt", "riser.1000.z1.vtu", "riser.2000.plt"]
+
+    @pytest.mark.parametrize("extra, message", [
+        ({}, "needs --binary"),
+        ({"binary": True, "freq": 0}, "positive integer"),
+    ])
+    def test_bad_freq_is_rejected(self, extra, message, capsys, tmp_path):
+        import argparse
+        ns = dict(case=str(tmp_path), from_remote="srv", freq=5, binary=False,
+                  dir=None, files=None, t1=None, t2=None, force=False,
+                  resume=False, help=False, examples=False, remote_path=None)
+        ns.update(extra)
+        assert CaseDownloadCommand().execute_download(argparse.Namespace(**ns)) == 1
+        assert message in capsys.readouterr().out

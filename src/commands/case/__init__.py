@@ -423,6 +423,10 @@ class CaseCommand(BaseCommand):
         time_window(download_parser, when=_binary, 
                     t1_kwargs=dict(metavar='STEP', help='With --binary: first timestep to download (alone: only that step)'),
                     t2_kwargs=dict(metavar='STEP', help='With --binary: last timestep to download'))
+        freq_arg(download_parser, metavar='N',
+                 resolve=lambda store, ns: (store.get('freq') if _binary(ns)
+                                            and store.is_set('freq') else None),
+                 help='With --binary: only the timesteps that are multiples of N')
         download_parser.add_argument('--force', action='store_true',
                                     help='Create the local case directory if it does not exist')
         download_parser.add_argument('--resume', action='store_true',

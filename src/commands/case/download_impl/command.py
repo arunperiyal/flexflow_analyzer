@@ -49,23 +49,25 @@ def resolve_step_window(t1, t2) -> Optional[tuple]:
     return (only, only)
 
 
-def select_steps(names: List[str], window: Optional[tuple]) -> tuple:
-    """Split `names` into (kept, no_step) for a step window.
+def select_steps(names: List[str], window: Optional[tuple],
+                 freq: Optional[int] = None) -> tuple:
+    """Split `names` into (kept, no_step) for a step window and frequency.
 
-    Without a window everything is kept. With one, a file is kept when its step
-    falls inside it, and a file with no step at all is set aside rather than
-    silently swept along: asking for one timestep should not drag the whole
-    post-processing script collection across the wire.
+    Without either everything is kept. With one, a file is kept when its step
+    falls inside the window and is a multiple of freq -- the same thinning as
+    `field` sweeps give --freq. A file with no step at all is set aside rather
+    than silently swept along: asking for one timestep should not drag the
+    whole post-processing script collection across the wire.
     """
-    if window is None:
+    if window is None and not freq:
         return sorted(names), []
-    lo, hi = window
+    lo, hi = window if window else (float('-inf'), float('inf'))
     kept, no_step = [], []
     for name in names:
         step = step_of(name)
         if step is None:
             no_step.append(name)
-        elif lo <= step <= hi:
+        elif lo <= step <= hi and (not freq or step % freq == 0):
             kept.append(name)
     return sorted(kept), sorted(no_step)
 
@@ -172,6 +174,7 @@ Download case directories from a remote server to the local machine.
                            in that range
     {Colors.YELLOW}--t1 STEP{Colors.RESET}              With --binary: first timestep (alone: only that step)
     {Colors.YELLOW}--t2 STEP{Colors.RESET}              With --binary: last timestep
+    {Colors.YELLOW}--freq N{Colors.RESET}               With --binary: only steps that are multiples of N
     {Colors.YELLOW}--remote-path PATH{Colors.RESET}     Override remote base path (default: remote config path)
     {Colors.YELLOW}--force{Colors.RESET}                Create the local case directory if it does not exist
     {Colors.YELLOW}--resume{Colors.RESET}               Resume the last interrupted download
@@ -210,8 +213,14 @@ Download case directories from a remote server to the local machine.
     nothing else in a case is written per step. The t1/t2 context supplies them:
     {Colors.DIM}use t1:1000 t2:5000{Colors.RESET}, then {Colors.DIM}case download CS4SG1U1 --binary{Colors.RESET}.
 
+    {Colors.YELLOW}--freq N{Colors.RESET} thins what is left to the steps that are multiples of N,
+    as it does for `field` sweeps -- with or without a range. It also comes
+    from the freq context, but only when --binary is given.
+
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
     case download CS4SG1U1 --from server --binary --t1 1000 --t2 5000
+    case download CS4SG1U1 --from server --binary --t1 1000 --t2 5000 --freq 500
+    case download CS4SG1U1 --from server --binary --freq 1000
     case download CS4SG1U1 --from server --binary --t1 5000
     case download CS4SG1U1 --from server --files
     case download CS4SG1U1 --from server --files "*.map"
@@ -301,6 +310,7 @@ class CaseUploadCommand:
         wildcard: bool,
         file_patterns: Optional[List[str]] = None,
         step_window: Optional[tuple] = None,
+        step_freq: Optional[int] = None,
     ) -> dict:
         """Construct a new resumable transfer state document."""
         return {
@@ -314,6 +324,7 @@ class CaseUploadCommand:
             'file_patterns': list(file_patterns or []),
             'force': force,
             'step_window': list(step_window) if step_window else None,
+            'step_freq': step_freq,
             'cases': case_entries,
             'completed_targets': [],
         }
@@ -410,6 +421,7 @@ class CaseUploadCommand:
             completed_targets = set(state.get('completed_targets', []))
             saved_window = state.get('step_window')
             step_window = tuple(saved_window) if saved_window else None
+            step_freq = state.get('step_freq')
         else:
             case_selection = self.validate_case_path(self._get_arg(args, 'case'))
             if not case_selection:
@@ -430,11 +442,23 @@ class CaseUploadCommand:
             binary_only = bool(self._get_arg(args, 'binary', False))
             step_window = resolve_step_window(self._get_arg(args, 't1'),
                                               self._get_arg(args, 't2'))
+            step_freq = self._get_arg(args, 'freq')
             if step_window and not binary_only:
                 self.console.print(
                     "[red]Error:[/red] --t1/--t2 select timesteps inside binary/, "
                     "so they need --binary. Nothing else in a case is written "
                     "per step."
+                )
+                return 1
+            if step_freq is not None and not binary_only:
+                self.console.print(
+                    "[red]Error:[/red] --freq thins the timesteps inside binary/, "
+                    "so it needs --binary."
+                )
+                return 1
+            if step_freq is not None and step_freq <= 0:
+                self.console.print(
+                    f"[red]Error:[/red] --freq must be a positive integer, got {step_freq}"
                 )
                 return 1
             if binary_only and not dir_arg:
@@ -487,6 +511,7 @@ class CaseUploadCommand:
                 wildcard,
                 file_patterns,
                 step_window,
+                step_freq,
             )
             self._save_transfer_state(state)
 
@@ -522,6 +547,8 @@ class CaseUploadCommand:
             lo, hi = step_window
             table.add_row('Timesteps',
                           f"{lo:g}" if lo == hi else f"{lo:g} .. {hi:g}")
+        if step_freq:
+            table.add_row('Every', f"{step_freq} steps")
         table.add_row('Force Create Missing Dir', 'Yes' if force_enabled else 'No')
         if resume_requested:
             table.add_row('Completed Targets', str(len(completed_targets)))
@@ -586,7 +613,7 @@ class CaseUploadCommand:
                         file_patterns,
                         force=force_enabled,
                     )
-                elif step_window and target['directory'] == 'binary':
+                elif (step_window or step_freq) and target['directory'] == 'binary':
                     if is_upload:
                         ok = self.upload_binary_range(
                             ssh,
@@ -601,6 +628,7 @@ class CaseUploadCommand:
                             target['remote_case_path'],
                             target['case_path'],
                             step_window,
+                            freq=step_freq,
                         )
                 elif is_upload:
                     ok = self.upload_directory(
@@ -1093,8 +1121,10 @@ class CaseUploadCommand:
         remote_case_path: str,
         local_case_path: str,
         window: Optional[tuple],
+        freq: Optional[int] = None,
     ) -> bool:
-        """Download binary/, restricted to the timesteps inside `window`."""
+        """Download binary/, restricted to the timesteps inside `window` that
+        are multiples of `freq`."""
         remote_dir = f"{remote_case_path}/binary"
         local_dir = os.path.join(local_case_path, "binary")
 
@@ -1118,8 +1148,8 @@ class CaseUploadCommand:
         # Only names carrying a step can be placed in the window, and those are
         # never directories, so the remote stat per entry that resolve_remote_files
         # does is not needed here.
-        kept, no_step = select_steps(entries, window)
-        if not self._report_selection(kept, no_step, window, remote_dir):
+        kept, no_step = select_steps(entries, window, freq)
+        if not self._report_selection(kept, no_step, window, remote_dir, freq):
             return True
 
         os.makedirs(local_dir, exist_ok=True)
@@ -1152,12 +1182,15 @@ class CaseUploadCommand:
             self.console.print(f"[red]Error:[/red] Failed to download binary: {e}")
             return False
 
-    def _report_selection(self, kept, no_step, window, where) -> bool:
+    def _report_selection(self, kept, no_step, window, where, freq=None) -> bool:
         """Say what the window picked out. False when there is nothing to move."""
-        if window:
-            lo, hi = window
-            span = f"step {lo:g}" if lo == hi else f"steps {lo:g}..{hi:g}"
-            self.console.print(f"[cyan]Selecting:[/cyan] {span} in binary/")
+        if window or freq:
+            span = "all steps"
+            if window:
+                lo, hi = window
+                span = f"step {lo:g}" if lo == hi else f"steps {lo:g}..{hi:g}"
+            every = f", every {freq}" if freq else ""
+            self.console.print(f"[cyan]Selecting:[/cyan] {span}{every} in binary/")
         if no_step:
             self.console.print(
                 f"[dim]    skipping {len(no_step)} file(s) with no timestep in "
