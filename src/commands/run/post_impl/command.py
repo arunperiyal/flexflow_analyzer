@@ -24,6 +24,9 @@ def execute_post(args):
         show_post_help()
         return
 
+    if not _take_post_mode(args):
+        return
+
     # Get case info
     case_name, base_dir = _get_case_info(args)
     if case_name is None:
@@ -46,6 +49,38 @@ def execute_post(args):
         return
     
     _execute_post_on_case(case_dir.resolve(), args)
+
+
+POST_MODES = ('full', 'convert')
+_POST_USAGE = "Usage: run post {full|convert} [case_directory] [options]"
+
+
+def _take_post_mode(args) -> bool:
+    """
+    Read the mode word: run post full [case] / run post convert [case].
+
+    Sets args.convert and moves the case that follows the mode word into
+    args.case. A mode is needed to submit; --cleanup-only and --show work
+    without one. Returns False (after printing why) on bad input.
+    """
+    words = list(getattr(args, 'words', None) or [])
+    mode = getattr(args, 'case', None)
+    if mode in POST_MODES:
+        args.case = words.pop(0) if words else None
+    else:
+        mode = None
+    args.post_mode = mode
+    args.convert = mode == 'convert'
+
+    if words:
+        print(f"Error: unexpected argument '{words[0]}'")
+        print(_POST_USAGE)
+        return False
+    if mode is None and not (getattr(args, 'cleanup_only', False) or getattr(args, 'show', False)):
+        print("Error: run post needs a mode: full (simPlt + simPlt2Bin) or convert (simPlt2Bin only)")
+        print(_POST_USAGE)
+        return False
+    return True
 
 
 def _execute_post_on_case(case_dir: Path, args):
@@ -108,8 +143,8 @@ def _get_case_info(args):
     
     if not case_name:
         print("Error: Case directory not specified")
-        print("\nUsage: run post <case_directory>")
-        print("   or: use case:<directory>, then run post")
+        print("\nUsage: run post {full|convert} <case_directory>")
+        print("   or: use case:<directory>, then run post full")
         return None, None
     
     return case_name, base_dir
@@ -651,13 +686,18 @@ Submit the postprocessing job script to SLURM queue.
 This typically runs simPlt (PLT generation) and simPlt2Bin (binary conversion).
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    run post [case_directory] [options]
+    run post full [case_directory] [options]
+    run post convert [case_directory] [options]
+    run post [case_directory] --cleanup-only | --show
+
+{Colors.BOLD}SUBCOMMANDS:{Colors.RESET}
+    {Colors.YELLOW}full{Colors.RESET}                 Run simPlt then simPlt2Bin
+    {Colors.YELLOW}convert{Colors.RESET}              Run simPlt2Bin only (skip simPlt; .plt files must already exist)
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
     {Colors.YELLOW}--start TSID{Colors.RESET}         Process from this timestep (rounds up to nearest outFreq multiple)
     {Colors.YELLOW}--upto TSID{Colors.RESET}          Process up to this timestep (rounds down to nearest outFreq multiple)
     {Colors.YELLOW}--freq N{Colors.RESET}             Override output frequency from simflow.config
-    {Colors.YELLOW}--convert{Colors.RESET}            Run simPlt2Bin only (skip simPlt; .plt files must already exist)
     {Colors.YELLOW}--partition NAME{Colors.RESET}     Apply partition header to script
     {Colors.YELLOW}--cleanup{Colors.RESET}            Clean up files with binary PLT before submitting
     {Colors.YELLOW}--cleanup-only{Colors.RESET}       Only perform cleanup, don't submit job
@@ -668,26 +708,29 @@ This typically runs simPlt (PLT generation) and simPlt2Bin (binary conversion).
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
     # Submit postprocessing
-    run post Case001
+    run post full Case001
 
     # Submit from context
     use case:Case001
-    run post
+    run post full
 
     # Cleanup first, then submit
-    run post Case001 --cleanup
+    run post full Case001 --cleanup
 
     # Only cleanup, don't submit
     run post Case001 --cleanup-only
 
+    # Convert existing .plt files to binary only
+    run post convert Case001
+
     # Process up to timestep 5000
-    run post Case001 --upto 5000
+    run post full Case001 --upto 5000
 
     # Chain after main simulation
-    run post Case001 --dependency 12345
+    run post full Case001 --dependency 12345
 
     # Apply partition header before submission
-    run post Case001 --partition shared
+    run post full Case001 --partition shared
 
 {Colors.BOLD}SCRIPT PRIORITY:{Colors.RESET}
     The command looks for scripts in this order:
@@ -716,10 +759,10 @@ This typically runs simPlt (PLT generation) and simPlt2Bin (binary conversion).
     # Option 1: Chain entire workflow
     run pre Case001              # Get job ID: 100
     run main --dependency 100    # Get job ID: 101
-    run post --dependency 101
+    run post full --dependency 101
 
     # Option 2: Cleanup between runs
-    run post Case001 --cleanup   # Clean old files, process new ones
+    run post full Case001 --cleanup   # Clean old files, process new ones
 
     # Option 3: Just cleanup
     run post Case001 --cleanup-only

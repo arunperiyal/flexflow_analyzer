@@ -417,7 +417,7 @@ def display_summary(results, console):
         console.print("[dim]You can now submit jobs with:[/dim]")
         console.print("[dim]  run pre     # Submit preprocessing[/dim]")
         console.print("[dim]  run main    # Submit main simulation[/dim]")
-        console.print("[dim]  run post    # Submit postprocessing[/dim]")
+        console.print("[dim]  run post full    # Submit postprocessing[/dim]")
     else:
         console.print("[bold red]✗ Case directory has errors![/bold red]")
         console.print()

@@ -103,7 +103,7 @@ const FlowChart = (() => {
     },
     {
       title: 'Submit post-processing',
-      command: 'run post myCase --dependency <mainJobID>',
+      command: 'run post full myCase --dependency <mainJobID>',
       detail: `Submits postFlex.sh, turning the raw ASCII solver output
         into binary PLT files. Needed before the output is usable for
         anything downstream.`,

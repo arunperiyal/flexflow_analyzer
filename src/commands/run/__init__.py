@@ -4,6 +4,7 @@ Commands: check, pre, main, post, sq, sb, sc
 """
 
 from ..base import BaseCommand
+from shellkit.completion import paths
 from src.cli.context import case_arg, freq_arg
 
 
@@ -15,6 +16,17 @@ def _complete_sq_mode(rt, prefix):
 def _complete_check_mode(rt, prefix):
     from shellkit.completion import path_candidates
     return [('headers', 'SBATCH header info for the job scripts')] + path_candidates(rt, prefix)
+
+
+def _complete_main_mode(rt, prefix):
+    from shellkit.completion import path_candidates
+    return [('restart', 'Restart from a timestep: restart TSID [case]'),
+            ('reset', 'Comment out restartFlag/restartTsId and start fresh')] + path_candidates(rt, prefix)
+
+
+def _complete_post_mode(rt, prefix):
+    return [('full', 'simPlt then simPlt2Bin'),
+            ('convert', 'simPlt2Bin only (.plt files must already exist)')]
 
 
 class RunCommand(BaseCommand):
@@ -73,9 +85,9 @@ class RunCommand(BaseCommand):
             add_help=False,
             help='Submit main simulation job'
         )
-        case_arg(main_parser, help='Case directory')
-        main_parser.add_argument('--restart', type=int, metavar='TSID', help='Restart from specific timestep')
-        main_parser.add_argument('--reset', action='store_true', help='Comment out restartFlag/restartTsId and start fresh')
+        case_arg(main_parser, help="Case directory, or 'restart' / 'reset'").completer = _complete_main_mode
+        main_parser.add_argument('words', nargs='*', metavar='ARG',
+                                 help='After restart: TSID [case]; after reset: [case]').completer = paths(dirs_only=True)
         main_parser.add_argument('-n', '--np', type=int, metavar='N', help='Set #SBATCH -n/--ntasks in script before submission')
         main_parser.add_argument('--dependency', type=str, metavar='JOB_ID', help='Job dependency')
         main_parser.add_argument('--partition', type=str, metavar='NAME', help='Apply partition header to script')
@@ -93,11 +105,12 @@ class RunCommand(BaseCommand):
             add_help=False,
             help='Submit postprocessing job'
         )
-        case_arg(post_parser, help='Case directory')
+        case_arg(post_parser, help="'full' or 'convert'").completer = _complete_post_mode
+        post_parser.add_argument('words', nargs='*', metavar='CASE',
+                                 help='Case directory after the mode word').completer = paths(dirs_only=True)
         post_parser.add_argument('--start', type=int, metavar='TSID', help='Process from this timestep (default: 0)')
         post_parser.add_argument('--upto', type=int, metavar='TSID', help='Process up to this timestep')
         freq_arg(post_parser, metavar='N', help='Override output frequency')
-        post_parser.add_argument('--convert', action='store_true', help='Run simPlt2Bin only (skip simPlt)')
         post_parser.add_argument('--dependency', type=str, metavar='JOB_ID', help='Job dependency')
         post_parser.add_argument('--partition', type=str, metavar='NAME', help='Apply partition header to script')
         post_parser.add_argument('--account', type=str, metavar='NAME', help='Set SLURM account (passed to sbatch)')

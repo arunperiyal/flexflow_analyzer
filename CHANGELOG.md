@@ -10,6 +10,12 @@
   grouped by submit directory as `run sq --by-dir` shows them. `--all` and
   `--sort` work with it as with the plain queue.
 - `run check --headers` is now `run check headers [case]`.
+- `run main --restart TSID` is now `run main restart TSID [case]`, and
+  `run main --reset` is now `run main reset [case]`.
+- `run post` now takes a mode: `run post full [case]` runs simPlt then
+  simPlt2Bin (what plain `run post` did), and `run post convert [case]`
+  replaces `run post --convert`. `--cleanup-only` and `--show` still work
+  without a mode.
 
 ### ♻️ The interactive shell now runs on shellkit
 
