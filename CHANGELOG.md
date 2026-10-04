@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### ⌨️ `run sq` and `run check` take mode words instead of flags
+
+- `run sq --watch [N]` is now `run sq watch [N]`.
+- New `run sq find <key>` lists the jobs whose name or work directory
+  contains `<key>` (case-insensitive), e.g. `run sq find CS4SG3U3P0`.
+  `--all`, `--by-dir` and `--sort` work with it as with the plain queue.
+- `run check --headers` is now `run check headers [case]`.
+
 ### ♻️ The interactive shell now runs on shellkit
 
 - The shell (prompt, history, aliases, `;` chaining, `|` pipes, `use`/`unuse`,

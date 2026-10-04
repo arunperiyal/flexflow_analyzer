@@ -26,28 +26,49 @@ def execute_sq(args):
         print("Make sure you're on an HPC cluster with SLURM installed")
         return
 
+    target = getattr(args, 'target', None)
+    value = getattr(args, 'value', None)
+
+    if getattr(args, 'out', False) and target in (None, 'watch', 'find'):
+        print("Error: --out requires <job_id> (usage: run sq <job_id> --out)")
+        return
+
+    # Watch mode: run sq watch [<seconds>]
+    if target == 'watch':
+        try:
+            interval = float(value) if value is not None else 10.0
+        except ValueError:
+            print(f"Error: watch interval must be a number of seconds, got '{value}'")
+            return
+        if interval <= 0:
+            print("Error: watch interval must be a positive number of seconds")
+            return
+        watch_queue(args, interval)
+        return
+
+    # Search mode: run sq find <key>
+    if target == 'find':
+        if not value:
+            print("Error: find requires a search key (usage: run sq find <key>)")
+            return
+        find_jobs(args, value)
+        return
+
+    if value is not None:
+        print(f"Error: unexpected argument '{value}'")
+        print("Usage: run sq [<job_id> | watch [<seconds>] | find <key>]")
+        return
+
     # Job detail mode: run sq <job_id>
-    job_id = getattr(args, 'job_id', None)
-    if job_id:
-        show_out = getattr(args, 'out', False)
+    if target:
         out_lines = getattr(args, 'n', 20)
         if out_lines <= 0:
             print("Error: -n/--lines must be a positive integer")
             return
-        show_job_detail(job_id, show_out=show_out, out_lines=out_lines)
+        show_job_detail(target, show_out=getattr(args, 'out', False), out_lines=out_lines)
         return
 
-    if getattr(args, 'out', False):
-        print("Error: --out requires <job_id> (usage: run sq <job_id> --out)")
-        return
-
-    if getattr(args, 'watch', None) is not None:
-        if args.watch <= 0:
-            print("Error: --watch interval must be a positive number of seconds")
-            return
-        watch_queue(args)
-    else:
-        show_queue(args)
+    show_queue(args)
 
 
 # ---------------------------------------------------------------------------
@@ -422,14 +443,45 @@ def create_queue_table(jobs: list) -> Table:
 # ---------------------------------------------------------------------------
 
 def show_queue(args):
-    console = Console()
-    show_all = getattr(args, 'all', False)
-    group_by_dir = getattr(args, 'by_dir', False)
-    sort_by = getattr(args, 'sort', None)
+    jobs = parse_queue_output(get_queue_data(getattr(args, 'all', False)))
+    _print_jobs(args, jobs)
 
-    output = get_queue_data(show_all)
-    jobs = parse_queue_output(output)
-    jobs = sort_jobs(jobs, sort_by)
+
+def filter_jobs(jobs: list, key: str) -> list:
+    """Jobs whose name or work directory contains key (case-insensitive).
+
+    The work directory is only looked up (one scontrol call each) for jobs
+    whose name does not already match.
+    """
+    needle = key.lower()
+    matched = []
+    for job in jobs:
+        if needle in job['name'].lower():
+            matched.append(job)
+            continue
+        if job.get('workdir') is None:
+            job['workdir'] = get_job_workdir(job['jobid'])
+        if needle in (job['workdir'] or '').lower():
+            matched.append(job)
+    return matched
+
+
+def find_jobs(args, key: str):
+    jobs = parse_queue_output(get_queue_data(getattr(args, 'all', False)))
+    jobs = filter_jobs(jobs, key)
+    if not jobs:
+        console = Console()
+        console.print()
+        console.print(f"[yellow]No jobs matching '{key}'[/yellow]")
+        console.print()
+        return
+    _print_jobs(args, jobs, title=f"SLURM Jobs matching '{key}'")
+
+
+def _print_jobs(args, jobs: list, title: str = 'SLURM Job Queue'):
+    console = Console()
+    group_by_dir = getattr(args, 'by_dir', False)
+    jobs = sort_jobs(jobs, getattr(args, 'sort', None))
 
     if not jobs:
         console.print()
@@ -439,35 +491,31 @@ def show_queue(args):
         console.print()
         return
 
+    console.print()
     if group_by_dir:
         jobs = enrich_jobs_with_workdir(jobs)
         grouped = group_jobs_by_workdir(jobs)
-        
-        console.print()
         for workdir in sorted(grouped.keys()):
-            dir_jobs = grouped[workdir]
-            table = create_queue_table(dir_jobs)
-            table.title = f'SLURM Job Queue - {workdir}'
+            table = create_queue_table(grouped[workdir])
+            table.title = f'{title} - {workdir}'
             console.print(table)
-        console.print()
     else:
-        console.print()
-        console.print(create_queue_table(jobs))
-        console.print()
+        table = create_queue_table(jobs)
+        table.title = title
+        console.print(table)
+    console.print()
 
-    if jobs:
-        running = sum(1 for j in jobs if j['state'] == 'RUNNING')
-        pending = sum(1 for j in jobs if j['state'] == 'PENDING')
-        console.print(f'[dim]Total: {len(jobs)} jobs  |  Running: {running}  |  Pending: {pending}[/dim]')
+    running = sum(1 for j in jobs if j['state'] == 'RUNNING')
+    pending = sum(1 for j in jobs if j['state'] == 'PENDING')
+    console.print(f'[dim]Total: {len(jobs)} jobs  |  Running: {running}  |  Pending: {pending}[/dim]')
     console.print()
 
 
-def watch_queue(args):
+def watch_queue(args, interval: float = 10.0):
     console = Console()
     show_all = getattr(args, 'all', False)
     group_by_dir = getattr(args, 'by_dir', False)
     sort_by = getattr(args, 'sort', None)
-    interval = args.watch
 
     console.print()
     console.print(f'[bold cyan]Watch Mode[/bold cyan] - refreshing every {interval:g}s - Press Ctrl+C to exit')
@@ -659,15 +707,20 @@ def show_sq_help():
 {Colors.BOLD}{Colors.CYAN}run sq — SLURM Job Queue{Colors.RESET}
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    run sq [<job_id>] [--all] [--by-dir] [--watch [<seconds>]] [--sort <column>] [--out] [-n <lines>]
+    run sq [--all] [--by-dir] [--sort <column>]
+    run sq watch [<seconds>] [--all] [--by-dir] [--sort <column>]
+    run sq find <key> [--all] [--by-dir] [--sort <column>]
+    run sq <job_id> [--out] [-n <lines>]
 
-{Colors.BOLD}ARGUMENTS:{Colors.RESET}
-    {Colors.YELLOW}<job_id>{Colors.RESET}    Show detailed info for a single job (scontrol + sstat)
+{Colors.BOLD}SUBCOMMANDS:{Colors.RESET}
+    {Colors.YELLOW}watch{Colors.RESET} [<seconds>]  Refresh every <seconds> (default: 10; Ctrl+C to stop)
+    {Colors.YELLOW}find{Colors.RESET} <key>         Jobs whose name or work directory contains <key>
+                       (case-insensitive)
+    {Colors.YELLOW}<job_id>{Colors.RESET}           Show detailed info for a single job (scontrol + sstat)
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
     {Colors.YELLOW}--all{Colors.RESET}       Show all users' jobs (default: yours only)
     {Colors.YELLOW}--by-dir{Colors.RESET}    Group jobs by parent directory (removes case name from path)
-    {Colors.YELLOW}--watch{Colors.RESET} [<seconds>]  Refresh every <seconds> (default: 10; Ctrl+C to stop)
     {Colors.YELLOW}--sort{Colors.RESET}      Sort by queue column ({sort_columns})
     {Colors.YELLOW}--out{Colors.RESET}       With <job_id>, show tail of StdOut file
     {Colors.YELLOW}-n, --lines{Colors.RESET} Number of StdOut lines with --out (default: 20)
@@ -687,7 +740,9 @@ def show_sq_help():
     run sq --all            # All users
     run sq --by-dir         # Group your jobs by work directory
     run sq --sort submit    # Sort by submit timestamp
-    run sq --watch          # Auto-refresh
+    run sq watch            # Auto-refresh every 10s
+    run sq watch 30         # Auto-refresh every 30s
+    run sq find CS4SG3U3P0  # Jobs for one case
     run sq 1258586          # Detail for job 1258586
     run sq 1258586 --out    # Show last 20 StdOut lines
     run sq 1258586 --out -n 50

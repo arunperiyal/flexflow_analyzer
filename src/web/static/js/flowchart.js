@@ -96,7 +96,7 @@ const FlowChart = (() => {
     },
     {
       title: 'Watch the queue',
-      command: 'run sq --watch\n# run sc <id|name>  to cancel',
+      command: 'run sq watch\n# run sc <id|name>  to cancel',
       optional: true,
       detail: `Polls Slurm for pre/main/post progress instead of raw
         squeue. "run sc" cancels a job if something needs to stop.`,

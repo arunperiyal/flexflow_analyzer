@@ -29,6 +29,9 @@ Submit and manage SLURM jobs for FlexFlow simulations.
     # Verbose check with error details
     run check Case001 --verbose
 
+    # Show SBATCH headers of the job scripts
+    run check headers Case001
+
     # Submit preprocessing job
     run pre Case001
 
@@ -45,7 +48,10 @@ Submit and manage SLURM jobs for FlexFlow simulations.
     run sq
 
     # Watch job queue
-    run sq --watch
+    run sq watch
+
+    # Find jobs for one case
+    run sq find CS4SG3U3P0
 
     # Sort queue by a column
     run sq --sort submitted

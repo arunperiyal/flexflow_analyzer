@@ -11,6 +11,10 @@ from rich import box
 from ..shared_helpers import execute_on_all_cases, get_case_name_and_base_dir
 
 
+# Words that select a focused check instead of naming a case
+CHECK_MODES = ('headers',)
+
+
 def execute_check(args):
     """Execute run check command to validate case directory and check SLURM status."""
 
@@ -18,6 +22,17 @@ def execute_check(args):
     if hasattr(args, 'help') and args.help:
         show_check_help()
         return
+
+    # Mode word: run check headers [case]
+    mode = None
+    if getattr(args, 'case', None) in CHECK_MODES:
+        mode = args.case
+        args.case = getattr(args, 'case_after', None)
+    elif getattr(args, 'case_after', None):
+        print(f"Error: unexpected argument '{args.case_after}'")
+        print("Usage: run check [headers] [case_directory]")
+        return
+    args.check_mode = mode
 
     # Get case info
     case_name, base_dir = _get_case_info(args)
@@ -49,7 +64,7 @@ def _execute_check_on_case(case_dir: Path, args):
     verbose = hasattr(args, 'verbose') and args.verbose
 
     # Focused mode: only show job-script SBATCH header info
-    if getattr(args, 'headers', False):
+    if getattr(args, 'check_mode', None) == 'headers':
         check_job_headers(case_dir, console)
         return
 
@@ -425,10 +440,13 @@ Also checks the status of the last submitted SLURM job.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
     run check [case_directory] [options]
+    run check headers [case_directory]
+
+{Colors.BOLD}SUBCOMMANDS:{Colors.RESET}
+    {Colors.YELLOW}headers{Colors.RESET}        Show SBATCH header info (job name, partition, QOS, tasks,
+                   nodes, CPUs/task, wall time) for pre/main/post scripts
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
-    {Colors.YELLOW}--headers{Colors.RESET}      Show SBATCH header info (job name, partition, QOS, tasks,
-                   nodes, CPUs/task, wall time) for pre/main/post scripts
     {Colors.YELLOW}-v, --verbose{Colors.RESET}  Show detailed validation results and error messages
     {Colors.YELLOW}-h, --help{Colors.RESET}     Show this help message
 
@@ -437,7 +455,7 @@ Also checks the status of the last submitted SLURM job.
     run check Case001
 
     # Show SBATCH headers for the job scripts
-    run check Case001 --headers
+    run check headers Case001
 
     # Check with detailed output
     run check Case001 --verbose

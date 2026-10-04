@@ -560,7 +560,7 @@ This typically runs mesh generation (gmsh) and mesh conversion (simGmshCnvt).
 {Colors.BOLD}AFTER SUBMISSION:{Colors.RESET}
     {Colors.GREEN}Monitor job status:{Colors.RESET}
     • run sq              # Show all your jobs
-    • run sq --watch      # Live queue monitoring
+    • run sq watch       # Live queue monitoring
     • squeue -j <job_id>  # Check specific job
 
     {Colors.GREEN}Next steps:{Colors.RESET}
