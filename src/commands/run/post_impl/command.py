@@ -607,7 +607,7 @@ def submit_postprocessing_job(script_path, case_dir, args, console):
             console.print()
             console.print("[dim]Monitor with:[/dim]")
             console.print(f"[dim]  run sq              # Show queue[/dim]")
-            console.print(f"[dim]  run sq --watch      # Live queue monitoring[/dim]")
+            console.print(f"[dim]  run sq watch       # Live queue monitoring[/dim]")
             console.print(f"[dim]  squeue -j {job_id}   # Check specific job[/dim]")
             console.print(f"[dim]  scancel {job_id}     # Cancel job[/dim]")
             console.print()
@@ -727,7 +727,7 @@ This typically runs simPlt (PLT generation) and simPlt2Bin (binary conversion).
 {Colors.BOLD}AFTER SUBMISSION:{Colors.RESET}
     {Colors.GREEN}Monitor job status:{Colors.RESET}
     • run sq              # Show all your jobs
-    • run sq --watch      # Live queue monitoring
+    • run sq watch       # Live queue monitoring
     • squeue -j <job_id>  # Check specific job
 
     {Colors.GREEN}Check results:{Colors.RESET}

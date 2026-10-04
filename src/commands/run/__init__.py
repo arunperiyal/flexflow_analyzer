@@ -7,6 +7,16 @@ from ..base import BaseCommand
 from src.cli.context import case_arg, freq_arg
 
 
+def _complete_sq_mode(rt, prefix):
+    return [('watch', 'Refresh the queue every N seconds (default: 10)'),
+            ('find', 'Jobs whose name or work directory contains a key')]
+
+
+def _complete_check_mode(rt, prefix):
+    from shellkit.completion import path_candidates
+    return [('headers', 'SBATCH header info for the job scripts')] + path_candidates(rt, prefix)
+
+
 class RunCommand(BaseCommand):
     """Run SLURM jobs for FlexFlow simulations"""
 
@@ -34,8 +44,9 @@ class RunCommand(BaseCommand):
             add_help=False,
             help='Validate case directory structure'
         )
-        case_arg(check_parser, help='Case directory')
-        check_parser.add_argument('--headers', action='store_true', help='Show SBATCH header info (partition, tasks, walltime) for job scripts')
+        case_arg(check_parser, help="Case directory, or 'headers'").completer = _complete_check_mode
+        check_parser.add_argument('case_after', nargs='?', metavar='CASE',
+                                  help='Case directory after a mode word (run check headers <case>)')
         check_parser.add_argument('-v', '--verbose', action='store_true', help='Verbose output')
         check_parser.add_argument('-h', '--help', action='store_true', help='Show help')
 
@@ -105,11 +116,12 @@ class RunCommand(BaseCommand):
             add_help=False,
             help='Show SLURM job queue status'
         )
-        sq_parser.add_argument('job_id', nargs='?', help='Show detail for a specific job ID')
+        sq_parser.add_argument('target', nargs='?',
+                               help="Job ID for detail, or 'watch' / 'find'").completer = _complete_sq_mode
+        sq_parser.add_argument('value', nargs='?',
+                               help="Refresh seconds for 'watch', search key for 'find'")
         sq_parser.add_argument('--all', action='store_true', help='Show all users jobs')
         sq_parser.add_argument('--by-dir', action='store_true', help='Group jobs by their work directory')
-        sq_parser.add_argument('--watch', nargs='?', const=10, type=float, metavar='SECONDS',
-                               help='Watch mode, refreshing every SECONDS (default: 10)')
         sq_parser.add_argument(
             '--sort',
             type=str,
