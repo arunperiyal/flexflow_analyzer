@@ -188,3 +188,29 @@ def test_execute_sq_rejects_bad_watch_and_missing_find_key(monkeypatch, capsys):
     assert "must be a number" in out
     assert "positive" in out
     assert "requires a search key" in out
+
+
+def test_find_jobs_groups_by_submit_directory(monkeypatch):
+    output = (
+        "101|mainCS4SG3U3P0|RUNNING|1:00:00|2|medium|80|4300|2026-10-04T08:00:00|node1|(null)\n"
+        "102|mainCS4SG1U1P0|RUNNING|1:00:00|2|medium|80|4300|2026-10-04T08:00:00|node1|(null)\n"
+    )
+    monkeypatch.setattr(sq_cmd, "get_queue_data", lambda show_all=False: output)
+    workdirs = {"101": "/scratch/a/CS4SG3U3P0", "102": "/scratch/a/CS4SG1U1P0"}
+    monkeypatch.setattr(sq_cmd, "get_job_workdir", workdirs.get)
+    titles = []
+    real_table = sq_cmd.create_queue_table
+
+    def spy_table(jobs):
+        table = real_table(jobs)
+        titles.append([job["jobid"] for job in jobs])
+        return table
+
+    monkeypatch.setattr(sq_cmd, "create_queue_table", spy_table)
+    printed = []
+    monkeypatch.setattr(sq_cmd.Console, "print", lambda self, *a, **k: printed.extend(a))
+
+    sq_cmd.find_jobs(_sq_args(), "CS4SG3U3P0")
+    tables = [p for p in printed if isinstance(p, sq_cmd.Table)]
+    assert [t.title for t in tables] == ["SLURM Jobs matching 'CS4SG3U3P0' - /scratch/a"]
+    assert titles == [["101"]]
