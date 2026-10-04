@@ -70,6 +70,9 @@ def execute_main(args):
         show_main_help()
         return
 
+    if not _take_main_mode(args):
+        return
+
     # Get case info
     case_name, base_dir = _get_case_info(args)
     if case_name is None:
@@ -92,6 +95,46 @@ def execute_main(args):
         return
     
     _execute_main_on_case(case_dir.resolve(), args)
+
+
+_MAIN_USAGE = "Usage: run main [restart <TSID> | reset] [case_directory] [options]"
+
+
+def _take_main_mode(args) -> bool:
+    """
+    Read the mode word: run main restart <TSID> [case] / run main reset [case].
+
+    Sets args.restart / args.reset and moves the case that follows the mode
+    word into args.case. Returns False (after printing why) on bad input.
+    """
+    words = list(getattr(args, 'words', None) or [])
+    args.restart = None
+    args.reset = False
+
+    mode = getattr(args, 'case', None)
+    if mode == 'restart':
+        if not words:
+            print("Error: restart needs a timestep (usage: run main restart <TSID> [case])")
+            return False
+        tsid = words.pop(0)
+        try:
+            args.restart = int(tsid)
+        except ValueError:
+            print(f"Error: restart timestep must be an integer, got '{tsid}'")
+            return False
+        if args.restart <= 0:
+            print("Error: restart timestep must be a positive integer")
+            return False
+        args.case = words.pop(0) if words else None
+    elif mode == 'reset':
+        args.reset = True
+        args.case = words.pop(0) if words else None
+
+    if words:
+        print(f"Error: unexpected argument '{words[0]}'")
+        print(_MAIN_USAGE)
+        return False
+    return True
 
 
 def _execute_main_on_case(case_dir: Path, args):
@@ -129,11 +172,8 @@ def _execute_main_on_case(case_dir: Path, args):
         show_dry_run(script_path, case_dir, args, console)
         return
 
-    # Handle --reset flag: comment out restart keys then submit fresh
+    # run main reset: comment out restart keys then submit fresh
     if hasattr(args, 'reset') and args.reset:
-        if hasattr(args, 'restart') and args.restart:
-            console.print("[red]Error:[/red] --reset and --restart cannot be used together.")
-            return
         console.print()
         console.print("[bold cyan]Resetting restart configuration[/bold cyan]")
         console.print()
@@ -931,7 +971,7 @@ def submit_main_job(script_path, case_dir, args, console):
             console.print(f"[dim]  scancel {job_id}     # Cancel job[/dim]")
             console.print()
             console.print("[dim]After completion:[/dim]")
-            console.print(f"[dim]  run post            # Submit postprocessing[/dim]")
+            console.print(f"[dim]  run post full       # Submit postprocessing[/dim]")
         else:
             console.print("[green]✓ Job submitted[/green]")
             console.print(f"[dim]{output}[/dim]")
@@ -971,10 +1011,14 @@ This runs the primary FlexFlow simulation (mpiSimflow).
 
 {Colors.BOLD}USAGE:{Colors.RESET}
     run main [case_directory] [options]
+    run main restart <TSID> [case_directory] [options]
+    run main reset [case_directory] [options]
+
+{Colors.BOLD}SUBCOMMANDS:{Colors.RESET}
+    {Colors.YELLOW}restart TSID{Colors.RESET}          Restart from specific timestep ID
+    {Colors.YELLOW}reset{Colors.RESET}                 Comment out restartFlag/restartTsId and start fresh
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
-    {Colors.YELLOW}--restart TSID{Colors.RESET}        Restart from specific timestep ID
-    {Colors.YELLOW}--reset{Colors.RESET}               Comment out restartFlag/restartTsId and start fresh
     {Colors.YELLOW}-n, --np N{Colors.RESET}            Set #SBATCH -n/--ntasks in main script before submit
     {Colors.YELLOW}--dependency JOB_ID{Colors.RESET}   Wait for another job to complete first
     {Colors.YELLOW}--partition NAME{Colors.RESET}      Apply partition header to script before submission
@@ -994,7 +1038,10 @@ This runs the primary FlexFlow simulation (mpiSimflow).
     run main
 
     # Restart from timestep 5000
-    run main Case001 --restart 5000
+    run main restart 5000 Case001
+
+    # Start fresh, ignoring restartFlag/restartTsId in simflow.config
+    run main reset Case001
 
     # Chain after preprocessing
     run main Case001 --dependency 12345
@@ -1031,7 +1078,7 @@ This runs the primary FlexFlow simulation (mpiSimflow).
     # Option 2: Restart simulation
     run main Case001            # Initial run
     # ... simulation runs, stops at TSID 5000
-    run main Case001 --restart 5000
+    run main restart 5000 Case001
 
 {Colors.BOLD}AFTER SUBMISSION:{Colors.RESET}
     {Colors.GREEN}Monitor job status:{Colors.RESET}
@@ -1042,5 +1089,5 @@ This runs the primary FlexFlow simulation (mpiSimflow).
     {Colors.GREEN}Next steps:{Colors.RESET}
     • Wait for simulation to complete
     • Check output files (*.out, *.rst, *.othd, *.oisd)
-    • Submit postprocessing: run post
+    • Submit postprocessing: run post full
 """)

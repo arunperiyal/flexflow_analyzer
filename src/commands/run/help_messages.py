@@ -39,10 +39,16 @@ Submit and manage SLURM jobs for FlexFlow simulations.
     run main Case001
 
     # Submit main with restart
-    run main Case001 --restart 5000
+    run main restart 5000 Case001
+
+    # Submit main fresh, ignoring restart settings
+    run main reset Case001
 
     # Submit postprocessing with cleanup
-    run post Case001 --cleanup
+    run post full Case001 --cleanup
+
+    # Convert existing .plt files to binary only
+    run post convert Case001
 
     # Check job queue
     run sq

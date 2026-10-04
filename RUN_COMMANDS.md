@@ -206,8 +206,8 @@ run pre Case001 --dry-run
      - If `.out` files exist, find the latest restart (`.rst`) file
      - Resume simulation from last available restart file
 
-   - **Manual restart** (with `--restart` option):
-     - Use `run main --restart <tsId>` to restart from specific time step
+   - **Manual restart** (with `run main restart`):
+     - Use `run main restart <tsId>` to restart from specific time step
      - Runs the restart algorithm (see Restart Algorithm section below)
 
 4. **Simulation Execution:**
@@ -263,7 +263,7 @@ use case:Case001
 run main
 
 # Restart from specific time step
-run main Case001 --restart 5000
+run main restart 5000 Case001
 
 # With dependency on previous job
 run main Case001 --dependency <job_id>
@@ -302,7 +302,7 @@ run main Case001 --dependency <job_id>
    Cleanup happens BEFORE submitting the postprocessing job:
 
    **With `--cleanup` option:**
-   - `run post` first identifies files that already have binary PLT files in `binary/`
+   - `run post full` first identifies files that already have binary PLT files in `binary/`
    - Deletes `.out`, `.rst`, `.plt` files that have corresponding binary PLT
    - Then submits `postFlex.sh` to process remaining files
    - Avoids reprocessing already archived data
@@ -346,8 +346,8 @@ simPlt2Bin -pb riser
 echo "Postprocessing complete"
 ```
 
-**Note:** When using `run post --cleanup`:
-1. `run post` identifies files to clean BEFORE submitting the job
+**Note:** When using `run post full --cleanup`:
+1. `run post full` identifies files to clean BEFORE submitting the job
 2. Deletes identified `.out`, `.rst`, `.plt` files immediately
 3. Then submits `postFlex.sh` to SLURM queue
 4. Script runs: simPlt → simPlt2Bin (on remaining files)
@@ -357,24 +357,24 @@ echo "Postprocessing complete"
 
 ```bash
 # Basic usage (submits postprocessing job, returns immediately)
-run post Case001
+run post full Case001
 # This submits postFlex.sh to SLURM queue and returns
 # Job runs asynchronously
 # Monitor with: squeue -u $USER
 
 # With context
 use case:Case001
-run post
+run post full
 
 # Process specific time range
-run post Case001 --last 2500 --freq 100
+run post full Case001 --last 2500 --freq 100
 
 # With automatic cleanup after job completes
-run post Case001 --cleanup
+run post full Case001 --cleanup
 # This submits a cleanup job with dependency on postFlex.sh
 
 # Keep original files (no cleanup)
-run post Case001 --no-cleanup
+run post full Case001 --no-cleanup
 
 # Monitor job progress (run post returns immediately)
 squeue -u $USER
@@ -382,12 +382,12 @@ squeue -u $USER
 
 **Timeline Example (with `--cleanup` option):**
 ```
-Time 0:00 → run post Case001 --cleanup
+Time 0:00 → run post full Case001 --cleanup
 Time 0:00 → Identify files with existing binary PLT in binary/
 Time 0:00 → Delete identified .out, .rst, .plt files (immediate)
 Time 0:01 → Cleanup complete (before job submission)
 Time 0:01 → Submit postFlex.sh (Job ID: 123456)
-Time 0:01 → run post returns
+Time 0:01 → run post full returns
 Time 0:05 → Job 123456 starts
 Time 0:05 → simPlt starts (only processes remaining files)
 Time 1:15 → simPlt completes (faster - fewer files to process)
@@ -399,9 +399,9 @@ Time 2:00 → All done - disk already cleaned at start
 
 **Timeline Example (without `--cleanup`):**
 ```
-Time 0:00 → run post Case001
+Time 0:00 → run post full Case001
 Time 0:00 → Submit postFlex.sh (Job ID: 123456)
-Time 0:00 → run post returns immediately
+Time 0:00 → run post full returns immediately
 Time 0:05 → Job 123456 starts
 Time 0:05 → simPlt starts (processes ALL .out files)
 Time 2:30 → simPlt completes
@@ -480,7 +480,7 @@ Time 3:45 → All .out, .rst, .plt files still present (no cleanup)
 
 ## Restart Algorithm
 
-When using `run main --restart <tsId>`, the following automated workflow is executed:
+When using `run main restart <tsId>`, the following automated workflow is executed:
 
 ### 1. Pre-restart Organization
 
@@ -491,7 +491,7 @@ Run `case organise` to prepare the case directory:
 
 ### 2. Archive Completed Results
 
-When using `run main --restart <tsId>`, the system automatically runs `run post --upto <tsId> --cleanup`:
+When using `run main restart <tsId>`, the system automatically runs `run post full --upto <tsId> --cleanup`:
 
 **What happens:**
 ```bash
@@ -544,18 +544,18 @@ Submit `mainFlex.sh` with SLURM dependency:
 ### Workflow Diagram
 
 ```
-run main --restart 5000
+run main restart 5000
     ↓
 [1] case organise (immediate)
     ↓
-[2] run post --upto 5000 --cleanup (cleanup first, then submit)
+[2] run post full --upto 5000 --cleanup (cleanup first, then submit)
     ↓
     ├─ Identify files with tsId < 5000 that have binary PLT (immediate)
     ├─ Delete .out, .rst, .plt files for those tsId (immediate)
     ├─ Cleanup complete, disk space freed (immediate)
     ├─ Submit postFlex.sh → Job 123456 (SLURM queue)
     ├─ Submit mainFlex.sh → Job 123457 (depends on 123456)
-    └─ run main --restart returns immediately
+    └─ run main restart returns immediately
 
 
 Job 123456 (postFlex.sh - processes remaining files):
@@ -589,7 +589,7 @@ case organise
 
 # 2. Run postprocessing up to restart point
 # This submits jobs - returns immediately
-run post --upto 5000
+run post full --upto 5000
 
 # 3. Monitor jobs until completion
 squeue -u $USER
@@ -610,7 +610,7 @@ run main
 case organise
 
 # 2. Generate PLT files only (no cleanup)
-run post --upto 5000 --no-cleanup
+run post full --upto 5000 --no-cleanup
 
 # 3. Monitor postprocessing jobs
 watch -n 30 'squeue -u $USER'  # Check every 30 seconds
@@ -656,8 +656,8 @@ sacct -j <job_id> --format=JobID,JobName,State,ExitCode
 - **Simplicity:** Cleanup is synchronous (immediate), postprocessing is asynchronous (SLURM)
 - **Single Postprocessing Job:** Only simPlt and simPlt2Bin in the SLURM job
 - **Easier Monitoring:** One postprocessing job to track
-- **Automation:** Single command (`run main --restart`) handles entire restart workflow
-- **Reusability:** `run post --cleanup` can be used independently to clean and update PLT files
+- **Automation:** Single command (`run main restart`) handles entire restart workflow
+- **Reusability:** `run post full --cleanup` can be used independently to clean and update PLT files
 
 ---
 
@@ -687,7 +687,7 @@ sacct -j <job_id> --format=JobID,JobName,State,ExitCode
 
 ### Postprocessing Time Estimates
 
-The time required for `run post` depends on several factors:
+The time required for `run post full` depends on several factors:
 
 **Factors affecting total postprocessing duration:**
 - Number of time steps to process
@@ -739,7 +739,7 @@ Large case (200K nodes, 10000 steps):
 
 ### Main Simulation Options (`run main`)
 
-- `--restart <tsId>` - Restart from specific time step (runs restart algorithm)
+- `restart <tsId>` - Restart from specific time step (runs restart algorithm)
 - `--dependency <job_id>` - Submit with SLURM dependency on another job
 
 ### Postprocessing Options (`run post`)
@@ -748,7 +748,7 @@ Large case (200K nodes, 10000 steps):
 - `--last <N>` - Process last N time steps
 - `--freq <N>` - Output frequency for PLT files (every N steps)
 - `--cleanup` - Submit cleanup job with dependency (runs after postFlex.sh completes)
-- `--no-cleanup` - Do not submit cleanup job (default for standalone `run post`)
+- `--no-cleanup` - Do not submit cleanup job (default for standalone `run post full`)
 - `--cleanup-only` - Only run cleanup (assumes binary PLT files already exist)
 
 **Examples:**
@@ -764,14 +764,14 @@ run main Case001 --show
 run pre Case001 --edit
 
 # Verbose output
-run post Case001 --verbose
+run post full Case001 --verbose
 
 # Postprocessing with specific options
-run post Case001 --upto 5000 --freq 100
-run post Case001 --last 2500 --no-cleanup
+run post full Case001 --upto 5000 --freq 100
+run post full Case001 --last 2500 --no-cleanup
 
 # Restart from specific time step
-run main Case001 --restart 5000
+run main restart 5000 Case001
 ```
 
 ---
@@ -795,7 +795,7 @@ run main
 # Check progress: case status
 
 # 4. Submit postprocessing jobs
-run post
+run post full
 # Note: This submits jobs and returns immediately
 # Jobs may take hours to complete
 
@@ -842,7 +842,7 @@ use case:Case001
 # 2. Submit postprocessing jobs (asynchronous, may take hours)
 # 3. Clean output directory (after jobs complete)
 # 4. Submit simulation to resume from step 5000 (with dependency)
-run main --restart 5000
+run main restart 5000
 
 # Monitor progress - you'll see two jobs in the queue
 squeue -u $USER
@@ -872,13 +872,13 @@ use case:Case015 problem:riser node:24 t1:50.0 t2:150.0
 run check
 run pre
 run main
-run post
+run post full
 
 # Organize data
 case clean --keep-every 10
 
 # Postprocessing (submits jobs - may take hours)
-run post
+run post full
 
 # Monitor postprocessing jobs
 squeue -u $USER
@@ -912,14 +912,14 @@ case status
 
 # 2. First restart (from time step 10000)
 # Automatically archives results and resumes
-run main --restart 10000
+run main restart 10000
 
 # 3. Second restart (from time step 20000)
-run main --restart 20000
+run main restart 20000
 
 # 4. Final postprocessing after simulation completes
 # This submits jobs to create binary PLT files and clean up
-run post
+run post full
 
 # 5. Monitor postprocessing jobs (may take hours)
 watch -n 60 'squeue -u $USER'
@@ -1044,7 +1044,7 @@ use case:Case015 problem:riser node:24 t1:0.0 t2:200.0
 run check
 run pre
 run main
-run post
+run post full
 ```
 
 ### 3. Monitor and Organize
@@ -1070,7 +1070,7 @@ case status
 
 ```bash
 # Submit postprocessing
-run post Case001
+run post full Case001
 
 # Get job IDs
 squeue -u $USER
@@ -1100,7 +1100,7 @@ sacct -j 123456 --format=JobID,JobName,State,Elapsed,ExitCode
 - ✓ Let the `run main` command handle OTHD/OISD file management
 - ✓ Restart simulations freely without manual cleanup
 
-**Output Directory Cleanup** (`run post`):
+**Output Directory Cleanup** (`run post full`):
 - ✓ Automatically archives visualization data as binary PLT files
 - ✓ Removes redundant `.out`, `.rst`, `.plt` files after binary creation
 - ✓ Frees up significant disk space
@@ -1181,11 +1181,11 @@ run main Case001
 Error: No space left on device
 ```
 
-**Solution:** Use `run post` to clean up output directory:
+**Solution:** Use `run post full` to clean up output directory:
 
 ```bash
 # Archive results as binary PLT files and clean up
-run post Case001
+run post full Case001
 
 # Check space saved
 du -sh SIMFLOW_DATA/
@@ -1195,13 +1195,13 @@ du -sh binary/
 case clean --keep-every 10
 ```
 
-**Prevention:** Run `run post` regularly during long simulations to avoid filling up disk:
+**Prevention:** Run `run post full` regularly during long simulations to avoid filling up disk:
 
 ```bash
 # After each major milestone
 run main Case001
 # ... wait for completion ...
-run post Case001  # Archives and cleans up
+run post full Case001  # Archives and cleans up
 ```
 
 ### Postprocessing Job Timeout
@@ -1218,9 +1218,9 @@ SLURM State: TIMEOUT
 #SBATCH -t 12:00:00  # Increase from 6:00:00 to 12:00:00
 
 # Or process in smaller chunks
-run post --last 5000  # Process last 5000 steps only
+run post full --last 5000  # Process last 5000 steps only
 # Wait for completion
-run post --last 5000 --start 5001  # Process next batch
+run post full --last 5000 --start 5001  # Process next batch
 ```
 
 **Check job efficiency to estimate needed time:**
@@ -1255,7 +1255,7 @@ scontrol show job 123456 | grep Dependency
 
 # If dependency failed, resubmit
 scancel 123456
-run post Case001
+run post full Case001
 ```
 
 ---
@@ -1285,7 +1285,7 @@ done
 run pre Case001 && run main Case001
 
 # Full pipeline
-run check && run pre && run main && run post
+run check && run pre && run main && run post full
 ```
 
 ### Custom Script Names
@@ -1320,12 +1320,12 @@ The `run` command integrates seamlessly with other FlexFlow Manager commands:
 | `run check [case]`               | Validate case directory                   | `run check Case001`            |
 | `run pre [case]`                 | Submit preprocessing job                  | `run pre Case001`              |
 | `run main [case]`                | Submit main simulation                    | `run main Case001`             |
-| `run main --restart <tsId>`      | Restart from specific time step           | `run main --restart 5000`      |
+| `run main restart <tsId>`      | Restart from specific time step           | `run main restart 5000`      |
 | `run main --dependency <job_id>` | Submit with SLURM dependency              | `run main --dependency 123456` |
-| `run post [case]`                | Submit postprocessing (no auto cleanup)   | `run post Case001`             |
-| `run post --cleanup`             | Submit postprocessing with cleanup job    | `run post --cleanup`           |
-| `run post --upto <tsId>`         | Process up to specific time step          | `run post --upto 5000`         |
-| `run post --last <N>`            | Process last N time steps                 | `run post --last 2500`         |
+| `run post full [case]`                | Submit postprocessing (no auto cleanup)   | `run post full Case001`             |
+| `run post full --cleanup`             | Submit postprocessing with cleanup job    | `run post full --cleanup`           |
+| `run post full --upto <tsId>`         | Process up to specific time step          | `run post full --upto 5000`         |
+| `run post full --last <N>`            | Process last N time steps                 | `run post full --last 2500`         |
 | `run post --cleanup-only`        | Only run cleanup (PLT files must exist)   | `run post --cleanup-only`      |
 | `run --help`                     | Show help message                         | `run --help`                   |
 | `run pre --show`                 | Display preprocessing script              | `run pre --show`               |
