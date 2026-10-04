@@ -198,7 +198,7 @@ ff run sq --all            # Show all users' jobs
 ff run sq --by-dir         # Group jobs by parent directory (case name level)
 ff run sq --sort submitted # Sort jobs by submit time
 ff run sq watch            # Auto-refresh every 10 seconds (run sq watch 30 for 30s)
-ff run sq find CS4SG3U3P0  # Jobs whose name or work directory contains the key
+ff run sq find CS4SG3U3P0  # Jobs whose name or work directory contains the key, grouped by directory
 ff run sq <job_id>         # Show detailed info for a job
 ff run sq <job_id> --out -n 50  # Show last 50 lines from job StdOut
 ```

@@ -6,8 +6,9 @@
 
 - `run sq --watch [N]` is now `run sq watch [N]`.
 - New `run sq find <key>` lists the jobs whose name or work directory
-  contains `<key>` (case-insensitive), e.g. `run sq find CS4SG3U3P0`.
-  `--all`, `--by-dir` and `--sort` work with it as with the plain queue.
+  contains `<key>` (case-insensitive), e.g. `run sq find CS4SG3U3P0`,
+  grouped by submit directory as `run sq --by-dir` shows them. `--all` and
+  `--sort` work with it as with the plain queue.
 - `run check --headers` is now `run check headers [case]`.
 
 ### ♻️ The interactive shell now runs on shellkit

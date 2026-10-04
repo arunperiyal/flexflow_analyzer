@@ -475,12 +475,14 @@ def find_jobs(args, key: str):
         console.print(f"[yellow]No jobs matching '{key}'[/yellow]")
         console.print()
         return
-    _print_jobs(args, jobs, title=f"SLURM Jobs matching '{key}'")
+    # Always grouped by submit directory, as run sq --by-dir shows it
+    _print_jobs(args, jobs, title=f"SLURM Jobs matching '{key}'", group_by_dir=True)
 
 
-def _print_jobs(args, jobs: list, title: str = 'SLURM Job Queue'):
+def _print_jobs(args, jobs: list, title: str = 'SLURM Job Queue', group_by_dir: bool = None):
     console = Console()
-    group_by_dir = getattr(args, 'by_dir', False)
+    if group_by_dir is None:
+        group_by_dir = getattr(args, 'by_dir', False)
     jobs = sort_jobs(jobs, getattr(args, 'sort', None))
 
     if not jobs:
@@ -709,13 +711,13 @@ def show_sq_help():
 {Colors.BOLD}USAGE:{Colors.RESET}
     run sq [--all] [--by-dir] [--sort <column>]
     run sq watch [<seconds>] [--all] [--by-dir] [--sort <column>]
-    run sq find <key> [--all] [--by-dir] [--sort <column>]
+    run sq find <key> [--all] [--sort <column>]
     run sq <job_id> [--out] [-n <lines>]
 
 {Colors.BOLD}SUBCOMMANDS:{Colors.RESET}
     {Colors.YELLOW}watch{Colors.RESET} [<seconds>]  Refresh every <seconds> (default: 10; Ctrl+C to stop)
     {Colors.YELLOW}find{Colors.RESET} <key>         Jobs whose name or work directory contains <key>
-                       (case-insensitive)
+                       (case-insensitive), grouped by submit directory
     {Colors.YELLOW}<job_id>{Colors.RESET}           Show detailed info for a single job (scontrol + sstat)
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
