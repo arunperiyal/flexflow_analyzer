@@ -246,7 +246,7 @@ Generate SLURM job script templates for FlexFlow simulations.
 
     {Colors.BOLD}Files generated:{Colors.RESET}
     - simflow_env.sh : Executable paths and module loads (edit this file)
-    - preFlex.sh     : Runs gmsh and simGmshCnvt
+    - preFlex.sh     : Runs gmsh, checks for triangles, runs simGmshCnvt
     - mainFlex.sh    : Runs mpiSimflow with archiving
     - postFlex.sh    : Runs simPlt and simPlt2Bin
 

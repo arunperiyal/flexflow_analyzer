@@ -15,7 +15,8 @@ def _complete_sq_mode(rt, prefix):
 
 def _complete_check_mode(rt, prefix):
     from shellkit.completion import path_candidates
-    return [('headers', 'SBATCH header info for the job scripts')] + path_candidates(rt, prefix)
+    return [('headers', 'SBATCH header info for the job scripts'),
+            ('mesh', 'Element counts of the mesh; flags triangles')] + path_candidates(rt, prefix)
 
 
 def _complete_main_mode(rt, prefix):
@@ -56,9 +57,9 @@ class RunCommand(BaseCommand):
             add_help=False,
             help='Validate case directory structure'
         )
-        case_arg(check_parser, help="Case directory, or 'headers'").completer = _complete_check_mode
+        case_arg(check_parser, help="Case directory, or 'headers' / 'mesh'").completer = _complete_check_mode
         check_parser.add_argument('case_after', nargs='?', metavar='CASE',
-                                  help='Case directory after a mode word (run check headers <case>)')
+                                  help='Case directory (or .msh file) after a mode word (run check mesh <case>)')
         check_parser.add_argument('-v', '--verbose', action='store_true', help='Verbose output')
         check_parser.add_argument('-h', '--help', action='store_true', help='Show help')
 

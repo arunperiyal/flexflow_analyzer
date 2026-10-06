@@ -32,6 +32,9 @@ Submit and manage SLURM jobs for FlexFlow simulations.
     # Show SBATCH headers of the job scripts
     run check headers Case001
 
+    # Count mesh elements and check for triangles
+    run check mesh Case001
+
     # Submit preprocessing job
     run pre Case001
 

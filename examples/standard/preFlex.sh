@@ -14,8 +14,9 @@
 # 
 # This script performs the following tasks:
 #   1. Generate mesh file using Gmsh
-#   2. Convert mesh to FlexFlow format
-#   3. Run MATLAB preprocessing (if needed)
+#   2. Check the mesh for triangles (stops the job if any)
+#   3. Convert mesh to FlexFlow format
+#   4. Run MATLAB preprocessing (if needed)
 #
 # Usage: sbatch preFlex.sh
 # ==============================================================================
@@ -69,12 +70,21 @@ main() {
         "${GMSH_BIN}" -3 "${PROBLEM}.geo" -o "${PROBLEM}.msh"
     
     check_file "${PROBLEM}.msh" "Mesh file" || exit 1
-    
+
     # ----------------------------------------------------------------------
-    # Step 2: Convert mesh to FlexFlow format
+    # Step 2: Check the mesh for triangles
     # ----------------------------------------------------------------------
     log_info "=========================================="
-    log_info "Step 2: Converting mesh to FlexFlow format"
+    log_info "Step 2: Checking mesh for triangles"
+    log_info "=========================================="
+
+    check_mesh_triangles "${PROBLEM}.msh" || exit 1
+    
+    # ----------------------------------------------------------------------
+    # Step 3: Convert mesh to FlexFlow format
+    # ----------------------------------------------------------------------
+    log_info "=========================================="
+    log_info "Step 3: Converting mesh to FlexFlow format"
     log_info "=========================================="
     
     local gmsh_converter="${FLEXFLOW_BIN}/simGmshCnvt"
@@ -84,10 +94,10 @@ main() {
         "${gmsh_converter}" -n ${SLURM_NTASKS} -msh "${PROBLEM}.msh"
     
     # ----------------------------------------------------------------------
-    # Step 3: Log mesh information
+    # Step 4: Log mesh information
     # ----------------------------------------------------------------------
     log_info "=========================================="
-    log_info "Step 3: Extracting mesh information"
+    log_info "Step 4: Extracting mesh information"
     log_info "=========================================="
     
     if [ -f "${PROBLEM}.msh" ]; then
@@ -97,10 +107,10 @@ main() {
     fi
     
     # ----------------------------------------------------------------------
-    # Step 4: Run MATLAB preprocessing (optional)
+    # Step 5: Run MATLAB preprocessing (optional)
     # ----------------------------------------------------------------------
     log_info "=========================================="
-    log_info "Step 4: Running MATLAB preprocessing"
+    log_info "Step 5: Running MATLAB preprocessing"
     log_info "=========================================="
     
     if [ -f "writeBeamLineCrd.m" ]; then

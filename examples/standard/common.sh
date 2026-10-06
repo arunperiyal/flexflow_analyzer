@@ -180,6 +180,49 @@ check_executable() {
     return 0
 }
 
+# Count mesh elements by type (ASCII MSH 2.x / 4.x); fail if there are triangles
+check_mesh_triangles() {
+    local msh="$1"
+    local counts rc=0
+
+    counts=$(awk '
+        BEGIN {
+            split("2 9 20 21 22 23 24 25", t); for (i in t) tri[t[i]] = 1
+            name[1] = "Line 2";       name[2] = "Triangle 3";      name[3] = "Quadrilateral 4"
+            name[4] = "Tetrahedron 4"; name[5] = "Hexahedron 8";   name[6] = "Prism 6"
+            name[7] = "Pyramid 5";    name[8] = "Line 3";          name[9] = "Triangle 6"
+            name[10] = "Quadrilateral 9"; name[11] = "Tetrahedron 10"; name[15] = "Point"
+        }
+        /^\$MeshFormat/  { getline; ver = $1 + 0; if ($2 != 0) binary = 1; next }
+        /^\$Elements/    { getline; inel = 1; seen = 1; next }
+        /^\$EndElements/ { inel = 0; next }
+        inel && !binary {
+            if (ver < 4) { n[$2]++ }
+            else { c = $4; n[$3] += c; for (i = 0; i < c; i++) getline }
+        }
+        END {
+            if (binary) { print "binary .msh is not supported (set Mesh.Binary = 0)"; exit 2 }
+            if (!seen)  { print "no $Elements section found"; exit 2 }
+            for (e = 1; e <= 150; e++) if (e in n) {
+                printf "  %-16s %d\n", (e in name ? name[e] : "type " e), n[e]
+                if (e in tri) ntri += n[e]
+            }
+            printf "  Triangles total: %d\n", ntri
+            exit (ntri > 0)
+        }' "${msh}") || rc=$?
+
+    log "${counts}"
+    if [ ${rc} -eq 2 ]; then
+        log_error "Could not read mesh file: ${msh}"
+        return 1
+    elif [ ${rc} -ne 0 ]; then
+        log_error "Mesh contains triangles; fix the .geo file (e.g. Recombine) and rerun"
+        return 1
+    fi
+    log_success "No triangles in the mesh"
+    return 0
+}
+
 # Check if command is available
 check_command() {
     local cmd="$1"

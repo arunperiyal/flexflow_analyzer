@@ -10,7 +10,8 @@
 # =============================================================================
 # This script runs preprocessing for FlexFlow simulations:
 #   1. gmsh - Generates mesh from .geo file
-#   2. simGmshCnvt - Converts Gmsh mesh to FlexFlow format
+#   2. Mesh check - Stops the job if the mesh has triangles
+#   3. simGmshCnvt - Converts Gmsh mesh to FlexFlow format
 #
 # The script auto-detects PROBLEM and GEO_FILE from simflow.config
 #
@@ -133,10 +134,59 @@ else
 fi
 
 # -----------------------------------------------------------------------------
-# Step 2: Convert mesh to FlexFlow format
+# Step 2: Check the mesh for triangles (ASCII MSH 2.x / 4.x)
 # -----------------------------------------------------------------------------
 
-echo "Step 2: Running simGmshCnvt to convert mesh..."
+echo "Step 2: Checking mesh for triangles..."
+
+MESH_CHECK=$(awk '
+    BEGIN {
+        split("2 9 20 21 22 23 24 25", t); for (i in t) tri[t[i]] = 1
+        name[1] = "Line 2";       name[2] = "Triangle 3";      name[3] = "Quadrilateral 4"
+        name[4] = "Tetrahedron 4"; name[5] = "Hexahedron 8";   name[6] = "Prism 6"
+        name[7] = "Pyramid 5";    name[8] = "Line 3";          name[9] = "Triangle 6"
+        name[10] = "Quadrilateral 9"; name[11] = "Tetrahedron 10"; name[15] = "Point"
+    }
+    /^\$MeshFormat/  { getline; ver = $1 + 0; if ($2 != 0) binary = 1; next }
+    /^\$Elements/    { getline; inel = 1; seen = 1; next }
+    /^\$EndElements/ { inel = 0; next }
+    inel && !binary {
+        if (ver < 4) { n[$2]++ }
+        else { c = $4; n[$3] += c; for (i = 0; i < c; i++) getline }
+    }
+    END {
+        if (binary) { print "binary .msh is not supported (set Mesh.Binary = 0)"; exit 2 }
+        if (!seen)  { print "no $Elements section found"; exit 2 }
+        for (e = 1; e <= 150; e++) if (e in n) {
+            printf "  %-16s %d\n", (e in name ? name[e] : "type " e), n[e]
+            if (e in tri) ntri += n[e]
+        }
+        printf "  Triangles total: %d\n", ntri
+        exit (ntri > 0)
+    }' "$MSH_FILE")
+MESH_CHECK_EXIT=$?
+
+echo "$MESH_CHECK"
+echo "Mesh elements:" >> result.log
+echo "$MESH_CHECK" >> result.log
+
+if [ $MESH_CHECK_EXIT -eq 2 ]; then
+    echo "Error: Could not read mesh file: $MSH_FILE"
+    exit 1
+elif [ $MESH_CHECK_EXIT -ne 0 ]; then
+    echo "Error: Mesh contains triangles; fix $GEO_FILE (e.g. Recombine) and rerun"
+    echo "       Skipping simGmshCnvt"
+    exit 1
+fi
+
+echo "✓ No triangles in the mesh"
+echo ""
+
+# -----------------------------------------------------------------------------
+# Step 3: Convert mesh to FlexFlow format
+# -----------------------------------------------------------------------------
+
+echo "Step 3: Running simGmshCnvt to convert mesh..."
 echo "Command: $SIMGMSHCNVT -n $SLURM_NTASKS -msh $MSH_FILE"
 
 $SIMGMSHCNVT -n $SLURM_NTASKS -msh $MSH_FILE
@@ -151,10 +201,10 @@ echo "✓ Mesh conversion completed successfully"
 echo ""
 
 # -----------------------------------------------------------------------------
-# Step 3: Log mesh information
+# Step 4: Log mesh information
 # -----------------------------------------------------------------------------
 
-echo "Step 3: Logging mesh information..."
+echo "Step 4: Logging mesh information..."
 
 if [ -f "$MSH_FILE" ]; then
     echo "Number of Nodes in the mesh:" >> result.log
@@ -180,7 +230,7 @@ echo ""
 # SIMPBC_EXIT=$?
 
 # Uncomment if you need to run MATLAB scripts
-# echo "Step 4: Running MATLAB preprocessing..."
+# echo "Step 5: Running MATLAB preprocessing..."
 # matlab -batch writeBeamLineCrd
 
 # -----------------------------------------------------------------------------

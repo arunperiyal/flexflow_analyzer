@@ -12,7 +12,7 @@ from ..shared_helpers import execute_on_all_cases, get_case_name_and_base_dir
 
 
 # Words that select a focused check instead of naming a case
-CHECK_MODES = ('headers',)
+CHECK_MODES = ('headers', 'mesh')
 
 
 def execute_check(args):
@@ -23,14 +23,14 @@ def execute_check(args):
         show_check_help()
         return
 
-    # Mode word: run check headers [case]
+    # Mode word: run check headers|mesh [case]
     mode = None
     if getattr(args, 'case', None) in CHECK_MODES:
         mode = args.case
         args.case = getattr(args, 'case_after', None)
     elif getattr(args, 'case_after', None):
         print(f"Error: unexpected argument '{args.case_after}'")
-        print("Usage: run check [headers] [case_directory]")
+        print("Usage: run check [headers|mesh] [case_directory]")
         return
     args.check_mode = mode
 
@@ -66,6 +66,12 @@ def _execute_check_on_case(case_dir: Path, args):
     # Focused mode: only show job-script SBATCH header info
     if getattr(args, 'check_mode', None) == 'headers':
         check_job_headers(case_dir, console)
+        return
+
+    # Focused mode: element counts of the mesh, failing on triangles
+    if getattr(args, 'check_mode', None) == 'mesh':
+        from .mesh import check_mesh
+        check_mesh(case_dir, console)
         return
 
     # Validate case directory
@@ -441,10 +447,13 @@ Also checks the status of the last submitted SLURM job.
 {Colors.BOLD}USAGE:{Colors.RESET}
     run check [case_directory] [options]
     run check headers [case_directory]
+    run check mesh [case_directory | file.msh]
 
 {Colors.BOLD}SUBCOMMANDS:{Colors.RESET}
     {Colors.YELLOW}headers{Colors.RESET}        Show SBATCH header info (job name, partition, QOS, tasks,
                    nodes, CPUs/task, wall time) for pre/main/post scripts
+    {Colors.YELLOW}mesh{Colors.RESET}           Count the elements of <problem>.msh by type and flag
+                   triangles (preFlex.sh stops before simGmshCnvt if any)
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
     {Colors.YELLOW}-v, --verbose{Colors.RESET}  Show detailed validation results and error messages
@@ -456,6 +465,10 @@ Also checks the status of the last submitted SLURM job.
 
     # Show SBATCH headers for the job scripts
     run check headers Case001
+
+    # Count mesh elements and check for triangles
+    run check mesh Case001
+    run check mesh Case001/riser.msh
 
     # Check with detailed output
     run check Case001 --verbose
