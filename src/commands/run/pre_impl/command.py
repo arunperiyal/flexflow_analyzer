@@ -554,6 +554,7 @@ This typically runs mesh generation (gmsh) and mesh conversion (simGmshCnvt).
 
 {Colors.BOLD}TYPICAL PREPROCESSING STEPS:{Colors.RESET}
     • Mesh generation with gmsh
+    • Triangle check (job stops before conversion if the mesh has any)
     • Mesh conversion with simGmshCnvt
     • Pre-simulation setup tasks
 

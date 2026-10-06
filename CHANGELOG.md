@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### 🔺 Mesh triangle check before `simGmshCnvt`
+
+- The `preFlex.sh` template now counts the elements of `<problem>.msh` by type
+  after gmsh and stops the job before `simGmshCnvt` if any are triangles. The
+  counts go to the job output and `result.log`. It reads the ASCII `.msh` (MSH
+  2.x and 4.x) with awk, so it needs neither Python nor the gmsh package. The
+  check also runs with `run pre --convert`.
+- New `run check mesh [case | file.msh]` prints the node count and the
+  elements per dimension and type, with triangles in red.
+- Cases created before this change keep their old `preFlex.sh`; copy the
+  "Step 2" block from the template to get the check.
+
 ### ⌨️ `run sq` and `run check` take mode words instead of flags
 
 - `run sq --watch [N]` is now `run sq watch [N]`.
