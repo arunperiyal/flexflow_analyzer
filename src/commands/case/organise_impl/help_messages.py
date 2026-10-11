@@ -58,8 +58,6 @@ Organize and clean up case directories. Pick one subcommand.
         {Colors.CYAN}--compile{Colors.RESET}
             Combine the archived parts into othd_files/compiled/{{problem}}.othd
             and oisd_files/compiled/{{problem}}.oisd (parts are kept):
-              • An existing compiled file is the base; the parts are layered
-                on top, so history survives a --prune
               • Parts are taken in order of their first tsId
               • A restart (a tsId at or below one already taken) replaces
                 everything from that tsId on with the restarted run's data
@@ -69,11 +67,17 @@ Organize and clean up case directories. Pick one subcommand.
               • Rewrites the compiled file each time; ignores --t1/--t2
 
         {Colors.CYAN}--prune{Colors.RESET}
-            Delete the parts in othd_files/ and oisd_files/ once the compiled
-            file holds all of their data — i.e. compiling again would write
-            exactly the same file. Out-of-date or missing compiled files are
-            refused (run --compile first). Asks before deleting. RCV files
-            are not touched.
+            Replace the parts with the compiled file: the parts in
+            othd_files/ and oisd_files/ are deleted and the compiled file
+            becomes {{problem}}1.othd / {{problem}}1.oisd, an ordinary part that
+            every command reads. The next --update numbers from 2.
+              • Only when the compiled file holds all of the parts' data —
+                compiling again would write exactly the same file;
+                out-of-date or missing compiled files are refused
+              • The compiled data stays on disk throughout: it is moved
+                into place first, then the parts are deleted
+              • A compiled file with no parts left is just moved into place
+              • Asks before deleting. RCV files are not touched.
 
     {Colors.CYAN}output{Colors.RESET}
         Remove intermediate .out/.rst files from the run directory:
@@ -209,7 +213,7 @@ def print_organise_examples():
     # Keep only the compiled files (asks first)
     flexflow case organise archive CS4SG1U1 --verify --compile --prune
 
-    # Later runs are layered onto the compiled file
+    # Later runs are added as riser2, riser3, ... and folded in again
     flexflow case organise archive CS4SG1U1 --update --compile --prune
 
 {Colors.BOLD}Cleaning Output Directory:{Colors.RESET}

@@ -90,10 +90,9 @@ Combines the archived parts into one file per type:
 - `othd_files/*.othd` → `othd_files/compiled/{problem}.othd`
 - `oisd_files/*.oisd` → `oisd_files/compiled/{problem}.oisd`
 
-The parts are kept. An existing compiled file is used as the base and the
-parts are layered on top of it, so the history survives once `--prune` has
-deleted the parts behind it; with every part still present, the parts
-override the base completely. Parts are taken in order of their first tsId; a tsId at
+The parts are kept, and only the parts are read — after a `--prune` the
+compiled data is itself the part `{problem}1.othd`, so the parts always hold
+the whole history. Parts are taken in order of their first tsId; a tsId at
 or below one already taken is a restart, and everything from that tsId on is
 replaced by the restarted run's data (the same "later run wins" rule the
 readers use when given several files). This also covers a restart appended
@@ -106,16 +105,31 @@ reports what would be written.
 
 #### `archive --prune`
 
-Deletes the parts in `othd_files/` and `oisd_files/` behind a compiled file,
-but only when compiling again would write exactly the same bytes — i.e.
-every timestep the parts hold is already in the compiled file. If the
-compiled file is missing or out of date, nothing is pruned for that type
-(run with `--compile` first, or together: `--compile --prune`). Lists the
-parts and asks once before deleting, unless `--no-confirm`; `--dry-run` only
-lists them. RCV files are not touched.
+Replaces the parts with the compiled file: the parts in `othd_files/` and
+`oisd_files/` are deleted, and `compiled/{problem}.othd` becomes
+`othd_files/{problem}1.othd` (likewise for OISD). The archive is then an
+ordinary one-part archive, which every command that reads
+`othd_files/*.othd` understands; `compiled/` only ever exists between a
+`--compile` and a `--prune`.
 
-After a prune, the next `--update` starts numbering again at
-`{problem}1.othd`, and the next `--compile` layers it onto the compiled file.
+It only does this when compiling again would write exactly the same bytes —
+i.e. every timestep the parts hold is already in the compiled file. If the
+compiled file is missing or out of date, nothing is pruned for that type
+(run with `--compile` first, or together: `--compile --prune`). The steps
+keep the full data on disk throughout: the compiled file is moved into
+`othd_files/` under a temporary name (`{problem}.othd.__prune__`, which no
+`*.othd` glob matches), the parts are deleted, and then it is renamed to
+`{problem}1.othd`. If a part could not be deleted and still holds that name,
+the compiled data is left under the temporary name and reported.
+
+A compiled file with no parts left beside it is simply moved into place —
+this finishes a prune made before `--prune` worked this way.
+
+Lists the parts and asks once before deleting, unless `--no-confirm`;
+`--dry-run` only lists them. RCV files are not touched.
+
+After a prune, the next `--update` adds `{problem}2.othd`, and the next
+`--compile` merges `{problem}1.othd` with it like any other parts.
 
 ### `output`
 
@@ -177,11 +191,10 @@ runs as its own step with its own entry in the confirmation summary.
 3. If `--clean`: read **all** files in `othd_files/`/`oisd_files/` (not
    filtered by `--t1`/`--t2`), propose duplicates/subsets, show the plan,
    confirm each deletion, confirm the renumbering, then delete and rename
-4. If `--compile`: combine the existing compiled file (if any) and each
-   type's parts into `compiled/{problem}.ext`, resolving restarts in favour
-   of the later run
-5. If `--prune`: for each type whose compiled file is current, confirm and
-   delete the parts
+4. If `--compile`: combine each type's parts into `compiled/{problem}.ext`,
+   resolving restarts in favour of the later run
+5. If `--prune`: for each type whose compiled file is current, confirm,
+   delete the parts and move the compiled file to `{problem}1.ext`
 
 ### Running `output`
 
@@ -264,7 +277,7 @@ case organise plt CS4SG1U1       # → "Nothing to do — pass --delete-ascii an
 - `archive --update`, `--verify` and `--compile` are non-destructive (they
   move, read or write, never delete) and honor `--dry-run`
 - `archive --prune` only deletes parts whose data is already in a current
-  compiled file, and asks first
+  compiled file, keeps that data on disk throughout, and asks first
 - `archive --clean` asks about each deletion and about the renumbering;
   `output` and `plt` show a summary before acting and ask for confirmation —
   all unless `--no-confirm` is given
