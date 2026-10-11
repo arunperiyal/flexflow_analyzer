@@ -442,8 +442,8 @@ def execute_plot(args):
         # Load case
         logger.info(f"Loading case from: {args.case}")
         case = FlexFlowCase(args.case, verbose=args.verbose)
-        if getattr(args, 'group', None) is not None:
-            case.load_othd_data(group=args.group)
+        if getattr(args, 'othid', None) is not None:
+            case.load_othd_data(group=args.othid)
         
         # Parse plot style
         plot_style = parse_plot_style(args.plot_style)

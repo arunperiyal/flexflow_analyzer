@@ -2,13 +2,19 @@
 
 ## Unreleased
 
-### 🧩 `use group:N` context
+### 🧩 `use othid:N` / `use osgid:N` contexts
 
-- New `group` context: `use group:1` sets the output group (othId in an
-  othd, osgId in an oisd) for `data table`, `data stats` and `plot`, the
-  same way `node` works. A typed `--group` still wins.
-- `plot` takes `--group` too, to plot displacements of a group other than
-  the first.
+- Two new contexts for the output group to read: `othid` (the probe set in
+  an othd) and `osgid` (the surface group in an oisd). The two numberings are
+  unrelated, so they are kept apart rather than shared as one "group".
+- `data table` and `data stats` take `--othid` and `--osgid`, filled from
+  the contexts; the variables decide which files are read, and so which id
+  applies. The other kind's id is ignored when it comes from context and is
+  an error when typed (`--osgid` on an othd variable). `--group` still works
+  as the id in whichever files are read, but is never filled from context.
+- `plot` takes `--othid` (from `use othid:`) to plot displacements of a
+  probe set other than the first.
+- `data show` names the right flag when a file holds several groups.
 
 ### 🗄️ `case organise archive`: `--update`, `--verify`, supervised `--clean`, `--compile`, `--prune`
 

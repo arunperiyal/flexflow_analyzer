@@ -4,7 +4,7 @@ Commands: plot, compare
 """
 
 from ..base import BaseCommand
-from src.cli.context import case_arg, group_arg, node_arg, time_window
+from src.cli.context import case_arg, node_arg, othid_arg, time_window
 
 
 class PlotCommand(BaseCommand):
@@ -25,7 +25,7 @@ class PlotCommand(BaseCommand):
         case_arg(parser, help='Case directory path')
         parser.add_argument('--input-file', type=str, help='YAML input file')
         node_arg(parser, help='Node number to plot')
-        group_arg(parser, help='othId group to plot displacements from (default: the first)')
+        othid_arg(parser, help='othId (probe set) to plot displacements from (default: the first)')
         parser.add_argument('--data-type', type=str, choices=['displacement', 'force', 'pendulum'],
                           help='Data type to plot')
 

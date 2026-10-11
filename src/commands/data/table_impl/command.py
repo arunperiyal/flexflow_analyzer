@@ -33,7 +33,7 @@ def execute_table(args):
         return
     logger = Logger(verbose=getattr(args, "verbose", False))
     if not getattr(args, "case", None):
-        shared.no_case(args, logger, print_table_help, ('var', 't1', 't2', 'node', 'output', 'head', 'tail', 'group'))
+        shared.no_case(args, logger, print_table_help, ('var', 't1', 't2', 'node', 'othid', 'osgid', 'output', 'head', 'tail', 'group'))
         return
 
     requested = shared.split_vars(getattr(args, "var", None))
@@ -83,7 +83,7 @@ def _run_table(case_dir, args, logger, requested):
         logger.error(f"not in the {kind} files: {', '.join(missing)}")
         sys.exit(1)
 
-    group = shared.resolve_group(meta, getattr(args, "group", None), logger)
+    group = shared.resolve_group(meta, args, logger)
     columns = shared.resolve_columns(meta, requested, logger, group)
     node = shared.resolve_node(meta, getattr(args, "node", None), logger, group)
     mask = shared.step_mask(meta, getattr(args, "t1", None),

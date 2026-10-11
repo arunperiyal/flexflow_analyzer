@@ -20,10 +20,15 @@ One row per variable instead of one row per timestep.
     {Colors.YELLOW}--t1 TSID{Colors.RESET}              First tsId (alone: from there to the end)
     {Colors.YELLOW}--t2 TSID{Colors.RESET}              Last tsId
     {Colors.YELLOW}--node N{Colors.RESET}               Node to read       (default: 0)
-    {Colors.YELLOW}--group ID{Colors.RESET}             Output group: othId in an othd file, osgId in an
-                           oisd (default: the first). Only matters when a run
-                           wrote more than one probe set into a file.
-                           From context: use group:N
+    {Colors.YELLOW}--othid ID{Colors.RESET}             othId -- which probe set to read from the othd
+                           files (default: the first). From context: use othid:N
+    {Colors.YELLOW}--osgid ID{Colors.RESET}             osgId -- which surface group to read from the oisd
+                           files (default: the first). From context: use osgid:N
+                           The two numberings are unrelated; the variables decide
+                           which files are read, and so which of the two applies.
+                           Only matters when a file holds more than one group.
+    {Colors.YELLOW}--group ID{Colors.RESET}             The id in whichever files are read (older spelling;
+                           never filled from context)
     {Colors.YELLOW}--output FILE{Colors.RESET}          Also write the summary to a .csv
     {Colors.YELLOW}--freq N{Colors.RESET}               PLT output frequency for maxloc
                            {Colors.DIM}(default: outFreq from simflow.config){Colors.RESET}
