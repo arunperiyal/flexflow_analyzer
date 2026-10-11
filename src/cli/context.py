@@ -94,6 +94,14 @@ CONTEXTS = [
                description='Run directory inside the case (e.g. RUN_1)'),
     ContextKey('node', parse=_non_negative_int, label='n',
                description='Node ID for data/plot commands'),
+    # Two keys, not one `group`: othId numbers the time-history probe sets in
+    # an othd, osgId the output surfaces in an oisd. The numberings are
+    # unrelated, so one shared number would read othId 1 for an othd variable
+    # and an unrelated osgId 1 for an oisd one.
+    ContextKey('othid', parse=_non_negative_int, label='oth',
+               description='othId: time-history probe set in an othd (data table/stats, plot)'),
+    ContextKey('osgid', parse=_non_negative_int, label='osg',
+               description='osgId: output surface group in an oisd (data table/stats)'),
     ContextKey('time', parse=float, clears=('t1', 't2'),
                description='A single timestep -- clears t1/t2, and they clear it'),
     ContextKey('t1', parse=float, clears=('time',),
@@ -129,6 +137,18 @@ def context_flag(parser, key, *flags, **kwargs):
 def node_arg(parser, **kwargs):
     kwargs.setdefault('type', int)
     return context_flag(parser, 'node', '--node', **kwargs)
+
+
+def othid_arg(parser, **kwargs):
+    kwargs.setdefault('type', int)
+    kwargs.setdefault('metavar', 'ID')
+    return context_flag(parser, 'othid', '--othid', **kwargs)
+
+
+def osgid_arg(parser, **kwargs):
+    kwargs.setdefault('type', int)
+    kwargs.setdefault('metavar', 'ID')
+    return context_flag(parser, 'osgid', '--osgid', **kwargs)
 
 
 def freq_arg(parser, **kwargs):
@@ -195,6 +215,22 @@ def current_case() -> Optional[str]:
     """The `use case:` value (an absolute path, or '*'), or None."""
     rt = current_runtime()
     return rt.get('case') if rt else None
+
+
+def typed(args, dest: str, key: str) -> bool:
+    """
+    Whether args.<dest> was typed rather than filled from the `key` context.
+
+    Contexts are filled in before the command runs, so this compares with the
+    context: a value equal to it is taken as filled (typing the context's own
+    value changes nothing anyway). Outside the shell there are no contexts, so
+    any value was typed.
+    """
+    value = getattr(args, dest, None)
+    if value is None:
+        return False
+    rt = current_runtime()
+    return not (rt and rt.get(key) == value)
 
 
 def current_rundir() -> Optional[str]:

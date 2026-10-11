@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### 🧩 `use othid:N` / `use osgid:N` contexts
+
+- Two new contexts for the output group to read: `othid` (the probe set in
+  an othd) and `osgid` (the surface group in an oisd). The two numberings are
+  unrelated, so they are kept apart rather than shared as one "group".
+- `data table` and `data stats` take `--othid` and `--osgid`, filled from
+  the contexts; the variables decide which files are read, and so which id
+  applies. The other kind's id is ignored when it comes from context and is
+  an error when typed (`--osgid` on an othd variable). `--group` still works
+  as the id in whichever files are read, but is never filled from context.
+- `plot` takes `--othid` (from `use othid:`) to plot displacements of a
+  probe set other than the first.
+- `data show` names the right flag when a file holds several groups.
+
 ### 🗄️ `case organise archive`: `--update`, `--verify`, supervised `--clean`, `--compile`, `--prune`
 
 - `archive` now takes flags that combine and run in the order

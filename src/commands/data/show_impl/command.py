@@ -29,7 +29,8 @@ def _describe(console, kind, meta, freq):
     # Always, not only when there are several: how a file is grouped is part of
     # what it holds, and "there is one group, numbered 0" is an answer.
     groups = ", ".join(str(g) for g in meta.groups)
-    suffix = "  [dim](--group N picks one)[/dim]" if len(meta.groups) > 1 else ""
+    flag = "--othid" if meta.kind == "othd" else "--osgid"
+    suffix = f"  [dim]({flag} N or `use {flag[2:]}:N` picks one)[/dim]" if len(meta.groups) > 1 else ""
     label = meta.group_label + ("s" if len(meta.groups) > 1 else "")
     info.add_row(label, groups + suffix)
     for group in meta.groups:

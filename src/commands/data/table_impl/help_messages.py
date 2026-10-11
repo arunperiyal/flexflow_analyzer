@@ -22,9 +22,15 @@ and variables across the columns.
     {Colors.YELLOW}--t1 TSID{Colors.RESET}              First tsId (alone: from there to the end)
     {Colors.YELLOW}--t2 TSID{Colors.RESET}              Last tsId
     {Colors.YELLOW}--node N{Colors.RESET}               Node to read       (default: 0)
-    {Colors.YELLOW}--group ID{Colors.RESET}             Output group: othId in an othd file, osgId in an
-                           oisd (default: the first). Only matters when a run
-                           wrote more than one probe set into a file.
+    {Colors.YELLOW}--othid ID{Colors.RESET}             othId -- which probe set to read from the othd
+                           files (default: the first). From context: use othid:N
+    {Colors.YELLOW}--osgid ID{Colors.RESET}             osgId -- which surface group to read from the oisd
+                           files (default: the first). From context: use osgid:N
+                           The two numberings are unrelated; the variables decide
+                           which files are read, and so which of the two applies.
+                           Only matters when a file holds more than one group.
+    {Colors.YELLOW}--group ID{Colors.RESET}             The id in whichever files are read (older spelling;
+                           never filled from context)
     {Colors.YELLOW}--output FILE{Colors.RESET}          Write {Colors.BOLD}every{Colors.RESET} row to a .csv instead of printing
     {Colors.YELLOW}--head N{Colors.RESET}               Print the first N rows
     {Colors.YELLOW}--tail N{Colors.RESET}               Print the last N rows

@@ -320,13 +320,44 @@ def step_mask(meta, t1, t2, logger):
     return mask
 
 
-def resolve_group(meta, group, logger):
+GROUP_FLAG = {'othd': 'othid', 'oisd': 'osgid'}
+
+
+def requested_group(args, kind, logger):
+    """
+    The group id asked for, for files of `kind`: --othid for othd, --osgid for
+    oisd (typed or from `use othid:`/`use osgid:`), or a typed --group.
+
+    The other kind's id is ignored when it came from context -- `use osgid:1`
+    has nothing to say about an othd -- but typing it is a mistake worth
+    naming, since the variables chose the file kind, not the flag.
+    """
+    from src.cli.context import typed
+    own = GROUP_FLAG[kind]
+    other_kind = 'oisd' if kind == 'othd' else 'othd'
+    other = GROUP_FLAG[other_kind]
+    if typed(args, other, other):
+        logger.error(f"--{other} picks a group in the {other_kind} files, but these "
+                     f"variables are in the {kind} files -- use --{own}.")
+        sys.exit(1)
+
+    group = getattr(args, 'group', None)
+    own_value = getattr(args, own, None)
+    if group is not None and own_value is not None and group != own_value \
+            and typed(args, own, own):
+        logger.error(f"--group {group} and --{own} {own_value} disagree; give one.")
+        sys.exit(1)
+    return group if group is not None else own_value
+
+
+def resolve_group(meta, args, logger):
     """Which output group to read. One group means there is nothing to choose."""
+    group = requested_group(args, meta.kind, logger)
     if group is None:
         if len(meta.groups) > 1:
             logger.warning(f"these {meta.kind} files hold {len(meta.groups)} "
                            f"{meta.group_label}s ({', '.join(str(g) for g in meta.groups)}); "
-                           f"reading {meta.groups[0]}. --group N picks another.")
+                           f"reading {meta.groups[0]}. --{GROUP_FLAG[meta.kind]} N picks another.")
         return meta.default_group
     if group not in meta.by_group:
         logger.error(f"No {meta.group_label} {group} in the {meta.kind} files. "

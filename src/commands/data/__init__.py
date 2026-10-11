@@ -4,7 +4,7 @@ Subcommands: show, stats
 """
 
 from ..base import BaseCommand
-from src.cli.context import case_arg, context_flag, freq_arg, node_arg, time_window
+from src.cli.context import case_arg, context_flag, freq_arg, node_arg, osgid_arg, othid_arg, time_window
 
 
 class DataCommand(BaseCommand):
@@ -59,9 +59,13 @@ class DataCommand(BaseCommand):
                                  help='Print the first N rows (default: 10)')
         table_parser.add_argument('--tail', type=int, metavar='N',
                                  help='Print the last N rows')
+        othid_arg(table_parser,
+                  help='othId (probe set) to read from the othd files (default: the first)')
+        osgid_arg(table_parser,
+                  help='osgId (surface group) to read from the oisd files (default: the first)')
         table_parser.add_argument('--group', type=int, metavar='ID',
-                                 help='Output group to read: othId in an othd '
-                                      'file, osgId in an oisd (default: the first)')
+                                 help='The id in whichever files are read -- othId or osgId '
+                                      '(prefer --othid/--osgid; not filled from context)')
         table_parser.add_argument('--othd', action='store_true',
                                  help='Take variables from the othd files')
         table_parser.add_argument('--oisd', action='store_true',
@@ -93,9 +97,13 @@ class DataCommand(BaseCommand):
         freq_arg(stats_parser, metavar='N',
                  help='PLT output frequency for maxloc '
                       '(default: outFreq from simflow.config)')
+        othid_arg(stats_parser,
+                  help='othId (probe set) to read from the othd files (default: the first)')
+        osgid_arg(stats_parser,
+                  help='osgId (surface group) to read from the oisd files (default: the first)')
         stats_parser.add_argument('--group', type=int, metavar='ID',
-                                 help='Output group to read: othId in an othd '
-                                      'file, osgId in an oisd (default: the first)')
+                                 help='The id in whichever files are read -- othId or osgId '
+                                      '(prefer --othid/--osgid; not filled from context)')
         stats_parser.add_argument('--othd', action='store_true',
                                  help='Take variables from the othd files')
         stats_parser.add_argument('--oisd', action='store_true',

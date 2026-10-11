@@ -91,6 +91,29 @@ def test_node_and_freq_validation(rt):
     assert (rt.get('node'), rt.get('freq')) == (24, 50)
 
 
+def test_othid_osgid_validation(rt):
+    assert rt.execute_line('use othid:-1') == 1
+    assert rt.execute_line('use osgid:x') == 1
+    use(rt, 'othid:2 osgid:0')
+    assert (rt.get('othid'), rt.get('osgid')) == (2, 0)
+
+
+def test_othid_osgid_fill_data_table_stats_and_plot(rt):
+    use(rt, 'othid:1 osgid:3')
+    for line in ('data table', 'data stats'):
+        a = parsed(rt, line)
+        assert (a.othid, a.osgid, a.group) == (1, 3, None)
+    assert parsed(rt, 'plot').othid == 1
+    assert not hasattr(parsed(rt, 'plot'), 'osgid')
+    assert parsed(rt, 'data table --othid 0').othid == 0
+
+
+def test_data_show_takes_no_group_id(rt):
+    use(rt, 'othid:1')
+    a = parsed(rt, 'data show')
+    assert not hasattr(a, 'othid') and not hasattr(a, 'osgid')
+
+
 def test_time_and_range_clear_each_other(rt):
     use(rt, 't1:10 t2:20')
     use(rt, 'time:15')
