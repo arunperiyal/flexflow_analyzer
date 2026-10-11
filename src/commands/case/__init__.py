@@ -102,13 +102,17 @@ class CaseCommand(BaseCommand):
 
         # case organise archive
         archive_parser = organise_subparsers.add_parser('archive', add_help=False,
-                                    help='Move .othd/.oisd/.rcv from run dir to archive dirs')
+                                    help='Update, clean and compile the OTHD/OISD archive')
         case_arg(archive_parser, help='Case directory path')
+        archive_parser.add_argument('--update', action='store_true',
+                                    help='Move .othd/.oisd/.rcv from run dir into the archive dirs')
         archive_parser.add_argument('--clean', action='store_true',
-                                    help='Deduplicate and clean redundant OTHD/OISD files after archiving')
+                                    help='Deduplicate archived OTHD/OISD files, confirming each deletion')
+        archive_parser.add_argument('--compile', action='store_true',
+                                    help='Combine archived OTHD/OISD files into compiled/{problem}.othd|oisd')
         time_window(archive_parser, 
-                    t1_kwargs=dict(metavar='STEP', help='Only target timesteps >= STEP'),
-                    t2_kwargs=dict(metavar='STEP', help='Only target timesteps <= STEP'))
+                    t1_kwargs=dict(metavar='STEP', help='Only --update files reaching timesteps >= STEP'),
+                    t2_kwargs=dict(metavar='STEP', help='Only --update files reaching timesteps <= STEP'))
         archive_parser.add_argument('--log', action='store_true',
                                     help='Create log file of deletions')
         archive_parser.add_argument('--no-confirm', action='store_true',
@@ -532,8 +536,8 @@ class CaseCommand(BaseCommand):
         console.print("    flexflow case create myCase --problem-name test")
         console.print("    flexflow case run CS4SG1U1")
         console.print("    flexflow case run CS4SG1U1 --no-monitor")
-        console.print("    flexflow case organise archive CS4SG1U1")
-        console.print("    flexflow case organise archive CS4SG1U1 --clean")
+        console.print("    flexflow case organise archive CS4SG1U1 --update")
+        console.print("    flexflow case organise archive CS4SG1U1 --clean --compile")
         console.print("    flexflow case organise output CS4SG1U1")
         console.print("    flexflow case organise plt CS4SG1U1 --delete-ascii")
         console.print("    flexflow case organise plt CS4SG1U1 --delete-binary --t1 0 --t2 1000")

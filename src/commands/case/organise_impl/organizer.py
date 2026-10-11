@@ -96,6 +96,7 @@ class CaseOrganizer:
             'plt_clean_space_freed': 0,
             'plt_binary_deleted': 0,
             'plt_binary_space_freed': 0,
+            'compiled': [],  # one line per compiled file, for the final summary
         }
 
         # Files to delete/rename
@@ -168,7 +169,7 @@ class CaseOrganizer:
 
         With --t1/--t2, only files whose timestep range overlaps that window
         are moved. RCV files have no reader to determine their range, so they
-        are always moved in full.
+        are always moved in full. With --dry-run, only lists the moves.
         """
         run_dir = self._get_run_dir_path()
         if not run_dir:
@@ -189,41 +190,33 @@ class CaseOrganizer:
             self.console.print("[dim]  No .othd/.oisd/.rcv files found in run directory[/dim]")
             return
 
-        # Create destination directories
-        othd_dest = self.case_dir / 'othd_files'
-        oisd_dest = self.case_dir / 'oisd_files'
-        othd_dest.mkdir(exist_ok=True)
-        oisd_dest.mkdir(exist_ok=True)
-
+        dry_run = getattr(self.args, 'dry_run', False)
         moved_count = 0
 
-        for file in sorted(othd_files_found):
-            dest_path = self._get_unique_filename(othd_dest, file.name)
-            shutil.move(str(file), str(dest_path))
-            self.console.print(f"  [green]↳[/green] {file.name} → othd_files/{dest_path.name}")
-            self.stats['archived_othd'] += 1
-            moved_count += 1
-
-        for file in sorted(oisd_files_found):
-            dest_path = self._get_unique_filename(oisd_dest, file.name)
-            shutil.move(str(file), str(dest_path))
-            self.console.print(f"  [green]↳[/green] {file.name} → oisd_files/{dest_path.name}")
-            self.stats['archived_oisd'] += 1
-            moved_count += 1
-
-        if rcv_files_found:
-            rcv_dest = self.case_dir / 'rcv_files'
-            rcv_dest.mkdir(exist_ok=True)
-            for file in sorted(rcv_files_found):
-                dest_path = self._get_unique_filename(rcv_dest, file.name)
+        for files, dest_name, stat_key in [(othd_files_found, 'othd_files', 'archived_othd'),
+                                           (oisd_files_found, 'oisd_files', 'archived_oisd'),
+                                           (rcv_files_found, 'rcv_files', 'archived_rcv')]:
+            if not files:
+                continue
+            dest_dir = self.case_dir / dest_name
+            if not dry_run:
+                dest_dir.mkdir(exist_ok=True)
+            for file in sorted(files):
+                dest_path = self._get_unique_filename(dest_dir, file.name)
+                if dry_run:
+                    self.console.print(f"  [cyan]↳[/cyan] {file.name} → {dest_name}/{dest_path.name} [dim](dry run)[/dim]")
+                    continue
                 shutil.move(str(file), str(dest_path))
-                self.console.print(f"  [green]↳[/green] {file.name} → rcv_files/{dest_path.name}")
-                self.stats['archived_rcv'] += 1
+                self.console.print(f"  [green]↳[/green] {file.name} → {dest_name}/{dest_path.name}")
+                self.stats[stat_key] += 1
                 moved_count += 1
 
-        self.console.print(
-            f"\n[green]✓[/green] Archived {moved_count} file(s) from run directory"
-        )
+        if dry_run:
+            self.console.print("\n[bold cyan]Dry run:[/bold cyan] nothing moved")
+        else:
+            self.console.print(
+                f"\n[green]✓[/green] Archived {moved_count} file(s) from run directory"
+            )
 
     def _get_unique_filename(self, dest_dir: Path, filename: str) -> Path:
         """Get unique filename with number suffix if file exists."""
@@ -270,7 +263,6 @@ class CaseOrganizer:
             'archive', 'output' or 'plt'
         """
         t1, t2 = self._t1_t2()
-        do_clean = subcommand == 'archive' and getattr(self.args, 'clean', False)
 
         self.console.print()
         self.console.print(Panel(
@@ -281,37 +273,13 @@ class CaseOrganizer:
         ))
         self.console.print()
 
-        othd_files: List[FileInfo] = []
-        oisd_files: List[FileInfo] = []
-
-        # --- ARCHIVE ---
+        # --- ARCHIVE --- (its own flow: --clean confirms file by file)
         if subcommand == 'archive':
-            self.console.print("[bold]Step: Archive run data files[/bold]")
-            self._archive_run_data_files(t1, t2)
-            self.console.print()
-
-            # --- ARCHIVE --clean (deduplicate OTHD/OISD) ---
-            # Always analyzes the complete archived set, ignoring --t1/--t2:
-            # dedup depends on comparing every file against every other file,
-            # so excluding files by timestep would hide the very files (e.g. a
-            # superset) that make another file redundant, and silently skip
-            # cleaning it. --t1/--t2 only scope the archive move step above.
-            if do_clean:
-                self.console.print("[bold]Step: Deduplicate OTHD/OISD files[/bold]")
-                self.logger.info("Analyzing OTHD files...")
-                othd_files = self._analyze_data_files('othd')
-                self._find_redundant_files(othd_files, 'OTHD')
-
-                self.logger.info("Analyzing OISD files...")
-                oisd_files = self._analyze_data_files('oisd')
-                self._find_redundant_files(oisd_files, 'OISD')
-
-                # Warn if OTHD and OISD coverage diverges after deduplication
-                self._check_cross_type_consistency(othd_files, oisd_files)
-                self.console.print()
+            self._organize_archive(t1, t2)
+            return
 
         # --- OUTPUT ---
-        elif subcommand == 'output':
+        if subcommand == 'output':
             self.console.print("[bold]Step: Clean output directory[/bold]")
             self._analyze_output_directory(t1, t2)
             self.console.print()
@@ -335,36 +303,69 @@ class CaseOrganizer:
                 self._analyze_delete_binary_plt(t1, t2)
                 self.console.print()
 
-        # Plain archive (no --clean) moves files without confirmation, same as before
         has_deletions = len(self.files_to_delete) > 0
         dry_run = getattr(self.args, 'dry_run', False)
-        needs_confirmation = subcommand in ('output', 'plt') or do_clean
 
-        if needs_confirmation:
-            # Show summary before asking confirmation
-            self._show_summary()
+        # Show summary before asking confirmation
+        self._show_summary()
 
-            if dry_run:
-                self.console.print(
-                    f"[bold cyan]Dry run:[/bold cyan] {len(self.files_to_delete)} files "
-                    f"would be deleted. No changes made."
-                )
+        if dry_run:
+            self.console.print(
+                f"[bold cyan]Dry run:[/bold cyan] {len(self.files_to_delete)} files "
+                f"would be deleted. No changes made."
+            )
+            return
+
+        if has_deletions and not self.args.no_confirm:
+            if not self._confirm_deletion():
+                self.console.print("[yellow]Operation cancelled[/yellow]")
                 return
 
-            if has_deletions and not self.args.no_confirm:
-                if not self._confirm_deletion():
-                    self.console.print("[yellow]Operation cancelled[/yellow]")
-                    return
-
-            if has_deletions:
-                self._perform_deletions()
-
-        # Rename OTHD/OISD files sequentially after deduplication
-        if do_clean:
-            self._rename_files(othd_files, oisd_files)
+        if has_deletions:
+            self._perform_deletions()
 
         # Final summary
-        self._show_final_summary(subcommand, do_clean)
+        self._show_final_summary(subcommand)
+
+    def _organize_archive(self, t1: Optional[float], t2: Optional[float]):
+        """
+        archive: run the requested steps in a fixed order —
+        --update → --clean → --compile. Each flag is optional; with none of
+        them there is nothing to do.
+        """
+        do_update = getattr(self.args, 'update', False)
+        do_clean = getattr(self.args, 'clean', False)
+        do_compile = getattr(self.args, 'compile', False)
+
+        if not (do_update or do_clean or do_compile):
+            self.console.print(
+                "[yellow]Nothing to do — pass --update, --clean and/or --compile[/yellow]"
+            )
+            return
+
+        if do_update:
+            self.console.print("[bold]Step: Update archive from run directory[/bold]")
+            self._archive_run_data_files(t1, t2)
+            self.console.print()
+
+        # --clean and --compile always work on the complete archived set,
+        # ignoring --t1/--t2: dedup compares every file against every other,
+        # so excluding files by timestep would hide the very files (e.g. a
+        # superset) that make another file redundant, and a t1/t2 context left
+        # over from something else would silently truncate a compiled file.
+        # --t1/--t2 only scope the --update move step above.
+        if do_clean:
+            self.console.print("[bold]Step: Clean archive (supervised)[/bold]")
+            if not self._clean_archive():
+                return
+            self.console.print()
+
+        if do_compile:
+            self.console.print("[bold]Step: Compile archive[/bold]")
+            self._compile_archive()
+            self.console.print()
+
+        self._show_final_summary('archive', do_update, do_clean, do_compile)
 
     def _analyze_data_files(self, file_type: str) -> List[FileInfo]:
         """
@@ -493,21 +494,267 @@ class CaseOrganizer:
                     f"tsId {_fmt_tsid(gap_start)} – {_fmt_tsid(gap_end)} not covered"
                 )
 
-        # Collect redundant files
+        if self.args.verbose:
+            for file in files:
+                if file.is_redundant:
+                    self.logger.info(f"  Redundant: {file.path.name} ({file.redundant_reason})")
+
+    def _collect_redundant(self, files: List[FileInfo], file_type: str):
+        """Queue the files still marked redundant (after supervision) for deletion."""
+        prefix = file_type.lower()
         for file in files:
             if file.is_redundant:
                 self.files_to_delete.append(file.path)
-                size = file.path.stat().st_size
+                self.stats[f'{prefix}_redundant'] += 1
+                self.stats[f'{prefix}_space_freed'] += file.size
 
-                if file_type == 'OTHD':
-                    self.stats['othd_redundant'] += 1
-                    self.stats['othd_space_freed'] += size
-                else:
-                    self.stats['oisd_redundant'] += 1
-                    self.stats['oisd_space_freed'] += size
+    def _clean_archive(self) -> bool:
+        """
+        archive --clean: deduplicate othd_files/ and oisd_files/ under manual
+        supervision. Shows the full plan, then asks about every file marked
+        redundant, one at a time; renumbering gets its own confirmation.
+        --no-confirm accepts the whole plan unattended, --dry-run only shows it.
 
-                if self.args.verbose:
-                    self.logger.info(f"  Redundant: {file.path.name} ({file.redundant_reason})")
+        Returns False if the user aborted (nothing deleted or renamed).
+        """
+        self.logger.info("Analyzing OTHD files...")
+        othd_files = self._analyze_data_files('othd')
+        self._find_redundant_files(othd_files, 'OTHD')
+
+        self.logger.info("Analyzing OISD files...")
+        oisd_files = self._analyze_data_files('oisd')
+        self._find_redundant_files(oisd_files, 'OISD')
+
+        # Warn if OTHD and OISD coverage diverges after deduplication
+        self._check_cross_type_consistency(othd_files, oisd_files)
+
+        self._show_clean_plan(othd_files, 'OTHD')
+        self._show_clean_plan(oisd_files, 'OISD')
+
+        candidates = [f for f in othd_files + oisd_files if f.is_redundant]
+        dry_run = getattr(self.args, 'dry_run', False)
+
+        if dry_run:
+            self.console.print(
+                f"[bold cyan]Dry run:[/bold cyan] {len(candidates)} file(s) would be "
+                f"offered for deletion. No changes made."
+            )
+            return True
+
+        if candidates and not self.args.no_confirm:
+            if not self._supervise_deletions(candidates):
+                self.console.print("[yellow]Clean aborted — nothing deleted or renamed[/yellow]")
+                return False
+
+        self._collect_redundant(othd_files, 'OTHD')
+        self._collect_redundant(oisd_files, 'OISD')
+
+        self._rename_files(othd_files, oisd_files)
+        if self.files_to_rename and not self.args.no_confirm:
+            self.console.print()
+            self.console.print("[bold]Renumber the remaining files by starting tsId:[/bold]")
+            for old_path, new_path in self.files_to_rename:
+                self.console.print(f"  {old_path.parent.name}/{old_path.name} → {new_path.name}")
+            self.console.print("[bold yellow]Apply renames?[/bold yellow] \\[y/N]: ", end="")
+            if self._read_answer() not in ('y', 'yes'):
+                self.console.print("[dim]  Renames skipped[/dim]")
+                self.files_to_rename = []
+
+        self._perform_deletions()
+        return True
+
+    def _show_clean_plan(self, files: List[FileInfo], file_type: str):
+        """Table of every archived file: tsId range, size, and keep/delete with the reason."""
+        if not files:
+            return
+        table = Table(title=f"{file_type} archive", box=box.ROUNDED)
+        table.add_column("File", style="cyan")
+        table.add_column("tsId range", justify="right")
+        table.add_column("Size", justify="right", style="green")
+        table.add_column("Action")
+        for f in sorted(files, key=lambda f: (f.start_step, f.path.name)):
+            action = (f"[red]delete[/red] [dim]({f.redundant_reason})[/dim]"
+                      if f.is_redundant else "[green]keep[/green]")
+            table.add_row(f.path.name,
+                          f"{_fmt_tsid(f.start_step)} – {_fmt_tsid(f.end_step)}",
+                          self._format_size(f.size), action)
+        self.console.print()
+        self.console.print(table)
+
+    def _supervise_deletions(self, candidates: List[FileInfo]) -> bool:
+        """
+        Ask about each redundant file in turn:
+          y = delete, n = keep (it is renumbered with the survivors),
+          a = delete this and every remaining one, q = abort the whole clean.
+        A file the user keeps is unmarked, so it is neither deleted nor counted.
+
+        Returns False on q (or end of input).
+        """
+        self.console.print()
+        delete_rest = False
+        for f in candidates:
+            if delete_rest:
+                continue
+            self.console.print(
+                f"[bold]{f.path.parent.name}/{f.path.name}[/bold] "
+                f"[dim]tsId {_fmt_tsid(f.start_step)} – {_fmt_tsid(f.end_step)}, "
+                f"{self._format_size(f.size)}, {f.redundant_reason}[/dim]"
+            )
+            while True:
+                self.console.print("  Delete? \\[y/n/a/q]: ", end="")
+                answer = self._read_answer()
+                if answer in ('y', 'yes'):
+                    break
+                if answer in ('n', 'no'):
+                    f.is_redundant = False
+                    f.redundant_reason = None
+                    break
+                if answer == 'a':
+                    delete_rest = True
+                    break
+                if answer in ('q', None):
+                    return False
+                self.console.print("  [dim]y = delete, n = keep, a = delete all remaining, "
+                                   "q = abort[/dim]")
+        return True
+
+    @staticmethod
+    def _read_answer() -> Optional[str]:
+        """One line of user input, lowercased; None at end of input."""
+        try:
+            return input().strip().lower()
+        except EOFError:
+            return None
+
+    def _compile_archive(self):
+        """
+        archive --compile: combine othd_files/*.othd into
+        othd_files/compiled/{problem}.othd, and the same for OISD. The parts
+        are kept. See _compile_files for how restarts are resolved.
+        """
+        problem = self.case.problem_name
+        if not problem:
+            self.console.print("  [yellow]⚠[/yellow]  'problem' not set — cannot name the compiled files")
+            return
+
+        for ext in ('othd', 'oisd'):
+            src_dir = self.case_dir / f'{ext}_files'
+            parts = sorted(src_dir.glob(f'*.{ext}')) if src_dir.exists() else []
+            if not parts:
+                self.console.print(f"  [dim]No {ext.upper()} files in {ext}_files/ — skipped[/dim]")
+                continue
+            self._compile_files(parts, src_dir / 'compiled' / f'{problem}.{ext}', ext.upper())
+
+    @staticmethod
+    def _scan_blocks(path: Path) -> Tuple[bytes, List[Tuple[int, int, int]]]:
+        """
+        Split an OTHD/OISD file into its header (everything before the first
+        `tsId` line) and its timestep blocks, each (tsId, start offset, end
+        offset) — a block runs from its `tsId` line to the next one.
+        """
+        header = b''
+        blocks = []
+        offset = 0
+        current = None  # (tsId, start)
+        with open(path, 'rb') as f:
+            for line in f:
+                if line.startswith(b'tsId '):
+                    if current is not None:
+                        blocks.append((current[0], current[1], offset))
+                    current = (int(line.split()[1]), offset)
+                elif current is None:
+                    header += line
+                offset += len(line)
+        if current is not None:
+            blocks.append((current[0], current[1], offset))
+        return header, blocks
+
+    def _compile_files(self, parts: List[Path], out_path: Path, file_type: str):
+        """
+        Write one file holding every timestep of `parts`.
+
+        Parts are taken in order of their first tsId. A tsId at or below one
+        already taken is a restart: everything from that tsId onwards is
+        dropped and the restarted run's data is used instead — the same
+        "later run wins" rule the readers apply. This also covers a restart
+        appended inside a single file. All parts must share the same header
+        (`mask`/`nOths` or `nOsfs`); otherwise nothing is written.
+        """
+        scanned = []
+        for part in parts:
+            header, blocks = self._scan_blocks(part)
+            if not blocks:
+                self.console.print(f"  [yellow]⚠[/yellow]  {part.name}: no timesteps — skipped")
+                continue
+            scanned.append((part, header, blocks))
+
+        if not scanned:
+            return
+
+        headers = {header for _, header, _ in scanned}
+        if len(headers) > 1:
+            self.console.print(
+                f"  [red]✗[/red]  {file_type} parts have different headers "
+                f"(different probe/surface sets) — not compiled"
+            )
+            return
+
+        scanned.sort(key=lambda s: (s[2][0][0], s[0].stat().st_mtime))
+
+        merged: List[Tuple[int, Path, int, int]] = []  # (tsId, part, start, end), tsId increasing
+        superseded = 0
+        for part, _, blocks in scanned:
+            for ts_id, start, end in blocks:
+                while merged and merged[-1][0] >= ts_id:
+                    merged.pop()
+                    superseded += 1
+                merged.append((ts_id, part, start, end))
+
+        first, last = merged[0][0], merged[-1][0]
+        rel_out = out_path.relative_to(self.case_dir)
+        self.console.print(
+            f"  {file_type}: {len(scanned)} part(s) → {rel_out}  "
+            f"[dim]tsId {_fmt_tsid(first)} – {_fmt_tsid(last)}, {len(merged):,} steps"
+            f"{f', {superseded:,} replaced by restarts' if superseded else ''}[/dim]"
+        )
+        self._warn_compile_gaps([ts for ts, _, _, _ in merged], file_type)
+
+        if getattr(self.args, 'dry_run', False):
+            self.console.print("  [dim](dry run — not written)[/dim]")
+            return
+
+        out_path.parent.mkdir(exist_ok=True)
+        tmp_path = out_path.with_name(out_path.name + '.__tmp__')
+        handles = {}
+        try:
+            with open(tmp_path, 'wb') as out:
+                out.write(scanned[0][1])
+                for _, part, start, end in merged:
+                    src = handles.get(part)
+                    if src is None:
+                        src = handles[part] = open(part, 'rb')
+                    src.seek(start)
+                    out.write(src.read(end - start))
+        finally:
+            for src in handles.values():
+                src.close()
+        os.replace(tmp_path, out_path)
+        self.stats['compiled'].append(
+            f"{rel_out} ({len(merged):,} steps, {self._format_size(out_path.stat().st_size)})"
+        )
+
+    def _warn_compile_gaps(self, ts_ids: List[int], file_type: str):
+        """Warn where the compiled tsIds jump by more than the usual output interval."""
+        if len(ts_ids) < 2:
+            return
+        diffs = [b - a for a, b in zip(ts_ids, ts_ids[1:])]
+        interval = max(set(diffs), key=diffs.count)
+        for a, b in zip(ts_ids, ts_ids[1:]):
+            if b - a > interval:
+                self.console.print(
+                    f"  [yellow]⚠[/yellow]  {file_type} gap: "
+                    f"tsId {_fmt_tsid(a + interval)} – {_fmt_tsid(b - interval)} not covered"
+                )
 
     def _check_cross_type_consistency(self, othd_files: List[FileInfo], oisd_files: List[FileInfo]):
         """Warn if OTHD and OISD coverage diverges after deduplication."""
@@ -955,7 +1202,7 @@ class CaseOrganizer:
 
         self.console.print(
             f"[bold yellow]Delete {total_files} files "
-            f"({self._format_size(total_space)})?[/bold yellow] [y/N]: ",
+            f"({self._format_size(total_space)})?[/bold yellow] \\[y/N]: ",
             end=""
         )
 
@@ -1031,21 +1278,25 @@ class CaseOrganizer:
             log_handle.close()
             self.console.print(f"\n[dim]Log saved to: {self.log_file}[/dim]")
 
-    def _show_final_summary(self, subcommand: str, do_clean: bool = False):
+    def _show_final_summary(self, subcommand: str, do_update: bool = False,
+                            do_clean: bool = False, do_compile: bool = False):
         """Show final summary after cleanup."""
         self.console.print()
 
         lines = []
         if subcommand == 'archive':
-            total_archived = (self.stats['archived_othd'] + self.stats['archived_oisd'] +
-                              self.stats['archived_rcv'])
-            lines.append(f"Archived: {self.stats['archived_othd']} OTHD, "
-                         f"{self.stats['archived_oisd']} OISD, "
-                         f"{self.stats['archived_rcv']} RCV  (total {total_archived} files)")
+            if do_update:
+                total_archived = (self.stats['archived_othd'] + self.stats['archived_oisd'] +
+                                  self.stats['archived_rcv'])
+                lines.append(f"Archived: {self.stats['archived_othd']} OTHD, "
+                             f"{self.stats['archived_oisd']} OISD, "
+                             f"{self.stats['archived_rcv']} RCV  (total {total_archived} files)")
             if do_clean:
                 lines.append(f"Deduplicated: {self.stats['othd_redundant']} OTHD, "
                              f"{self.stats['oisd_redundant']} OISD removed  "
                              f"({self._format_size(self.stats['othd_space_freed'] + self.stats['oisd_space_freed'])} freed)")
+            if do_compile:
+                lines.append("Compiled: " + ("; ".join(self.stats['compiled']) or "nothing written"))
         if subcommand == 'output':
             total_out = self.stats['out_deleted'] + self.stats['rst_deleted'] + self.stats['plt_deleted']
             lines.append(f"Output cleaned: {total_out} files removed  "

@@ -13,37 +13,49 @@ case organise <subcommand> [case_directory] [options]
 
 ### `archive`
 
-Moves output data files from the run directory (specified in `simflow.config`
-`dir` field) into dedicated archive directories:
+Manages the OTHD/OISD archive (`othd_files/`, `oisd_files/`, `rcv_files/`).
+Pass at least one of `--update`, `--clean`, `--compile`; they combine and
+always run in the order **update → clean → compile**. `archive` with no flag
+prints a "nothing to do" message.
 
-- `.othd` files → `othd_files/`
+#### `archive --update`
+
+Moves output data files from the run directory (specified in `simflow.config`
+`dir` field) into the archive directories under the next free number:
+
+- `.othd` files → `othd_files/` (e.g. `riser.othd` → `riser6.othd`)
 - `.oisd` files → `oisd_files/`
 - `.rcv` files → `rcv_files/` (only if present)
 
-Files are numbered using sequential suffixes (e.g., `riser1.othd`,
-`riser2.othd`) to avoid overwriting existing archived files.
-
 With `--t1`/`--t2`, only run-dir files whose timestep range overlaps that
 window are moved (RCV files have no reader to determine their range, so they
-are always moved in full).
+are always moved in full). With `--dry-run`, the moves are only listed.
 
-**No confirmation required** — the move step only moves files, does not delete.
+**No confirmation required** — it only moves files, never deletes.
 
 #### `archive --clean`
 
-After archiving, deduplicates and cleans redundant OTHD/OISD files in
-`othd_files/` and `oisd_files/`:
+Deduplicates `othd_files/` and `oisd_files/` under manual supervision. It
+works on the archive only; it never touches the run directory.
 
 1. Reads **every** `.othd` / `.oisd` file in those directories and extracts
    their time step ranges
-2. Identifies redundant files:
+2. Proposes redundant files:
    - **Duplicates**: Same time step range → keeps larger/newer file
-   - **Subsets**: Time range fully covered by another file → marks for deletion
+   - **Subsets**: Time range fully covered by another file
    - **Overlaps**: Partial overlaps → **both kept**
-3. Shows summary and asks for confirmation (unless `--no-confirm`)
-4. Deletes redundant files
-5. Renames remaining files sequentially sorted by starting time step:
-   - `{problem}1.othd`, `{problem}2.othd`, etc.
+3. Shows a table per type: every file, its tsId range, size and proposed
+   action with the reason
+4. Asks about each proposed deletion in turn:
+   `y` delete, `n` keep, `a` delete this and all remaining, `q` abort the
+   whole clean (nothing deleted or renamed)
+5. Shows the renumbering of the surviving files (including any the user
+   kept), sorted by starting time step — `{problem}1.othd`,
+   `{problem}2.othd`, … — and asks once before renaming
+6. Deletes the confirmed files and applies the renames
+
+`--no-confirm` accepts the whole plan without asking; `--dry-run` shows the
+tables and stops.
 
 `--clean` always inspects the **complete** archived set — `--t1`/`--t2` do
 **not** scope it. Excluding a file by timestep would risk hiding the very
@@ -53,7 +65,25 @@ something unrelated, e.g. `use t1:50 t2:2800`, `archive --clean` used to skip
 analyzing any file outside that window — so a subset file whose superset
 happened to fall outside the window was never detected as redundant, and
 nothing got deleted. Fixed by always dedup-ing the full set regardless of
-`--t1`/`--t2`; only the `archive` move step respects the timestep window.)
+`--t1`/`--t2`; only the `--update` move step respects the timestep window.)
+
+#### `archive --compile`
+
+Combines the archived parts into one file per type:
+
+- `othd_files/*.othd` → `othd_files/compiled/{problem}.othd`
+- `oisd_files/*.oisd` → `oisd_files/compiled/{problem}.oisd`
+
+The parts are kept. Parts are taken in order of their first tsId; a tsId at
+or below one already taken is a restart, and everything from that tsId on is
+replaced by the restarted run's data (the same "later run wins" rule the
+readers use when given several files). This also covers a restart appended
+inside a single file. Gaps in the combined tsIds are reported. Parts whose
+headers differ (`mask`/`nOths`, `nOsfs` — different probe or surface sets)
+are not combined. The compiled file is rewritten on every run, through a
+temporary file, so an interrupted run never leaves a half-written result.
+`--t1`/`--t2` are ignored, for the same reason as `--clean`; `--dry-run`
+reports what would be written.
 
 ### `output`
 
@@ -106,15 +136,15 @@ runs as its own step with its own entry in the confirmation summary.
 
 ### Running `archive`
 
-1. Resolve run directory from `simflow.config['dir']`
-2. Find `.othd`, `.oisd`, `.rcv` files in the run directory
-3. If `--t1`/`--t2` given, drop OTHD/OISD files whose range doesn't overlap
-   the window (RCV files are never filtered)
-4. Create `othd_files/`, `oisd_files/`, `rcv_files/` if needed
-5. Move files with numbered suffixes
-6. If `--clean`: read **all** files in `othd_files/`/`oisd_files/` (not just
-   the ones just archived, and not filtered by `--t1`/`--t2`), mark
-   duplicates/subsets, show a summary, confirm, delete, and renumber
+1. If `--update`: resolve the run directory from `simflow.config['dir']`,
+   find `.othd`, `.oisd`, `.rcv` files there, drop OTHD/OISD files outside
+   `--t1`/`--t2` if given (RCV files are never filtered), and move the rest
+   into the archive directories under the next free number
+2. If `--clean`: read **all** files in `othd_files/`/`oisd_files/` (not
+   filtered by `--t1`/`--t2`), propose duplicates/subsets, show the plan,
+   confirm each deletion, confirm the renumbering, then delete and rename
+3. If `--compile`: combine each type's parts into `compiled/{problem}.ext`,
+   resolving restarts in favour of the later run
 
 ### Running `output`
 
@@ -146,8 +176,9 @@ runs as its own step with its own entry in the confirmation summary.
 ```
 
 Either alone is a one-sided bound; both together is an inclusive range.
-Available on the `archive` move step, `output` and `plt`. **Not** applied to
-`archive --clean`, which always dedupes everything (see above).
+Available on `archive --update`, `output` and `plt`. **Not** applied to
+`archive --clean` or `archive --compile`, which always use the complete
+archive (see above).
 
 Both flags can also come from context instead of being typed explicitly:
 
@@ -163,10 +194,12 @@ window `--t1 N --t2 N`, the same way it works for `case upload/download --binary
 ## Options
 
 ```bash
-case organise archive CS4SG1U1                                  # Move data files to archive dirs
-case organise archive CS4SG1U1 --clean                          # Move, then deduplicate OTHD/OISD files
+case organise archive CS4SG1U1 --update                         # Move data files to archive dirs
+case organise archive CS4SG1U1 --clean                          # Deduplicate, asking per file
+case organise archive CS4SG1U1 --compile                        # One combined file per type
+case organise archive CS4SG1U1 --update --clean --compile       # All three, in that order
 case organise output CS4SG1U1                                   # Clean intermediate output files
-case organise archive CS4SG1U1 --t1 0 --t2 1000                 # Only archive files in [0, 1000]
+case organise archive CS4SG1U1 --update --t1 0 --t2 1000        # Only archive files in [0, 1000]
 case organise output CS4SG1U1 --keep-every 5                    # Custom retention
 case organise output CS4SG1U1 --t2 5000                         # Only clean up to timestep 5000
 case organise archive CS4SG1U1 --clean --no-confirm             # Skip confirmation
@@ -178,21 +211,22 @@ case organise plt CS4SG1U1 --delete-ascii --delete-binary       # Both direction
 
 ## Default Behavior
 
-Running without a subcommand, or `plt` without either delete flag, shows help
-or a "nothing to do" message:
+Running without a subcommand, `archive` without a flag, or `plt` without
+either delete flag, shows help or a "nothing to do" message:
 
 ```bash
 case organise                    # → shows help
-case organise archive            # → still runs (archive needs no flag)
+case organise archive CS4SG1U1   # → "Nothing to do — pass --update, --clean and/or --compile"
 case organise plt CS4SG1U1       # → "Nothing to do — pass --delete-ascii and/or --delete-binary"
 ```
 
 ## Safety
 
-- `archive` (without `--clean`) is non-destructive (moves, does not delete)
-  and does not currently honor `--dry-run`
-- `archive --clean`, `output` and `plt` show a summary before acting and ask
-  for confirmation unless `--no-confirm` is given
+- `archive --update` and `archive --compile` are non-destructive (they move
+  or write, never delete) and honor `--dry-run`
+- `archive --clean` asks about each deletion and about the renumbering;
+  `output` and `plt` show a summary before acting and ask for confirmation —
+  all unless `--no-confirm` is given
 - `--delete-binary` is unconditional: it does not check the run directory
   first, and can remove the last surviving copy of a timestep's PLT data
 - A `t1`/`t2` context left over from something else never silently narrows
