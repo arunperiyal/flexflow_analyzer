@@ -23,6 +23,7 @@ One row per variable instead of one row per timestep.
     {Colors.YELLOW}--group ID{Colors.RESET}             Output group: othId in an othd file, osgId in an
                            oisd (default: the first). Only matters when a run
                            wrote more than one probe set into a file.
+                           From context: use group:N
     {Colors.YELLOW}--output FILE{Colors.RESET}          Also write the summary to a .csv
     {Colors.YELLOW}--freq N{Colors.RESET}               PLT output frequency for maxloc
                            {Colors.DIM}(default: outFreq from simflow.config){Colors.RESET}

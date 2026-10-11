@@ -132,7 +132,7 @@ class FlexFlowCase:
         
         return self._oisd_files
     
-    def load_othd_data(self, use_def_time=True, tsId_filter=None):
+    def load_othd_data(self, use_def_time=True, tsId_filter=None, group=None):
         """
         Load all OTHD files from the case.
         
@@ -142,6 +142,8 @@ class FlexFlowCase:
             If True, recalculate time vector using initialTimeIncrement from .def file
         tsId_filter : int or list of int, optional
             Filter to only read specific time series IDs
+        group : int, optional
+            Which `othId` group to expose (default: the lowest present)
             
         Returns:
         --------
@@ -155,7 +157,7 @@ class FlexFlowCase:
         print(f"Loading {len(othd_files)} OTHD file(s) from {self.case_directory}")
         
         # Create reader
-        reader = OTHDReader(othd_files, tsId_filter=tsId_filter)
+        reader = OTHDReader(othd_files, tsId_filter=tsId_filter, group=group)
         
         # Recalculate times if requested and initialTimeIncrement is available
         dt = self.def_config.initial_time_increment

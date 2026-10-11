@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### 🧩 `use group:N` context
+
+- New `group` context: `use group:1` sets the output group (othId in an
+  othd, osgId in an oisd) for `data table`, `data stats` and `plot`, the
+  same way `node` works. A typed `--group` still wins.
+- `plot` takes `--group` too, to plot displacements of a group other than
+  the first.
+
 ### 🗄️ `case organise archive`: `--update`, `--verify`, supervised `--clean`, `--compile`, `--prune`
 
 - `archive` now takes flags that combine and run in the order

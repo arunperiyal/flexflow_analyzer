@@ -94,6 +94,9 @@ CONTEXTS = [
                description='Run directory inside the case (e.g. RUN_1)'),
     ContextKey('node', parse=_non_negative_int, label='n',
                description='Node ID for data/plot commands'),
+    ContextKey('group', parse=_non_negative_int, label='g',
+               description='Output group -- othId in an othd, osgId in an oisd '
+                           '(data table/stats, plot)'),
     ContextKey('time', parse=float, clears=('t1', 't2'),
                description='A single timestep -- clears t1/t2, and they clear it'),
     ContextKey('t1', parse=float, clears=('time',),
@@ -129,6 +132,12 @@ def context_flag(parser, key, *flags, **kwargs):
 def node_arg(parser, **kwargs):
     kwargs.setdefault('type', int)
     return context_flag(parser, 'node', '--node', **kwargs)
+
+
+def group_arg(parser, **kwargs):
+    kwargs.setdefault('type', int)
+    kwargs.setdefault('metavar', 'ID')
+    return context_flag(parser, 'group', '--group', **kwargs)
 
 
 def freq_arg(parser, **kwargs):

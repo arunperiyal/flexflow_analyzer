@@ -25,6 +25,7 @@ and variables across the columns.
     {Colors.YELLOW}--group ID{Colors.RESET}             Output group: othId in an othd file, osgId in an
                            oisd (default: the first). Only matters when a run
                            wrote more than one probe set into a file.
+                           From context: use group:N
     {Colors.YELLOW}--output FILE{Colors.RESET}          Write {Colors.BOLD}every{Colors.RESET} row to a .csv instead of printing
     {Colors.YELLOW}--head N{Colors.RESET}               Print the first N rows
     {Colors.YELLOW}--tail N{Colors.RESET}               Print the last N rows

@@ -91,6 +91,26 @@ def test_node_and_freq_validation(rt):
     assert (rt.get('node'), rt.get('freq')) == (24, 50)
 
 
+def test_group_validation(rt):
+    assert rt.execute_line('use group:-1') == 1
+    assert rt.execute_line('use group:x') == 1
+    use(rt, 'group:2')
+    assert rt.get('group') == 2
+
+
+def test_group_fills_data_table_stats_and_plot(rt):
+    use(rt, 'group:1')
+    assert parsed(rt, 'data table').group == 1
+    assert parsed(rt, 'data stats').group == 1
+    assert parsed(rt, 'plot').group == 1
+    assert parsed(rt, 'data table --group 0').group == 0
+
+
+def test_data_show_takes_no_group(rt):
+    use(rt, 'group:1')
+    assert not hasattr(parsed(rt, 'data show'), 'group')
+
+
 def test_time_and_range_clear_each_other(rt):
     use(rt, 't1:10 t2:20')
     use(rt, 'time:15')

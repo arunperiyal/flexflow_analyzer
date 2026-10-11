@@ -15,6 +15,8 @@ Plot displacement or force data for a specific node.
 
 {Colors.BOLD}REQUIRED OPTIONS:{Colors.RESET}
     {Colors.YELLOW}--node{Colors.RESET} N              Node number to plot (for displacement/force)
+    {Colors.YELLOW}--group{Colors.RESET} ID            othId group to plot displacements from
+                           (default: the first; from context: use group:N)
     {Colors.YELLOW}--data-type{Colors.RESET} TYPE     Data type: displacement, force, or pendulum
 
 {Colors.BOLD}PLOT OPTIONS:{Colors.RESET}
