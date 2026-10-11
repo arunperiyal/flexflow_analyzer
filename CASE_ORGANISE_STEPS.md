@@ -14,9 +14,10 @@ case organise <subcommand> [case_directory] [options]
 ### `archive`
 
 Manages the OTHD/OISD archive (`othd_files/`, `oisd_files/`, `rcv_files/`).
-Pass at least one of `--update`, `--clean`, `--compile`; they combine and
-always run in the order **update → clean → compile**. `archive` with no flag
-prints a "nothing to do" message.
+Pass at least one of `--update`, `--verify`, `--clean`, `--compile`,
+`--prune`; they combine and always run in the order
+**update → verify → clean → compile → prune**. `archive` with no flag prints
+a "nothing to do" message.
 
 #### `archive --update`
 
@@ -32,6 +33,21 @@ window are moved (RCV files have no reader to determine their range, so they
 are always moved in full). With `--dry-run`, the moves are only listed.
 
 **No confirmation required** — it only moves files, never deletes.
+
+#### `archive --verify`
+
+Reads every part in `othd_files/` and `oisd_files/`, and the compiled files
+if present, to the end. Every timestep block in an OTHD/OISD file has the
+same layout (the same keyword lines with the same number of values), so the
+check reports, per file:
+
+- a last step that is cut off — typically a job killed mid-write
+- steps whose layout differs from the rest of the file
+- values that are not numbers, or a missing newline at the end
+
+Restarts inside a file (tsId going back) are listed but are not a problem.
+If any file has a problem, the later steps (`--clean`, `--compile`,
+`--prune`) do not run.
 
 #### `archive --clean`
 
@@ -74,7 +90,10 @@ Combines the archived parts into one file per type:
 - `othd_files/*.othd` → `othd_files/compiled/{problem}.othd`
 - `oisd_files/*.oisd` → `oisd_files/compiled/{problem}.oisd`
 
-The parts are kept. Parts are taken in order of their first tsId; a tsId at
+The parts are kept. An existing compiled file is used as the base and the
+parts are layered on top of it, so the history survives once `--prune` has
+deleted the parts behind it; with every part still present, the parts
+override the base completely. Parts are taken in order of their first tsId; a tsId at
 or below one already taken is a restart, and everything from that tsId on is
 replaced by the restarted run's data (the same "later run wins" rule the
 readers use when given several files). This also covers a restart appended
@@ -84,6 +103,19 @@ are not combined. The compiled file is rewritten on every run, through a
 temporary file, so an interrupted run never leaves a half-written result.
 `--t1`/`--t2` are ignored, for the same reason as `--clean`; `--dry-run`
 reports what would be written.
+
+#### `archive --prune`
+
+Deletes the parts in `othd_files/` and `oisd_files/` behind a compiled file,
+but only when compiling again would write exactly the same bytes — i.e.
+every timestep the parts hold is already in the compiled file. If the
+compiled file is missing or out of date, nothing is pruned for that type
+(run with `--compile` first, or together: `--compile --prune`). Lists the
+parts and asks once before deleting, unless `--no-confirm`; `--dry-run` only
+lists them. RCV files are not touched.
+
+After a prune, the next `--update` starts numbering again at
+`{problem}1.othd`, and the next `--compile` layers it onto the compiled file.
 
 ### `output`
 
@@ -140,11 +172,16 @@ runs as its own step with its own entry in the confirmation summary.
    find `.othd`, `.oisd`, `.rcv` files there, drop OTHD/OISD files outside
    `--t1`/`--t2` if given (RCV files are never filtered), and move the rest
    into the archive directories under the next free number
-2. If `--clean`: read **all** files in `othd_files/`/`oisd_files/` (not
+2. If `--verify`: check every part and compiled file; stop here if any has
+   a problem
+3. If `--clean`: read **all** files in `othd_files/`/`oisd_files/` (not
    filtered by `--t1`/`--t2`), propose duplicates/subsets, show the plan,
    confirm each deletion, confirm the renumbering, then delete and rename
-3. If `--compile`: combine each type's parts into `compiled/{problem}.ext`,
-   resolving restarts in favour of the later run
+4. If `--compile`: combine the existing compiled file (if any) and each
+   type's parts into `compiled/{problem}.ext`, resolving restarts in favour
+   of the later run
+5. If `--prune`: for each type whose compiled file is current, confirm and
+   delete the parts
 
 ### Running `output`
 
@@ -177,7 +214,7 @@ runs as its own step with its own entry in the confirmation summary.
 
 Either alone is a one-sided bound; both together is an inclusive range.
 Available on `archive --update`, `output` and `plt`. **Not** applied to
-`archive --clean` or `archive --compile`, which always use the complete
+the other `archive` flags, which always use the complete
 archive (see above).
 
 Both flags can also come from context instead of being typed explicitly:
@@ -197,7 +234,9 @@ window `--t1 N --t2 N`, the same way it works for `case upload/download --binary
 case organise archive CS4SG1U1 --update                         # Move data files to archive dirs
 case organise archive CS4SG1U1 --clean                          # Deduplicate, asking per file
 case organise archive CS4SG1U1 --compile                        # One combined file per type
-case organise archive CS4SG1U1 --update --clean --compile       # All three, in that order
+case organise archive CS4SG1U1 --update --clean --compile       # Several steps, in that order
+case organise archive CS4SG1U1 --verify                         # Check every archived file
+case organise archive CS4SG1U1 --verify --compile --prune       # Keep only the compiled files
 case organise output CS4SG1U1                                   # Clean intermediate output files
 case organise archive CS4SG1U1 --update --t1 0 --t2 1000        # Only archive files in [0, 1000]
 case organise output CS4SG1U1 --keep-every 5                    # Custom retention
@@ -216,14 +255,16 @@ either delete flag, shows help or a "nothing to do" message:
 
 ```bash
 case organise                    # → shows help
-case organise archive CS4SG1U1   # → "Nothing to do — pass --update, --clean and/or --compile"
+case organise archive CS4SG1U1   # → "Nothing to do — pass --update, --verify, --clean, --compile and/or --prune"
 case organise plt CS4SG1U1       # → "Nothing to do — pass --delete-ascii and/or --delete-binary"
 ```
 
 ## Safety
 
-- `archive --update` and `archive --compile` are non-destructive (they move
-  or write, never delete) and honor `--dry-run`
+- `archive --update`, `--verify` and `--compile` are non-destructive (they
+  move, read or write, never delete) and honor `--dry-run`
+- `archive --prune` only deletes parts whose data is already in a current
+  compiled file, and asks first
 - `archive --clean` asks about each deletion and about the renumbering;
   `output` and `plt` show a summary before acting and ask for confirmation —
   all unless `--no-confirm` is given

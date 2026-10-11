@@ -31,7 +31,8 @@ class _Logger:
 
 
 def make_organizer(case_dir, **flags):
-    args = Namespace(update=False, clean=False, compile=False, dry_run=False,
+    args = Namespace(update=False, verify=False, clean=False, compile=False, prune=False,
+                     dry_run=False,
                      no_confirm=False, log=False, verbose=False, t1=None, t2=None)
     for key, value in flags.items():
         setattr(args, key, value)
@@ -146,3 +147,61 @@ def test_clean_declined_renames_leave_names(tmp_path, monkeypatch):
     _answers(monkeypatch, 'y', 'n')           # delete riser2, decline renaming riser3 → riser2
     make_organizer(tmp_path, clean=True).organize('archive')
     assert sorted(p.name for p in othd_dir.glob('*.othd')) == ['riser1.othd', 'riser3.othd']
+
+
+def test_verify_flags_a_cut_off_last_step_and_stops_compile(tmp_path):
+    text = othd([1, 2, 3])
+    othd_dir = write_parts(tmp_path, {
+        'riser1.othd': text,
+        'riser2.othd': text[:-12],            # killed mid-write
+    })
+    organizer = make_organizer(tmp_path, verify=True, compile=True)
+    organizer.organize('archive')
+    assert organizer.stats['verify_ok'] is False
+    assert not (othd_dir / 'compiled').exists()
+
+    _, _, problems, _ = organizer._check_file(othd_dir / 'riser2.othd')
+    assert any('incomplete last step (tsId 3)' in p for p in problems)
+
+
+def test_verify_accepts_good_files_and_restarts(tmp_path):
+    othd_dir = write_parts(tmp_path, {'riser1.othd': othd([1, 2, 3, 2, 3, 4])})
+    organizer = make_organizer(tmp_path, verify=True)
+    organizer.organize('archive')
+    assert organizer.stats['verify_ok'] is True
+    assert organizer._check_file(othd_dir / 'riser1.othd') == (6, (1, 4), [], 1)
+
+
+def test_prune_then_update_keeps_the_history(tmp_path):
+    othd_dir = write_parts(tmp_path, {
+        'riser1.othd': othd(range(1, 8), value=1.0),
+        'riser2.othd': othd(range(5, 11), value=2.0),
+    })
+    make_organizer(tmp_path, compile=True, prune=True, no_confirm=True).organize('archive')
+    assert list(othd_dir.glob('*.othd')) == []
+
+    run_dir = tmp_path / 'RUN_1'
+    run_dir.mkdir()
+    (run_dir / 'riser.othd').write_text(othd(range(9, 13), value=3.0))   # restart from 8
+    make_organizer(tmp_path, update=True, compile=True).organize('archive')
+
+    reader = OTHDReader(str(othd_dir / 'compiled' / 'riser.othd'))
+    assert reader.tsIds == list(range(1, 13))
+    sources = [reader.displacements[(0, i, 0)][0] for i in range(12)]
+    assert sources == [1.0] * 4 + [2.0] * 4 + [3.0] * 4
+
+
+def test_prune_refuses_an_out_of_date_compiled_file(tmp_path):
+    othd_dir = write_parts(tmp_path, {'riser1.othd': othd([1, 2])})
+    make_organizer(tmp_path, compile=True).organize('archive')
+    (othd_dir / 'riser2.othd').write_text(othd([3, 4]))
+    make_organizer(tmp_path, prune=True, no_confirm=True).organize('archive')
+    assert sorted(p.name for p in othd_dir.glob('*.othd')) == ['riser1.othd', 'riser2.othd']
+
+
+def test_prune_asks_first(tmp_path, monkeypatch):
+    othd_dir = write_parts(tmp_path, {'riser1.othd': othd([1, 2])})
+    make_organizer(tmp_path, compile=True).organize('archive')
+    _answers(monkeypatch, 'n')
+    make_organizer(tmp_path, prune=True).organize('archive')
+    assert (othd_dir / 'riser1.othd').exists()

@@ -102,14 +102,18 @@ class CaseCommand(BaseCommand):
 
         # case organise archive
         archive_parser = organise_subparsers.add_parser('archive', add_help=False,
-                                    help='Update, clean and compile the OTHD/OISD archive')
+                                    help='Update, verify, clean, compile and prune the OTHD/OISD archive')
         case_arg(archive_parser, help='Case directory path')
         archive_parser.add_argument('--update', action='store_true',
                                     help='Move .othd/.oisd/.rcv from run dir into the archive dirs')
         archive_parser.add_argument('--clean', action='store_true',
                                     help='Deduplicate archived OTHD/OISD files, confirming each deletion')
+        archive_parser.add_argument('--verify', action='store_true',
+                                    help='Check every archived OTHD/OISD file reads through to the end')
         archive_parser.add_argument('--compile', action='store_true',
                                     help='Combine archived OTHD/OISD files into compiled/{problem}.othd|oisd')
+        archive_parser.add_argument('--prune', action='store_true',
+                                    help='Delete the parts once the compiled file holds all their data')
         time_window(archive_parser, 
                     t1_kwargs=dict(metavar='STEP', help='Only --update files reaching timesteps >= STEP'),
                     t2_kwargs=dict(metavar='STEP', help='Only --update files reaching timesteps <= STEP'))

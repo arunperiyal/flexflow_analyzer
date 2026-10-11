@@ -2,10 +2,10 @@
 
 ## Unreleased
 
-### 🗄️ `case organise archive`: `--update`, supervised `--clean`, `--compile`
+### 🗄️ `case organise archive`: `--update`, `--verify`, supervised `--clean`, `--compile`, `--prune`
 
 - `archive` now takes flags that combine and run in the order
-  update → clean → compile. Plain `archive` with no flag no longer moves
+  update → verify → clean → compile → prune. Plain `archive` with no flag no longer moves
   anything; it prints "nothing to do".
 - `--update` moves the run directory's `.othd`/`.oisd`/`.rcv` into the
   archive under the next free number (what plain `archive` used to do), and
@@ -17,7 +17,15 @@
 - New `--compile` writes `othd_files/compiled/{problem}.othd` and
   `oisd_files/compiled/{problem}.oisd` from the archived parts, keeping the
   parts. Restarts are resolved in favour of the later run, gaps are
-  reported, and parts with different headers are refused.
+  reported, and parts with different headers are refused. An existing
+  compiled file is the base the parts are layered onto.
+- New `--verify` reads every archived part and compiled file to the end
+  and reports cut-off last steps (killed jobs), steps with an odd layout,
+  non-numeric values and a missing final newline. A failure stops the later
+  steps.
+- New `--prune` deletes the parts once the compiled file holds all their
+  data (compiling again would write the same bytes), after asking. Later
+  `--update`s are layered onto the compiled file, so no history is lost.
 - The `[y/N]` in organise's confirmation prompts was swallowed as Rich
   markup; it now shows.
 

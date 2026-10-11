@@ -97,6 +97,9 @@ class CaseOrganizer:
             'plt_binary_deleted': 0,
             'plt_binary_space_freed': 0,
             'compiled': [],  # one line per compiled file, for the final summary
+            'verify_ok': True,
+            'pruned': 0,
+            'pruned_space_freed': 0,
         }
 
         # Files to delete/rename
@@ -330,42 +333,58 @@ class CaseOrganizer:
     def _organize_archive(self, t1: Optional[float], t2: Optional[float]):
         """
         archive: run the requested steps in a fixed order —
-        --update → --clean → --compile. Each flag is optional; with none of
-        them there is nothing to do.
+        --update → --verify → --clean → --compile → --prune. Each flag is
+        optional; with none of them there is nothing to do.
         """
-        do_update = getattr(self.args, 'update', False)
-        do_clean = getattr(self.args, 'clean', False)
-        do_compile = getattr(self.args, 'compile', False)
+        steps = [step for step in ('update', 'verify', 'clean', 'compile', 'prune')
+                 if getattr(self.args, step, False)]
 
-        if not (do_update or do_clean or do_compile):
+        if not steps:
             self.console.print(
-                "[yellow]Nothing to do — pass --update, --clean and/or --compile[/yellow]"
+                "[yellow]Nothing to do — pass --update, --verify, --clean, "
+                "--compile and/or --prune[/yellow]"
             )
             return
 
-        if do_update:
+        if 'update' in steps:
             self.console.print("[bold]Step: Update archive from run directory[/bold]")
             self._archive_run_data_files(t1, t2)
             self.console.print()
 
-        # --clean and --compile always work on the complete archived set,
+        # Everything after --update works on the complete archived set,
         # ignoring --t1/--t2: dedup compares every file against every other,
         # so excluding files by timestep would hide the very files (e.g. a
         # superset) that make another file redundant, and a t1/t2 context left
         # over from something else would silently truncate a compiled file.
-        # --t1/--t2 only scope the --update move step above.
-        if do_clean:
+        if 'verify' in steps:
+            self.console.print("[bold]Step: Verify archive[/bold]")
+            if not self._verify_archive():
+                if any(step in steps for step in ('clean', 'compile', 'prune')):
+                    self.console.print(
+                        "[red]Stopping: fix or remove the files above before "
+                        "--clean / --compile / --prune[/red]"
+                    )
+                self._show_final_summary('archive', steps)
+                return
+            self.console.print()
+
+        if 'clean' in steps:
             self.console.print("[bold]Step: Clean archive (supervised)[/bold]")
             if not self._clean_archive():
                 return
             self.console.print()
 
-        if do_compile:
+        if 'compile' in steps:
             self.console.print("[bold]Step: Compile archive[/bold]")
             self._compile_archive()
             self.console.print()
 
-        self._show_final_summary('archive', do_update, do_clean, do_compile)
+        if 'prune' in steps:
+            self.console.print("[bold]Step: Prune compiled parts[/bold]")
+            self._prune_archive()
+            self.console.print()
+
+        self._show_final_summary('archive', steps)
 
     def _analyze_data_files(self, file_type: str) -> List[FileInfo]:
         """
@@ -626,24 +645,43 @@ class CaseOrganizer:
         except EOFError:
             return None
 
+    def _archive_types(self):
+        """(ext, archive dir, compiled file, parts) for OTHD and OISD."""
+        problem = self.case.problem_name
+        for ext in ('othd', 'oisd'):
+            src_dir = self.case_dir / f'{ext}_files'
+            parts = sorted(src_dir.glob(f'*.{ext}')) if src_dir.exists() else []
+            yield ext, src_dir, src_dir / 'compiled' / f'{problem}.{ext}', parts
+
     def _compile_archive(self):
         """
         archive --compile: combine othd_files/*.othd into
         othd_files/compiled/{problem}.othd, and the same for OISD. The parts
-        are kept. See _compile_files for how restarts are resolved.
+        are kept. See _plan_compile for how restarts are resolved.
         """
-        problem = self.case.problem_name
-        if not problem:
+        if not self.case.problem_name:
             self.console.print("  [yellow]⚠[/yellow]  'problem' not set — cannot name the compiled files")
             return
 
-        for ext in ('othd', 'oisd'):
-            src_dir = self.case_dir / f'{ext}_files'
-            parts = sorted(src_dir.glob(f'*.{ext}')) if src_dir.exists() else []
+        for ext, src_dir, out_path, parts in self._archive_types():
+            base = out_path if out_path.exists() else None
             if not parts:
                 self.console.print(f"  [dim]No {ext.upper()} files in {ext}_files/ — skipped[/dim]")
                 continue
-            self._compile_files(parts, src_dir / 'compiled' / f'{problem}.{ext}', ext.upper())
+            plan = self._plan_compile(parts, base, ext.upper())
+            if plan is None:
+                continue
+            self._report_plan(plan, out_path, ext.upper())
+
+            if getattr(self.args, 'dry_run', False):
+                self.console.print("  [dim](dry run — not written)[/dim]")
+                continue
+
+            self._write_compiled(plan, out_path)
+            self.stats['compiled'].append(
+                f"{out_path.relative_to(self.case_dir)} ({len(plan['merged']):,} steps, "
+                f"{self._format_size(out_path.stat().st_size)})"
+            )
 
     @staticmethod
     def _scan_blocks(path: Path) -> Tuple[bytes, List[Tuple[int, int, int]]]:
@@ -669,16 +707,19 @@ class CaseOrganizer:
             blocks.append((current[0], current[1], offset))
         return header, blocks
 
-    def _compile_files(self, parts: List[Path], out_path: Path, file_type: str):
+    def _plan_compile(self, parts: List[Path], base: Optional[Path], file_type: str) -> Optional[dict]:
         """
-        Write one file holding every timestep of `parts`.
+        Work out which block of which file goes where in the compiled file.
 
-        Parts are taken in order of their first tsId. A tsId at or below one
-        already taken is a restart: everything from that tsId onwards is
-        dropped and the restarted run's data is used instead — the same
-        "later run wins" rule the readers apply. This also covers a restart
-        appended inside a single file. All parts must share the same header
-        (`mask`/`nOths` or `nOsfs`); otherwise nothing is written.
+        An existing compiled file is the base and comes first, so the history
+        survives once --prune has deleted the parts behind it. The parts follow
+        in order of their first tsId. A tsId at or below one already taken is
+        a restart: everything from that tsId onwards is dropped and the
+        restarted run's data is used instead — the same "later run wins" rule
+        the readers apply. This also covers a restart appended inside a single
+        file. With every part still present, the parts override the base
+        completely. All files must share the same header (`mask`/`nOths` or
+        `nOsfs`); otherwise there is no plan.
         """
         scanned = []
         for part in parts:
@@ -687,61 +728,85 @@ class CaseOrganizer:
                 self.console.print(f"  [yellow]⚠[/yellow]  {part.name}: no timesteps — skipped")
                 continue
             scanned.append((part, header, blocks))
-
         if not scanned:
-            return
-
-        headers = {header for _, header, _ in scanned}
-        if len(headers) > 1:
-            self.console.print(
-                f"  [red]✗[/red]  {file_type} parts have different headers "
-                f"(different probe/surface sets) — not compiled"
-            )
-            return
-
+            return None
         scanned.sort(key=lambda s: (s[2][0][0], s[0].stat().st_mtime))
 
-        merged: List[Tuple[int, Path, int, int]] = []  # (tsId, part, start, end), tsId increasing
+        if base is not None:
+            header, blocks = self._scan_blocks(base)
+            if blocks:
+                scanned.insert(0, (base, header, blocks))
+
+        if len({header for _, header, _ in scanned}) > 1:
+            self.console.print(
+                f"  [red]✗[/red]  {file_type} files have different headers "
+                f"(different probe/surface sets) — not compiled"
+            )
+            return None
+
+        merged: List[Tuple[int, Path, int, int]] = []  # (tsId, file, start, end), tsId increasing
         superseded = 0
-        for part, _, blocks in scanned:
+        for path, _, blocks in scanned:
             for ts_id, start, end in blocks:
                 while merged and merged[-1][0] >= ts_id:
-                    merged.pop()
-                    superseded += 1
-                merged.append((ts_id, part, start, end))
+                    if merged.pop()[1] != base:
+                        superseded += 1
+                merged.append((ts_id, path, start, end))
 
-        first, last = merged[0][0], merged[-1][0]
-        rel_out = out_path.relative_to(self.case_dir)
+        return {
+            'header': scanned[0][1],
+            'merged': merged,
+            'parts': [path for path, _, _ in scanned if path != base],
+            'from_base': sum(1 for _, path, _, _ in merged if path == base),
+            'superseded': superseded,
+        }
+
+    def _report_plan(self, plan: dict, out_path: Path, file_type: str):
+        merged = plan['merged']
+        notes = [f"tsId {_fmt_tsid(merged[0][0])} – {_fmt_tsid(merged[-1][0])}",
+                 f"{len(merged):,} steps"]
+        if plan['from_base']:
+            notes.append(f"{plan['from_base']:,} kept from the previous compiled file")
+        if plan['superseded']:
+            notes.append(f"{plan['superseded']:,} replaced by restarts")
         self.console.print(
-            f"  {file_type}: {len(scanned)} part(s) → {rel_out}  "
-            f"[dim]tsId {_fmt_tsid(first)} – {_fmt_tsid(last)}, {len(merged):,} steps"
-            f"{f', {superseded:,} replaced by restarts' if superseded else ''}[/dim]"
+            f"  {file_type}: {len(plan['parts'])} part(s) → "
+            f"{out_path.relative_to(self.case_dir)}  [dim]{', '.join(notes)}[/dim]"
         )
         self._warn_compile_gaps([ts for ts, _, _, _ in merged], file_type)
 
-        if getattr(self.args, 'dry_run', False):
-            self.console.print("  [dim](dry run — not written)[/dim]")
-            return
-
-        out_path.parent.mkdir(exist_ok=True)
-        tmp_path = out_path.with_name(out_path.name + '.__tmp__')
+    @staticmethod
+    def _plan_chunks(plan: dict):
+        """The compiled file's bytes, header first, one block at a time."""
+        yield plan['header']
         handles = {}
         try:
-            with open(tmp_path, 'wb') as out:
-                out.write(scanned[0][1])
-                for _, part, start, end in merged:
-                    src = handles.get(part)
-                    if src is None:
-                        src = handles[part] = open(part, 'rb')
-                    src.seek(start)
-                    out.write(src.read(end - start))
+            for _, path, start, end in plan['merged']:
+                src = handles.get(path)
+                if src is None:
+                    src = handles[path] = open(path, 'rb')
+                src.seek(start)
+                yield src.read(end - start)
         finally:
             for src in handles.values():
                 src.close()
+
+    def _write_compiled(self, plan: dict, out_path: Path):
+        """Write through a temporary file, so an interrupted run leaves the old file intact."""
+        out_path.parent.mkdir(exist_ok=True)
+        tmp_path = out_path.with_name(out_path.name + '.__tmp__')
+        with open(tmp_path, 'wb') as out:
+            for chunk in self._plan_chunks(plan):
+                out.write(chunk)
         os.replace(tmp_path, out_path)
-        self.stats['compiled'].append(
-            f"{rel_out} ({len(merged):,} steps, {self._format_size(out_path.stat().st_size)})"
-        )
+
+    def _compiled_is_current(self, plan: dict, out_path: Path) -> bool:
+        """Whether compiling again would write exactly the bytes already in out_path."""
+        with open(out_path, 'rb') as f:
+            for chunk in self._plan_chunks(plan):
+                if f.read(len(chunk)) != chunk:
+                    return False
+            return f.read(1) == b''
 
     def _warn_compile_gaps(self, ts_ids: List[int], file_type: str):
         """Warn where the compiled tsIds jump by more than the usual output interval."""
@@ -755,6 +820,167 @@ class CaseOrganizer:
                     f"  [yellow]⚠[/yellow]  {file_type} gap: "
                     f"tsId {_fmt_tsid(a + interval)} – {_fmt_tsid(b - interval)} not covered"
                 )
+
+    def _prune_archive(self):
+        """
+        archive --prune: delete the parts behind a compiled file. Only when
+        compiling again would reproduce the compiled file byte for byte — so
+        every timestep the parts hold is already in it. Asks before deleting
+        unless --no-confirm; --dry-run only lists. RCV files are not touched.
+        """
+        if not self.case.problem_name:
+            self.console.print("  [yellow]⚠[/yellow]  'problem' not set — cannot find the compiled files")
+            return
+
+        to_delete: List[Path] = []
+        for ext, src_dir, out_path, parts in self._archive_types():
+            label = ext.upper()
+            if not parts:
+                self.console.print(f"  [dim]{label}: no parts in {ext}_files/ — nothing to prune[/dim]")
+                continue
+            if not out_path.exists():
+                self.console.print(
+                    f"  [yellow]⚠[/yellow]  {label}: no {out_path.relative_to(self.case_dir)} — "
+                    f"run with --compile first"
+                )
+                continue
+            plan = self._plan_compile(parts, out_path, label)
+            if plan is None or not self._compiled_is_current(plan, out_path):
+                self.console.print(
+                    f"  [yellow]⚠[/yellow]  {label}: {out_path.relative_to(self.case_dir)} is "
+                    f"out of date with the parts — run with --compile first; nothing pruned"
+                )
+                continue
+            size = sum(p.stat().st_size for p in parts)
+            self.console.print(
+                f"  {label}: compiled file is current — {len(parts)} part(s), "
+                f"{self._format_size(size)} can go"
+            )
+            for part in parts:
+                self.console.print(f"    {ext}_files/{part.name}")
+            to_delete.extend(parts)
+
+        if not to_delete:
+            return
+        if getattr(self.args, 'dry_run', False):
+            self.console.print(f"  [bold cyan]Dry run:[/bold cyan] {len(to_delete)} part(s) would be deleted")
+            return
+        if not self.args.no_confirm:
+            self.console.print(f"[bold yellow]Delete {len(to_delete)} part(s)?[/bold yellow] \\[y/N]: ", end="")
+            if self._read_answer() not in ('y', 'yes'):
+                self.console.print("[dim]  Prune skipped[/dim]")
+                return
+
+        for part in to_delete:
+            self.stats['pruned'] += 1
+            self.stats['pruned_space_freed'] += part.stat().st_size
+        self.files_to_delete = to_delete
+        self.files_to_rename = []
+        self._perform_deletions()
+
+    def _verify_archive(self) -> bool:
+        """
+        archive --verify: read every archived part and compiled file through
+        to the end. In an OTHD/OISD file every timestep block has the same
+        shape — the same keyword lines with the same value counts — so a block
+        that differs (typically the last one, from a job killed mid-write), a
+        value that is not a number, or a missing final newline is a problem.
+        Restarts inside a file (tsId going back) are reported but are fine.
+
+        Returns False if any file has a problem.
+        """
+        table = Table(title="Archive check", box=box.ROUNDED)
+        table.add_column("File", style="cyan")
+        table.add_column("Steps", justify="right")
+        table.add_column("tsId range", justify="right")
+        table.add_column("Status")
+
+        all_ok = True
+        any_file = False
+        for ext, src_dir, out_path, parts in self._archive_types():
+            files = parts + ([out_path] if out_path.exists() else [])
+            for path in files:
+                any_file = True
+                n_blocks, ts_range, problems, restarts = self._check_file(path)
+                if problems:
+                    all_ok = False
+                    status = "[red]" + "; ".join(problems) + "[/red]"
+                else:
+                    status = "[green]ok[/green]"
+                if restarts:
+                    status += f" [dim]({restarts} restart(s) inside)[/dim]"
+                table.add_row(str(path.relative_to(self.case_dir)), f"{n_blocks:,}",
+                              f"{_fmt_tsid(ts_range[0])} – {_fmt_tsid(ts_range[1])}" if ts_range else "—",
+                              status)
+
+        if not any_file:
+            self.console.print("  [dim]No OTHD/OISD files in the archive[/dim]")
+            return True
+
+        self.console.print(table)
+        self.stats['verify_ok'] = all_ok
+        return all_ok
+
+    @staticmethod
+    def _check_file(path: Path):
+        """(blocks, (first, last) tsId, problems, restarts) for one OTHD/OISD file."""
+        shapes = []      # (tsId, shape) per block
+        shape = None
+        bad_values = []  # tsIds with a non-numeric value
+        ts_id = None
+        last_line = b''
+        with open(path, 'rb') as f:
+            for line in f:
+                last_line = line
+                tokens = line.split()
+                if tokens and tokens[0] == b'tsId':
+                    if shape is not None:
+                        shapes.append((ts_id, tuple(shape)))
+                    try:
+                        ts_id = int(tokens[1])
+                    except (IndexError, ValueError):
+                        ts_id = None
+                    shape = []
+                    continue
+                if shape is None:
+                    continue  # header
+                if tokens and tokens[0][:1].isalpha():
+                    shape.append((tokens[0], len(tokens)))
+                    numbers = tokens[1:]
+                else:
+                    shape.append(len(tokens))
+                    numbers = tokens
+                try:
+                    for value in numbers:
+                        float(value)
+                except ValueError:
+                    if not bad_values or bad_values[-1] != ts_id:
+                        bad_values.append(ts_id)
+        if shape is not None:
+            shapes.append((ts_id, tuple(shape)))
+
+        problems = []
+        if not shapes:
+            return 0, None, ["no timesteps"], 0
+        if not last_line.endswith(b'\n'):
+            problems.append("no newline at end (cut off mid-line)")
+        if any(t is None for t, _ in shapes):
+            problems.append("unreadable tsId line")
+
+        usual = max(set(s for _, s in shapes), key=[s for _, s in shapes].count)
+        odd = [t for t, s in shapes if s != usual]
+        if odd == [shapes[-1][0]] and len(shapes) > 1:
+            problems.append(f"incomplete last step (tsId {odd[0]})")
+        elif odd:
+            listed = ", ".join(str(t) for t in odd[:5]) + (", …" if len(odd) > 5 else "")
+            problems.append(f"{len(odd)} step(s) with an unusual layout (tsId {listed})")
+        if bad_values:
+            listed = ", ".join(str(t) for t in bad_values[:5]) + (", …" if len(bad_values) > 5 else "")
+            problems.append(f"non-numeric values (tsId {listed})")
+
+        ts_ids = [t for t, _ in shapes if t is not None]
+        restarts = sum(1 for a, b in zip(ts_ids, ts_ids[1:]) if b <= a)
+        return len(shapes), (min(ts_ids), max(ts_ids)) if ts_ids else None, problems, restarts
 
     def _check_cross_type_consistency(self, othd_files: List[FileInfo], oisd_files: List[FileInfo]):
         """Warn if OTHD and OISD coverage diverges after deduplication."""
@@ -1224,7 +1450,7 @@ class CaseOrganizer:
         # Open log file if requested
         log_handle = None
         if self.log_file:
-            log_handle = open(self.log_file, 'w')
+            log_handle = open(self.log_file, 'a')
             log_handle.write(f"FlexFlow Case Organise Log\n")
             log_handle.write(f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
             log_handle.write(f"Case: {self.case_dir}\n\n")
@@ -1278,25 +1504,31 @@ class CaseOrganizer:
             log_handle.close()
             self.console.print(f"\n[dim]Log saved to: {self.log_file}[/dim]")
 
-    def _show_final_summary(self, subcommand: str, do_update: bool = False,
-                            do_clean: bool = False, do_compile: bool = False):
-        """Show final summary after cleanup."""
+    def _show_final_summary(self, subcommand: str, steps=()):
+        """Show final summary after cleanup. `steps` are the archive flags that ran."""
         self.console.print()
 
         lines = []
         if subcommand == 'archive':
-            if do_update:
+            if 'update' in steps:
                 total_archived = (self.stats['archived_othd'] + self.stats['archived_oisd'] +
                                   self.stats['archived_rcv'])
                 lines.append(f"Archived: {self.stats['archived_othd']} OTHD, "
                              f"{self.stats['archived_oisd']} OISD, "
                              f"{self.stats['archived_rcv']} RCV  (total {total_archived} files)")
-            if do_clean:
-                lines.append(f"Deduplicated: {self.stats['othd_redundant']} OTHD, "
-                             f"{self.stats['oisd_redundant']} OISD removed  "
-                             f"({self._format_size(self.stats['othd_space_freed'] + self.stats['oisd_space_freed'])} freed)")
-            if do_compile:
-                lines.append("Compiled: " + ("; ".join(self.stats['compiled']) or "nothing written"))
+            if 'verify' in steps:
+                lines.append("Verified: all files ok" if self.stats['verify_ok']
+                             else "Verified: [red]problems found[/red]")
+            if self.stats['verify_ok']:  # a failed --verify stops the later steps
+                if 'clean' in steps:
+                    lines.append(f"Deduplicated: {self.stats['othd_redundant']} OTHD, "
+                                 f"{self.stats['oisd_redundant']} OISD removed  "
+                                 f"({self._format_size(self.stats['othd_space_freed'] + self.stats['oisd_space_freed'])} freed)")
+                if 'compile' in steps:
+                    lines.append("Compiled: " + ("; ".join(self.stats['compiled']) or "nothing written"))
+                if 'prune' in steps:
+                    lines.append(f"Pruned: {self.stats['pruned']} part(s) removed  "
+                                 f"({self._format_size(self.stats['pruned_space_freed'])} freed)")
         if subcommand == 'output':
             total_out = self.stats['out_deleted'] + self.stats['rst_deleted'] + self.stats['plt_deleted']
             lines.append(f"Output cleaned: {total_out} files removed  "
