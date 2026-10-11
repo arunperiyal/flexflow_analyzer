@@ -100,6 +100,7 @@ class CaseOrganizer:
             'verify_ok': True,
             'pruned': 0,
             'pruned_space_freed': 0,
+            'pruned_moved': [],  # compiled files that became {problem}1.{ext}
         }
 
         # Files to delete/rename
@@ -664,11 +665,10 @@ class CaseOrganizer:
             return
 
         for ext, src_dir, out_path, parts in self._archive_types():
-            base = out_path if out_path.exists() else None
             if not parts:
                 self.console.print(f"  [dim]No {ext.upper()} files in {ext}_files/ — skipped[/dim]")
                 continue
-            plan = self._plan_compile(parts, base, ext.upper())
+            plan = self._plan_compile(parts, ext.upper())
             if plan is None:
                 continue
             self._report_plan(plan, out_path, ext.upper())
@@ -707,19 +707,18 @@ class CaseOrganizer:
             blocks.append((current[0], current[1], offset))
         return header, blocks
 
-    def _plan_compile(self, parts: List[Path], base: Optional[Path], file_type: str) -> Optional[dict]:
+    def _plan_compile(self, parts: List[Path], file_type: str) -> Optional[dict]:
         """
-        Work out which block of which file goes where in the compiled file.
+        Work out which block of which part goes where in the compiled file.
 
-        An existing compiled file is the base and comes first, so the history
-        survives once --prune has deleted the parts behind it. The parts follow
-        in order of their first tsId. A tsId at or below one already taken is
-        a restart: everything from that tsId onwards is dropped and the
-        restarted run's data is used instead — the same "later run wins" rule
-        the readers apply. This also covers a restart appended inside a single
-        file. With every part still present, the parts override the base
-        completely. All files must share the same header (`mask`/`nOths` or
-        `nOsfs`); otherwise there is no plan.
+        Only the parts are read: after a --prune the compiled file has become
+        {problem}1.{ext}, an ordinary part, so the parts always hold the whole
+        history. Parts are taken in order of their first tsId. A tsId at or
+        below one already taken is a restart: everything from that tsId
+        onwards is dropped and the restarted run's data is used instead — the
+        same "later run wins" rule the readers apply. This also covers a
+        restart appended inside a single file. All parts must share the same
+        header (`mask`/`nOths` or `nOsfs`); otherwise there is no plan.
         """
         scanned = []
         for part in parts:
@@ -731,11 +730,6 @@ class CaseOrganizer:
         if not scanned:
             return None
         scanned.sort(key=lambda s: (s[2][0][0], s[0].stat().st_mtime))
-
-        if base is not None:
-            header, blocks = self._scan_blocks(base)
-            if blocks:
-                scanned.insert(0, (base, header, blocks))
 
         if len({header for _, header, _ in scanned}) > 1:
             self.console.print(
@@ -749,15 +743,14 @@ class CaseOrganizer:
         for path, _, blocks in scanned:
             for ts_id, start, end in blocks:
                 while merged and merged[-1][0] >= ts_id:
-                    if merged.pop()[1] != base:
-                        superseded += 1
+                    merged.pop()
+                    superseded += 1
                 merged.append((ts_id, path, start, end))
 
         return {
             'header': scanned[0][1],
             'merged': merged,
-            'parts': [path for path, _, _ in scanned if path != base],
-            'from_base': sum(1 for _, path, _, _ in merged if path == base),
+            'parts': [path for path, _, _ in scanned],
             'superseded': superseded,
         }
 
@@ -765,8 +758,6 @@ class CaseOrganizer:
         merged = plan['merged']
         notes = [f"tsId {_fmt_tsid(merged[0][0])} – {_fmt_tsid(merged[-1][0])}",
                  f"{len(merged):,} steps"]
-        if plan['from_base']:
-            notes.append(f"{plan['from_base']:,} kept from the previous compiled file")
         if plan['superseded']:
             notes.append(f"{plan['superseded']:,} replaced by restarts")
         self.console.print(
@@ -823,20 +814,43 @@ class CaseOrganizer:
 
     def _prune_archive(self):
         """
-        archive --prune: delete the parts behind a compiled file. Only when
-        compiling again would reproduce the compiled file byte for byte — so
-        every timestep the parts hold is already in it. Asks before deleting
-        unless --no-confirm; --dry-run only lists. RCV files are not touched.
+        archive --prune: replace the parts with the compiled file. The parts
+        are deleted and compiled/{problem}.{ext} becomes {problem}1.{ext}, so
+        the archive is an ordinary one-part archive that every reader of
+        {ext}_files/*.{ext} understands, and the next --update numbers from 2.
+
+        Only when compiling again would reproduce the compiled file byte for
+        byte — so every timestep the parts hold is already in it. The compiled
+        file is first moved into {ext}_files/ under a temporary name, then the
+        parts are deleted, then it takes the name {problem}1.{ext}: the full
+        data is on disk at every step. A compiled file with no parts left
+        (a prune from before this worked this way) is just moved into place.
+        Asks before deleting unless --no-confirm; --dry-run only lists. RCV
+        files are not touched.
         """
-        if not self.case.problem_name:
+        problem = self.case.problem_name
+        if not problem:
             self.console.print("  [yellow]⚠[/yellow]  'problem' not set — cannot find the compiled files")
             return
 
-        to_delete: List[Path] = []
+        dry_run = getattr(self.args, 'dry_run', False)
+        to_prune = []  # (ext, src_dir, compiled, parts)
         for ext, src_dir, out_path, parts in self._archive_types():
             label = ext.upper()
+            final = src_dir / f'{problem}1.{ext}'
             if not parts:
-                self.console.print(f"  [dim]{label}: no parts in {ext}_files/ — nothing to prune[/dim]")
+                if out_path.exists():
+                    self.console.print(
+                        f"  {label}: no parts left — {out_path.relative_to(self.case_dir)} "
+                        f"→ {ext}_files/{final.name}"
+                        + (" [dim](dry run)[/dim]" if dry_run else "")
+                    )
+                    if not dry_run:
+                        os.replace(out_path, final)
+                        self._remove_empty(out_path.parent)
+                        self.stats['pruned_moved'].append(f"{ext}_files/{final.name}")
+                else:
+                    self.console.print(f"  [dim]{label}: no parts in {ext}_files/ — nothing to prune[/dim]")
                 continue
             if not out_path.exists():
                 self.console.print(
@@ -844,7 +858,7 @@ class CaseOrganizer:
                     f"run with --compile first"
                 )
                 continue
-            plan = self._plan_compile(parts, out_path, label)
+            plan = self._plan_compile(parts, label)
             if plan is None or not self._compiled_is_current(plan, out_path):
                 self.console.print(
                     f"  [yellow]⚠[/yellow]  {label}: {out_path.relative_to(self.case_dir)} is "
@@ -854,29 +868,62 @@ class CaseOrganizer:
             size = sum(p.stat().st_size for p in parts)
             self.console.print(
                 f"  {label}: compiled file is current — {len(parts)} part(s), "
-                f"{self._format_size(size)} can go"
+                f"{self._format_size(size)} can go; "
+                f"{out_path.relative_to(self.case_dir)} becomes {ext}_files/{final.name}"
             )
             for part in parts:
                 self.console.print(f"    {ext}_files/{part.name}")
-            to_delete.extend(parts)
+            to_prune.append((ext, src_dir, out_path, parts))
 
-        if not to_delete:
+        if not to_prune:
             return
-        if getattr(self.args, 'dry_run', False):
-            self.console.print(f"  [bold cyan]Dry run:[/bold cyan] {len(to_delete)} part(s) would be deleted")
+        n_parts = sum(len(parts) for *_, parts in to_prune)
+        if dry_run:
+            self.console.print(f"  [bold cyan]Dry run:[/bold cyan] {n_parts} part(s) would be deleted")
             return
         if not self.args.no_confirm:
-            self.console.print(f"[bold yellow]Delete {len(to_delete)} part(s)?[/bold yellow] \\[y/N]: ", end="")
+            self.console.print(
+                f"[bold yellow]Delete {n_parts} part(s) and keep the compiled file(s) "
+                f"in their place?[/bold yellow] \\[y/N]: ", end=""
+            )
             if self._read_answer() not in ('y', 'yes'):
                 self.console.print("[dim]  Prune skipped[/dim]")
                 return
 
-        for part in to_delete:
+        # 1. compiled file into {ext}_files/ under a name no glob matches
+        staged = []
+        for ext, src_dir, out_path, parts in to_prune:
+            tmp = src_dir / f'{problem}.{ext}.__prune__'
+            os.replace(out_path, tmp)
+            self._remove_empty(out_path.parent)
+            staged.append((ext, src_dir, tmp, src_dir / f'{problem}1.{ext}'))
+
+        # 2. the parts
+        self.files_to_delete = [p for *_, parts in to_prune for p in parts]
+        self.files_to_rename = []
+        for part in self.files_to_delete:
             self.stats['pruned'] += 1
             self.stats['pruned_space_freed'] += part.stat().st_size
-        self.files_to_delete = to_delete
-        self.files_to_rename = []
         self._perform_deletions()
+
+        # 3. the compiled file takes the first part's name
+        for ext, src_dir, tmp, final in staged:
+            if final.exists():
+                self.console.print(
+                    f"  [red]✗[/red]  {ext}_files/{final.name} still exists (could not be "
+                    f"deleted) — the compiled data is kept as {ext}_files/{tmp.name}"
+                )
+                continue
+            os.replace(tmp, final)
+            self.stats['pruned_moved'].append(f"{ext}_files/{final.name}")
+
+    @staticmethod
+    def _remove_empty(directory: Path):
+        """Remove `directory` if nothing is left in it."""
+        try:
+            directory.rmdir()
+        except OSError:
+            pass
 
     def _verify_archive(self) -> bool:
         """
@@ -1529,6 +1576,8 @@ class CaseOrganizer:
                 if 'prune' in steps:
                     lines.append(f"Pruned: {self.stats['pruned']} part(s) removed  "
                                  f"({self._format_size(self.stats['pruned_space_freed'])} freed)")
+                    if self.stats['pruned_moved']:
+                        lines.append("Compiled data now in: " + ", ".join(self.stats['pruned_moved']))
         if subcommand == 'output':
             total_out = self.stats['out_deleted'] + self.stats['rst_deleted'] + self.stats['plt_deleted']
             lines.append(f"Output cleaned: {total_out} files removed  "

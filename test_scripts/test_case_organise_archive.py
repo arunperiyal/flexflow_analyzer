@@ -172,23 +172,57 @@ def test_verify_accepts_good_files_and_restarts(tmp_path):
     assert organizer._check_file(othd_dir / 'riser1.othd') == (6, (1, 4), [], 1)
 
 
+def test_prune_puts_the_compiled_file_in_place_of_the_parts(tmp_path):
+    othd_dir = write_parts(tmp_path, {
+        'riser1.othd': othd(range(1, 8), value=1.0),
+        'riser2.othd': othd(range(5, 11), value=2.0),
+    })
+    make_organizer(tmp_path, compile=True).organize('archive')
+    compiled = (othd_dir / 'compiled' / 'riser.othd').read_bytes()
+
+    make_organizer(tmp_path, prune=True, no_confirm=True).organize('archive')
+    assert sorted(p.name for p in othd_dir.iterdir()) == ['riser1.othd']
+    assert (othd_dir / 'riser1.othd').read_bytes() == compiled
+
+
 def test_prune_then_update_keeps_the_history(tmp_path):
     othd_dir = write_parts(tmp_path, {
         'riser1.othd': othd(range(1, 8), value=1.0),
         'riser2.othd': othd(range(5, 11), value=2.0),
     })
     make_organizer(tmp_path, compile=True, prune=True, no_confirm=True).organize('archive')
-    assert list(othd_dir.glob('*.othd')) == []
 
     run_dir = tmp_path / 'RUN_1'
     run_dir.mkdir()
     (run_dir / 'riser.othd').write_text(othd(range(9, 13), value=3.0))   # restart from 8
     make_organizer(tmp_path, update=True, compile=True).organize('archive')
+    assert sorted(p.name for p in othd_dir.glob('*.othd')) == ['riser1.othd', 'riser2.othd']
 
     reader = OTHDReader(str(othd_dir / 'compiled' / 'riser.othd'))
     assert reader.tsIds == list(range(1, 13))
     sources = [reader.displacements[(0, i, 0)][0] for i in range(12)]
     assert sources == [1.0] * 4 + [2.0] * 4 + [3.0] * 4
+
+
+def test_prune_finishes_a_compiled_file_left_without_parts(tmp_path):
+    # The state the first --prune left behind: compiled/ and nothing else.
+    othd_dir = tmp_path / 'othd_files'
+    (othd_dir / 'compiled').mkdir(parents=True)
+    (othd_dir / 'compiled' / 'riser.othd').write_text(othd([1, 2, 3]))
+    make_organizer(tmp_path, prune=True, dry_run=True).organize('archive')
+    assert (othd_dir / 'compiled' / 'riser.othd').exists()
+
+    make_organizer(tmp_path, prune=True).organize('archive')   # moves without asking
+    assert sorted(p.name for p in othd_dir.iterdir()) == ['riser1.othd']
+    assert OTHDReader(str(othd_dir / 'riser1.othd')).tsIds == [1, 2, 3]
+
+
+def test_prune_dry_run_changes_nothing(tmp_path):
+    othd_dir = write_parts(tmp_path, {'riser1.othd': othd([1, 2]), 'riser2.othd': othd([3, 4])})
+    make_organizer(tmp_path, compile=True).organize('archive')
+    before = sorted(str(p.relative_to(othd_dir)) for p in othd_dir.rglob('*'))
+    make_organizer(tmp_path, prune=True, dry_run=True).organize('archive')
+    assert sorted(str(p.relative_to(othd_dir)) for p in othd_dir.rglob('*')) == before
 
 
 def test_prune_refuses_an_out_of_date_compiled_file(tmp_path):

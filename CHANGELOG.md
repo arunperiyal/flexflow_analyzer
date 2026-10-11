@@ -31,15 +31,18 @@
 - New `--compile` writes `othd_files/compiled/{problem}.othd` and
   `oisd_files/compiled/{problem}.oisd` from the archived parts, keeping the
   parts. Restarts are resolved in favour of the later run, gaps are
-  reported, and parts with different headers are refused. An existing
-  compiled file is the base the parts are layered onto.
+  reported, and parts with different headers are refused.
 - New `--verify` reads every archived part and compiled file to the end
   and reports cut-off last steps (killed jobs), steps with an odd layout,
   non-numeric values and a missing final newline. A failure stops the later
   steps.
-- New `--prune` deletes the parts once the compiled file holds all their
-  data (compiling again would write the same bytes), after asking. Later
-  `--update`s are layered onto the compiled file, so no history is lost.
+- New `--prune` replaces the parts with the compiled file once it holds all
+  their data (compiling again would write the same bytes), after asking: the
+  parts are deleted and the compiled file becomes `{problem}1.othd` /
+  `{problem}1.oisd`, so every command keeps reading the archive as before and
+  the next `--update` numbers from 2. A compiled file left with no parts (by
+  the first version of `--prune`, which only deleted the parts) is moved into
+  place the same way.
 - The `[y/N]` in organise's confirmation prompts was swallowed as Rich
   markup; it now shows.
 
