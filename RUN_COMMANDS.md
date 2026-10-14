@@ -491,7 +491,7 @@ Run `case organise` to prepare the case directory:
 
 ### 2. Archive Completed Results
 
-When using `run main restart <tsId>`, the system automatically runs `run post full --upto <tsId> --cleanup`:
+When using `run main restart <tsId>`, the system automatically runs `run post full --t2 <tsId> --cleanup`:
 
 **What happens:**
 ```bash
@@ -548,7 +548,7 @@ run main restart 5000
     ↓
 [1] case organise (immediate)
     ↓
-[2] run post full --upto 5000 --cleanup (cleanup first, then submit)
+[2] run post full --t2 5000 --cleanup (cleanup first, then submit)
     ↓
     ├─ Identify files with tsId < 5000 that have binary PLT (immediate)
     ├─ Delete .out, .rst, .plt files for those tsId (immediate)
@@ -589,7 +589,7 @@ case organise
 
 # 2. Run postprocessing up to restart point
 # This submits jobs - returns immediately
-run post full --upto 5000
+run post full --t2 5000
 
 # 3. Monitor jobs until completion
 squeue -u $USER
@@ -610,7 +610,7 @@ run main
 case organise
 
 # 2. Generate PLT files only (no cleanup)
-run post full --upto 5000 --no-cleanup
+run post full --t2 5000 --no-cleanup
 
 # 3. Monitor postprocessing jobs
 watch -n 30 'squeue -u $USER'  # Check every 30 seconds
@@ -744,7 +744,8 @@ Large case (200K nodes, 10000 steps):
 
 ### Postprocessing Options (`run post`)
 
-- `--upto <tsId>` - Process output files up to specific time step
+- `--t2 <tsId>` - Process output files up to specific time step (`--t1 <tsId>`: from it)
+- `--remote <name>` - Send each binary PLT to that remote as soon as it is written (ssh key login; also `use remote:<name>`)
 - `--last <N>` - Process last N time steps
 - `--freq <N>` - Output frequency for PLT files (every N steps)
 - `--cleanup` - Submit cleanup job with dependency (runs after postFlex.sh completes)
@@ -767,7 +768,7 @@ run pre Case001 --edit
 run post full Case001 --verbose
 
 # Postprocessing with specific options
-run post full Case001 --upto 5000 --freq 100
+run post full Case001 --t2 5000 --freq 100
 run post full Case001 --last 2500 --no-cleanup
 
 # Restart from specific time step
@@ -1220,7 +1221,7 @@ SLURM State: TIMEOUT
 # Or process in smaller chunks
 run post full --last 5000  # Process last 5000 steps only
 # Wait for completion
-run post full --last 5000 --start 5001  # Process next batch
+run post full --t1 5050  # Process the next batch
 ```
 
 **Check job efficiency to estimate needed time:**
@@ -1324,7 +1325,7 @@ The `run` command integrates seamlessly with other FlexFlow Manager commands:
 | `run main --dependency <job_id>` | Submit with SLURM dependency              | `run main --dependency 123456` |
 | `run post full [case]`                | Submit postprocessing (no auto cleanup)   | `run post full Case001`             |
 | `run post full --cleanup`             | Submit postprocessing with cleanup job    | `run post full --cleanup`           |
-| `run post full --upto <tsId>`         | Process up to specific time step          | `run post full --upto 5000`         |
+| `run post full --t2 <tsId>`         | Process up to specific time step          | `run post full --t2 5000`         |
 | `run post full --last <N>`            | Process last N time steps                 | `run post full --last 2500`         |
 | `run post --cleanup-only`        | Only run cleanup (PLT files must exist)   | `run post --cleanup-only`      |
 | `run --help`                     | Show help message                         | `run --help`                   |

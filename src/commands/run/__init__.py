@@ -5,7 +5,7 @@ Commands: check, pre, main, post, sq, sb, sc
 
 from ..base import BaseCommand
 from shellkit.completion import paths
-from src.cli.context import case_arg, freq_arg
+from src.cli.context import case_arg, context_flag, freq_arg, time_window
 
 
 def _complete_sq_mode(rt, prefix):
@@ -109,8 +109,14 @@ class RunCommand(BaseCommand):
         case_arg(post_parser, help="'full' or 'convert'").completer = _complete_post_mode
         post_parser.add_argument('words', nargs='*', metavar='CASE',
                                  help='Case directory after the mode word').completer = paths(dirs_only=True)
-        post_parser.add_argument('--start', type=int, metavar='TSID', help='Process from this timestep (default: 0)')
-        post_parser.add_argument('--upto', type=int, metavar='TSID', help='Process up to this timestep')
+        time_window(post_parser,
+                    t1_kwargs=dict(metavar='TSID', help='Process from this timestep (default: 0)'),
+                    t2_kwargs=dict(metavar='TSID', help='Process up to this timestep'))
+        context_flag(post_parser, 'remote', '--remote', type=str, metavar='REMOTE',
+                     help='Send each binary PLT to this remote as soon as it is written '
+                          '(or use context with "use remote:name")')
+        post_parser.add_argument('--no-remote', action='store_true',
+                                 help='Do not send, even with a remote context set')
         freq_arg(post_parser, metavar='N', help='Override output frequency')
         post_parser.add_argument('--dependency', type=str, metavar='JOB_ID', help='Job dependency')
         post_parser.add_argument('--partition', type=str, metavar='NAME', help='Apply partition header to script')

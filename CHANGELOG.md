@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+### 📤 `run post --remote`: binary PLT files go to a remote as they are written
+
+- `run post full|convert --remote NAME` (or `use remote:NAME`) makes the
+  post job send each binary PLT to the remote as soon as simPlt2Bin has
+  finished writing it, then send whatever is left when simPlt2Bin ends — no
+  more `case upload --binary` after every post job. Files land where
+  `case upload --binary` would put them: `<remote path>/<case>/binary/`.
+- Only ssh key authentication is used; `run post` checks the login with
+  `ssh -o BatchMode=yes` before submitting and refuses if it would prompt.
+  rsync is used when both ends have it, otherwise scp to a temporary name and
+  a rename, so the remote never holds a half-written file under its name.
+- Only files the job writes, for steps in `--t1`/`--t2`, are sent. A failed
+  transfer does not fail the job: it is listed in the job output and
+  `post_sent_<jobid>.log`, with the `case upload` command to send it later.
+- `--no-remote` skips sending when a remote context is set.
+- Needs the new `postFlex.sh`: `template script post <case> --force`.
+  `run post --remote` refuses an older script rather than silently sending
+  nothing.
+- `run post --start`/`--upto` are now `--t1`/`--t2`, and take the `t1`/`t2`
+  (or `time`) context like the other commands.
+- The post job's closing message pointed at the run directory for the binary
+  PLT files; they are in `binary/`.
+
 ### 🧩 `use othid:N` / `use osgid:N` contexts
 
 - Two new contexts for the output group to read: `othid` (the probe set in

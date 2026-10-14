@@ -55,9 +55,9 @@ def test_main_mode_errors(parse, capsys, words, message):
 
 
 def test_post_full_and_convert(parse):
-    args = parse('post', 'full', 'Case001', '--upto', '5000')
+    args = parse('post', 'full', 'Case001', '--t2', '5000')
     assert post_cmd._take_post_mode(args)
-    assert (args.post_mode, args.convert, args.case, args.upto) == ('full', False, 'Case001', 5000)
+    assert (args.post_mode, args.convert, args.case, args.t2) == ('full', False, 'Case001', 5000)
 
     args = parse('post', 'convert')
     assert post_cmd._take_post_mode(args)
