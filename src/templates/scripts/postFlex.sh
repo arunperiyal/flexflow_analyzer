@@ -11,6 +11,8 @@
 # This script runs postprocessing on simulation output:
 #   1. simPlt - Converts .out files to ASCII PLT files
 #   2. simPlt2Bin - Converts ASCII PLT to binary format
+#   3. (with `run post --remote NAME`) sends each binary PLT to a remote
+#      machine as soon as it is written, over ssh with key authentication
 #
 # The script auto-detects PROBLEM, RUN_DIR, and FREQ from simflow.config
 # Command-line arguments can override these defaults
@@ -93,6 +95,16 @@ END_TIME=${END_TIME:-${3:-$MAX_STEPS}}
 # CONVERT_ONLY: skip simPlt and run only simPlt2Bin (env var, default: 0)
 CONVERT_ONLY=${CONVERT_ONLY:-0}
 
+# REMOTE_TARGET (user@host), REMOTE_PORT, REMOTE_DIR: set by
+# `run post --remote NAME`. Empty REMOTE_TARGET = send nothing.
+REMOTE_TARGET=${REMOTE_TARGET:-}
+REMOTE_PORT=${REMOTE_PORT:-22}
+REMOTE_DIR=${REMOTE_DIR:-}
+# A binary PLT counts as finished once it has not changed for this long
+SEND_STABLE_SECS=${SEND_STABLE_SECS:-30}
+# How often binary/ is checked for finished files while simPlt2Bin runs
+SEND_POLL_SECS=${SEND_POLL_SECS:-60}
+
 # -----------------------------------------------------------------------------
 # Display job configuration
 # -----------------------------------------------------------------------------
@@ -109,6 +121,9 @@ echo "Processes:    $SLURM_NTASKS"
 echo "CPUs/Task:    $SLURM_CPUS_PER_TASK"
 if [ "$CONVERT_ONLY" = "1" ]; then
     echo "Mode:         convert-only (simPlt2Bin only, skipping simPlt)"
+fi
+if [ -n "$REMOTE_TARGET" ]; then
+    echo "Send to:      ${REMOTE_TARGET}:${REMOTE_DIR} (port ${REMOTE_PORT})"
 fi
 echo "=========================================="
 echo ""
@@ -153,13 +168,13 @@ else
 
     if [ $SIMPLT_EXIT -ne 0 ]; then
         # simPlt looks one outFreq step beyond the last processed timestep to check
-        # for more files.  When --upto is used the next step won't exist, causing a
+        # for more files.  When --t2 is used the next step won't exist, causing a
         # non-zero exit even though all requested files were created successfully.
         # Treat this as success if the expected last plt file is present.
         EXPECTED_LAST="${PROBLEM}.${END_TIME}.plt"
         if [ -f "$EXPECTED_LAST" ]; then
             echo "Note: simPlt exited with code $SIMPLT_EXIT but $EXPECTED_LAST exists."
-            echo "      Lookahead beyond END_TIME=$END_TIME is expected when using --upto."
+            echo "      Lookahead beyond END_TIME=$END_TIME is expected when using --t2."
         else
             echo "Error: simPlt failed with exit code $SIMPLT_EXIT"
             exit $SIMPLT_EXIT
@@ -167,6 +182,102 @@ else
     fi
 
     echo "✓ simPlt completed successfully"
+    echo ""
+fi
+
+# -----------------------------------------------------------------------------
+# Sending binary PLT files to a remote (run post --remote)
+# -----------------------------------------------------------------------------
+# A file is sent once it is finished: simPlt2Bin has not touched it for
+# SEND_STABLE_SECS. Only files this job wrote (newer than START_MARK) for steps
+# in [START_TIME, END_TIME] are sent. After simPlt2Bin exits, a final pass sends
+# everything left, and resends any file that changed after it was sent.
+# rsync writes to a temporary name and renames; without rsync, scp does the
+# same by hand -- the remote never holds a half-written file under its name.
+
+BIN_DIR="binary"
+SEND=0
+SEND_LOG="post_sent_${SLURM_JOB_ID:-$$}.log"
+START_MARK=".post_start_${SLURM_JOB_ID:-$$}"
+declare -A SENT SEEN
+UNSENT=()
+SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=20 -p "$REMOTE_PORT")
+
+# ssh, scp and rsync all start in the remote home directory, so a leading ~/
+# becomes a relative path (a quoted ~ would not be expanded)
+remote_path() {
+    case "$1" in
+        "~")    echo "." ;;
+        "~/"*)  echo "${1#\~/}" ;;
+        *)      echo "$1" ;;
+    esac
+}
+
+setup_send() {
+    RDIR=$(remote_path "$REMOTE_DIR")
+    if ! ssh "${SSH_OPTS[@]}" "$REMOTE_TARGET" "mkdir -p '$RDIR'"; then
+        echo "Warning: could not reach ${REMOTE_TARGET} with key authentication."
+        echo "         Binary PLT files will NOT be sent; send them later with:"
+        echo "         case upload --binary --t1 ${START_TIME} --t2 ${END_TIME}"
+        return 1
+    fi
+    if command -v rsync >/dev/null 2>&1 \
+            && ssh "${SSH_OPTS[@]}" "$REMOTE_TARGET" "command -v rsync" >/dev/null 2>&1; then
+        USE_RSYNC=1
+    else
+        USE_RSYNC=0
+    fi
+    echo "Sending binary PLT files to ${REMOTE_TARGET}:${RDIR} ($( [ $USE_RSYNC = 1 ] && echo rsync || echo scp ))"
+    : > "$SEND_LOG"
+    return 0
+}
+
+send_file() {
+    local f="$1" name="${1##*/}"
+    if [ "$USE_RSYNC" = 1 ]; then
+        rsync -a --partial -e "ssh ${SSH_OPTS[*]}" "$f" "${REMOTE_TARGET}:${RDIR}/"
+    else
+        scp -q -P "$REMOTE_PORT" -o BatchMode=yes -o ConnectTimeout=20 \
+            "$f" "${REMOTE_TARGET}:${RDIR}/.${name}.part" \
+        && ssh "${SSH_OPTS[@]}" "$REMOTE_TARGET" "mv -f '${RDIR}/.${name}.part' '${RDIR}/${name}'"
+    fi
+}
+
+# send_ready 0: send files that look finished; send_ready 1: send everything left
+send_ready() {
+    local final="$1" f name step sig now
+    now=$(date +%s)
+    [ "$final" = 1 ] && UNSENT=()
+    for f in "$BIN_DIR"/"$PROBLEM".*.plt; do
+        [ -f "$f" ] || continue
+        name="${f##*/}"
+        step="${name#"$PROBLEM".}"
+        step="${step%.plt}"
+        case "$step" in ''|*[!0-9]*) continue ;; esac
+        [ "$step" -ge "$START_TIME" ] && [ "$step" -le "$END_TIME" ] || continue
+        [ "$f" -nt "$START_MARK" ] || continue
+        sig=$(stat -c '%s %Y' "$f")
+        [ "${SENT[$f]:-}" = "$sig" ] && continue
+        if [ "$final" != 1 ]; then
+            # finished = same size and mtime as last check, and old enough
+            if [ "${SEEN[$f]:-}" != "$sig" ]; then
+                SEEN[$f]="$sig"
+                continue
+            fi
+            [ $(( now - ${sig#* } )) -ge "$SEND_STABLE_SECS" ] || continue
+        fi
+        if send_file "$f"; then
+            SENT[$f]="$sig"
+            echo "$(date '+%F %T') sent ${name}" >> "$SEND_LOG"
+        else
+            echo "$(date '+%F %T') FAILED ${name}" >> "$SEND_LOG"
+            [ "$final" = 1 ] && UNSENT+=("$name")
+        fi
+    done
+}
+
+if [ -n "$REMOTE_TARGET" ]; then
+    setup_send && SEND=1
     echo ""
 fi
 
@@ -184,11 +295,30 @@ fi
 
 echo "Command: $SIMPLT2BIN -n $SLURM_NTASKS -w $RUN_DIR -f $FREQ -p $PROBLEM ${MIN_ARG} -l $END_TIME"
 
-$SIMPLT2BIN -n $SLURM_NTASKS -w $RUN_DIR -f $FREQ -p $PROBLEM ${MIN_ARG} -l $END_TIME
-SIMPLT2BIN_EXIT=$?
+if [ "$SEND" = 1 ]; then
+    # In the background, so finished files can be sent while the rest convert
+    touch "$START_MARK"
+    $SIMPLT2BIN -n $SLURM_NTASKS -w $RUN_DIR -f $FREQ -p $PROBLEM ${MIN_ARG} -l $END_TIME &
+    SIMPLT2BIN_PID=$!
+    while kill -0 "$SIMPLT2BIN_PID" 2>/dev/null; do
+        waited=0
+        while [ "$waited" -lt "$SEND_POLL_SECS" ] && kill -0 "$SIMPLT2BIN_PID" 2>/dev/null; do
+            sleep 1
+            waited=$((waited + 1))
+        done
+        send_ready 0
+    done
+    wait "$SIMPLT2BIN_PID"
+    SIMPLT2BIN_EXIT=$?
+else
+    $SIMPLT2BIN -n $SLURM_NTASKS -w $RUN_DIR -f $FREQ -p $PROBLEM ${MIN_ARG} -l $END_TIME
+    SIMPLT2BIN_EXIT=$?
+fi
 
 if [ $SIMPLT2BIN_EXIT -ne 0 ]; then
     echo "Error: simPlt2Bin failed with exit code $SIMPLT2BIN_EXIT"
+    [ "$SEND" = 1 ] && echo "       Files sent before the failure are listed in $SEND_LOG"
+    rm -f "$START_MARK"
     exit $SIMPLT2BIN_EXIT
 fi
 
@@ -196,12 +326,29 @@ echo "✓ simPlt2Bin completed successfully"
 echo ""
 
 # -----------------------------------------------------------------------------
+# Step 3: Send whatever is left (run post --remote)
+# -----------------------------------------------------------------------------
+
+if [ "$SEND" = 1 ]; then
+    echo "Step 3: Sending the remaining binary PLT files..."
+    send_ready 1
+    n_sent=$(grep -c ' sent ' "$SEND_LOG")
+    echo "✓ Sent ${n_sent} file(s) to ${REMOTE_TARGET}:${RDIR} (log: $SEND_LOG)"
+    if [ ${#UNSENT[@]} -gt 0 ]; then
+        echo "Warning: ${#UNSENT[@]} file(s) could not be sent: ${UNSENT[*]}"
+        echo "         Send them later with: case upload --binary --t1 ${START_TIME} --t2 ${END_TIME}"
+    fi
+    echo ""
+fi
+rm -f "$START_MARK"
+
+# -----------------------------------------------------------------------------
 # Job Complete
 # -----------------------------------------------------------------------------
 
 echo "=========================================="
 echo "Postprocessing completed successfully!"
-echo "Binary PLT files are in: $RUN_DIR"
+echo "Binary PLT files are in: $BIN_DIR"
 echo "=========================================="
 
 exit 0

@@ -210,24 +210,12 @@ def show_dry_run(script_path, case_dir, args, console):
         else:
             table.add_row("Partition Header", f"[bold red]{partition_override}.header not found[/bold red]")
 
-    start_tsid   = getattr(args, 'start',   None)
-    upto_tsid    = getattr(args, 'upto',    None)
-    freq_arg     = getattr(args, 'freq',    None)
-    convert_only = getattr(args, 'convert', False)
-
-    start_tsid = _validate_start(start_tsid, freq_arg, case_dir, console)
-    upto_tsid  = _validate_upto(upto_tsid, freq_arg, case_dir, console)
-    if upto_tsid is None and getattr(args, 'upto', None) is not None:
-        return  # corrected to invalid (below freq); abort
-
-    if start_tsid:
-        table.add_row("Process from TSID", str(start_tsid))
-    if upto_tsid:
-        table.add_row("Process up to TSID", str(upto_tsid))
-    if freq_arg:
-        table.add_row("Frequency override", str(freq_arg))
-    if convert_only:
-        table.add_row("Mode", "convert-only (simPlt2Bin only)")
+    job = _job_exports(args, case_dir, script_path, console, check_remote=False)
+    if job is None:
+        return
+    export_parts, rows = job
+    for row in rows:
+        table.add_row(*row)
 
     # Check for cleanup option
     if hasattr(args, 'cleanup') and args.cleanup:
@@ -267,15 +255,6 @@ def show_dry_run(script_path, case_dir, args, console):
     qos_override = getattr(args, 'qos', None)
     if qos_override:
         cmd_parts.append(f"--qos={qos_override}")
-    export_parts = []
-    if start_tsid is not None:
-        export_parts.append(f'START_TIME={start_tsid}')
-    if upto_tsid is not None:
-        export_parts.append(f'END_TIME={upto_tsid}')
-    if freq_arg is not None:
-        export_parts.append(f'FREQ={freq_arg}')
-    if convert_only:
-        export_parts.append('CONVERT_ONLY=1')
     if export_parts:
         cmd_parts.append(f'--export=ALL,{",".join(export_parts)}')
     cmd_parts.append(script_path.name)
@@ -437,7 +416,7 @@ def perform_cleanup(case_dir, args, console):
 
 
 def _validate_start(start_tsid, freq_arg, case_dir, console):
-    """Validate --start against output frequency and return a corrected value.
+    """Validate --t1 against output frequency and return a corrected value.
 
     Rounds up to the nearest valid multiple so we don't skip available files.
     Returns the (possibly adjusted) start value, or None if start was None.
@@ -463,7 +442,7 @@ def _validate_start(start_tsid, freq_arg, case_dir, console):
     # Round up to nearest valid multiple
     corrected = ((start_tsid + freq - 1) // freq) * freq
     console.print(
-        f"[yellow]Warning:[/yellow] --start {start_tsid} is not a multiple of "
+        f"[yellow]Warning:[/yellow] --t1 {start_tsid} is not a multiple of "
         f"outFreq={freq}. No .out file exists at that step."
     )
     console.print(
@@ -473,7 +452,7 @@ def _validate_start(start_tsid, freq_arg, case_dir, console):
 
 
 def _validate_upto(upto_tsid, freq_arg, case_dir, console):
-    """Validate --upto against output frequency and return a corrected value.
+    """Validate --t2 against output frequency and return a corrected value.
 
     Returns the (possibly adjusted) upto value, or None if upto was None.
     Prints a warning if the value was not a multiple of the frequency.
@@ -501,7 +480,7 @@ def _validate_upto(upto_tsid, freq_arg, case_dir, console):
     # Round down to nearest valid multiple
     corrected = (upto_tsid // freq) * freq
     console.print(
-        f"[yellow]Warning:[/yellow] --upto {upto_tsid} is not a multiple of "
+        f"[yellow]Warning:[/yellow] --t2 {upto_tsid} is not a multiple of "
         f"outFreq={freq}. No .out file exists at that step."
     )
     if corrected > 0:
@@ -510,8 +489,143 @@ def _validate_upto(upto_tsid, freq_arg, case_dir, console):
         )
         return corrected
     else:
-        console.print("[red]Error:[/red] --upto is smaller than the output frequency. Nothing to process.")
+        console.print("[red]Error:[/red] --t2 is smaller than the output frequency. Nothing to process.")
         return None
+
+
+def _whole_step(value, flag, console):
+    """--t1/--t2 as an int timestep; they parse as floats so a `use t1:` context fits."""
+    if value is None:
+        return None
+    if value != int(value) or value < 0:
+        console.print(f"[red]Error:[/red] {flag} must be a whole, non-negative timestep, not {value}")
+        raise ValueError(flag)
+    return int(value)
+
+
+def _job_exports(args, case_dir, script_path, console, check_remote):
+    """
+    The variables postFlex.sh reads (passed with sbatch --export), and the
+    rows describing them for the summary table.
+
+    Returns (exports, rows), or None (after saying why) when the job should
+    not be submitted. With check_remote, a remote is also checked to accept
+    key-based ssh before anything is submitted.
+    """
+    freq_arg = getattr(args, 'freq', None)
+    convert_only = getattr(args, 'convert', False)
+    try:
+        t1 = _whole_step(getattr(args, 't1', None), '--t1', console)
+        t2 = _whole_step(getattr(args, 't2', None), '--t2', console)
+    except ValueError:
+        return None
+
+    t1 = _validate_start(t1, freq_arg, case_dir, console)
+    t2_given = t2 is not None
+    t2 = _validate_upto(t2, freq_arg, case_dir, console)
+    if t2 is None and t2_given:
+        return None  # corrected to invalid (below freq); abort
+
+    exports, rows = [], []
+    if t1 is not None:
+        exports.append(f'START_TIME={t1}')
+        if t1:
+            rows.append(("Process from TSID", str(t1)))
+    if t2 is not None:
+        exports.append(f'END_TIME={t2}')
+        rows.append(("Process up to TSID", str(t2)))
+    if freq_arg is not None:
+        exports.append(f'FREQ={freq_arg}')
+        rows.append(("Frequency override", str(freq_arg)))
+    if convert_only:
+        exports.append('CONVERT_ONLY=1')
+        rows.append(("Mode", "convert-only (simPlt2Bin only)"))
+
+    remote = _remote_exports(args, case_dir, script_path, console, check_remote)
+    if remote is None:
+        return None
+    if remote:
+        remote_exports, remote_row = remote
+        exports.extend(remote_exports)
+        rows.append(remote_row)
+    return exports, rows
+
+
+def _remote_exports(args, case_dir, script_path, console, check):
+    """
+    REMOTE_TARGET/REMOTE_PORT/REMOTE_DIR for `--remote NAME` (or the `remote`
+    context), or [] when nothing is to be sent. None means: do not submit.
+
+    The remote case path is built as `case upload` builds it -- the remote's
+    path, then the case name -- so the files land where `case upload --binary`
+    would put them. No password is passed: the job sends with ssh keys only.
+    """
+    name = None if getattr(args, 'no_remote', False) else getattr(args, 'remote', None)
+    if not name:
+        return []
+
+    from src.utils.remote_config import RemoteConfig
+    from src.commands.case.download_impl.command import CaseUploadCommand
+
+    remote = RemoteConfig().get_remote(name)
+    if remote is None:
+        console.print(f"[red]Error:[/red] remote '{name}' not found (`remote list` shows them)")
+        return None
+
+    try:
+        script_text = script_path.read_text()
+    except OSError:
+        script_text = ''
+    if 'REMOTE_TARGET' not in script_text:
+        console.print(f"[red]Error:[/red] {script_path.name} predates sending to a remote, "
+                      f"so --remote would do nothing.")
+        console.print("[dim]  Regenerate it from the template (this replaces local edits):[/dim]")
+        console.print(f"[dim]  template script post {case_dir} --force[/dim]")
+        return None
+
+    user, host = remote.get('user'), remote.get('ip')
+    port = remote.get('port') or 22
+    upload = CaseUploadCommand()
+    base = upload.get_remote_base_path(remote, None)
+    remote_dir = upload.construct_remote_case_path(base, str(case_dir)) + '/binary'
+    target = f'{user}@{host}'
+
+    # sbatch --export splits on commas; the job quotes paths in single quotes
+    bad = [v for v in (target, remote_dir) if ',' in v or "'" in v or ' ' in v]
+    if bad:
+        console.print(f"[red]Error:[/red] cannot pass {bad[0]!r} to the job "
+                      f"(commas, quotes and spaces are not supported)")
+        return None
+
+    if check and not _ssh_key_login_works(target, port, console):
+        return None
+
+    exports = [f'REMOTE_TARGET={target}', f'REMOTE_PORT={port}', f'REMOTE_DIR={remote_dir}']
+    return exports, ("Send binary PLT to", f"{name}  ({target}:{remote_dir})")
+
+
+def _ssh_key_login_works(target, port, console) -> bool:
+    """
+    Whether `target` accepts ssh without a password. BatchMode makes ssh fail
+    instead of prompting, which is exactly what the job will meet. Checked
+    from here, not the compute node -- a cluster that blocks outbound ssh from
+    compute nodes is reported by the job, which then skips sending.
+    """
+    cmd = ['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10', '-p', str(port), target, 'true']
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        result = None
+        reason = str(e)
+    else:
+        reason = (result.stderr or '').strip().splitlines()[-1:] or ['']
+        reason = reason[0]
+    if result is not None and result.returncode == 0:
+        return True
+    console.print(f"[red]Error:[/red] ssh to {target} (port {port}) without a password failed"
+                  + (f": {reason}" if reason else ""))
+    console.print("[dim]  Set up a key (ssh-copy-id), or drop --remote / use --no-remote.[/dim]")
+    return False
 
 
 def submit_postprocessing_job(script_path, case_dir, args, console):
@@ -548,24 +662,12 @@ def submit_postprocessing_job(script_path, case_dir, args, console):
     table.add_row("Case", case_dir.name)
     table.add_row("Script", script_path.name)
 
-    start_tsid   = getattr(args, 'start',   None)
-    upto_tsid    = getattr(args, 'upto',    None)
-    freq_arg     = getattr(args, 'freq',    None)
-    convert_only = getattr(args, 'convert', False)
-
-    start_tsid = _validate_start(start_tsid, freq_arg, case_dir, console)
-    upto_tsid  = _validate_upto(upto_tsid, freq_arg, case_dir, console)
-    if upto_tsid is None and getattr(args, 'upto', None) is not None:
-        return  # corrected to invalid (below freq); abort
-
-    if start_tsid:
-        table.add_row("Process from TSID", str(start_tsid))
-    if upto_tsid:
-        table.add_row("Process up to TSID", str(upto_tsid))
-    if freq_arg:
-        table.add_row("Frequency override", str(freq_arg))
-    if convert_only:
-        table.add_row("Mode", "convert-only (simPlt2Bin only)")
+    job = _job_exports(args, case_dir, script_path, console, check_remote=True)
+    if job is None:
+        return
+    export_parts, rows = job
+    for row in rows:
+        table.add_row(*row)
 
     if hasattr(args, 'dependency') and args.dependency:
         table.add_row("Dependency", f"Wait for job {args.dependency}")
@@ -605,15 +707,6 @@ def submit_postprocessing_job(script_path, case_dir, args, console):
             cmd.append(f'--qos={qos_override}')
 
         # Pass overrides via --export so postFlex.sh picks them up
-        export_parts = []
-        if start_tsid is not None:
-            export_parts.append(f'START_TIME={start_tsid}')
-        if upto_tsid is not None:
-            export_parts.append(f'END_TIME={upto_tsid}')
-        if freq_arg is not None:
-            export_parts.append(f'FREQ={freq_arg}')
-        if convert_only:
-            export_parts.append('CONVERT_ONLY=1')
         if export_parts:
             cmd.append(f'--export=ALL,{",".join(export_parts)}')
 
@@ -695,8 +788,12 @@ This typically runs simPlt (PLT generation) and simPlt2Bin (binary conversion).
     {Colors.YELLOW}convert{Colors.RESET}              Run simPlt2Bin only (skip simPlt; .plt files must already exist)
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
-    {Colors.YELLOW}--start TSID{Colors.RESET}         Process from this timestep (rounds up to nearest outFreq multiple)
-    {Colors.YELLOW}--upto TSID{Colors.RESET}          Process up to this timestep (rounds down to nearest outFreq multiple)
+    {Colors.YELLOW}--t1 TSID{Colors.RESET}            Process from this timestep (rounds up to nearest outFreq multiple)
+    {Colors.YELLOW}--t2 TSID{Colors.RESET}            Process up to this timestep (rounds down to nearest outFreq multiple)
+                         Both also come from context: use t1:N t2:N (or use time:N)
+    {Colors.YELLOW}--remote NAME{Colors.RESET}        Send each binary PLT to this remote as soon as it is written
+                         (from context: use remote:NAME). Needs ssh key login.
+    {Colors.YELLOW}--no-remote{Colors.RESET}          Do not send, even with a remote context set
     {Colors.YELLOW}--freq N{Colors.RESET}             Override output frequency from simflow.config
     {Colors.YELLOW}--partition NAME{Colors.RESET}     Apply partition header to script
     {Colors.YELLOW}--cleanup{Colors.RESET}            Clean up files with binary PLT before submitting
@@ -724,7 +821,14 @@ This typically runs simPlt (PLT generation) and simPlt2Bin (binary conversion).
     run post convert Case001
 
     # Process up to timestep 5000
-    run post full Case001 --upto 5000
+    run post full Case001 --t2 5000
+
+    # Send each binary PLT to the remote 'ws' as soon as it is written
+    run post full Case001 --remote ws
+
+    # Same, from context
+    use remote:ws
+    run post full Case001
 
     # Chain after main simulation
     run post full Case001 --dependency 12345
@@ -752,6 +856,21 @@ This typically runs simPlt (PLT generation) and simPlt2Bin (binary conversion).
     The postFlex.sh script typically:
     1. Runs simPlt to generate PLT files from simulation output
     2. Runs simPlt2Bin to convert PLT to binary format
+    3. With --remote: sends each binary PLT as soon as it is finished
+
+{Colors.BOLD}SENDING TO A REMOTE (--remote):{Colors.RESET}
+    • Files go where `case upload --binary` puts them: <remote path>/<case>/binary/
+    • Only key-based ssh is used (no password); run post checks the login
+      before submitting, and refuses if it would prompt
+    • A file is sent once simPlt2Bin has not changed it for 30 s; after
+      simPlt2Bin ends, the rest is sent. rsync when both ends have it, else
+      scp to a temporary name, then a rename -- never a half-written file
+    • Only files this job writes, for steps in --t1/--t2, are sent
+    • A failed transfer does not fail the job: it is listed in the job
+      output and post_sent_<jobid>.log, with the case upload command to
+      send it later
+    • Needs a postFlex.sh from the current template:
+      template script post <case> --force
 
     Note: Both steps can take significant time (hours for large simulations)
 

@@ -109,7 +109,7 @@ CONTEXTS = [
     ContextKey('t2', parse=float, clears=('time',),
                description='End of a timestep range (clears time)'),
     ContextKey('remote', parse=_parse_remote, complete=_complete_remotes, label='rem',
-               style='#ffaaee', description="Remote machine for 'case upload/download'"),
+               style='#ffaaee', description="Remote machine for 'case upload/download' and 'run post'"),
     ContextKey('var', style='#00ddaa',
                description='Variable(s) for field extract, data table/stats'),
     ContextKey('zone', style='#dd88ff',
