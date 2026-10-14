@@ -11,8 +11,13 @@
   `case upload --binary` would put them: `<remote path>/<case>/binary/`.
 - Only ssh key authentication is used; `run post` checks the login with
   `ssh -o BatchMode=yes` before submitting and refuses if it would prompt.
-  rsync is used when both ends have it, otherwise scp to a temporary name and
-  a rename, so the remote never holds a half-written file under its name.
+  When `~/.ssh/config` has a `Host` named like the remote (`ssh cloud`), that
+  alias is used, with its User, IdentityFile and Port; the remote config's
+  user@ip is only the fallback.
+- rsync is used when both ends have it; otherwise the file is streamed over
+  ssh into a temporary name, size-checked and renamed, which needs nothing but
+  a shell on the remote (a BusyBox NAS has neither rsync nor an scp server).
+  Either way the remote never holds a half-written file under its name.
 - Only files the job writes, for steps in `--t1`/`--t2`, are sent. A failed
   transfer does not fail the job: it is listed in the job output and
   `post_sent_<jobid>.log`, with the `case upload` command to send it later.

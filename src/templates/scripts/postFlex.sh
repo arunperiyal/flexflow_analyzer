@@ -95,10 +95,11 @@ END_TIME=${END_TIME:-${3:-$MAX_STEPS}}
 # CONVERT_ONLY: skip simPlt and run only simPlt2Bin (env var, default: 0)
 CONVERT_ONLY=${CONVERT_ONLY:-0}
 
-# REMOTE_TARGET (user@host), REMOTE_PORT, REMOTE_DIR: set by
-# `run post --remote NAME`. Empty REMOTE_TARGET = send nothing.
+# REMOTE_TARGET (user@host, or a Host alias from ~/.ssh/config), REMOTE_PORT,
+# REMOTE_DIR: set by `run post --remote NAME`. Empty REMOTE_TARGET = send
+# nothing; empty REMOTE_PORT = whatever ssh would use (the alias's Port).
 REMOTE_TARGET=${REMOTE_TARGET:-}
-REMOTE_PORT=${REMOTE_PORT:-22}
+REMOTE_PORT=${REMOTE_PORT:-}
 REMOTE_DIR=${REMOTE_DIR:-}
 # A binary PLT counts as finished once it has not changed for this long
 SEND_STABLE_SECS=${SEND_STABLE_SECS:-30}
@@ -123,7 +124,7 @@ if [ "$CONVERT_ONLY" = "1" ]; then
     echo "Mode:         convert-only (simPlt2Bin only, skipping simPlt)"
 fi
 if [ -n "$REMOTE_TARGET" ]; then
-    echo "Send to:      ${REMOTE_TARGET}:${REMOTE_DIR} (port ${REMOTE_PORT})"
+    echo "Send to:      ${REMOTE_TARGET}:${REMOTE_DIR}${REMOTE_PORT:+ (port ${REMOTE_PORT})}"
 fi
 echo "=========================================="
 echo ""
@@ -192,8 +193,10 @@ fi
 # SEND_STABLE_SECS. Only files this job wrote (newer than START_MARK) for steps
 # in [START_TIME, END_TIME] are sent. After simPlt2Bin exits, a final pass sends
 # everything left, and resends any file that changed after it was sent.
-# rsync writes to a temporary name and renames; without rsync, scp does the
-# same by hand -- the remote never holds a half-written file under its name.
+# rsync writes to a temporary name and renames; without rsync on both ends,
+# the file is streamed through ssh into a temporary name and renamed, which
+# needs nothing on the remote but a shell (a BusyBox NAS has no scp server or
+# rsync) -- either way the remote never holds a half-written file under its name.
 
 BIN_DIR="binary"
 SEND=0
@@ -201,9 +204,10 @@ SEND_LOG="post_sent_${SLURM_JOB_ID:-$$}.log"
 START_MARK=".post_start_${SLURM_JOB_ID:-$$}"
 declare -A SENT SEEN
 UNSENT=()
-SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=20 -p "$REMOTE_PORT")
+SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=20)
+[ -n "$REMOTE_PORT" ] && SSH_OPTS+=(-p "$REMOTE_PORT")
 
-# ssh, scp and rsync all start in the remote home directory, so a leading ~/
+# ssh and rsync both start in the remote home directory, so a leading ~/
 # becomes a relative path (a quoted ~ would not be expanded)
 remote_path() {
     case "$1" in
@@ -227,7 +231,7 @@ setup_send() {
     else
         USE_RSYNC=0
     fi
-    echo "Sending binary PLT files to ${REMOTE_TARGET}:${RDIR} ($( [ $USE_RSYNC = 1 ] && echo rsync || echo scp ))"
+    echo "Sending binary PLT files to ${REMOTE_TARGET}:${RDIR} ($( [ $USE_RSYNC = 1 ] && echo rsync || echo ssh ))"
     : > "$SEND_LOG"
     return 0
 }
@@ -237,9 +241,12 @@ send_file() {
     if [ "$USE_RSYNC" = 1 ]; then
         rsync -a --partial -e "ssh ${SSH_OPTS[*]}" "$f" "${REMOTE_TARGET}:${RDIR}/"
     else
-        scp -q -P "$REMOTE_PORT" -o BatchMode=yes -o ConnectTimeout=20 \
-            "$f" "${REMOTE_TARGET}:${RDIR}/.${name}.part" \
-        && ssh "${SSH_OPTS[@]}" "$REMOTE_TARGET" "mv -f '${RDIR}/.${name}.part' '${RDIR}/${name}'"
+        # a dropped connection ends the remote cat as if the file had ended,
+        # so the size is checked before the rename
+        local size part="${RDIR}/.${name}.part"
+        size=$(stat -c %s "$f")
+        ssh "${SSH_OPTS[@]}" "$REMOTE_TARGET" \
+            "cat > '$part' && [ \$(wc -c < '$part') -eq $size ] && mv -f '$part' '${RDIR}/${name}'" < "$f"
     fi
 }
 

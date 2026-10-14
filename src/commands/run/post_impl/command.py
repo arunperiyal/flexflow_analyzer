@@ -559,6 +559,11 @@ def _remote_exports(args, case_dir, script_path, console, check):
     The remote case path is built as `case upload` builds it -- the remote's
     path, then the case name -- so the files land where `case upload --binary`
     would put them. No password is passed: the job sends with ssh keys only.
+
+    When ~/.ssh/config defines a Host with the remote's name, that alias is
+    the target, so its User, IdentityFile and Port apply -- the remote config's
+    user and ip are only the fallback. `ssh cloud` working while
+    `ssh sshd@10.24.3.58` is refused is exactly the case this covers.
     """
     name = None if getattr(args, 'no_remote', False) else getattr(args, 'remote', None)
     if not name:
@@ -583,12 +588,17 @@ def _remote_exports(args, case_dir, script_path, console, check):
         console.print(f"[dim]  template script post {case_dir} --force[/dim]")
         return None
 
-    user, host = remote.get('user'), remote.get('ip')
-    port = remote.get('port') or 22
     upload = CaseUploadCommand()
     base = upload.get_remote_base_path(remote, None)
     remote_dir = upload.construct_remote_case_path(base, str(case_dir)) + '/binary'
-    target = f'{user}@{host}'
+
+    alias = _ssh_alias(name)
+    if alias:
+        target, port = name, None
+        via = f"ssh config: {alias.get('user', '?')}@{alias.get('hostname', '?')}"
+    else:
+        target, port = f"{remote.get('user')}@{remote.get('ip')}", remote.get('port') or 22
+        via = target
 
     # sbatch --export splits on commas; the job quotes paths in single quotes
     bad = [v for v in (target, remote_dir) if ',' in v or "'" in v or ' ' in v]
@@ -600,8 +610,31 @@ def _remote_exports(args, case_dir, script_path, console, check):
     if check and not _ssh_key_login_works(target, port, console):
         return None
 
-    exports = [f'REMOTE_TARGET={target}', f'REMOTE_PORT={port}', f'REMOTE_DIR={remote_dir}']
-    return exports, ("Send binary PLT to", f"{name}  ({target}:{remote_dir})")
+    exports = [f'REMOTE_TARGET={target}', f'REMOTE_DIR={remote_dir}']
+    if port is not None:
+        exports.insert(1, f'REMOTE_PORT={port}')
+    return exports, ("Send binary PLT to", f"{name}  ({via}, {remote_dir})")
+
+
+def _ssh_alias(name):
+    """
+    ssh's settings for `name` when ~/.ssh/config makes it an alias for another
+    host, else None. `ssh -G` prints the configuration ssh would use without
+    connecting; with no matching Host entry, its hostname is the name itself.
+    """
+    try:
+        result = subprocess.run(['ssh', '-G', name], capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    settings = {}
+    for line in result.stdout.splitlines():
+        key, _, value = line.partition(' ')
+        settings.setdefault(key.lower(), value.strip())
+    if settings.get('hostname', name).lower() == name.lower():
+        return None
+    return settings
 
 
 def _ssh_key_login_works(target, port, console) -> bool:
@@ -611,7 +644,10 @@ def _ssh_key_login_works(target, port, console) -> bool:
     from here, not the compute node -- a cluster that blocks outbound ssh from
     compute nodes is reported by the job, which then skips sending.
     """
-    cmd = ['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10', '-p', str(port), target, 'true']
+    cmd = ['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10']
+    if port is not None:
+        cmd += ['-p', str(port)]
+    cmd += [target, 'true']
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
     except (OSError, subprocess.TimeoutExpired) as e:
@@ -622,9 +658,12 @@ def _ssh_key_login_works(target, port, console) -> bool:
         reason = reason[0]
     if result is not None and result.returncode == 0:
         return True
-    console.print(f"[red]Error:[/red] ssh to {target} (port {port}) without a password failed"
+    where = f"{target} (port {port})" if port is not None else target
+    console.print(f"[red]Error:[/red] ssh to {where} without a password failed"
                   + (f": {reason}" if reason else ""))
-    console.print("[dim]  Set up a key (ssh-copy-id), or drop --remote / use --no-remote.[/dim]")
+    console.print("[dim]  Set up a key (ssh-copy-id), or give ~/.ssh/config a Host entry named "
+                  "like the remote with the User and IdentityFile that work;[/dim]")
+    console.print("[dim]  or drop --remote / use --no-remote.[/dim]")
     return False
 
 
@@ -862,9 +901,12 @@ This typically runs simPlt (PLT generation) and simPlt2Bin (binary conversion).
     • Files go where `case upload --binary` puts them: <remote path>/<case>/binary/
     • Only key-based ssh is used (no password); run post checks the login
       before submitting, and refuses if it would prompt
+    • If ~/.ssh/config has a Host named like the remote (`ssh cloud`), that
+      alias is used, with its User, IdentityFile and Port
     • A file is sent once simPlt2Bin has not changed it for 30 s; after
       simPlt2Bin ends, the rest is sent. rsync when both ends have it, else
-      scp to a temporary name, then a rename -- never a half-written file
+      streamed over ssh into a temporary name, size-checked, then renamed
+      (needs only a shell on the remote) -- never a half-written file
     • Only files this job writes, for steps in --t1/--t2, are sent
     • A failed transfer does not fail the job: it is listed in the job
       output and post_sent_<jobid>.log, with the case upload command to

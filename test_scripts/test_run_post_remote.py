@@ -3,7 +3,7 @@
 The job runs simPlt2Bin in the background and sends a file once it has stopped
 changing, then sends the rest when simPlt2Bin ends. These tests run the real
 template end to end: a fake simPlt2Bin writes binary/riser.<step>.plt slowly,
-and fake ssh/scp run the "remote" side in a local directory (rsync is the real
+and a fake ssh runs the "remote" side in a local directory (rsync is the real
 one, carried over the fake ssh). Also: the --t1/--t2 rename and how run post
 builds the job's REMOTE_* variables.
 """
@@ -32,7 +32,7 @@ while [ $# -gt 0 ]; do
 done
 mkdir -p binary
 for step in $(seq "$FREQ" "$FREQ" 40); do
-    if [ "$step" -eq "$LAST" ] && [ -n "$REMOTE_TARGET" ] && [ -z "$FAKE_DOWN" ]; then
+    if [ "$step" -eq "$LAST" ] && [ -n "$REMOTE_TARGET" ] && [ -z "$FAKE_DOWN$FAKE_TRUNCATE" ]; then
         for i in $(seq 1 30); do
             [ -f "$FAKE_HOME/cases/Case/binary/$P.$FREQ.plt" ] && { echo yes > early_send; break; }
             sleep 1
@@ -50,12 +50,12 @@ while [ $# -gt 0 ]; do case "$1" in -o|-p|-l) shift 2;; -*) shift;; *) break;; e
 shift   # user@host
 cmd="$*"
 if [ -n "$FAKE_NO_RSYNC" ] && [ "$cmd" = "command -v rsync" ]; then exit 1; fi
-cd "$FAKE_HOME" && exec bash -c "$cmd"
-"""
-
-FAKE_SCP = r"""#!/bin/bash
-src="${@: -2:1}"; dest="${@: -1}"
-cp "$src" "$FAKE_HOME/${dest#*:}"
+cd "$FAKE_HOME" || exit 1
+if [ -n "$FAKE_TRUNCATE" ] && [ "${cmd#cat >}" != "$cmd" ]; then
+    head -c 5 | bash -c "$cmd"     # the connection drops after 5 bytes
+    exit $?
+fi
+exec bash -c "$cmd"
 """
 
 
@@ -76,7 +76,6 @@ def job(tmp_path):
     fake_bin.mkdir()
     _executable(fake_bin / 'simPlt2Bin', FAKE_SIMPLT2BIN)
     _executable(fake_bin / 'ssh', FAKE_SSH)
-    _executable(fake_bin / 'scp', FAKE_SCP)
     (case / 'simflow_env.sh').write_text(
         f'export SIMPLT=/bin/true\nexport SIMPLT2BIN={fake_bin / "simPlt2Bin"}\n')
 
@@ -121,11 +120,19 @@ def test_sends_each_file_as_it_is_written_with_rsync(job):
     assert '(rsync)' in result.stdout
 
 
-def test_sends_with_scp_when_the_remote_has_no_rsync(job):
+def test_streams_over_ssh_when_the_remote_has_no_rsync(job):
+    # a BusyBox NAS: a shell, but no rsync and no scp server
     result, case, remote = job(FAKE_NO_RSYNC='1')
     _check_sent(result, case, remote)
-    assert '(scp)' in result.stdout
+    assert '(ssh)' in result.stdout
     assert not list(remote.glob('.*.part'))
+
+
+def test_a_cut_off_stream_never_takes_the_files_name(job):
+    result, case, remote = job(FAKE_NO_RSYNC='1', FAKE_TRUNCATE='1')
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert not list(remote.glob('riser.*.plt'))
+    assert '3 file(s) could not be sent' in result.stdout
 
 
 def test_unreachable_remote_does_not_fail_the_job(job):
@@ -171,6 +178,7 @@ def case_with_script(tmp_path, monkeypatch):
     from src.utils import remote_config
     monkeypatch.setattr(remote_config.RemoteConfig, 'get_remote',
                         lambda self, name: remotes.get(name))
+    monkeypatch.setattr(post_cmd, '_ssh_alias', lambda name: None)
     return case
 
 
@@ -186,7 +194,7 @@ def test_remote_becomes_the_jobs_variables(case_with_script):
     exports, rows = _exports(case_with_script, remote='ws', t1=100.0, t2=500.0)
     assert exports == ['START_TIME=100', 'END_TIME=500', 'REMOTE_TARGET=me@10.0.0.5',
                        'REMOTE_PORT=2222', 'REMOTE_DIR=~/cases/Case001/binary']
-    assert ('Send binary PLT to', 'ws  (me@10.0.0.5:~/cases/Case001/binary)') in rows
+    assert ('Send binary PLT to', 'ws  (me@10.0.0.5, ~/cases/Case001/binary)') in rows
 
 
 def test_no_remote_wins_over_the_context(case_with_script):
@@ -215,3 +223,23 @@ def test_submit_refuses_when_key_login_fails(case_with_script, monkeypatch):
 
 def test_fractional_t1_is_refused(case_with_script):
     assert _exports(case_with_script, t1=10.5) is None
+
+
+def test_an_ssh_config_alias_is_used_as_is(case_with_script, monkeypatch):
+    # `ssh cloud` works (its Host entry sets User/IdentityFile); user@ip does not
+    monkeypatch.setattr(post_cmd, '_ssh_alias',
+                        lambda name: {'user': 'root', 'hostname': '10.0.0.5'})
+    exports, rows = _exports(case_with_script, remote='ws')
+    assert exports == ['REMOTE_TARGET=ws', 'REMOTE_DIR=~/cases/Case001/binary']
+    assert ('Send binary PLT to',
+            'ws  (ssh config: root@10.0.0.5, ~/cases/Case001/binary)') in rows
+
+
+def test_ssh_alias_reads_ssh_dash_g(monkeypatch):
+    def fake_run(cmd, **kw):
+        host = '10.24.3.58' if cmd[-1] == 'cloud' else cmd[-1]
+        return subprocess.CompletedProcess(cmd, 0, f'user root\nhostname {host}\nport 22\n', '')
+
+    monkeypatch.setattr(post_cmd.subprocess, 'run', fake_run)
+    assert post_cmd._ssh_alias('cloud') == {'user': 'root', 'hostname': '10.24.3.58', 'port': '22'}
+    assert post_cmd._ssh_alias('10.0.0.5') is None
