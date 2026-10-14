@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### 🔎 `case check`: timesteps print as plain digits
+
+- `case check` printed tsIds with thousands separators (`4,000`), so
+  `case check out | grep 4000` found nothing. They now print as `4000`, the
+  same form `--t1`/`--t2` take and the file names use.
+
 ### 📤 `run post --remote`: binary PLT files go to a remote as they are written
 
 - `run post full|convert --remote NAME` (or `use remote:NAME`) makes the
