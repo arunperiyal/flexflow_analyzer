@@ -386,3 +386,13 @@ def test_oneshot_from_main(home, work, capsys):
     finally:
         sys.argv = argv
     assert 'script' in capsys.readouterr().out.lower()
+
+
+def test_case_check_out_greps_by_tsid(rt, work):
+    # tsIds print as plain digits, so `| grep 4000` finds them (not "4,000")
+    (work / 'CaseA' / 'simflow.config').write_text('problem = riser\ndir = ./RUN_1\n')
+    for step in (2000, 4000, 14000):
+        (work / 'CaseA' / 'RUN_1' / f'riser.{step}_0.out').write_text('')
+    assert rt.execute_line('case check out CaseA | grep 4000') == 0, err(rt)
+    lines = rt.console.file.getvalue().splitlines()
+    assert [line.split()[0] for line in lines if '✓' in line] == ['4000', '14000']

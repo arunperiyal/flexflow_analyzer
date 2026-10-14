@@ -205,7 +205,9 @@ def _read_data_file_range(file_path: Path) -> Optional[Tuple[int, int]]:
 
 
 def _fmt_tsid(tsid: int) -> str:
-    return f"{tsid:,}"
+    # Plain digits, no thousands separators: tsIds are names people grep for
+    # (`case check out | grep 4000`) and pass back as --t1/--t2.
+    return str(tsid)
 
 
 def _step_in_bounds(step: float, t1: Optional[float], t2: Optional[float]) -> bool:
