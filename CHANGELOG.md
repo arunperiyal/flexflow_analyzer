@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### 🐚 Shell: basic file and system commands
+
+- New builtins, so the shell need not be left for them: `mkdir [-p]`,
+  `mv [-f]` (asks before replacing a file), `touch` and `top` (the system
+  top; options pass through, `$VARS` expand; one snapshot inside a pipe).
+- `find` finds any file or directory by name, not only cases:
+  `find [-f|-d|-c] [pattern] [path]`. A pattern with `* ? [` is a glob,
+  anything else a substring, both case-insensitive; `-c` keeps the old
+  cases-only search. Output is one path per line, so it pipes.
+
 ### 🔎 `case check`: timesteps print as plain digits
 
 - `case check` printed tsIds with thousands separators (`4,000`), so
