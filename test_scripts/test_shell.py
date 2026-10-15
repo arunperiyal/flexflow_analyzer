@@ -349,9 +349,9 @@ def test_file_style():
     assert file_style(Path('notes.txt')) is None
 
 
-def test_find_lists_cases(rt):
+def test_find_c_lists_only_cases(rt):
     rt.console.file.truncate(0)
-    assert rt.execute_line('find') == 0
+    assert rt.execute_line('find -c') == 0
     out = rt.console.file.getvalue()
     assert 'CaseA' in out and 'CaseB' not in out
 

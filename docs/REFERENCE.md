@@ -32,7 +32,11 @@ ff                    # Start interactive shell
 | `grep -i <pattern>` | Case-insensitive search | `grep -i warning file.txt` |
 | `grep -r <pattern> <dir>` | Recursive search | `grep -r TODO src/` |
 | `grep -l <pattern>` | Show only filenames | `grep -l error logs/` |
-| `find [pattern]` | Find cases | `find CS4*` |
+| `find [-f\|-d\|-c] [pattern] [path]` | Find files/directories by name (`-c`: cases only) | `find *.othd`, `find -c CS4` |
+| `mkdir [-p] <dir>` | Make directories | `mkdir -p post/plots` |
+| `mv [-f] <src...> <dest>` | Move or rename (asks before replacing) | `mv *.png plots` |
+| `touch <file>` | Create a file or update its time | `touch notes.txt` |
+| `top [options]` | System top (one snapshot in a pipe) | `top -u $USER` |
 | `tree [depth]` | Show directory tree | `tree 2` |
 
 ## Context Management

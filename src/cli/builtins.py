@@ -1,10 +1,13 @@
 """
-FlexFlow's own shell builtins -- the ones that are not generic file handling:
-`web`, `quota`, `du` and `find` -- and the colours `ls`/`tree` give FlexFlow
-files.
+FlexFlow's own shell builtins -- `web`, `quota`, `du` -- the basic file and
+system commands shellkit does not have (`find`, `mkdir`, `mv`, `touch`,
+`top`), so the shell need not be left for them, and the colours `ls`/`tree`
+give FlexFlow files.
 """
 
+import fnmatch
 import os
+import shutil
 import subprocess
 import threading
 from pathlib import Path
@@ -14,6 +17,7 @@ from rich.markup import escape
 from rich.table import Table
 
 from shellkit import Builtin
+from shellkit.builtins.files import _expand, _shown_path, _split_flags, _styled
 
 CASE_INDICATORS = ('input', 'output', 'binary', 'simflow.config', 'case.config')
 CASE_GLOBS = ('*.othd', '*.oisd')
@@ -52,10 +56,30 @@ def builtins():
         Builtin('quota', _quota, help='Disk quota for /home and /scratch', category='FlexFlow'),
         Builtin('du', _du, help='Disk usage of directory entries', usage='du [path]',
                 complete='path', category='FlexFlow'),
-        Builtin('find', _find, help='Find case directories', usage='find [pattern]',
-                details="  [dim]find           # every case below here\n"
-                        "  find CS4        # cases with CS4 in the name[/dim]",
-                category='FlexFlow'),
+        Builtin('find', _find, help='Find files and directories by name',
+                usage='find [-f|-d|-c] [pattern] [path]',
+                details="  [cyan]-f[/cyan]  Files only\n"
+                        "  [cyan]-d[/cyan]  Directories only\n"
+                        "  [cyan]-c[/cyan]  Case directories only\n"
+                        "[dim]A pattern with * ? [ is a glob on the name, anything else a\n"
+                        "substring; both ignore case. Hidden directories are skipped.\n"
+                        "  find riser*.othd     # every riser othd below here\n"
+                        "  find -d RUN_         # run directories\n"
+                        "  find -c CS4          # cases with CS4 in the name[/dim]",
+                complete='path', category='Files'),
+        Builtin('mkdir', _mkdir, help='Make directories', usage='mkdir [-p] <dir> [dirs...]',
+                details="  [cyan]-p[/cyan]  Make parents as needed; no error if it exists",
+                complete='path', category='Files'),
+        Builtin('mv', _mv, help='Move or rename files', usage='mv [-f] <source> [sources...] <dest>',
+                details="  [cyan]-f[/cyan]  Replace an existing target without asking",
+                complete='path', category='Files'),
+        Builtin('touch', _touch, help='Create a file, or update its time',
+                usage='touch <file> [files...]', complete='path', category='Files'),
+        Builtin('top', _top, help='Running processes (the system top)',
+                usage='top [top options]',
+                details="[dim]Options go to top as they are: `top -u $USER`. Quit with q.\n"
+                        "In a pipe it prints one snapshot: `top | grep flexflow`.[/dim]",
+                category='Shell', own_help=True),
     ]
 
 
@@ -142,7 +166,7 @@ def _web_stop(rt):
 
 
 # ---------------------------------------------------------------------------
-# quota / du / find
+# quota / du
 # ---------------------------------------------------------------------------
 
 def _quota(rt, argv):
@@ -209,25 +233,163 @@ def _du(rt, argv):
     return 0
 
 
+# ---------------------------------------------------------------------------
+# find / mkdir / mv / touch / top
+# ---------------------------------------------------------------------------
+
 def _find(rt, argv):
-    """Case directories below the cwd whose name contains the pattern."""
-    pattern = argv[0] if argv else '*'
-    rt.console.print(f"[dim]Searching for cases matching '{escape(pattern)}'...[/dim]")
-    found = [p for p in rt.cwd.rglob('*')
-             if is_case_directory(p) and (pattern == '*' or pattern.lower() in p.name.lower())]
-    if not found:
-        rt.warn(f"No cases found matching '{pattern}'")
+    """Paths below a directory whose name matches the pattern."""
+    flags, rest, bad = _split_flags(argv, 'fdc')
+    if bad:
+        rt.error(f"find: unknown option {bad}")
+        return 2
+    if len(rest) > 2:
+        rt.error("usage: find [-f|-d|-c] [pattern] [path]")
+        return 2
+    pattern = rest[0] if rest else '*'
+    root = rt.resolve_path(rest[1]) if len(rest) > 1 else rt.cwd
+    if not root.is_dir():
+        rt.error(f"find: not a directory: {escape(str(root))}")
         return 1
 
-    if rt.capturing:
-        for case in found:
-            rt.out(str(case.relative_to(rt.cwd)))
-        return 0
-    table = Table(title=f"Cases Found ({len(found)})", box=box.ROUNDED)
-    table.add_column("#", style="dim", width=4)
-    table.add_column("Case Name", style="green")
-    table.add_column("Path", style="cyan")
-    for i, case in enumerate(found, 1):
-        table.add_row(str(i), escape(case.name), escape(str(case.relative_to(rt.cwd))))
-    rt.console.print(table)
+    if any(c in pattern for c in '*?['):
+        glob = pattern.lower()
+        matches = lambda name: fnmatch.fnmatchcase(name.lower(), glob)
+    else:
+        needle = pattern.lower()
+        matches = lambda name: needle in name.lower()
+
+    found = []
+    for top, dirs, files in os.walk(root, onerror=lambda e: None):
+        dirs[:] = sorted(d for d in dirs if not d.startswith('.'))
+        top = Path(top)
+        if 'f' not in flags:
+            found.extend(top / d for d in dirs if matches(d))
+        if not flags & {'d', 'c'}:
+            found.extend(top / f for f in sorted(files) if matches(f))
+    if 'c' in flags:
+        found = [p for p in found if is_case_directory(p)]
+
+    if not found:
+        rt.warn(f"find: nothing matches '{pattern}'")
+        return 1
+    for path in found:
+        shown = _shown_path(rt, path)
+        if rt.capturing:
+            rt.out(shown + ('/' if path.is_dir() else ''))
+        else:
+            parent = escape(str(Path(shown).parent))
+            rt.console.print(('' if parent == '.' else f"[dim]{parent}/[/dim]") + _styled(rt, path),
+                             highlight=False)
+    if not rt.capturing:
+        rt.console.print(f"[dim]{len(found)} found[/dim]")
     return 0
+
+
+def _mkdir(rt, argv):
+    flags, rest, bad = _split_flags(argv, 'p')
+    if bad:
+        rt.error(f"mkdir: unknown option {bad}")
+        return 2
+    if not rest:
+        rt.error("usage: mkdir [-p] <dir> [dirs...]")
+        return 2
+    status = 0
+    for name in rest:
+        target = rt.resolve_path(name)
+        try:
+            target.mkdir(parents='p' in flags, exist_ok='p' in flags)
+            rt.console.print(f"  [green]created[/green]  {escape(str(target))}")
+        except FileExistsError:
+            rt.error(f"mkdir: already exists: {escape(str(target))}")
+            status = 1
+        except FileNotFoundError:
+            rt.error(f"mkdir: no parent directory (use -p): {escape(str(target))}")
+            status = 1
+        except OSError as e:
+            rt.error(f"mkdir: {escape(str(e))}")
+            status = 1
+    return status
+
+
+def _mv(rt, argv):
+    argv = ['-f' if a == '--force' else a for a in argv]
+    flags, rest, bad = _split_flags(argv, 'f')
+    if bad:
+        rt.error(f"mv: unknown option {bad}")
+        return 2
+    if len(rest) < 2:
+        rt.error("usage: mv [-f] <source> [sources...] <dest>")
+        return 2
+
+    sources = _expand(rt, rest[:-1])
+    dest = rt.resolve_path(rest[-1])
+    if len(sources) > 1 and not dest.is_dir():
+        rt.error("mv: destination must be an existing directory when moving several sources")
+        return 1
+
+    status = 0
+    for src in sources:
+        target = dest / src.name if dest.is_dir() else dest
+        if not src.exists() and not src.is_symlink():
+            rt.error(f"mv: not found: {escape(str(src))}")
+            status = 1
+            continue
+        if target.exists():
+            if target.is_dir():
+                rt.error(f"mv: a directory is in the way: {escape(str(target))}")
+                status = 1
+                continue
+            if src.is_dir():
+                rt.error(f"mv: cannot replace a file with a directory: {escape(str(target))}")
+                status = 1
+                continue
+            if 'f' not in flags and not rt.confirm(
+                    f"  Replace [cyan]{escape(str(target))}[/cyan]?"):
+                rt.console.print("  [dim]skipped[/dim]")
+                continue
+        try:
+            shutil.move(str(src), str(target))
+            rt.console.print(f"  [green]moved[/green]  {escape(str(src))}  →  {escape(str(target))}")
+        except (OSError, shutil.Error) as e:
+            rt.error(f"mv: {escape(str(e))}")
+            status = 1
+    return status
+
+
+def _touch(rt, argv):
+    if not argv:
+        rt.error("usage: touch <file> [files...]")
+        return 2
+    status = 0
+    for name in argv:
+        target = rt.resolve_path(name)
+        try:
+            target.touch()
+        except OSError as e:
+            rt.error(f"touch: {escape(str(e))}")
+            status = 1
+    return status
+
+
+def _top(rt, argv):
+    """The system top: interactive at the prompt, one batch snapshot in a pipe."""
+    if argv in (['-h'], ['--help']):
+        rt.console.print("[yellow]Usage:[/yellow] top [top options]   "
+                         "[dim](e.g. top -u $USER; q quits)[/dim]")
+        return 0
+    argv = [os.path.expandvars(a) for a in argv]     # `top -u $USER`
+    try:
+        if rt.capturing:
+            result = subprocess.run(['top', '-b', '-n', '1', *argv], cwd=rt.cwd,
+                                    capture_output=True, text=True)
+            rt.out(result.stdout, end='')
+            if result.returncode:
+                rt.error(escape(result.stderr.strip() or f"top exited with {result.returncode}"))
+            return result.returncode
+        return subprocess.run(['top', *argv], cwd=rt.cwd).returncode
+    except FileNotFoundError:
+        rt.error("top not found")
+        return 127
+    except KeyboardInterrupt:
+        return 130
