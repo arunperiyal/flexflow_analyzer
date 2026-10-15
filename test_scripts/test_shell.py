@@ -396,3 +396,34 @@ def test_case_check_out_greps_by_tsid(rt, work):
     assert rt.execute_line('case check out CaseA | grep 4000') == 0, err(rt)
     lines = rt.console.file.getvalue().splitlines()
     assert [line.split()[0] for line in lines if '✓' in line] == ['4000', '14000']
+
+
+def _out_case(work, steps):
+    (work / 'CaseA' / 'simflow.config').write_text('problem = riser\ndir = ./RUN_1\n')
+    for step in steps:
+        (work / 'CaseA' / 'RUN_1' / f'riser.{step}_0.out').write_text('')
+        (work / 'CaseA' / 'RUN_1' / f'riser.{step}_0.rst').write_text('')
+
+
+def test_case_check_out_freq_lists_missing_steps(rt, work):
+    _out_case(work, (1000, 2000, 4000, 5000))
+    assert rt.execute_line('case check out CaseA --freq 1000 | grep missing') == 0, err(rt)
+    lines = rt.console.file.getvalue().splitlines()
+    assert [line.split()[0] for line in lines if line.split()[-1] == 'missing'] == ['3000']
+    assert any('1 step(s) missing at --freq 1000' in line for line in lines)
+
+
+def test_case_check_out_freq_window_and_none_missing(rt, work):
+    _out_case(work, (1000, 2000, 3000))
+    # 3500 rounds up to 4000; up to t2 = 5000, with no files there: both missing
+    out = rt.run_captured('case check out CaseA --freq 1000 --t1 3500 --t2 5000')
+    rows = [line.split()[0] for line in out.splitlines() if line.strip().endswith('missing')]
+    assert rows == ['4000', '5000'] and '2 step(s) missing at --freq 1000' in out
+    out = rt.run_captured('case check out CaseA --freq 1000')
+    assert 'no step missing at --freq 1000' in out
+
+
+def test_case_check_all_freq_is_not_the_out_frequency(rt, work):
+    _out_case(work, (1000, 3000))
+    out = rt.run_captured('case check all CaseA --freq 1000')
+    assert 'Out/Rst file check' in out and 'missing at --freq' not in out

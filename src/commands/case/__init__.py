@@ -244,6 +244,11 @@ class CaseCommand(BaseCommand):
                                     help='Only check timesteps >= STEP')
         out_check_parser.add_argument('--t2', type=float, metavar='STEP',
                                     help='Only check timesteps <= STEP')
+        # A plain flag, not the `freq` context: that is the PLT frequency, and
+        # the .out/.rst files need not be written as often.
+        out_check_parser.add_argument('--freq', type=int, metavar='N',
+                                    help='Expect a step every N timesteps and list the ones '
+                                         'with neither .out nor .rst')
         out_check_parser.add_argument('-v', '--verbose', action='store_true',
                                     help='Enable verbose output')
         out_check_parser.add_argument('-h', '--help', action='store_true',
