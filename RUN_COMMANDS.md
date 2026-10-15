@@ -16,6 +16,7 @@ run <subcommand> [case_directory] [options]
 - `pre` - Submit preprocessing job (mesh generation, conversion)
 - `main` - Submit main simulation job (with automatic archiving)
 - `post` - Submit postprocessing job (PLT file generation)
+- `list log` - List the case's slurm-* files with their job type
 
 ---
 
@@ -270,6 +271,29 @@ run main Case001 --dependency <job_id>
 ```
 
 **Recommended SLURM Partition:** `medium` (up to 120 workers, 72 hour limit)
+
+---
+
+### `run list log` - SLURM Output Files
+
+Lists the `slurm-*` files in the case directory (or the current directory,
+without a case or `use case`) with the job type of each: `pre`, `main` or
+`post`, read from `SLURM_JOB_NAME` (the `#SBATCH -J pre<case>` name) or the
+banner the job script prints. Anything else is `other`.
+
+```bash
+run list log Case001                    # oldest first (by modification time)
+run list log --sort type                # pre, main, post, other; then time
+run list log --sort jobid
+run list log --type main -r             # main jobs only, newest first
+run list log | grep post                # rows only in a pipe
+```
+
+| Option | Description |
+|--------|-------------|
+| `--sort time\|type\|jobid` | Sort key (default `time`) |
+| `-r`, `--reverse` | Reverse the order |
+| `--type TYPE` | Only this job type (`pre`, `main`, `post`, `other`); repeatable |
 
 ---
 

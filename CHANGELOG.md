@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### 📋 `run list log`: a case's slurm-* files with their job type
+
+- `run list log [case]` lists the `slurm-*` files with job ID, type (`pre`,
+  `main`, `post` or `other`, from `SLURM_JOB_NAME` or the job script's
+  banner), job name, modification time and size.
+- `--sort time|type|jobid` (default `time`), `-r` to reverse, `--type` to
+  keep one or more job types. Takes the case from `use case:`; in a pipe it
+  prints the rows only.
+
 ### 🐚 Shell: basic file and system commands
 
 - New builtins, so the shell need not be left for them: `mkdir [-p]`,
