@@ -1,6 +1,6 @@
 """
 Run commands - Submit and manage SLURM jobs
-Commands: check, pre, main, post, sq, sb, sc
+Commands: check, pre, main, post, list, sq, sb, sc
 """
 
 from ..base import BaseCommand
@@ -23,6 +23,10 @@ def _complete_main_mode(rt, prefix):
     from shellkit.completion import path_candidates
     return [('restart', 'Restart from a timestep: restart TSID [case]'),
             ('reset', 'Comment out restartFlag/restartTsId and start fresh')] + path_candidates(rt, prefix)
+
+
+def _complete_list_what(rt, prefix):
+    return [('log', 'The slurm-* files, with their job type')]
 
 
 def _complete_post_mode(rt, prefix):
@@ -130,6 +134,24 @@ class RunCommand(BaseCommand):
         post_parser.add_argument('-v', '--verbose', action='store_true', help='Verbose output')
         post_parser.add_argument('-h', '--help', action='store_true', help='Show help')
 
+        # run list subcommand (a case's job files)
+        list_parser = run_subparsers.add_parser(
+            'list',
+            add_help=False,
+            help="List a case's job files"
+        )
+        list_parser.add_argument('what', nargs='?', choices=['log'],
+                                 help="'log': the slurm-* files, with their job type"
+                                 ).completer = _complete_list_what
+        case_arg(list_parser, help='Case directory (default: current directory)')
+        list_parser.add_argument('--sort', choices=['time', 'type', 'jobid'], default='time',
+                                 help='Sort by modification time (default), job type or job ID')
+        list_parser.add_argument('-r', '--reverse', action='store_true', help='Reverse the order')
+        list_parser.add_argument('--type', action='append', metavar='TYPE',
+                                 choices=['pre', 'main', 'post', 'other'],
+                                 help='Only this job type (repeatable)')
+        list_parser.add_argument('-h', '--help', action='store_true', help='Show help')
+
         # run sq subcommand (job queue status)
         sq_parser = run_subparsers.add_parser(
             'sq',
@@ -206,6 +228,9 @@ class RunCommand(BaseCommand):
         elif subcommand == 'post':
             from .post_impl import command as post_cmd
             post_cmd.execute_post(args)
+        elif subcommand == 'list':
+            from .list_impl import command as list_cmd
+            list_cmd.execute_list(args)
         elif subcommand == 'sq':
             from .sq_impl import command as sq_cmd
             sq_cmd.execute_sq(args)

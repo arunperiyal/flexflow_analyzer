@@ -18,6 +18,7 @@ Submit and manage SLURM jobs for FlexFlow simulations.
     {Colors.YELLOW}pre{Colors.RESET}      Submit preprocessing job (mesh generation)
     {Colors.YELLOW}main{Colors.RESET}     Submit main simulation job
     {Colors.YELLOW}post{Colors.RESET}     Submit postprocessing job (PLT generation)
+    {Colors.YELLOW}list{Colors.RESET}     List a case's job files (list log: slurm-* with job type)
     {Colors.YELLOW}sq{Colors.RESET}       Show SLURM job queue status
     {Colors.YELLOW}sb{Colors.RESET}       Submit any SLURM batch script
     {Colors.YELLOW}sc{Colors.RESET}       Cancel a SLURM job by ID or name
@@ -52,6 +53,9 @@ Submit and manage SLURM jobs for FlexFlow simulations.
 
     # Convert existing .plt files to binary only
     run post convert Case001
+
+    # List the slurm-* files with their job type, by type
+    run list log Case001 --sort type
 
     # Check job queue
     run sq
