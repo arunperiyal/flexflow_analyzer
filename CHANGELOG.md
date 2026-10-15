@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### 🗄️ NAS case helpers: `tools/nas/simulation_functions.sh`
+
+- Shell functions for the NAS, where flexflow cannot run (BusyBox `ash`):
+  `show_plt` (missing and empty PLT files), `show_archive` (othd/oisd parts
+  with tsId ranges; redundant parts, restarts, gaps), `clean_archive`
+  (delete parts by number) and `clean_plt` (delete PLT files in a window).
+- Defaults come from the case's `simflow.config`; the clean functions ask
+  first, take `--dry-run`, and need `DELETE` typed when data would be lost.
+- See `tools/nas/README.md`; tested under `busybox ash`.
+
 ### 📋 `run list log`: a case's slurm-* files with their job type
 
 - `run list log [case]` lists the `slurm-*` files with job ID, type (`pre`,
