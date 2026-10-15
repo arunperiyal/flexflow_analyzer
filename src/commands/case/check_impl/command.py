@@ -168,7 +168,9 @@ def _execute_check_on_case(case_dir: Path, do_run, do_archive, do_config, do_plt
         _check_plt(cfg, case_dir, console, freq, t1, t2)
 
     if do_out:
-        _check_out(cfg, case_dir, console, t1, t2)
+        # `case check all --freq` is the PLT frequency; only `case check out
+        # --freq` is the frequency of the .out/.rst files.
+        _check_out(cfg, case_dir, console, t1, t2, freq=None if do_plt else freq)
 
     console.print()
 
@@ -661,8 +663,15 @@ def _check_plt(cfg, case_dir: Path, console: Console, freq: Optional[int] = None
 # ---------------------------------------------------------------------------
 
 def _check_out(cfg, case_dir: Path, console: Console,
-               t1: Optional[float] = None, t2: Optional[float] = None):
-    """List timesteps for which .out/.rst files are present in the run directory."""
+               t1: Optional[float] = None, t2: Optional[float] = None,
+               freq: Optional[int] = None):
+    """List timesteps for which .out/.rst files are present in the run directory.
+
+    With `freq`, the steps freq, 2*freq, ... are expected too: each one with
+    neither file is listed as missing. They run up to t2, or to the last step
+    found -- not maxTimeSteps, so a run still going does not show its future
+    steps as missing.
+    """
     console.print("[bold]Out/Rst file check[/bold]")
 
     problem = cfg.problem
@@ -698,25 +707,43 @@ def _check_out(cfg, case_dir: Path, console: Console,
 
     all_steps = sorted(set(out_steps) | set(rst_steps))
 
-    if not all_steps:
+    missing = set()
+    if freq and (all_steps or t2 is not None):
+        first = freq if t1 is None else max(freq, int(-(-t1 // freq)) * freq)
+        last = int(t2) if t2 is not None else all_steps[-1]
+        missing = set(range(first, last + 1, freq)) - set(all_steps)
+
+    if not all_steps and not missing:
         console.print(f"  [dim]No {problem}.*_*.out or .rst files found in "
                        f"{cfg.run_dir_str or run_dir}[/dim]")
         console.print()
         return
+    all_steps = sorted(set(all_steps) | missing)
 
     tbl = Table(box=box.SIMPLE, show_header=True, header_style="bold yellow")
     tbl.add_column("tsId", justify="right", style="cyan")
     tbl.add_column(".out", justify="center")
     tbl.add_column(".rst", justify="center")
+    if freq:
+        tbl.add_column("", no_wrap=True)
 
     for step in all_steps:
+        if step in missing:
+            tbl.add_row(f"[red]{_fmt_tsid(step)}[/red]", '[red]✗[/red]', '[red]✗[/red]',
+                        '[red]missing[/red]')
+            continue
         out_icon = '[green]✓[/green]' if step in out_steps else '[dim]—[/dim]'
         rst_icon = '[green]✓[/green]' if step in rst_steps else '[dim]—[/dim]'
-        tbl.add_row(_fmt_tsid(step), out_icon, rst_icon)
+        tbl.add_row(_fmt_tsid(step), out_icon, rst_icon, *([''] if freq else []))
 
     console.print(tbl)
-    console.print(
-        f"  {len(out_steps)} .out file(s), {len(rst_steps)} .rst file(s)  "
-        f"([cyan]{_fmt_tsid(all_steps[0])}[/cyan] → [cyan]{_fmt_tsid(all_steps[-1])}[/cyan])"
-    )
+    present = [s for s in all_steps if s not in missing]
+    span = (f"  ([cyan]{_fmt_tsid(present[0])}[/cyan] → [cyan]{_fmt_tsid(present[-1])}[/cyan])"
+            if present else '')
+    console.print(f"  {len(out_steps)} .out file(s), {len(rst_steps)} .rst file(s){span}")
+    if freq:
+        if missing:
+            console.print(f"  [red]✗[/red] {len(missing)} step(s) missing at --freq {freq}")
+        else:
+            console.print(f"  [green]✓[/green] no step missing at --freq {freq}")
     console.print()

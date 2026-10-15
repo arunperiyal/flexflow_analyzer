@@ -72,6 +72,9 @@ Pick one subcommand.
           • {Colors.YELLOW}--t1{Colors.RESET}/{Colors.YELLOW}--t2{Colors.RESET} restrict the listing to a timestep window (either
             alone is a one-sided bound); usable via context too:
             {Colors.DIM}use t1:0 t2:1000{Colors.RESET}
+          • {Colors.YELLOW}--freq N{Colors.RESET} expects a step every N timesteps (N, 2N, ... up to --t2
+            or the last step found) and lists each one with neither file
+            as missing
 
     {Colors.CYAN}all{Colors.RESET}
         Run every check in order: config, def, run, archive, plt, out.
@@ -107,6 +110,7 @@ Pick one subcommand.
     # List timesteps with .out/.rst files in the run directory
     case check out CS4SG1U1
     case check out CS4SG1U1 --t1 0 --t2 1000
+    case check out CS4SG1U1 --freq 1000          # flag missing restart steps
 
     # Run everything
     case check all CS4SG1U1

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### 🔎 `case check out --freq N`
+
+- Expects a step every N timesteps (N, 2N, ... up to `--t2`, or the last
+  step found) and lists each one with neither `.out` nor `.rst` as missing,
+  with a count. Combines with `--t1`/`--t2`. A plain flag: the `freq`
+  context (the PLT frequency) does not fill it, and `case check all --freq`
+  still applies to the PLT check only.
+
 ### 🗄️ NAS case helpers: `tools/nas/simulation_functions.sh`
 
 - Shell functions for the NAS, where flexflow cannot run (BusyBox `ash`):
