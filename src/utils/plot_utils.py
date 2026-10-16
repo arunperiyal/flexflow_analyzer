@@ -148,6 +148,19 @@ def plot_node_displacements(reader, node_id, component='all', figsize=(12, 8), u
     return fig, axes
 
 
+def _component(component, prefix):
+    """--component arrives as a list (nargs='+') and as x/y/z, as the help says;
+    the OISD keys are tx/ty/tz (mx/my/mz). Take the first and name it so."""
+    if isinstance(component, (list, tuple)):
+        component = component[0] if component else 'all'
+    component = str(component or 'all').lower()
+    if component in ('x', 'y', 'z'):
+        return prefix + component
+    if component in ('mag', 'magn'):
+        return 'magnitude'
+    return component
+
+
 def plot_force_data(reader, component='all', figsize=(12, 8), use_index=False, plot_style=None, start_time=None, end_time=None):
     """
     Plot total traction/force time history from OISD data.
@@ -178,6 +191,7 @@ def plot_force_data(reader, component='all', figsize=(12, 8), use_index=False, p
     
     default_style = {'linewidth': 1.5}
     default_style.update(plot_style)
+    component = _component(component, 't')
     data = reader.get_total_traction()
     
     # Filter data by time range if specified
@@ -229,7 +243,7 @@ def plot_force_data(reader, component='all', figsize=(12, 8), use_index=False, p
             ax.set_ylabel(ylabel)
             ax.set_title(f'Total Traction - {component.upper()}')
         else:
-            raise ValueError(f"Invalid component '{component}'. Use tx, ty, tz, magnitude, or all")
+            raise ValueError(f"Invalid component '{component}'. Use x, y, z, magnitude, or all")
         
         ax.set_xlabel(x_label)
         ax.grid(True, alpha=0.3)
@@ -257,6 +271,7 @@ def plot_moment_data(reader, component='all', figsize=(12, 8), use_index=False):
     --------
     fig, axes : matplotlib objects
     """
+    component = _component(component, 'm')
     data = reader.get_total_moment()
     
     if use_index:
@@ -304,7 +319,7 @@ def plot_moment_data(reader, component='all', figsize=(12, 8), use_index=False):
             ax.set_ylabel(ylabel)
             ax.set_title(f'Total Moment - {component.upper()}')
         else:
-            raise ValueError(f"Invalid component '{component}'. Use mx, my, mz, magnitude, or all")
+            raise ValueError(f"Invalid component '{component}'. Use x, y, z, magnitude, or all")
         
         ax.set_xlabel(x_label)
         ax.grid(True, alpha=0.3)
