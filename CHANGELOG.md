@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### 🐛 `plot --data-type force --component y`
+
+- Failed with "unhashable type: 'list'": `--component` takes a list, and the
+  force and moment plots compared that list as one name. They now take the
+  first item and accept `x`/`y`/`z` (as the help shows) as well as
+  `tx`/`ty`/`tz` (`mx`/`my`/`mz` for moment) and `magnitude`.
+
 ### 🔎 `case check out --freq N`
 
 - Expects a step every N timesteps (N, 2N, ... up to `--t2`, or the last
