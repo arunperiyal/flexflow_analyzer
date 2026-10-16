@@ -8,8 +8,8 @@
   steps divisible by N are deleted, and those divisible by M are kept.
   `... --t1 4000 --t2 5000 --freq 1 --keep-freq 5` leaves every 5th file.
 - `output --keep-freq N` keeps the `.out`/`.rst` files at steps divisible by N
-  directly, with no need to know outFreq. `--keep-every N` (N × freq) still
-  works; giving both is an error.
+  directly, with no need to know outFreq. It replaces `--keep-every N`
+  (N × freq), which is gone; with neither, it still keeps 10 × freq.
 
 ### 🐛 `plot --data-type force --component y`
 

@@ -1187,7 +1187,7 @@ class CaseOrganizer:
 
     def _analyze_output_directory(self, t1: Optional[float] = None, t2: Optional[float] = None):
         """Analyze output directory and find files to delete."""
-        # Keep the steps divisible by --keep-freq; else by --keep-every (default 10) * freq
+        # Keep the steps divisible by --keep-freq, by default 10 * freq
         freq = None
         keep_interval = getattr(self.args, 'keep_freq', None)
         if keep_interval is None:
@@ -1196,9 +1196,8 @@ class CaseOrganizer:
                 self.logger.warning("Could not determine frequency, skipping output directory "
                                     "cleanup (give --keep-freq N)")
                 return
-            keep_every = getattr(self.args, 'keep_every', None) or 10
-            keep_interval = freq * keep_every
-            self.logger.info(f"Using freq={freq}, keep_every={keep_every}, keep_interval={keep_interval}")
+            keep_interval = freq * 10
+            self.logger.info(f"Using freq={freq}, keep_interval={keep_interval}")
         self.console.print(f"  Keeping .out/.rst files at steps divisible by {keep_interval}")
 
         if t1 is not None or t2 is not None:

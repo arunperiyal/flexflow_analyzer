@@ -136,9 +136,6 @@ class CaseCommand(BaseCommand):
         case_arg(output_parser, help='Case directory path')
         output_parser.add_argument('--keep-freq', type=int, metavar='N',
                                     help='Keep the steps divisible by N (default: 10 * freq)')
-        # The old spelling: N times the output frequency.
-        output_parser.add_argument('--keep-every', type=int, metavar='N',
-                                    help='Keep the steps divisible by N * freq')
         time_window(output_parser, 
                     t1_kwargs=dict(metavar='STEP', help='Only target timesteps >= STEP'),
                     t2_kwargs=dict(metavar='STEP', help='Only target timesteps <= STEP'))

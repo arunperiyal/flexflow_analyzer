@@ -87,8 +87,6 @@ Organize and clean up case directories. Pick one subcommand.
 
         {Colors.CYAN}--keep-freq N{Colors.RESET}
             Keep the steps divisible by N
-        {Colors.CYAN}--keep-every N{Colors.RESET}
-            Keep the steps divisible by N * freq (the older spelling)
 
     {Colors.CYAN}plt{Colors.RESET}
         Pass at least one of --delete-ascii / --delete-binary.
@@ -289,7 +287,7 @@ def print_organise_examples():
     → compiled/riser.othd [1-2084]: steps 1-1000 from riser1,
       1001-2084 from riser2
 
-{Colors.BOLD}What output Does (freq=50, keep_every=10):{Colors.RESET}
+{Colors.BOLD}What output Does (freq=50, no --keep-freq):{Colors.RESET}
 
     • riser.50_1.out       → Delete (not multiple of 500)
     • riser.100_1.out      → Delete

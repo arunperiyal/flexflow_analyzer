@@ -90,8 +90,8 @@ def execute_organise(args):
 
 
 def _check_keep_flags(args, subcommand):
-    """What is wrong with --freq/--keep-freq/--keep-every, or None."""
-    for flag in ('freq', 'keep_freq', 'keep_every'):
+    """What is wrong with --freq/--keep-freq, or None."""
+    for flag in ('freq', 'keep_freq'):
         value = getattr(args, flag, None)
         if value is not None and value < 1:
             return f"--{flag.replace('_', '-')} must be 1 or more"
@@ -99,9 +99,6 @@ def _check_keep_flags(args, subcommand):
         for flag in ('freq', 'keep_freq'):
             if getattr(args, flag, None) is not None:
                 return f"--{flag.replace('_', '-')} only applies with --delete-binary"
-    if (subcommand == 'output' and getattr(args, 'keep_freq', None) is not None
-            and getattr(args, 'keep_every', None) is not None):
-        return "give --keep-freq or --keep-every, not both"
     return None
 
 

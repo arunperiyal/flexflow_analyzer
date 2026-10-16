@@ -2,7 +2,7 @@
 
 --freq picks the binary/ steps that may go, --keep-freq spares the steps it
 divides; `output --keep-freq N` keeps the .out/.rst steps divisible by N with
-no need to know outFreq. --keep-every (N * freq) still works.
+no need to know outFreq; without it, 10 * freq.
 """
 
 import argparse
@@ -24,7 +24,7 @@ class _Logger:
 
 def organise(case_dir, subcommand, config=None, **flags):
     args = Namespace(delete_ascii=False, delete_binary=False, freq=None, keep_freq=None,
-                     keep_every=None, dry_run=False, no_confirm=True, log=False,
+                     dry_run=False, no_confirm=True, log=False,
                      verbose=False, t1=None, t2=None)
     for key, value in flags.items():
         setattr(args, key, value)
@@ -80,9 +80,9 @@ def test_output_keep_freq_needs_no_outfreq(tmp_path, run_dir):
     assert steps(run_dir, '.rst') == steps(run_dir, '.out')
 
 
-def test_output_keep_every_is_still_times_freq(tmp_path, run_dir):
-    organise(tmp_path, 'output', config={'dir': './RUN_1', 'outFreq': '50'}, keep_every=8)
-    assert steps(run_dir, '.out') == [400, 800, 1200, 1600, 2000]
+def test_output_default_is_ten_times_freq(tmp_path, run_dir):
+    organise(tmp_path, 'output', config={'dir': './RUN_1', 'outFreq': '50'})
+    assert steps(run_dir, '.out') == [500, 1000, 1500, 2000]
 
 
 @pytest.fixture
@@ -100,6 +100,6 @@ def test_parse_and_check(parse):
         _check_keep_flags(parse('plt', 'C1', '--delete-ascii', '--keep-freq', '5'), 'plt')
     assert 'must be 1 or more' in \
         _check_keep_flags(parse('plt', 'C1', '--delete-binary', '--freq', '0'), 'plt')
-    assert 'not both' in \
-        _check_keep_flags(parse('output', 'C1', '--keep-freq', '5', '--keep-every', '2'), 'output')
+    with pytest.raises(SystemExit):
+        parse('output', 'C1', '--keep-every', '2')
     assert parse('output', 'C1', '--keep-freq', '500').keep_freq == 500
