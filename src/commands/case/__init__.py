@@ -134,8 +134,11 @@ class CaseCommand(BaseCommand):
         output_parser = organise_subparsers.add_parser('output', add_help=False,
                                     help='Remove intermediate .out/.rst files from run dir')
         case_arg(output_parser, help='Case directory path')
-        output_parser.add_argument('--keep-every', type=int,
-                                    help='Keep every Nth output (default: 10 * freq)')
+        output_parser.add_argument('--keep-freq', type=int, metavar='N',
+                                    help='Keep the steps divisible by N (default: 10 * freq)')
+        # The old spelling: N times the output frequency.
+        output_parser.add_argument('--keep-every', type=int, metavar='N',
+                                    help='Keep the steps divisible by N * freq')
         time_window(output_parser, 
                     t1_kwargs=dict(metavar='STEP', help='Only target timesteps >= STEP'),
                     t2_kwargs=dict(metavar='STEP', help='Only target timesteps <= STEP'))
@@ -161,6 +164,11 @@ class CaseCommand(BaseCommand):
         plt_parser.add_argument('--delete-binary', action='store_true',
                                     help='Delete PLT files from binary/ within --t1/--t2 '
                                          '(unconditional; omitting both deletes all)')
+        # Plain flags, not the `freq` context: they choose what --delete-binary removes.
+        plt_parser.add_argument('--freq', type=int, metavar='N',
+                                    help='With --delete-binary: only the steps divisible by N')
+        plt_parser.add_argument('--keep-freq', type=int, metavar='N',
+                                    help='With --delete-binary: keep the steps divisible by N')
         time_window(plt_parser, 
                     t1_kwargs=dict(metavar='STEP', help='Only target timesteps >= STEP'),
                     t2_kwargs=dict(metavar='STEP', help='Only target timesteps <= STEP'))

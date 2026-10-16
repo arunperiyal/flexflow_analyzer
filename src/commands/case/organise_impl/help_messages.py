@@ -81,11 +81,14 @@ Organize and clean up case directories. Pick one subcommand.
 
     {Colors.CYAN}output{Colors.RESET}
         Remove intermediate .out/.rst files from the run directory:
-          • Keeps files at multiples of freq * keep_every
-          • Uses outFreq from simflow.config or auto-detects
+          • Keeps the files at steps divisible by --keep-freq
+            (default: 10 * freq, freq from outFreq in simflow.config
+            or auto-detected)
 
+        {Colors.CYAN}--keep-freq N{Colors.RESET}
+            Keep the steps divisible by N
         {Colors.CYAN}--keep-every N{Colors.RESET}
-            Keep every Nth output (default: 10, means freq*10)
+            Keep the steps divisible by N * freq (the older spelling)
 
     {Colors.CYAN}plt{Colors.RESET}
         Pass at least one of --delete-ascii / --delete-binary.
@@ -103,6 +106,11 @@ Organize and clean up case directories. Pick one subcommand.
               • Unconditional — no check against the run directory
               • Omitting both --t1 and --t2 deletes every PLT file in binary/
               • Can leave no surviving copy of that timestep's PLT data
+
+        {Colors.CYAN}--freq N{Colors.RESET}       (with --delete-binary)
+            Only the steps divisible by N
+        {Colors.CYAN}--keep-freq N{Colors.RESET}  (with --delete-binary)
+            Keep the steps divisible by N
 
 {Colors.BOLD}TARGETING BY TIMESTEP:{Colors.RESET}
     --t1 STEP                 Only target timesteps >= STEP
@@ -221,8 +229,8 @@ def print_organise_examples():
     # Remove intermediate .out/.rst files (keeps every freq*10)
     flexflow case organise output CS4SG1U1
 
-    # Custom retention interval (keep every freq*5)
-    flexflow case organise output CS4SG1U1 --keep-every 5
+    # Keep only the steps divisible by 5000
+    flexflow case organise output CS4SG1U1 --keep-freq 5000
 
     # Only clean up to timestep 5000
     flexflow case organise output CS4SG1U1 --t2 5000
@@ -240,6 +248,9 @@ def print_organise_examples():
 
     # Unconditionally delete PLT files from binary/ for a timestep window
     flexflow case organise plt CS4SG1U1 --delete-binary --t1 1000 --t2 2000
+
+    # Thin binary/ out: in 4000-5000, keep only the steps divisible by 5
+    flexflow case organise plt CS4SG1U1 --delete-binary --t1 4000 --t2 5000 --freq 1 --keep-freq 5
 
     # Both directions in one call
     flexflow case organise plt CS4SG1U1 --delete-ascii --delete-binary --t1 1000 --t2 2000
@@ -294,9 +305,14 @@ def print_organise_examples():
     • binary/riser.1500.plt      → Delete (in range, regardless of run dir)
     • binary/riser.3000.plt      → Keep   (outside range)
 
+{Colors.BOLD}... with --keep-freq 500:{Colors.RESET}
+
+    • binary/riser.1500.plt      → Keep   (1500 % 500 == 0)
+    • binary/riser.1550.plt      → Delete
+
 {Colors.BOLD}Notes:{Colors.RESET}
     • archive --update, --verify and --compile run immediately, no confirmation needed
     • archive --clean, output and plt ask for confirmation unless --no-confirm
     • --delete-ascii never touches binary/; --delete-binary never touches the run dir
-    • --delete-binary with no --t1/--t2 deletes every PLT file in binary/
+    • --delete-binary with no --t1/--t2/--freq/--keep-freq deletes every PLT file in binary/
 """)

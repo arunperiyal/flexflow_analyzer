@@ -54,6 +54,11 @@ def execute_organise(args):
         print_organise_help()
         return
 
+    problem = _check_keep_flags(args, subcommand)
+    if problem:
+        print(f"Error: {problem}", file=sys.stderr)
+        sys.exit(2)
+
     logger = Logger(verbose=args.verbose)
     console = Console()
 
@@ -82,6 +87,22 @@ def execute_organise(args):
             import traceback
             traceback.print_exc()
         sys.exit(1)
+
+
+def _check_keep_flags(args, subcommand):
+    """What is wrong with --freq/--keep-freq/--keep-every, or None."""
+    for flag in ('freq', 'keep_freq', 'keep_every'):
+        value = getattr(args, flag, None)
+        if value is not None and value < 1:
+            return f"--{flag.replace('_', '-')} must be 1 or more"
+    if subcommand == 'plt' and not getattr(args, 'delete_binary', False):
+        for flag in ('freq', 'keep_freq'):
+            if getattr(args, flag, None) is not None:
+                return f"--{flag.replace('_', '-')} only applies with --delete-binary"
+    if (subcommand == 'output' and getattr(args, 'keep_freq', None) is not None
+            and getattr(args, 'keep_every', None) is not None):
+        return "give --keep-freq or --keep-every, not both"
+    return None
 
 
 def _execute_organise_on_all_cases(args, logger, console, subcommand):
