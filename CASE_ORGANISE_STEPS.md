@@ -135,12 +135,11 @@ After a prune, the next `--update` adds `{problem}2.othd`, and the next
 
 Removes intermediate output files from the run directory:
 
-- **`.out` and `.rst` files**: deleted if their time step is NOT a multiple of
-  `freq * keep_every`
-  - Default `keep_every = 10`, so keeps steps at multiples of `freq * 10`
-
-Frequency is read from `simflow.config` (`outFreq` field) or auto-detected
-from existing output files.
+- **`.out` and `.rst` files**: deleted if their time step is NOT divisible by
+  `--keep-freq N`
+  - Without `--keep-freq` it keeps the multiples of `freq * 10`, where freq is
+    read from `simflow.config` (`outFreq` field) or auto-detected from the
+    existing output files
 
 With `--t1`/`--t2`, only files whose timestep falls in that window are
 considered; the rest are left untouched (either bound alone is a one-sided
@@ -175,6 +174,18 @@ Deletes PLT files from `binary/` within `--t1`/`--t2`:
 - Can leave no surviving copy of that timestep's PLT data — this is the most
   destructive of the three subcommands
 
+Two flags narrow it (both only with `--delete-binary`, and plain flags — the
+`freq` context does not fill them):
+
+- `--freq N`: only the steps divisible by N are candidates
+- `--keep-freq N`: the steps divisible by N are kept
+
+```
+case organise plt --delete-binary --t1 4000 --t2 5000 --freq 1 --keep-freq 5
+```
+
+deletes 4001–4004, 4006–4009, … and keeps 4000, 4005, …, 5000.
+
 `--delete-ascii` and `--delete-binary` can be combined in one `plt` call; each
 runs as its own step with its own entry in the confirmation summary.
 
@@ -199,7 +210,7 @@ runs as its own step with its own entry in the confirmation summary.
 ### Running `output`
 
 1. Determine frequency (from config or auto-detect)
-2. Calculate keep interval = `freq × keep_every`
+2. Keep interval = `--keep-freq`, or `freq × 10` without it
 3. Find all `.out`/`.rst` files in the run directory
 4. Skip files outside `--t1`/`--t2`, if given
 5. Mark remaining files for deletion if their step is not a multiple of the
@@ -252,7 +263,7 @@ case organise archive CS4SG1U1 --verify                         # Check every ar
 case organise archive CS4SG1U1 --verify --compile --prune       # Keep only the compiled files
 case organise output CS4SG1U1                                   # Clean intermediate output files
 case organise archive CS4SG1U1 --update --t1 0 --t2 1000        # Only archive files in [0, 1000]
-case organise output CS4SG1U1 --keep-every 5                    # Custom retention
+case organise output CS4SG1U1 --keep-freq 5000                # Custom retention
 case organise output CS4SG1U1 --t2 5000                         # Only clean up to timestep 5000
 case organise archive CS4SG1U1 --clean --no-confirm             # Skip confirmation
 case organise archive CS4SG1U1 --clean --log                    # Log deletions to file

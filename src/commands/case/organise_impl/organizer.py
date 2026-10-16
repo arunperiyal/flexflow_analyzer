@@ -1068,21 +1068,34 @@ class CaseOrganizer:
 
         pattern = re.compile(rf'^{re.escape(problem)}\.(\d+)\.plt$')
 
+        freq = getattr(self.args, 'freq', None)
+        keep_freq = getattr(self.args, 'keep_freq', None)
+
         to_delete = []
-        for binary_plt in sorted(binary_dir.glob(f'{problem}.*.plt')):
+        kept = 0
+        for binary_plt in sorted(binary_dir.glob(f'{problem}.*.plt'),
+                                 key=lambda p: self._extract_plt_step(p.name, problem) or 0):
             match = pattern.match(binary_plt.name)
             if not match:
                 continue
             step = int(match.group(1))
             if not self._step_in_bounds(step, t1, t2):
                 continue
+            if freq and step % freq:
+                continue
+            if keep_freq and step % keep_freq == 0:
+                kept += 1
+                continue
             to_delete.append(binary_plt)
 
+        if keep_freq:
+            self.console.print(f"  [green]✓[/green]  Keeping {kept} file(s) at steps divisible by {keep_freq}")
+
         if not to_delete:
-            self.console.print(f"  [dim]No {problem}.*.plt files found in binary/ for the given range[/dim]")
+            self.console.print(f"  [dim]No {problem}.*.plt files to delete in binary/ for the given range[/dim]")
             return
 
-        if t1 is None and t2 is None:
+        if t1 is None and t2 is None and not freq and not keep_freq:
             self.console.print(
                 "  [yellow]⚠[/yellow]  No --t1/--t2 given — this deletes ALL PLT files in binary/"
             )
@@ -1174,20 +1187,18 @@ class CaseOrganizer:
 
     def _analyze_output_directory(self, t1: Optional[float] = None, t2: Optional[float] = None):
         """Analyze output directory and find files to delete."""
-        # Get frequency
-        freq = self._get_frequency()
-        if freq is None:
-            self.logger.warning("Could not determine frequency, skipping output directory cleanup")
-            return
-
-        # Calculate keep_every: use provided value or default to 10 * freq
-        if hasattr(self.args, 'keep_every') and self.args.keep_every is not None:
-            keep_every = self.args.keep_every
-        else:
-            keep_every = 10
-
-        keep_interval = freq * keep_every
-        self.logger.info(f"Using freq={freq}, keep_every={keep_every}, keep_interval={keep_interval}")
+        # Keep the steps divisible by --keep-freq, by default 10 * freq
+        freq = None
+        keep_interval = getattr(self.args, 'keep_freq', None)
+        if keep_interval is None:
+            freq = self._get_frequency()
+            if freq is None:
+                self.logger.warning("Could not determine frequency, skipping output directory "
+                                    "cleanup (give --keep-freq N)")
+                return
+            keep_interval = freq * 10
+            self.logger.info(f"Using freq={freq}, keep_interval={keep_interval}")
+        self.console.print(f"  Keeping .out/.rst files at steps divisible by {keep_interval}")
 
         if t1 is not None or t2 is not None:
             self.logger.info(f"Limiting cleanup to timesteps in [{t1}, {t2}]")

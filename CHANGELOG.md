@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### 🧹 `--keep-freq` for `case organise plt --delete-binary` and `output`
+
+- `plt --delete-binary --freq N --keep-freq M`: within `--t1`/`--t2`, only the
+  steps divisible by N are deleted, and those divisible by M are kept.
+  `... --t1 4000 --t2 5000 --freq 1 --keep-freq 5` leaves every 5th file.
+- `output --keep-freq N` keeps the `.out`/`.rst` files at steps divisible by N
+  directly, with no need to know outFreq. It replaces `--keep-every N`
+  (N × freq), which is gone; with neither, it still keeps 10 × freq.
+
 ### 🐛 `plot --data-type force --component y`
 
 - Failed with "unhashable type: 'list'": `--component` takes a list, and the
