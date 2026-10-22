@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### ⚡ `case report`: faster, and saved in `.case_report`
+
+- The last timestep of each `.othd` is read from the end of the file instead
+  of parsing all of it, so its cost no longer grows with the file (68 MB of
+  parts: 1.2 s → 0.03 s). After a restart inside one file it reports where the
+  restarted run stopped.
+- The report is saved in `.case_report` beside `.cases`. The first
+  `case report` in a shell session recomputes it; later ones read it, compute
+  only a column not saved yet (e.g. the first `--size`), and say how old the
+  values are. `--update` recomputes. A fresh report keeps the saved values of
+  the columns it doesn't show, so the slow `--size` totals survive a plain
+  `case report`. Outside the shell every run recomputes.
+
 ### 🔢 `missing`: gaps in a numbered file series
 
 - `missing 'slice_xVor_{}.png' --t1 3000 --t2 5000 --freq 50` lists the
