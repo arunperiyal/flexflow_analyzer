@@ -386,6 +386,8 @@ class CaseCommand(BaseCommand):
                                   help='Add column with last timestep from run directory')
         report_parser.add_argument('--size', action='store_true',
                                   help='Add column with total disk usage of each case')
+        report_parser.add_argument('--update', action='store_true',
+                                  help='Recompute everything instead of reading .case_report')
         report_parser.add_argument('-h', '--help', action='store_true',
                                   help='Show help for report command')
 

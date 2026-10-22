@@ -30,3 +30,91 @@ def test_last_timestep_across_parts(tmp_path):
     othd(tmp_path / 'riser3.othd', range(20, 41))
     assert report._last_othd_timestep_in_dir(tmp_path) == 150
     assert report._last_othd_timestep_in_dir(tmp_path / 'nope') is None
+
+
+# --- the .case_report cache ---------------------------------------------------
+
+import argparse
+import json
+
+import pytest
+
+
+@pytest.fixture
+def project(tmp_path, monkeypatch):
+    monkeypatch.setattr(report, '_refreshed', set())
+    cases = []
+    for name in ('C1', 'C2'):
+        case = tmp_path / name
+        (case / 'othd_files').mkdir(parents=True)
+        (case / 'binary').mkdir()
+        (case / 'simflow.config').write_text('problem = riser\ndir = ./RUN_1\n')
+        othd(case / 'othd_files' / 'riser1.othd', range(1, 101))
+        (case / 'binary' / 'riser.100.plt').write_text('x')
+        cases.append({'name': name, 'path': str(case)})
+    (tmp_path / '.cases').write_text(json.dumps(cases))
+    return tmp_path
+
+
+def run(project, capsys, **flags):
+    args = argparse.Namespace(dir=str(project), run=False, size=False, update=False, help=False)
+    for key, value in flags.items():
+        setattr(args, key, value)
+    report.execute_report(args)
+    return capsys.readouterr().out
+
+
+def lasts(text):
+    """{case: [archive, binary, ...]} from the table."""
+    rows = {}
+    for line in text.splitlines():
+        cells = [c.strip() for c in line.strip('│ ').split('│')]
+        if cells and cells[0] in ('C1', 'C2'):
+            rows[cells[0]] = cells[1:]
+    return rows
+
+
+def test_first_report_in_a_session_computes_then_reads_the_file(project, capsys):
+    first = run(project, capsys)
+    assert lasts(first)['C1'][:2] == ['100', '100'] and 'From .case_report' not in first
+    saved = json.loads((project / '.case_report').read_text())
+    assert saved['cases'][str(project / 'C1')]['archive']['value'] == 100
+
+    # the case moves on; within the session the saved report is shown, and says so
+    othd(project / 'C1' / 'othd_files' / 'riser2.othd', range(90, 201))
+    second = run(project, capsys)
+    assert lasts(second)['C1'][0] == '100'
+    assert 'From .case_report, computed' in second and '--update' in second
+
+    assert lasts(run(project, capsys, update=True))['C1'][0] == '200'
+
+
+def test_a_new_session_recomputes(project, capsys):
+    run(project, capsys)
+    othd(project / 'C1' / 'othd_files' / 'riser2.othd', range(90, 201))
+    report._refreshed.clear()                       # a new shell, or the plain CLI
+    assert lasts(run(project, capsys))['C1'][0] == '200'
+
+
+def test_a_column_not_cached_yet_is_computed_and_kept(project, capsys, monkeypatch):
+    run(project, capsys)
+    out = run(project, capsys, size=True)
+    assert 'B' in lasts(out)['C1'][2]
+    sizes = []
+    monkeypatch.setattr(report, '_dir_size', lambda p: sizes.append(p) or 0)
+    run(project, capsys, size=True)                 # now from the file
+    assert sizes == []
+    report._refreshed.clear()
+    run(project, capsys)                            # a fresh report without --size ...
+    run(project, capsys, size=True)                 # ... keeps the sizes
+    assert sizes == []
+
+
+def test_a_bad_or_missing_cache_is_rebuilt(project, capsys):
+    run(project, capsys)
+    (project / '.case_report').write_text('{"version": 1, "cases": {"x": 5, "%s": {"archive": 3}}}'
+                                          % (project / 'C1'))
+    assert lasts(run(project, capsys))['C1'][0] == '100'
+    (project / '.case_report').write_text('not json')
+    assert lasts(run(project, capsys))['C1'][0] == '100'
+    assert 'x' not in json.loads((project / '.case_report').read_text())['cases']
