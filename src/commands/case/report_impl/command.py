@@ -128,24 +128,42 @@ def _resolve_rundir(case_path: Path, cfg: dict, context_rundir: 'str | None') ->
     return None
 
 
+_TSID = re.compile(rb'^[ \t]*tsId[ \t]+(\d+)', re.M)
+
+
+def _last_tsid(path: Path):
+    """The last tsId written to an .othd file, read from its end.
+
+    A run writes its steps in order, so the last block is where it got to;
+    reading the tail (growing it until a whole tsId line is in it) costs the
+    same for a 10 MB file as for a 10 GB one. After a restart inside one file
+    this is where the restarted run stopped -- the step the file really holds.
+    """
+    with open(path, 'rb') as f:
+        size = f.seek(0, os.SEEK_END)
+        window = 1 << 20
+        while True:
+            start = max(0, size - window)
+            f.seek(start)
+            hits = _TSID.findall(f.read(size - start))
+            # a hit at the very start of the window may be a cut-off line
+            if hits and (start == 0 or len(hits) > 1):
+                return int(hits[-1])
+            if start == 0:
+                return None
+            window *= 4
+
+
 def _last_othd_timestep_in_dir(directory: Path):
-    """Return the highest timestep across all .othd files directly in directory."""
-    files = sorted(directory.glob('*.othd'))
-    if not files:
-        return None
-
+    """Return the last timestep reached across the .othd files directly in directory."""
     max_ts = None
-    for fp in files:
+    for fp in sorted(directory.glob('*.othd')):
         try:
-            from ....core.readers.othd_reader import OTHDReader
-            reader = OTHDReader(str(fp), range_only=True)
-            if reader.tsIds:
-                ts = max(reader.tsIds)
-                if max_ts is None or ts > max_ts:
-                    max_ts = ts
-        except Exception:
+            ts = _last_tsid(fp)
+        except OSError:
             continue
-
+        if ts is not None and (max_ts is None or ts > max_ts):
+            max_ts = ts
     return max_ts
 
 
@@ -271,9 +289,9 @@ def _show_help(console):
     console.print()
     console.print("[bold]COLUMNS:[/bold]")
     console.print("    Case              Case directory name")
-    console.print("    Last (archive)    Highest timestep across all .othd files in othd_files/")
-    console.print("    Last (binary PLT) Timestep of the most recently modified PLT in binary/")
-    console.print("    Last (rundir)     Highest timestep from .othd files in run directory (--run)")
+    console.print("    Last (archive)    Last timestep reached by the .othd files in othd_files/")
+    console.print("    Last (binary PLT) Highest PLT timestep in binary/")
+    console.print("    Last (rundir)     Last timestep reached by the .othd files in the run directory (--run)")
     console.print("    Disk Usage        Total size of the case directory (--size)")
     console.print()
     console.print("[bold]EXAMPLES:[/bold]")
