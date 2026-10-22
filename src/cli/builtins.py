@@ -6,7 +6,9 @@ give FlexFlow files.
 """
 
 import fnmatch
+import math
 import os
+import re
 import shutil
 import subprocess
 import threading
@@ -66,6 +68,21 @@ def builtins():
                         "  find riser*.othd     # every riser othd below here\n"
                         "  find -d RUN_         # run directories\n"
                         "  find -c CS4          # cases with CS4 in the name[/dim]",
+                complete='path', category='Files'),
+        Builtin('missing', _missing, help='Missing files in a numbered series',
+                usage='missing <pattern> [--t1 N] [--t2 N] [--freq N] [--empty] [--extra] [-q]',
+                details="  [cyan]--t1 N[/cyan]    First number (default: the lowest found)\n"
+                        "  [cyan]--t2 N[/cyan]    Last number (default: the highest found)\n"
+                        "  [cyan]--freq N[/cyan]  Step between numbers (default: inferred from the files)\n"
+                        "  [cyan]--empty[/cyan]   Also report 0-byte files\n"
+                        "  [cyan]--extra[/cyan]   Also report files between the expected steps\n"
+                        "  [cyan]-q[/cyan]        Only the summary line\n"
+                        "[dim]{} in the pattern stands for the number; zero padding follows the\n"
+                        "files found. Expects t1, t1+freq, ... up to t2. Exits 1 if any is\n"
+                        "missing (or empty, with --empty). In a pipe it prints just the names.\n"
+                        "  missing 'slice_xVor_{}.png' --t1 3000 --t2 5000 --freq 50\n"
+                        "  missing binary/riser.{}.plt --empty\n"
+                        "  missing 'img_{}.png' | wc -l[/dim]",
                 complete='path', category='Files'),
         Builtin('mkdir', _mkdir, help='Make directories', usage='mkdir [-p] <dir> [dirs...]',
                 details="  [cyan]-p[/cyan]  Make parents as needed; no error if it exists",
@@ -284,6 +301,121 @@ def _find(rt, argv):
     if not rt.capturing:
         rt.console.print(f"[dim]{len(found)} found[/dim]")
     return 0
+
+
+_MISSING_USAGE = "usage: missing <pattern> [--t1 N] [--t2 N] [--freq N] [--empty] [--extra] [-q]"
+
+
+def _missing_args(argv):
+    """(pattern, {t1, t2, freq}, flags) or an error message."""
+    numbers, flags, rest = {}, set(), []
+    args = iter(argv)
+    for arg in args:
+        name, eq, value = arg.partition('=')
+        if name in ('--t1', '--t2', '--freq'):
+            if not eq:
+                value = next(args, None)
+                if value is None:
+                    return f"{name} needs a value"
+            try:
+                numbers[name[2:]] = int(value)
+            except ValueError:
+                return f"{name} needs a whole number, not '{value}'"
+        elif arg in ('--empty', '--extra', '-q'):
+            flags.add(arg.lstrip('-'))
+        elif arg.startswith('-') and len(arg) > 1:
+            return f"unknown option {arg}"
+        else:
+            rest.append(arg)
+    if len(rest) != 1:
+        return _MISSING_USAGE
+    if numbers.get('freq', 1) < 1:
+        return "--freq must be 1 or more"
+    if 't1' in numbers and 't2' in numbers and numbers['t1'] > numbers['t2']:
+        return f"--t1 {numbers['t1']} is after --t2 {numbers['t2']}"
+    return rest[0], numbers, flags
+
+
+def _missing(rt, argv):
+    """The numbers of a series like slice_{}.png that have no file."""
+    parsed = _missing_args(argv)
+    if isinstance(parsed, str):
+        rt.error(f"missing: {parsed}" if not parsed.startswith('usage') else parsed)
+        return 2
+    pattern, numbers, flags = parsed
+    typed_dir, _, name = pattern.rpartition('/')
+    if name.count('{}') != 1 or '{}' in typed_dir:
+        rt.error("missing: the file name needs one {} where the number goes")
+        return 2
+    folder = rt.resolve_path(typed_dir) if typed_dir else rt.cwd
+    if not folder.is_dir():
+        rt.error(f"missing: not a directory: {escape(str(folder))}")
+        return 1
+
+    prefix, suffix = name.split('{}')
+    number = re.compile(re.escape(prefix) + r'(\d+)' + re.escape(suffix) + '$')
+    found, pad = {}, 0
+    for entry in os.scandir(folder):
+        match = number.match(entry.name)
+        if match:
+            digits = match.group(1)
+            found[int(digits)] = Path(entry.path)
+            if len(digits) > 1 and digits.startswith('0'):
+                pad = len(digits)
+
+    t1 = numbers.get('t1', min(found, default=None))
+    t2 = numbers.get('t2', max(found, default=None))
+    if t1 is None or t2 is None:
+        rt.warn(f"missing: no file matches '{pattern}' (give --t1 and --t2 to list them all)")
+        return 1
+    if t1 > t2:
+        rt.error(f"missing: --t1 {t1} is after the last file, {t2}")
+        return 2
+    freq = numbers.get('freq')
+    guessed = freq is None
+    if guessed:
+        freq = math.gcd(*(n - t1 for n in found if t1 <= n <= t2)) or 1
+    if (t2 - t1) // freq > 5_000_000:
+        rt.error(f"missing: {t1}..{t2} every {freq} is too many steps; give --freq")
+        return 2
+
+    expected = range(t1, t2 + 1, freq)
+    missing = [n for n in expected if n not in found]
+    empty = [n for n in expected if n in found and 'empty' in flags
+             and found[n].stat().st_size == 0]
+    extra = sorted(n for n in found if 'extra' in flags and t1 <= n <= t2 and (n - t1) % freq)
+
+    shown = lambda n: (f"{typed_dir}/" if typed_dir else '') + f"{prefix}{n:0{pad}d}{suffix}"
+    rows = ([('missing', n, 'red') for n in missing] + [('empty', n, 'yellow') for n in empty]
+            + [('extra', n, 'cyan') for n in extra])
+    rows.sort(key=lambda row: row[1])
+    labelled = bool(flags & {'empty', 'extra'})
+    if 'q' not in flags:
+        for kind, n, colour in rows:
+            if rt.capturing:
+                rt.out(f"{kind:<8} {shown(n)}" if labelled else shown(n))
+            else:
+                rt.console.print(f"  [{colour}]{kind:<8}[/{colour}] {escape(shown(n))}",
+                                 highlight=False)
+
+    span = f"{t1}..{t2} every {freq}" + (" (inferred)" if guessed else "")
+    if not rt.capturing or 'q' in flags:
+        parts = [f"{len(missing)} of {len(expected)} missing" if missing
+                 else f"all {len(expected)} present"]
+        if 'empty' in flags:
+            parts.append(f"{len(empty)} empty")
+        if 'extra' in flags:
+            parts.append(f"{len(extra)} extra")
+        bad = missing or empty
+        mark = "[red]✗[/red]" if bad else "[green]✓[/green]"
+        text = ", ".join(parts) + f" · {span}"
+        if rt.capturing:
+            rt.out(("✗ " if bad else "✓ ") + text)
+        else:
+            if rows and 'q' not in flags:
+                rt.console.print()
+            rt.console.print(f"{mark} {text}", highlight=False)
+    return 1 if missing or empty else 0
 
 
 def _mkdir(rt, argv):
