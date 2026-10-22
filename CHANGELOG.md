@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### 🔢 `missing`: gaps in a numbered file series
+
+- `missing 'slice_xVor_{}.png' --t1 3000 --t2 5000 --freq 50` lists the
+  files of the series that don't exist; `{}` stands for the number and the
+  pattern may include a directory. Without `--t1`/`--t2` it uses the lowest
+  and highest number found, without `--freq` the gcd of the gaps (shown as
+  "inferred"); zero padding follows the files.
+- `--empty` also reports 0-byte files, `--extra` files between the expected
+  steps, `-q` just the summary. Exits 1 if anything is missing; in a pipe it
+  prints only the names (`missing 'img_{}.png' | wc -l`).
+
 ### 🧹 `--keep-freq` for `case organise plt --delete-binary` and `output`
 
 - `plt --delete-binary --freq N --keep-freq M`: within `--t1`/`--t2`, only the
