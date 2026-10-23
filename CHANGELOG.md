@@ -13,7 +13,9 @@
   symlinks are not followed. In a pipe, `du` prints `size<TAB>path` lines.
 - `du -n N` shows only the largest N entries of each directory, with a
   `... K more` row for the rest.
-- Needs shellkit v0.1.2 (`requirements.txt` now pins it).
+- `du --sort name` lists each level in name order (RUN_2 before RUN_10);
+  `-n` still picks the largest N.
+- Needs shellkit v0.1.3 (`requirements.txt` now pins it).
 
 ### 🔁 `case upload|download rst` and `sgd` split; every step by default
 
