@@ -179,6 +179,9 @@ class CaseCommand(BaseCommand):
         case_arg(output_parser, help='Case directory path')
         output_parser.add_argument('--keep-freq', type=int, metavar='N',
                                     help='Keep the .rst of steps divisible by N (default: 10 * freq); .out go once their step has a .plt')
+        output_parser.add_argument('--all-out', action='store_true',
+                                    help='Delete every .out in range, even steps with no .plt '
+                                         '(their field data is then gone for good)')
         time_window(output_parser, 
                     t1_kwargs=dict(metavar='STEP', help='Only target timesteps >= STEP'),
                     t2_kwargs=dict(metavar='STEP', help='Only target timesteps <= STEP'))

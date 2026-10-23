@@ -11,6 +11,8 @@
 - Steps with no `.plt` yet keep their `.out`, and are listed so you can
   convert them first.
 - `--keep-freq` (default `10 * freq`) now applies to `.rst` only.
+- `--all-out` deletes every `.out` in range, converted or not, for when the
+  fields of those steps are not wanted (still asks first).
 
 ### 🐛 `case upload|download sgd`: one file per subgrid, not per step
 

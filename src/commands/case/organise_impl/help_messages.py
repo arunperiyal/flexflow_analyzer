@@ -91,6 +91,10 @@ Organize and clean up case directories. Pick one subcommand.
         {Colors.CYAN}--keep-freq N{Colors.RESET}
             Keep the .rst of the steps divisible by N
 
+        {Colors.CYAN}--all-out{Colors.RESET}
+            Delete every .out in range, even at steps with no .plt.
+            Those steps can then never be converted.
+
     {Colors.CYAN}plt{Colors.RESET}
         Pass at least one of --delete-ascii / --delete-binary.
 
@@ -229,6 +233,9 @@ def print_organise_examples():
 
     # Remove converted .out and intermediate .rst (keeps .rst every freq*10)
     flexflow case organise output CS4SG1U1
+
+    # Delete all .out, converted or not (asks first)
+    flexflow case organise output CS4SG1U1 --all-out
 
     # Keep only the .rst of the steps divisible by 5000
     flexflow case organise output CS4SG1U1 --keep-freq 5000
