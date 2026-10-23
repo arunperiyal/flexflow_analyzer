@@ -135,11 +135,16 @@ After a prune, the next `--update` adds `{problem}2.othd`, and the next
 
 Removes intermediate output files from the run directory:
 
-- **`.out` and `.rst` files**: deleted if their time step is NOT divisible by
-  `--keep-freq N`
+- **`.rst` files** (restart points): deleted if their time step is NOT
+  divisible by `--keep-freq N`
   - Without `--keep-freq` it keeps the multiples of `freq * 10`, where freq is
     read from `simflow.config` (`outFreq` field) or auto-detected from the
     existing output files
+- **`.out` files**: deleted at any step, keep-freq steps included, once
+  `{problem}.{step}.plt` exists in `binary/` or the run directory. A restart
+  reads only `.rst` (and the `.sgd` subgrid files); `.out` is read only by the
+  conversion that writes the `.plt`. Steps without a `.plt` keep their `.out`
+  and are listed, so convert them first.
 
 With `--t1`/`--t2`, only files whose timestep falls in that window are
 considered; the rest are left untouched (either bound alone is a one-sided
@@ -213,8 +218,9 @@ runs as its own step with its own entry in the confirmation summary.
 2. Keep interval = `--keep-freq`, or `freq × 10` without it
 3. Find all `.out`/`.rst` files in the run directory
 4. Skip files outside `--t1`/`--t2`, if given
-5. Mark remaining files for deletion if their step is not a multiple of the
-   keep interval
+5. Mark `.rst` files for deletion if their step is not a multiple of the keep
+   interval, and `.out` files if their step has a `.plt` (in `binary/` or the
+   run directory); list the steps whose `.out` stay for want of one
 6. Show summary and ask for confirmation (unless `--no-confirm`)
 7. Delete marked files
 

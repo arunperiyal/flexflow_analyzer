@@ -1229,7 +1229,8 @@ class CaseOrganizer:
                 return
             keep_interval = freq * 10
             self.logger.info(f"Using freq={freq}, keep_interval={keep_interval}")
-        self.console.print(f"  Keeping .out/.rst files at steps divisible by {keep_interval}")
+        self.console.print(f"  Keeping .rst at steps divisible by {keep_interval}; "
+                           f".out go once converted to .plt")
 
         if t1 is not None or t2 is not None:
             self.logger.info(f"Limiting cleanup to timesteps in [{t1}, {t2}]")
@@ -1257,7 +1258,14 @@ class CaseOrganizer:
     def _analyze_single_output_dir(self, output_dir: Path, problem: str, freq: int,
                                    keep_interval: int, t1: Optional[float] = None,
                                    t2: Optional[float] = None):
-        """Analyze a single output directory."""
+        """Analyze a single output directory.
+
+        .rst files are restart points, so the steps divisible by keep_interval
+        stay. .out files are not read by a restart -- only by the conversion
+        that writes {problem}.T.plt -- so any step's .out can go, but only
+        once that .plt exists (in binary/ or the run directory): without it
+        the step's field data would be gone for good.
+        """
         # Find out and rst files (plt files are handled by `plt --delete-ascii`/`--delete-binary`, not `output`)
         out_pattern = f'{problem}.*_*.out'
         rst_pattern = f'{problem}.*_*.rst'
@@ -1268,7 +1276,9 @@ class CaseOrganizer:
         self.logger.info(f"Found {len(out_files)} .out files, {len(rst_files)} .rst files "
                         f"in {output_dir.name}")
 
-        # Extract step numbers and check retention for .out and .rst files
+        binary_dir = self.case_dir / 'binary'
+        no_plt = set()          # steps whose .out stay: nothing has converted them
+
         for file in out_files + rst_files:
             step = self._extract_step_from_filename(file.name, problem)
             if step is None:
@@ -1278,8 +1288,17 @@ class CaseOrganizer:
             if not self._step_in_bounds(step, t1, t2):
                 continue
 
-            # Keep if multiple of keep_interval
-            if step % keep_interval != 0:
+            if file.suffix == '.out':
+                plt = f'{problem}.{step}.plt'
+                delete = (binary_dir / plt).exists() or (output_dir / plt).exists()
+                if not delete:
+                    no_plt.add(step)
+                reason = f"step {step} has {plt}"
+            else:
+                delete = step % keep_interval != 0
+                reason = f"step {step} not multiple of {keep_interval}"
+
+            if delete:
                 self.files_to_delete.append(file)
                 size = file.stat().st_size
 
@@ -1291,7 +1310,14 @@ class CaseOrganizer:
                 self.stats['output_space_freed'] += size
 
                 if self.args.verbose:
-                    self.logger.info(f"  Delete: {file.name} (step {step} not multiple of {keep_interval})")
+                    self.logger.info(f"  Delete: {file.name} ({reason})")
+
+        if no_plt:
+            steps = sorted(no_plt)
+            shown = ', '.join(map(str, steps[:10])) + (', ...' if len(steps) > 10 else '')
+            self.console.print(f"  [yellow]Keeping .out of {len(steps)} step(s) with no "
+                               f"{problem}.<step>.plt yet:[/yellow] {shown}")
+            self.console.print("  [dim]Convert them first (run post), then run this again.[/dim]")
 
         # PLT files are handled exclusively by `plt --delete-ascii`/`--delete-binary`, not `output`
 

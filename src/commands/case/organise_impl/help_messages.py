@@ -81,12 +81,15 @@ Organize and clean up case directories. Pick one subcommand.
 
     {Colors.CYAN}output{Colors.RESET}
         Remove intermediate .out/.rst files from the run directory:
-          • Keeps the files at steps divisible by --keep-freq
-            (default: 10 * freq, freq from outFreq in simflow.config
-            or auto-detected)
+          • .rst (restart points): keeps the steps divisible by
+            --keep-freq (default: 10 * freq, freq from outFreq in
+            simflow.config or auto-detected)
+          • .out: deletes every step whose <problem>.<step>.plt exists
+            (binary/ or run dir), keep-freq steps too -- a restart does
+            not read .out. Steps with no .plt yet keep their .out.
 
         {Colors.CYAN}--keep-freq N{Colors.RESET}
-            Keep the steps divisible by N
+            Keep the .rst of the steps divisible by N
 
     {Colors.CYAN}plt{Colors.RESET}
         Pass at least one of --delete-ascii / --delete-binary.
@@ -224,10 +227,10 @@ def print_organise_examples():
 
 {Colors.BOLD}Cleaning Output Directory:{Colors.RESET}
 
-    # Remove intermediate .out/.rst files (keeps every freq*10)
+    # Remove converted .out and intermediate .rst (keeps .rst every freq*10)
     flexflow case organise output CS4SG1U1
 
-    # Keep only the steps divisible by 5000
+    # Keep only the .rst of the steps divisible by 5000
     flexflow case organise output CS4SG1U1 --keep-freq 5000
 
     # Only clean up to timestep 5000
@@ -289,10 +292,10 @@ def print_organise_examples():
 
 {Colors.BOLD}What output Does (freq=50, no --keep-freq):{Colors.RESET}
 
-    • riser.50_1.out       → Delete (not multiple of 500)
-    • riser.100_1.out      → Delete
-    • riser.500_1.out      → Keep  (500 % 500 == 0)
-    • riser.1000_1.out     → Keep  (1000 % 500 == 0)
+    • riser.50_1.rst       → Delete (not multiple of 500)
+    • riser.500_1.rst      → Keep   (500 % 500 == 0, a restart point)
+    • riser.500_1.out      → Delete (binary/riser.500.plt exists)
+    • riser.550_1.out      → Keep   (no riser.550.plt yet -- convert it first)
 
 {Colors.BOLD}What plt --delete-ascii Does:{Colors.RESET}
 

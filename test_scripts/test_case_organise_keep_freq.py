@@ -1,8 +1,10 @@
 """`case organise plt --delete-binary --freq/--keep-freq` and `output --keep-freq`.
 
 --freq picks the binary/ steps that may go, --keep-freq spares the steps it
-divides; `output --keep-freq N` keeps the .out/.rst steps divisible by N with
-no need to know outFreq; without it, 10 * freq.
+divides; `output --keep-freq N` keeps the .rst steps divisible by N with no
+need to know outFreq; without it, 10 * freq. `output` deletes a step's .out
+once its .plt exists -- keep-freq steps too, since a restart reads only .rst
+-- and keeps the .out of steps with no .plt.
 """
 
 import argparse
@@ -74,15 +76,43 @@ def run_dir(tmp_path):
     return run
 
 
+@pytest.fixture
+def converted(tmp_path, run_dir):
+    """Steps up to 1000 have their .plt: 50..500 in binary/, 550..1000 still in
+    the run directory."""
+    binary = tmp_path / 'binary'
+    binary.mkdir()
+    for t in range(50, 501, 50):
+        (binary / f'riser.{t}.plt').write_text('x')
+    for t in range(550, 1001, 50):
+        (run_dir / f'riser.{t}.plt').write_text('x')
+    return run_dir
+
+
 def test_output_keep_freq_needs_no_outfreq(tmp_path, run_dir):
     organise(tmp_path, 'output', keep_freq=300, t2=1500)
-    assert steps(run_dir, '.out') == [300, 600, 900, 1200, 1500] + list(range(1550, 2001, 50))
-    assert steps(run_dir, '.rst') == steps(run_dir, '.out')
+    assert steps(run_dir, '.rst') == [300, 600, 900, 1200, 1500] + list(range(1550, 2001, 50))
 
 
 def test_output_default_is_ten_times_freq(tmp_path, run_dir):
     organise(tmp_path, 'output', config={'dir': './RUN_1', 'outFreq': '50'})
-    assert steps(run_dir, '.out') == [500, 1000, 1500, 2000]
+    assert steps(run_dir, '.rst') == [500, 1000, 1500, 2000]
+
+
+def test_output_deletes_out_once_its_plt_exists_keep_freq_steps_too(tmp_path, converted):
+    organise(tmp_path, 'output', keep_freq=500)
+    assert steps(converted, '.out') == list(range(1050, 2001, 50))     # no .plt for these
+    assert steps(converted, '.rst') == [500, 1000, 1500, 2000]
+
+
+def test_output_without_any_plt_keeps_every_out(tmp_path, run_dir):
+    organise(tmp_path, 'output', keep_freq=500)
+    assert len(steps(run_dir, '.out')) == 40
+
+
+def test_output_out_respects_the_time_window(tmp_path, converted):
+    organise(tmp_path, 'output', keep_freq=500, t1=300, t2=700)
+    assert steps(converted, '.out') == [50, 100, 150, 200, 250] + list(range(750, 2001, 50))
 
 
 @pytest.fixture
