@@ -239,3 +239,46 @@ def test_prune_asks_first(tmp_path, monkeypatch):
     _answers(monkeypatch, 'n')
     make_organizer(tmp_path, prune=True).organize('archive')
     assert (othd_dir / 'riser1.othd').exists()
+
+
+# A run that stopped before its first step leaves a part with only the header
+# (or nothing at all). --clean used to abort on it ("No time steps found");
+# it holds no data, so it is offered for deletion like a redundant part.
+
+def test_clean_offers_a_part_with_no_time_steps(tmp_path, monkeypatch):
+    othd_dir = write_parts(tmp_path, {
+        'riser1.othd': othd(range(1, 11)),
+        'riser2.othd': HEADER,                # header only
+        'riser3.othd': '',                    # empty file
+        'riser4.othd': othd(range(11, 21)),
+    })
+    _answers(monkeypatch, 'y', 'y', 'y')      # delete riser2, riser3, apply renames
+    make_organizer(tmp_path, clean=True).organize('archive')
+    assert sorted(p.name for p in othd_dir.glob('*.othd')) == ['riser1.othd', 'riser2.othd']
+    assert OTHDReader(str(othd_dir / 'riser2.othd')).tsIds == list(range(11, 21))
+
+
+def test_clean_keeps_an_empty_part_without_overwriting_it(tmp_path, monkeypatch):
+    othd_dir = write_parts(tmp_path, {
+        'riser1.othd': othd(range(1, 11)),
+        'riser2.othd': HEADER,
+        'riser3.othd': othd(range(11, 21)),
+    })
+    _answers(monkeypatch, 'n', 'y')           # keep the empty part, apply renames
+    make_organizer(tmp_path, clean=True).organize('archive')
+    assert sorted(p.name for p in othd_dir.glob('*.othd')) == \
+        ['riser1.othd', 'riser2.othd', 'riser3.othd']
+    assert OTHDReader(str(othd_dir / 'riser2.othd')).tsIds == list(range(11, 21))
+    assert (othd_dir / 'riser3.othd').read_text() == HEADER
+
+
+def test_clean_still_aborts_on_a_part_it_cannot_read(tmp_path, monkeypatch):
+    othd_dir = write_parts(tmp_path, {
+        'riser1.othd': othd(range(1, 11)),
+        'riser2.othd': HEADER + "tsIdx garbage\n",   # mentions tsId, yields no step
+    })
+    _answers(monkeypatch)
+    import pytest
+    with pytest.raises(SystemExit):
+        make_organizer(tmp_path, clean=True).organize('archive')
+    assert sorted(p.name for p in othd_dir.glob('*.othd')) == ['riser1.othd', 'riser2.othd']
