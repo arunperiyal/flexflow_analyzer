@@ -15,10 +15,10 @@ from src.cli.context import case_arg, context_flag, freq_arg, time_window
 TRANSFER_MODES = {
     'upload': [('binary', 'binary/: every timestep, or just --t1..--t2'),
                ('rst', 'Restart .rst files of every step (or --t1..--t2) in the run directory'),
-               ('sgd', 'Restart .sgd files of every step (or --t1..--t2) in the run directory')],
+               ('sgd', 'Subgrid files <problem>.<k>.sgd (all nsg) in the run directory')],
     'download': [('binary', 'binary/: every timestep, or just --t1..--t2 (--freq)'),
                  ('rst', 'Restart .rst files of every step (or --t1..--t2) from the remote run directory'),
-                 ('sgd', 'Restart .sgd files of every step (or --t1..--t2) from the remote run directory')],
+                 ('sgd', 'Subgrid files <problem>.<k>.sgd (all nsg) from the remote run directory')],
 }
 
 
@@ -29,8 +29,9 @@ def _mode(args):
 
 
 def _stepped(args):
-    """The t1/t2/time/freq contexts select timesteps, so they only apply to binary/rst/sgd."""
-    return _mode(args) is not None
+    """The t1/t2/time/freq contexts select timesteps, so they only apply to
+    binary/rst (.sgd files are per subgrid, not per step)."""
+    return _mode(args) in ('binary', 'rst')
 
 
 def _transfer_case(store, ns):
@@ -450,8 +451,8 @@ class CaseCommand(BaseCommand):
         upload_parser.add_argument('--remote-path', type=str, metavar='PATH',
                                   help='Override remote base path (default: use remote config)')
         time_window(upload_parser, when=_stepped,
-                    t1_kwargs=dict(metavar='STEP', help='binary/rst/sgd: first timestep to upload (alone: only that step)'),
-                    t2_kwargs=dict(metavar='STEP', help='binary/rst/sgd: last timestep to upload'))
+                    t1_kwargs=dict(metavar='STEP', help='binary/rst: first timestep to upload (alone: only that step)'),
+                    t2_kwargs=dict(metavar='STEP', help='binary/rst: last timestep to upload'))
         upload_parser.add_argument('--force', action='store_true',
                                   help='Create remote directories if they do not exist')
         upload_parser.add_argument('--resume', action='store_true',
@@ -479,8 +480,8 @@ class CaseCommand(BaseCommand):
         download_parser.add_argument('--remote-path', type=str, metavar='PATH',
                                     help='Override remote base path (default: use remote config)')
         time_window(download_parser, when=_stepped,
-                    t1_kwargs=dict(metavar='STEP', help='binary/rst/sgd: first timestep to download (alone: only that step)'),
-                    t2_kwargs=dict(metavar='STEP', help='binary/rst/sgd: last timestep to download'))
+                    t1_kwargs=dict(metavar='STEP', help='binary/rst: first timestep to download (alone: only that step)'),
+                    t2_kwargs=dict(metavar='STEP', help='binary/rst: last timestep to download'))
         freq_arg(download_parser, metavar='N',
                  resolve=lambda store, ns: (store.get('freq') if _mode(ns) == 'binary'
                                             and store.is_set('freq') else None),

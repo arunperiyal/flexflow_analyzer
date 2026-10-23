@@ -80,18 +80,16 @@ def select_steps(names: List[str], window: Optional[tuple],
 
 
 def select_restart(names: List[str], problem: str, window: Optional[tuple],
-                   nsg: Optional[int], kind: str = 'rst') -> tuple:
-    """One kind of restart file of the steps in `window`: (complete, incomplete).
+                   nsg: Optional[int]) -> tuple:
+    """The .rst files of the steps in `window`: (complete, incomplete).
 
-    A restart from step T reads {problem}.T.sgd and one {problem}.T_<k>.rst per
-    subgrid -- nsg of them (simflow.config). kind 'sgd' takes the .sgd of each
-    step; kind 'rst' takes the .rst files, and a step is complete with all nsg
-    of them (any at all when nsg is not known). Both results are dicts
-    {step: [names]}. No window means every step.
+    A restart from step T reads one {problem}.T_<k>.rst per subgrid -- nsg of
+    them (simflow.config) -- so a step is complete with all nsg (any at all
+    when nsg is not known). Both results are dicts {step: [names]}. No window
+    means every step.
     """
     lo, hi = window if window else (float('-inf'), float('inf'))
-    suffix = r"\.sgd" if kind == 'sgd' else r"_(\d+)\.rst"
-    pattern = re.compile(re.escape(problem) + r"\.(\d+)" + suffix + "$")
+    pattern = re.compile(re.escape(problem) + r"\.(\d+)_(\d+)\.rst$")
     steps: dict = {}
     for name in names:
         match = pattern.match(name)
@@ -99,9 +97,26 @@ def select_restart(names: List[str], problem: str, window: Optional[tuple],
             steps.setdefault(int(match.group(1)), []).append(name)
     complete, incomplete = {}, {}
     for step, files in sorted(steps.items()):
-        ok = kind == 'sgd' or not nsg or len(files) == nsg
+        ok = not nsg or len(files) == nsg
         (complete if ok else incomplete)[step] = sorted(files, key=_restart_order)
     return complete, incomplete
+
+
+def select_sgd(names: List[str], problem: str, nsg: Optional[int]) -> tuple:
+    """The subgrid files {problem}.<k>.sgd: (names by k, missing k).
+
+    The preprocessor writes one per subgrid, k = 0..nsg-1 (preProcOut.c), and
+    every run reads them all (solProc.c). They belong to the mesh split, not
+    to a timestep. Without nsg nothing can be called missing.
+    """
+    pattern = re.compile(re.escape(problem) + r"\.(\d+)\.sgd$")
+    found = {}
+    for name in names:
+        match = pattern.match(name)
+        if match:
+            found[int(match.group(1))] = name
+    missing = [k for k in range(nsg) if k not in found] if nsg else []
+    return [found[k] for k in sorted(found)], missing
 
 
 def _restart_order(name: str):
@@ -120,15 +135,16 @@ Upload case directories from local machine to a remote server.
 {Colors.BOLD}USAGE:{Colors.RESET}
     flexflow case upload [{Colors.YELLOW}case{Colors.RESET}] --to {Colors.YELLOW}REMOTE{Colors.RESET} [options]
     flexflow case upload binary [{Colors.YELLOW}case{Colors.RESET}] [--t1 STEP] [--t2 STEP] [options]
-    flexflow case upload rst|sgd [{Colors.YELLOW}case{Colors.RESET}] [--t1 STEP] [--t2 STEP] [options]
+    flexflow case upload rst [{Colors.YELLOW}case{Colors.RESET}] [--t1 STEP] [--t2 STEP] [options]
+    flexflow case upload sgd [{Colors.YELLOW}case{Colors.RESET}] [options]
 
 {Colors.BOLD}ARGUMENTS:{Colors.RESET}
     {Colors.YELLOW}binary{Colors.RESET}                 binary/ only -- with --t1/--t2, only the timesteps
                            in that range
     {Colors.YELLOW}rst{Colors.RESET}                    The nsg <problem>.<step>_<k>.rst of every step (or
                            --t1..--t2) in the run directory
-    {Colors.YELLOW}sgd{Colors.RESET}                    The <problem>.<step>.sgd of every step (or
-                           --t1..--t2) in the run directory
+    {Colors.YELLOW}sgd{Colors.RESET}                    The nsg subgrid files <problem>.<k>.sgd in the run
+                           directory (one per subgrid, not per step)
     {Colors.YELLOW}case{Colors.RESET}                   Local case directory path (use * for all cases in .cases)
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
@@ -137,8 +153,8 @@ Upload case directories from local machine to a remote server.
                            (default: othd_files,oisd_files,binary)
     {Colors.YELLOW}--files [PATTERNS]{Colors.RESET}     Loose files from the case root, as comma-separated
                            globs (default: simflow.config,*.def,*.geo,*.map)
-    {Colors.YELLOW}--t1 STEP{Colors.RESET}              binary/rst/sgd: first timestep (alone: only that step)
-    {Colors.YELLOW}--t2 STEP{Colors.RESET}              binary/rst/sgd: last timestep
+    {Colors.YELLOW}--t1 STEP{Colors.RESET}              binary/rst: first timestep (alone: only that step)
+    {Colors.YELLOW}--t2 STEP{Colors.RESET}              binary/rst: last timestep
     {Colors.YELLOW}--remote-path PATH{Colors.RESET}     Override remote base path (default: remote config path)
     {Colors.YELLOW}--force{Colors.RESET}                Create remote directories if they do not exist
     {Colors.YELLOW}--resume{Colors.RESET}               Resume the last interrupted upload
@@ -176,23 +192,24 @@ Upload case directories from local machine to a remote server.
     where it is, and the count of those is reported.
 
     The two flags read as they do everywhere else in FlexFlow: both bounds make
-    a range, one alone names that single step. They need {Colors.YELLOW}binary{Colors.RESET}, {Colors.YELLOW}rst{Colors.RESET} or {Colors.YELLOW}sgd{Colors.RESET},
+    a range, one alone names that single step. They need {Colors.YELLOW}binary{Colors.RESET} or {Colors.YELLOW}rst{Colors.RESET},
     since nothing else in a case is written per step. The t1/t2 context
     supplies them: {Colors.DIM}use t1:1000 t2:5000{Colors.RESET}, then {Colors.DIM}case upload binary CS4SG1U1{Colors.RESET}.
 
 {Colors.BOLD}RESTART FILES:{Colors.RESET}
-    To restart a run from step T the remote run directory needs <problem>.T.sgd
-    and one <problem>.T_<k>.rst per subgrid. {Colors.YELLOW}case upload sgd --t1 T{Colors.RESET} and
-    {Colors.YELLOW}case upload rst --t1 T{Colors.RESET} send them from the local run directory
-    (simflow.config 'dir') to the same directory under the remote case.
-    Without --t1/--t2 they send every step there is. A step with fewer .rst
-    files than nsg in simflow.config cannot restart a run: it is reported and
-    its .rst files are not sent.
+    To restart a run from step T the remote run directory needs one
+    <problem>.T_<k>.rst per subgrid, and the subgrid files <problem>.<k>.sgd
+    (k = 0..nsg-1) that every run reads. {Colors.YELLOW}case upload rst --t1 T{Colors.RESET} and
+    {Colors.YELLOW}case upload sgd{Colors.RESET} send them from the local run directory (simflow.config
+    'dir') to the same directory under the remote case. rst without
+    --t1/--t2 sends every step there is. A step with fewer .rst files than
+    nsg cannot restart a run: it is reported and not sent. sgd sends nothing
+    unless all nsg .sgd files are there.
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
     case upload binary CS4SG1U1 --to server --t1 1000 --t2 5000
     case upload binary CS4SG1U1 --to server --t1 5000
-    case upload sgd CS4SG1U1 --to server --t1 4000
+    case upload sgd CS4SG1U1 --to server
     case upload rst CS4SG1U1 --to server --t1 4000
     case upload rst CS4SG1U1 --to server --t1 3000 --t2 4000 --force
     case upload rst CS4SG1U1 --to server
@@ -217,15 +234,16 @@ Download case directories from a remote server to the local machine.
 {Colors.BOLD}USAGE:{Colors.RESET}
     flexflow case download [{Colors.YELLOW}case{Colors.RESET}] --from {Colors.YELLOW}REMOTE{Colors.RESET} [options]
     flexflow case download binary [{Colors.YELLOW}case{Colors.RESET}] [--t1 STEP] [--t2 STEP] [--freq N] [options]
-    flexflow case download rst|sgd [{Colors.YELLOW}case{Colors.RESET}] [--t1 STEP] [--t2 STEP] [options]
+    flexflow case download rst [{Colors.YELLOW}case{Colors.RESET}] [--t1 STEP] [--t2 STEP] [options]
+    flexflow case download sgd [{Colors.YELLOW}case{Colors.RESET}] [options]
 
 {Colors.BOLD}ARGUMENTS:{Colors.RESET}
     {Colors.YELLOW}binary{Colors.RESET}                 binary/ only -- with --t1/--t2, only the timesteps
                            in that range
     {Colors.YELLOW}rst{Colors.RESET}                    The nsg <problem>.<step>_<k>.rst of every step (or
                            --t1..--t2) in the remote run directory
-    {Colors.YELLOW}sgd{Colors.RESET}                    The <problem>.<step>.sgd of every step (or
-                           --t1..--t2) in the remote run directory
+    {Colors.YELLOW}sgd{Colors.RESET}                    The nsg subgrid files <problem>.<k>.sgd in the remote
+                           run directory (one per subgrid, not per step)
     {Colors.YELLOW}case{Colors.RESET}                   Local case directory path (destination; use * for all cases in .cases)
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
@@ -235,8 +253,8 @@ Download case directories from a remote server to the local machine.
     {Colors.YELLOW}--files [PATTERNS]{Colors.RESET}     Loose files from the remote case root, as
                            comma-separated globs
                            (default: simflow.config,*.def,*.geo,*.map)
-    {Colors.YELLOW}--t1 STEP{Colors.RESET}              binary/rst/sgd: first timestep (alone: only that step)
-    {Colors.YELLOW}--t2 STEP{Colors.RESET}              binary/rst/sgd: last timestep
+    {Colors.YELLOW}--t1 STEP{Colors.RESET}              binary/rst: first timestep (alone: only that step)
+    {Colors.YELLOW}--t2 STEP{Colors.RESET}              binary/rst: last timestep
     {Colors.YELLOW}--freq N{Colors.RESET}               binary: only steps that are multiples of N
     {Colors.YELLOW}--remote-path PATH{Colors.RESET}     Override remote base path (default: remote config path)
     {Colors.YELLOW}--force{Colors.RESET}                Create the local case directory if it does not exist
@@ -272,7 +290,7 @@ Download case directories from a remote server to the local machine.
     is left where it is, and the count of those is reported.
 
     The two flags read as they do everywhere else in FlexFlow: both bounds make
-    a range, one alone names that single step. They need {Colors.YELLOW}binary{Colors.RESET}, {Colors.YELLOW}rst{Colors.RESET} or {Colors.YELLOW}sgd{Colors.RESET},
+    a range, one alone names that single step. They need {Colors.YELLOW}binary{Colors.RESET} or {Colors.YELLOW}rst{Colors.RESET},
     since nothing else in a case is written per step. The t1/t2 context
     supplies them: {Colors.DIM}use t1:1000 t2:5000{Colors.RESET}, then {Colors.DIM}case download binary CS4SG1U1{Colors.RESET}.
 
@@ -281,20 +299,20 @@ Download case directories from a remote server to the local machine.
     from the freq context, but only with binary.
 
 {Colors.BOLD}RESTART FILES:{Colors.RESET}
-    {Colors.YELLOW}case download sgd --t1 T{Colors.RESET} fetches <problem>.T.sgd, and
-    {Colors.YELLOW}case download rst --t1 T{Colors.RESET} the nsg files <problem>.T_<k>.rst, from the
-    remote run directory into the same directory here (created if needed).
-    Without --t1/--t2 they fetch every step there is. problem, dir and nsg are
-    read from the remote simflow.config -- the run that wrote the files -- or
-    the local one when the remote has none. A step short of .rst files is
-    reported and not fetched.
+    {Colors.YELLOW}case download rst --t1 T{Colors.RESET} fetches the nsg files <problem>.T_<k>.rst,
+    and {Colors.YELLOW}case download sgd{Colors.RESET} the nsg subgrid files <problem>.<k>.sgd, from
+    the remote run directory into the same directory here (created if needed).
+    rst without --t1/--t2 fetches every step there is. problem, dir and nsg
+    are read from the remote simflow.config -- the run that wrote the files --
+    or the local one when the remote has none. A step short of .rst files is
+    reported and not fetched; sgd fetches nothing unless all nsg are there.
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
     case download binary CS4SG1U1 --from server --t1 1000 --t2 5000
     case download binary CS4SG1U1 --from server --t1 1000 --t2 5000 --freq 500
     case download binary CS4SG1U1 --from server --freq 1000
     case download binary CS4SG1U1 --from server --t1 5000
-    case download sgd CS4SG1U1 --from server --t1 4000
+    case download sgd CS4SG1U1 --from server
     case download rst CS4SG1U1 --from server --t1 4000
     case download rst CS4SG1U1 --from server
     case download CS4SG1U1 --from server --files
@@ -547,7 +565,7 @@ class CaseUploadCommand:
             if step_window and not mode:
                 self.console.print(
                     f"[red]Error:[/red] --t1/--t2 select timesteps, so they need "
-                    f"`case {direction} binary`, `rst` or `sgd`. "
+                    f"`case {direction} binary` or `rst`. "
                     f"Nothing else in a case is written per step."
                 )
                 return 1
@@ -559,8 +577,14 @@ class CaseUploadCommand:
                 return 1
             if mode in RESTART_TARGETS and step_freq is not None:
                 self.console.print(
-                    "[red]Error:[/red] --freq is for binary/; name the restart steps "
+                    "[red]Error:[/red] --freq is for binary/; name rst steps "
                     "with --t1/--t2."
+                )
+                return 1
+            if mode == 'sgd' and step_window:
+                self.console.print(
+                    f"[red]Error:[/red] .sgd files are one per subgrid "
+                    f"(<problem>.<k>.sgd), not per step; drop --t1/--t2."
                 )
                 return 1
             if mode in RESTART_TARGETS and (dir_arg or file_patterns):
@@ -1277,34 +1301,51 @@ class CaseUploadCommand:
     def _pick_restart(self, names: List[str], problem: str, window: Optional[tuple],
                       nsg: Optional[int], run_dir: str, where: str,
                       kind: str = 'rst') -> List[str]:
-        """The .rst or .sgd files of the steps in `window` (all steps without
-        one), after reporting each step: the complete ones with their count, the
-        rest with what they lack. [] when no step has any."""
-        complete, incomplete = select_restart(names, problem, window, nsg, kind)
+        """The .rst files of the steps in `window` (all steps without one), or
+        with kind 'sgd' the nsg subgrid files, after reporting what was found
+        and what is missing. [] when there is nothing that can be used."""
+        if kind == 'sgd':
+            return self._pick_sgd(names, problem, nsg, run_dir, where)
+        complete, incomplete = select_restart(names, problem, window, nsg)
         if window is None:
             span = "every step"
         else:
             lo, hi = window
             span = f"step {lo:g}" if lo == hi else f"steps {lo:g}..{hi:g}"
         self.console.print(f"[cyan]Selecting:[/cyan] .{kind} files of {span} in {run_dir}/")
-        if kind == 'rst' and not nsg:
+        if not nsg:
             self.console.print("[yellow]Warning:[/yellow] nsg is not set in simflow.config; "
                                "cannot check that every subgrid's .rst is there")
         for step, files in incomplete.items():
             self.console.print(f"[yellow]  skipping step {step}:[/yellow] "
                                f"{len(files)}/{nsg} .rst -- not enough to restart from")
         if not complete:
-            what = "complete .rst step" if kind == 'rst' else ".sgd file"
-            self.console.print(f"[red]Error:[/red] No {what} for {span} in {where}")
+            self.console.print(f"[red]Error:[/red] No complete .rst step for {span} in {where}")
             return []
-        if kind == 'rst':
-            for step, files in complete.items():
-                self.console.print(f"  step {step}: {len(files)} .rst")
-        else:
-            steps = list(complete)
-            shown = ', '.join(map(str, steps[:8])) + (', ...' if len(steps) > 8 else '')
-            self.console.print(f"  {len(steps)} step(s): {shown}")
+        for step, files in complete.items():
+            self.console.print(f"  step {step}: {len(files)} .rst")
         return [n for files in complete.values() for n in files]
+
+    def _pick_sgd(self, names: List[str], problem: str, nsg: Optional[int],
+                  run_dir: str, where: str) -> List[str]:
+        """All nsg <problem>.<k>.sgd, or [] if any is missing: a run reads
+        every subgrid's, so part of the set is no use."""
+        found, missing = select_sgd(names, problem, nsg)
+        self.console.print(f"[cyan]Selecting:[/cyan] subgrid files {problem}.<k>.sgd "
+                           f"in {run_dir}/")
+        if missing:
+            shown = ', '.join(map(str, missing[:8])) + (', ...' if len(missing) > 8 else '')
+            self.console.print(f"[red]Error:[/red] {len(missing)} of {nsg} .sgd files missing "
+                               f"in {where} (k = {shown}); nothing sent")
+            return []
+        if not found:
+            self.console.print(f"[red]Error:[/red] No {problem}.<k>.sgd in {where}")
+            return []
+        if not nsg:
+            self.console.print("[yellow]Warning:[/yellow] nsg is not set in simflow.config; "
+                               "cannot check that every subgrid's .sgd is there")
+        self.console.print(f"  {len(found)} .sgd" + (f" (nsg = {nsg})" if nsg else ""))
+        return found
 
     def upload_restart(
         self,
@@ -1315,9 +1356,9 @@ class CaseUploadCommand:
         force: bool = False,
         kind: str = 'rst',
     ) -> bool:
-        """Upload the .rst (nsg per step) or .sgd files of the steps in `window`
-        -- every step when None -- from the case's run directory to the same
-        directory on the remote.
+        """Upload the .rst files (nsg per step) of the steps in `window` --
+        every step when None -- or with kind 'sgd' the nsg subgrid files, from
+        the case's run directory to the same directory on the remote.
 
         A step missing some of its .rst files cannot restart a run, so it is
         reported and left behind.
@@ -1346,9 +1387,9 @@ class CaseUploadCommand:
         window: Optional[tuple],
         kind: str = 'rst',
     ) -> bool:
-        """Download the .rst (nsg per step) or .sgd files of the steps in
-        `window` -- every step when None -- from the remote case's run directory
-        to the same directory here.
+        """Download the .rst files (nsg per step) of the steps in `window` --
+        every step when None -- or with kind 'sgd' the nsg subgrid files, from
+        the remote case's run directory to the same directory here.
 
         problem, dir and nsg come from the remote simflow.config -- the run that
         wrote the files -- or the local one when the remote has none.
