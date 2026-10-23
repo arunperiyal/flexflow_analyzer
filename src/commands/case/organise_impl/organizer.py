@@ -25,7 +25,10 @@ def _fmt_tsid(tsid: int) -> str:
 class FileInfo:
     """Information about a data file."""
 
-    def __init__(self, path: Path, start_step: int, end_step: int, size: int, mtime: float):
+    def __init__(self, path: Path, start_step: Optional[int], end_step: Optional[int],
+                 size: int, mtime: float):
+        # start/end are None for a part with no time steps (a run that stopped
+        # before writing its first step): it holds no data, so --clean offers it
         self.path = path
         self.start_step = start_step
         self.end_step = end_step
@@ -33,6 +36,15 @@ class FileInfo:
         self.mtime = mtime
         self.is_redundant = False
         self.redundant_reason = None
+
+    @property
+    def is_empty(self) -> bool:
+        return self.start_step is None
+
+    @property
+    def range_text(self) -> str:
+        return ("no time steps" if self.is_empty
+                else f"{_fmt_tsid(self.start_step)} – {_fmt_tsid(self.end_step)}")
 
     def covers_range(self, start: int, end: int) -> bool:
         """Check if this file completely covers the given range."""
@@ -426,15 +438,22 @@ class CaseOrganizer:
             try:
                 # Read file to get time step range
                 reader = reader_class(str(file_path), range_only=True)
+                size = file_path.stat().st_size
+                mtime = file_path.stat().st_mtime
 
                 if len(reader.tsIds) == 0:
-                    raise ValueError(f"No time steps found in {file_path.name}")
+                    # No tsId line at all: the run stopped before its first
+                    # step. Anything else read as nothing is not understood.
+                    if self._mentions_tsid(file_path):
+                        raise ValueError(f"No time steps could be read from {file_path.name}")
+                    file_info = FileInfo(file_path, None, None, size, mtime)
+                    file_info.is_redundant = True
+                    file_info.redundant_reason = "holds no time steps"
+                    file_infos.append(file_info)
+                    continue
 
                 start_step = min(reader.tsIds)
                 end_step = max(reader.tsIds)
-
-                size = file_path.stat().st_size
-                mtime = file_path.stat().st_mtime
 
                 file_info = FileInfo(file_path, start_step, end_step, size, mtime)
                 file_infos.append(file_info)
@@ -457,6 +476,17 @@ class CaseOrganizer:
 
         return file_infos
 
+    @staticmethod
+    def _mentions_tsid(path: Path) -> bool:
+        """Whether the file has the text 'tsId' anywhere (read in chunks)."""
+        tail = b''
+        with open(path, 'rb') as f:
+            for chunk in iter(lambda: f.read(1 << 20), b''):
+                if b'tsId' in tail + chunk:
+                    return True
+                tail = chunk[-3:]
+        return False
+
     def _find_redundant_files(self, files: List[FileInfo], file_type: str):
         """
         Find redundant files (duplicates and subsets).
@@ -468,11 +498,13 @@ class CaseOrganizer:
         file_type : str
             'OTHD' or 'OISD'
         """
+        # Sort in place (the order --clean asks in): empty parts first, then by
+        # start step, then by size (larger first), then by mtime (recent first)
+        files.sort(key=lambda f: (not f.is_empty, f.start_step or 0, -f.size, -f.mtime))
+        all_files = files
+        files = [f for f in files if not f.is_empty]    # empty parts are already marked
         if not files:
             return
-
-        # Sort by start step, then by size (larger first), then by mtime (recent first)
-        files.sort(key=lambda f: (f.start_step, -f.size, -f.mtime))
 
         for i, file in enumerate(files):
             if file.is_redundant:
@@ -515,7 +547,7 @@ class CaseOrganizer:
                 )
 
         if self.args.verbose:
-            for file in files:
+            for file in all_files:
                 if file.is_redundant:
                     self.logger.info(f"  Redundant: {file.path.name} ({file.redundant_reason})")
 
@@ -592,11 +624,10 @@ class CaseOrganizer:
         table.add_column("tsId range", justify="right")
         table.add_column("Size", justify="right", style="green")
         table.add_column("Action")
-        for f in sorted(files, key=lambda f: (f.start_step, f.path.name)):
+        for f in sorted(files, key=lambda f: (not f.is_empty, f.start_step or 0, f.path.name)):
             action = (f"[red]delete[/red] [dim]({f.redundant_reason})[/dim]"
                       if f.is_redundant else "[green]keep[/green]")
-            table.add_row(f.path.name,
-                          f"{_fmt_tsid(f.start_step)} – {_fmt_tsid(f.end_step)}",
+            table.add_row(f.path.name, f.range_text,
                           self._format_size(f.size), action)
         self.console.print()
         self.console.print(table)
@@ -617,7 +648,7 @@ class CaseOrganizer:
                 continue
             self.console.print(
                 f"[bold]{f.path.parent.name}/{f.path.name}[/bold] "
-                f"[dim]tsId {_fmt_tsid(f.start_step)} – {_fmt_tsid(f.end_step)}, "
+                f"[dim]tsId {f.range_text}, "
                 f"{self._format_size(f.size)}, {f.redundant_reason}[/dim]"
             )
             while True:
@@ -1032,7 +1063,7 @@ class CaseOrganizer:
     def _check_cross_type_consistency(self, othd_files: List[FileInfo], oisd_files: List[FileInfo]):
         """Warn if OTHD and OISD coverage diverges after deduplication."""
         def coverage(files):
-            survivors = [f for f in files if not f.is_redundant]
+            survivors = [f for f in files if not f.is_redundant and not f.is_empty]
             if not survivors:
                 return None
             return (min(f.start_step for f in survivors), max(f.end_step for f in survivors))
@@ -1370,7 +1401,8 @@ class CaseOrganizer:
                 continue
 
             kept_files = [f for f in files if not f.is_redundant]
-            kept_files.sort(key=lambda f: f.start_step)
+            # an empty part the user kept goes last, so it is renamed rather than overwritten
+            kept_files.sort(key=lambda f: (f.is_empty, f.start_step or 0, f.path.name))
 
             ext = 'othd' if file_type == 'OTHD' else 'oisd'
 

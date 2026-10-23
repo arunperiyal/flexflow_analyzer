@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### 🐛 `case organise archive --clean` stopped on a part with no time steps
+
+- A run that stops before writing its first step leaves a part with only the
+  header (or nothing). `--clean` aborted on it ("Failed to read riser2.othd:
+  No time steps found"). Such a part holds no data, so it is now offered for
+  deletion with the reason "holds no time steps". If you keep it, it is
+  renumbered after the others rather than overwritten. A part that mentions
+  `tsId` but yields no step is still not understood and still aborts.
+
 ### ⚡ `case report`: faster, and saved in `.case_report`
 
 - The last timestep of each `.othd` is read from the end of the file instead
