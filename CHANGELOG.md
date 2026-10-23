@@ -11,7 +11,9 @@
 - `du -s` (or `-d 0`) prints only the total; `--dirs` leaves out files.
 - Sizes come from one walk of the tree instead of one per entry, and
   symlinks are not followed. In a pipe, `du` prints `size<TAB>path` lines.
-- Needs shellkit v0.1.1 (`requirements.txt` now pins it).
+- `du -n N` shows only the largest N entries of each directory, with a
+  `... K more` row for the rest.
+- Needs shellkit v0.1.2 (`requirements.txt` now pins it).
 
 ### 🔁 `case upload|download rst` and `sgd` split; every step by default
 
