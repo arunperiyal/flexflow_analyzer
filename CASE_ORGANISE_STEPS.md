@@ -144,7 +144,8 @@ Removes intermediate output files from the run directory:
   `{problem}.{step}.plt` exists in `binary/` or the run directory. A restart
   reads only `.rst` (and the `.sgd` subgrid files); `.out` is read only by the
   conversion that writes the `.plt`. Steps without a `.plt` keep their `.out`
-  and are listed, so convert them first.
+  and are listed, so convert them first -- or pass `--all-out` to delete
+  every `.out` in range regardless; those steps can then never be converted.
 
 With `--t1`/`--t2`, only files whose timestep falls in that window are
 considered; the rest are left untouched (either bound alone is a one-sided

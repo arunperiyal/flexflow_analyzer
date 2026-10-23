@@ -1229,8 +1229,12 @@ class CaseOrganizer:
                 return
             keep_interval = freq * 10
             self.logger.info(f"Using freq={freq}, keep_interval={keep_interval}")
-        self.console.print(f"  Keeping .rst at steps divisible by {keep_interval}; "
-                           f".out go once converted to .plt")
+        if getattr(self.args, 'all_out', False):
+            self.console.print(f"  Keeping .rst at steps divisible by {keep_interval}; "
+                               f"[bold]every .out goes[/bold] (--all-out)")
+        else:
+            self.console.print(f"  Keeping .rst at steps divisible by {keep_interval}; "
+                               f".out go once converted to .plt")
 
         if t1 is not None or t2 is not None:
             self.logger.info(f"Limiting cleanup to timesteps in [{t1}, {t2}]")
@@ -1278,6 +1282,7 @@ class CaseOrganizer:
 
         binary_dir = self.case_dir / 'binary'
         no_plt = set()          # steps whose .out stay: nothing has converted them
+        all_out = getattr(self.args, 'all_out', False)
 
         for file in out_files + rst_files:
             step = self._extract_step_from_filename(file.name, problem)
@@ -1290,10 +1295,11 @@ class CaseOrganizer:
 
             if file.suffix == '.out':
                 plt = f'{problem}.{step}.plt'
-                delete = (binary_dir / plt).exists() or (output_dir / plt).exists()
+                converted = (binary_dir / plt).exists() or (output_dir / plt).exists()
+                delete = converted or all_out
                 if not delete:
                     no_plt.add(step)
-                reason = f"step {step} has {plt}"
+                reason = f"step {step} has {plt}" if converted else "--all-out"
             else:
                 delete = step % keep_interval != 0
                 reason = f"step {step} not multiple of {keep_interval}"
@@ -1317,7 +1323,8 @@ class CaseOrganizer:
             shown = ', '.join(map(str, steps[:10])) + (', ...' if len(steps) > 10 else '')
             self.console.print(f"  [yellow]Keeping .out of {len(steps)} step(s) with no "
                                f"{problem}.<step>.plt yet:[/yellow] {shown}")
-            self.console.print("  [dim]Convert them first (run post), then run this again.[/dim]")
+            self.console.print("  [dim]Convert them first (run post), or add --all-out to "
+                               "delete them anyway.[/dim]")
 
         # PLT files are handled exclusively by `plt --delete-ascii`/`--delete-binary`, not `output`
 
