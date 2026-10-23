@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### 🔁 `case upload|download rst` and `sgd` split; every step by default
+
+- `rst` now carries only the `<problem>.T_<k>.rst` files; the new word `sgd`
+  carries `<problem>.T.sgd`. A restart from step T needs both:
+  `case upload sgd --t1 T` and `case upload rst --t1 T`.
+- Without `--t1`/`--t2`, `rst` and `sgd` take every step in the run
+  directory instead of stopping with "Say which restart step(s)".
+- A step with fewer `.rst` files than `nsg` is still reported and its `.rst`
+  files are not sent.
+
 ### 📥 `case download rst`
 
 - `case download rst [case] --t1 T [--t2 T2]` fetches the restart files of

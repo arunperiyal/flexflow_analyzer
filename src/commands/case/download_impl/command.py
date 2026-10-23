@@ -19,9 +19,12 @@ from rich import box
 # whatever the case calls its problem.
 DEFAULT_UPLOAD_FILES = ["simflow.config", "*.def", "*.geo", "*.map"]
 
-# The transfer target for `case upload rst`: not a directory of the case, but
-# the restart files of some steps in its run directory.
+# The transfer targets for `case upload rst|sgd`: not a directory of the case,
+# but one kind of restart file of some steps in its run directory.
 RST_TARGET = '__rst__'
+SGD_TARGET = '__sgd__'
+RESTART_TARGETS = {'rst': RST_TARGET, 'sgd': SGD_TARGET}
+RESTART_KIND = {target: kind for kind, target in RESTART_TARGETS.items()}
 
 # A timestep in a binary/ filename: riser.5000.plt, and the .vtu sidecars that
 # sit beside it (riser.5000.vtu, riser.5000.z1.vtu). The first dotted number is
@@ -76,17 +79,19 @@ def select_steps(names: List[str], window: Optional[tuple],
     return sorted(kept), sorted(no_step)
 
 
-def select_restart(names: List[str], problem: str, window: tuple,
-                   nsg: Optional[int]) -> tuple:
-    """The restart files of the steps in `window`: (complete, incomplete).
+def select_restart(names: List[str], problem: str, window: Optional[tuple],
+                   nsg: Optional[int], kind: str = 'rst') -> tuple:
+    """One kind of restart file of the steps in `window`: (complete, incomplete).
 
     A restart from step T reads {problem}.T.sgd and one {problem}.T_<k>.rst per
-    subgrid -- nsg of them (simflow.config). Both are dicts {step: [names]};
-    a step is complete with its .sgd and nsg .rst files (any .rst at all when
-    nsg is not known). An incomplete step cannot restart a run.
+    subgrid -- nsg of them (simflow.config). kind 'sgd' takes the .sgd of each
+    step; kind 'rst' takes the .rst files, and a step is complete with all nsg
+    of them (any at all when nsg is not known). Both results are dicts
+    {step: [names]}. No window means every step.
     """
-    lo, hi = window
-    pattern = re.compile(re.escape(problem) + r"\.(\d+)(?:\.sgd|_(\d+)\.rst)$")
+    lo, hi = window if window else (float('-inf'), float('inf'))
+    suffix = r"\.sgd" if kind == 'sgd' else r"_(\d+)\.rst"
+    pattern = re.compile(re.escape(problem) + r"\.(\d+)" + suffix + "$")
     steps: dict = {}
     for name in names:
         match = pattern.match(name)
@@ -94,17 +99,15 @@ def select_restart(names: List[str], problem: str, window: tuple,
             steps.setdefault(int(match.group(1)), []).append(name)
     complete, incomplete = {}, {}
     for step, files in sorted(steps.items()):
-        rst = [n for n in files if n.endswith('.rst')]
-        sgd = any(n.endswith('.sgd') for n in files)
-        ok = sgd and (len(rst) == nsg if nsg else bool(rst))
+        ok = kind == 'sgd' or not nsg or len(files) == nsg
         (complete if ok else incomplete)[step] = sorted(files, key=_restart_order)
     return complete, incomplete
 
 
 def _restart_order(name: str):
-    """The .sgd first, then the .rst files by subgrid number."""
+    """The .rst files by subgrid number."""
     match = re.search(r"_(\d+)\.rst$", name)
-    return (1, int(match.group(1))) if match else (0, 0)
+    return int(match.group(1)) if match else 0
 
 
 def show_upload_help() -> None:
@@ -117,14 +120,15 @@ Upload case directories from local machine to a remote server.
 {Colors.BOLD}USAGE:{Colors.RESET}
     flexflow case upload [{Colors.YELLOW}case{Colors.RESET}] --to {Colors.YELLOW}REMOTE{Colors.RESET} [options]
     flexflow case upload binary [{Colors.YELLOW}case{Colors.RESET}] [--t1 STEP] [--t2 STEP] [options]
-    flexflow case upload rst [{Colors.YELLOW}case{Colors.RESET}] --t1 STEP [--t2 STEP] [options]
+    flexflow case upload rst|sgd [{Colors.YELLOW}case{Colors.RESET}] [--t1 STEP] [--t2 STEP] [options]
 
 {Colors.BOLD}ARGUMENTS:{Colors.RESET}
     {Colors.YELLOW}binary{Colors.RESET}                 binary/ only -- with --t1/--t2, only the timesteps
                            in that range
-    {Colors.YELLOW}rst{Colors.RESET}                    The restart files of --t1 (..--t2) from the run
-                           directory: <problem>.<step>.sgd and the nsg
-                           <problem>.<step>_<k>.rst
+    {Colors.YELLOW}rst{Colors.RESET}                    The nsg <problem>.<step>_<k>.rst of every step (or
+                           --t1..--t2) in the run directory
+    {Colors.YELLOW}sgd{Colors.RESET}                    The <problem>.<step>.sgd of every step (or
+                           --t1..--t2) in the run directory
     {Colors.YELLOW}case{Colors.RESET}                   Local case directory path (use * for all cases in .cases)
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
@@ -133,8 +137,8 @@ Upload case directories from local machine to a remote server.
                            (default: othd_files,oisd_files,binary)
     {Colors.YELLOW}--files [PATTERNS]{Colors.RESET}     Loose files from the case root, as comma-separated
                            globs (default: simflow.config,*.def,*.geo,*.map)
-    {Colors.YELLOW}--t1 STEP{Colors.RESET}              binary/rst: first timestep (alone: only that step)
-    {Colors.YELLOW}--t2 STEP{Colors.RESET}              binary/rst: last timestep
+    {Colors.YELLOW}--t1 STEP{Colors.RESET}              binary/rst/sgd: first timestep (alone: only that step)
+    {Colors.YELLOW}--t2 STEP{Colors.RESET}              binary/rst/sgd: last timestep
     {Colors.YELLOW}--remote-path PATH{Colors.RESET}     Override remote base path (default: remote config path)
     {Colors.YELLOW}--force{Colors.RESET}                Create remote directories if they do not exist
     {Colors.YELLOW}--resume{Colors.RESET}               Resume the last interrupted upload
@@ -172,23 +176,26 @@ Upload case directories from local machine to a remote server.
     where it is, and the count of those is reported.
 
     The two flags read as they do everywhere else in FlexFlow: both bounds make
-    a range, one alone names that single step. They need {Colors.YELLOW}binary{Colors.RESET} or {Colors.YELLOW}rst{Colors.RESET},
+    a range, one alone names that single step. They need {Colors.YELLOW}binary{Colors.RESET}, {Colors.YELLOW}rst{Colors.RESET} or {Colors.YELLOW}sgd{Colors.RESET},
     since nothing else in a case is written per step. The t1/t2 context
     supplies them: {Colors.DIM}use t1:1000 t2:5000{Colors.RESET}, then {Colors.DIM}case upload binary CS4SG1U1{Colors.RESET}.
 
 {Colors.BOLD}RESTART FILES:{Colors.RESET}
     To restart a run from step T the remote run directory needs <problem>.T.sgd
-    and one <problem>.T_<k>.rst per subgrid. {Colors.YELLOW}case upload rst --t1 T{Colors.RESET} sends
-    exactly those from the local run directory (simflow.config 'dir') to the
-    same directory under the remote case. A step without its .sgd, or with
-    fewer .rst files than nsg in simflow.config, cannot restart a run: it is
-    reported and not sent.
+    and one <problem>.T_<k>.rst per subgrid. {Colors.YELLOW}case upload sgd --t1 T{Colors.RESET} and
+    {Colors.YELLOW}case upload rst --t1 T{Colors.RESET} send them from the local run directory
+    (simflow.config 'dir') to the same directory under the remote case.
+    Without --t1/--t2 they send every step there is. A step with fewer .rst
+    files than nsg in simflow.config cannot restart a run: it is reported and
+    its .rst files are not sent.
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
     case upload binary CS4SG1U1 --to server --t1 1000 --t2 5000
     case upload binary CS4SG1U1 --to server --t1 5000
+    case upload sgd CS4SG1U1 --to server --t1 4000
     case upload rst CS4SG1U1 --to server --t1 4000
     case upload rst CS4SG1U1 --to server --t1 3000 --t2 4000 --force
+    case upload rst CS4SG1U1 --to server
     case upload CS4SG1U1 --to server --files
     case upload CS4SG1U1 --to server --files "*.map"
     case upload * --to server --files --force
@@ -210,14 +217,15 @@ Download case directories from a remote server to the local machine.
 {Colors.BOLD}USAGE:{Colors.RESET}
     flexflow case download [{Colors.YELLOW}case{Colors.RESET}] --from {Colors.YELLOW}REMOTE{Colors.RESET} [options]
     flexflow case download binary [{Colors.YELLOW}case{Colors.RESET}] [--t1 STEP] [--t2 STEP] [--freq N] [options]
-    flexflow case download rst [{Colors.YELLOW}case{Colors.RESET}] --t1 STEP [--t2 STEP] [options]
+    flexflow case download rst|sgd [{Colors.YELLOW}case{Colors.RESET}] [--t1 STEP] [--t2 STEP] [options]
 
 {Colors.BOLD}ARGUMENTS:{Colors.RESET}
     {Colors.YELLOW}binary{Colors.RESET}                 binary/ only -- with --t1/--t2, only the timesteps
                            in that range
-    {Colors.YELLOW}rst{Colors.RESET}                    The restart files of --t1 (..--t2) from the remote
-                           run directory: <problem>.<step>.sgd and the nsg
-                           <problem>.<step>_<k>.rst
+    {Colors.YELLOW}rst{Colors.RESET}                    The nsg <problem>.<step>_<k>.rst of every step (or
+                           --t1..--t2) in the remote run directory
+    {Colors.YELLOW}sgd{Colors.RESET}                    The <problem>.<step>.sgd of every step (or
+                           --t1..--t2) in the remote run directory
     {Colors.YELLOW}case{Colors.RESET}                   Local case directory path (destination; use * for all cases in .cases)
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
@@ -227,8 +235,8 @@ Download case directories from a remote server to the local machine.
     {Colors.YELLOW}--files [PATTERNS]{Colors.RESET}     Loose files from the remote case root, as
                            comma-separated globs
                            (default: simflow.config,*.def,*.geo,*.map)
-    {Colors.YELLOW}--t1 STEP{Colors.RESET}              binary/rst: first timestep (alone: only that step)
-    {Colors.YELLOW}--t2 STEP{Colors.RESET}              binary/rst: last timestep
+    {Colors.YELLOW}--t1 STEP{Colors.RESET}              binary/rst/sgd: first timestep (alone: only that step)
+    {Colors.YELLOW}--t2 STEP{Colors.RESET}              binary/rst/sgd: last timestep
     {Colors.YELLOW}--freq N{Colors.RESET}               binary: only steps that are multiples of N
     {Colors.YELLOW}--remote-path PATH{Colors.RESET}     Override remote base path (default: remote config path)
     {Colors.YELLOW}--force{Colors.RESET}                Create the local case directory if it does not exist
@@ -264,7 +272,7 @@ Download case directories from a remote server to the local machine.
     is left where it is, and the count of those is reported.
 
     The two flags read as they do everywhere else in FlexFlow: both bounds make
-    a range, one alone names that single step. They need {Colors.YELLOW}binary{Colors.RESET} or {Colors.YELLOW}rst{Colors.RESET},
+    a range, one alone names that single step. They need {Colors.YELLOW}binary{Colors.RESET}, {Colors.YELLOW}rst{Colors.RESET} or {Colors.YELLOW}sgd{Colors.RESET},
     since nothing else in a case is written per step. The t1/t2 context
     supplies them: {Colors.DIM}use t1:1000 t2:5000{Colors.RESET}, then {Colors.DIM}case download binary CS4SG1U1{Colors.RESET}.
 
@@ -273,11 +281,12 @@ Download case directories from a remote server to the local machine.
     from the freq context, but only with binary.
 
 {Colors.BOLD}RESTART FILES:{Colors.RESET}
-    {Colors.YELLOW}case download rst --t1 T{Colors.RESET} fetches <problem>.T.sgd and the nsg files
-    <problem>.T_<k>.rst from the remote run directory into the same directory
-    here (created if needed). problem, dir and nsg are read from the remote
-    simflow.config -- the run that wrote the files -- or the local one when the
-    remote has none. A step without its .sgd, or short of .rst files, is
+    {Colors.YELLOW}case download sgd --t1 T{Colors.RESET} fetches <problem>.T.sgd, and
+    {Colors.YELLOW}case download rst --t1 T{Colors.RESET} the nsg files <problem>.T_<k>.rst, from the
+    remote run directory into the same directory here (created if needed).
+    Without --t1/--t2 they fetch every step there is. problem, dir and nsg are
+    read from the remote simflow.config -- the run that wrote the files -- or
+    the local one when the remote has none. A step short of .rst files is
     reported and not fetched.
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
@@ -285,7 +294,9 @@ Download case directories from a remote server to the local machine.
     case download binary CS4SG1U1 --from server --t1 1000 --t2 5000 --freq 500
     case download binary CS4SG1U1 --from server --freq 1000
     case download binary CS4SG1U1 --from server --t1 5000
+    case download sgd CS4SG1U1 --from server --t1 4000
     case download rst CS4SG1U1 --from server --t1 4000
+    case download rst CS4SG1U1 --from server
     case download CS4SG1U1 --from server --files
     case download CS4SG1U1 --from server --files "*.map"
     case download * --from server --files --force
@@ -448,7 +459,7 @@ class CaseUploadCommand:
         return None
 
     def _transfer_mode(self, args, direction: str):
-        """(mode, problem): binary/rst/None from the first word, or what is wrong.
+        """(mode, problem): binary/rst/sgd/None from the first word, or what is wrong.
 
         `case upload CS4` puts the case in the first positional; it is moved to
         `case` (the parser does not fill the case context in that situation).
@@ -457,12 +468,12 @@ class CaseUploadCommand:
             return None, (f"--binary is now a word: `case {direction} binary` "
                           f"(with --t1/--t2 as before).")
         what = self._get_arg(args, 'what')
-        if what in ('binary', 'rst'):
+        if what in ('binary', 'rst', 'sgd'):
             return what, None
         if what is not None:
             case = self._get_arg(args, 'case')
             if case is not None:
-                return None, (f"'{what}' is not binary or rst (did you mean "
+                return None, (f"'{what}' is not binary, rst or sgd (did you mean "
                               f"`case {direction} binary {case}`?)")
             args.case = what
         return None, None
@@ -536,7 +547,7 @@ class CaseUploadCommand:
             if step_window and not mode:
                 self.console.print(
                     f"[red]Error:[/red] --t1/--t2 select timesteps, so they need "
-                    f"`case {direction} binary` or `case {direction} rst`. "
+                    f"`case {direction} binary`, `rst` or `sgd`. "
                     f"Nothing else in a case is written per step."
                 )
                 return 1
@@ -546,21 +557,15 @@ class CaseUploadCommand:
                     f"(it thins the steps in binary/)."
                 )
                 return 1
-            if mode == 'rst' and step_freq is not None:
+            if mode in RESTART_TARGETS and step_freq is not None:
                 self.console.print(
                     "[red]Error:[/red] --freq is for binary/; name the restart steps "
                     "with --t1/--t2."
                 )
                 return 1
-            if mode == 'rst' and not step_window:
+            if mode in RESTART_TARGETS and (dir_arg or file_patterns):
                 self.console.print(
-                    f"[red]Error:[/red] Say which restart step(s): "
-                    f"`case {direction} rst --t1 STEP` (or --t1/--t2 for a range)."
-                )
-                return 1
-            if mode == 'rst' and (dir_arg or file_patterns):
-                self.console.print(
-                    f"[red]Error:[/red] `case {direction} rst` carries the restart files "
+                    f"[red]Error:[/red] `case {direction} {mode}` carries the .{mode} files "
                     f"only; {direction} --dir/--files separately."
                 )
                 return 1
@@ -569,8 +574,8 @@ class CaseUploadCommand:
                     f"[red]Error:[/red] --freq must be a positive integer, got {step_freq}"
                 )
                 return 1
-            if mode == 'rst':
-                directories = [RST_TARGET]
+            if mode in RESTART_TARGETS:
+                directories = [RESTART_TARGETS[mode]]
             elif mode == 'binary' and not dir_arg:
                 # binary on its own means binary/ alone, the way --files on its
                 # own means the files alone.
@@ -652,7 +657,8 @@ class CaseUploadCommand:
         table.add_row('Remote Host', f"{remote['user']}@{remote['ip']}:{remote['port']}")
         table.add_row('Remote Base Path', remote_base)
         table.add_row('Directories', ', '.join(
-            'restart files (.sgd, .rst)' if d == RST_TARGET else d for d in directories) or '(none)')
+            f"restart files (.{RESTART_KIND[d]})" if d in RESTART_KIND else d
+            for d in directories) or '(none)')
         if file_patterns:
             table.add_row('Files', ', '.join(file_patterns))
         if step_window:
@@ -725,7 +731,8 @@ class CaseUploadCommand:
                         file_patterns,
                         force=force_enabled,
                     )
-                elif target['directory'] == RST_TARGET:
+                elif target['directory'] in RESTART_KIND:
+                    kind = RESTART_KIND[target['directory']]
                     if is_upload:
                         ok = self.upload_restart(
                             ssh,
@@ -733,6 +740,7 @@ class CaseUploadCommand:
                             target['case_path'],
                             step_window,
                             force=force_enabled,
+                            kind=kind,
                         )
                     else:
                         ok = self.download_restart(
@@ -740,6 +748,7 @@ class CaseUploadCommand:
                             target['remote_case_path'],
                             target['case_path'],
                             step_window,
+                            kind=kind,
                         )
                 elif (step_window or step_freq) and target['directory'] == 'binary':
                     if is_upload:
@@ -1265,29 +1274,36 @@ class CaseUploadCommand:
             return None
         return problem, Path(os.path.normpath(run_dir)).as_posix(), cfg.nsg
 
-    def _pick_restart(self, names: List[str], problem: str, window: tuple,
-                      nsg: Optional[int], run_dir: str, where: str) -> List[str]:
-        """The files of the complete restart steps in `window`, after reporting
-        each step: the complete ones with their size... the rest with what they
-        lack. [] when no step is complete."""
-        complete, incomplete = select_restart(names, problem, window, nsg)
-        lo, hi = window
-        span = f"step {lo:g}" if lo == hi else f"steps {lo:g}..{hi:g}"
-        self.console.print(f"[cyan]Selecting:[/cyan] restart files of {span} in {run_dir}/")
-        if not nsg:
+    def _pick_restart(self, names: List[str], problem: str, window: Optional[tuple],
+                      nsg: Optional[int], run_dir: str, where: str,
+                      kind: str = 'rst') -> List[str]:
+        """The .rst or .sgd files of the steps in `window` (all steps without
+        one), after reporting each step: the complete ones with their count, the
+        rest with what they lack. [] when no step has any."""
+        complete, incomplete = select_restart(names, problem, window, nsg, kind)
+        if window is None:
+            span = "every step"
+        else:
+            lo, hi = window
+            span = f"step {lo:g}" if lo == hi else f"steps {lo:g}..{hi:g}"
+        self.console.print(f"[cyan]Selecting:[/cyan] .{kind} files of {span} in {run_dir}/")
+        if kind == 'rst' and not nsg:
             self.console.print("[yellow]Warning:[/yellow] nsg is not set in simflow.config; "
                                "cannot check that every subgrid's .rst is there")
         for step, files in incomplete.items():
-            rst = sum(n.endswith('.rst') for n in files)
-            sgd = 'with' if any(n.endswith('.sgd') for n in files) else 'no'
-            need = f"/{nsg}" if nsg else ""
-            self.console.print(f"[yellow]  skipping step {step}:[/yellow] {sgd} .sgd, "
-                               f"{rst}{need} .rst -- not enough to restart from")
+            self.console.print(f"[yellow]  skipping step {step}:[/yellow] "
+                               f"{len(files)}/{nsg} .rst -- not enough to restart from")
         if not complete:
-            self.console.print(f"[red]Error:[/red] No complete restart step in {span} in {where}")
+            what = "complete .rst step" if kind == 'rst' else ".sgd file"
+            self.console.print(f"[red]Error:[/red] No {what} for {span} in {where}")
             return []
-        for step, files in complete.items():
-            self.console.print(f"  step {step}: 1 .sgd + {len(files) - 1} .rst")
+        if kind == 'rst':
+            for step, files in complete.items():
+                self.console.print(f"  step {step}: {len(files)} .rst")
+        else:
+            steps = list(complete)
+            shown = ', '.join(map(str, steps[:8])) + (', ...' if len(steps) > 8 else '')
+            self.console.print(f"  {len(steps)} step(s): {shown}")
         return [n for files in complete.values() for n in files]
 
     def upload_restart(
@@ -1295,14 +1311,16 @@ class CaseUploadCommand:
         ssh: SSHClientWrapper,
         remote_case_path: str,
         local_case_path: str,
-        window: tuple,
+        window: Optional[tuple],
         force: bool = False,
+        kind: str = 'rst',
     ) -> bool:
-        """Upload the restart files (.sgd + nsg .rst) of the steps in `window`
-        from the case's run directory to the same directory on the remote.
+        """Upload the .rst (nsg per step) or .sgd files of the steps in `window`
+        -- every step when None -- from the case's run directory to the same
+        directory on the remote.
 
-        Only complete steps go: a step missing its .sgd or some of its .rst
-        files cannot restart a run, so it is reported and left behind.
+        A step missing some of its .rst files cannot restart a run, so it is
+        reported and left behind.
         """
         layout = self._restart_layout(os.path.join(local_case_path, 'simflow.config'),
                                       local_case_path)
@@ -1314,21 +1332,23 @@ class CaseUploadCommand:
             self.console.print(f"[red]Error:[/red] Run directory not found: {local_dir}")
             return False
         names = self._pick_restart(os.listdir(local_dir), problem, window, nsg, run_dir,
-                                   local_dir)
+                                   local_dir, kind)
         if not names:
             return False
         return self._upload_names(ssh, local_dir, f"{remote_case_path}/{run_dir}", names,
-                                  force, 'restart files')
+                                  force, f".{kind} files")
 
     def download_restart(
         self,
         ssh: SSHClientWrapper,
         remote_case_path: str,
         local_case_path: str,
-        window: tuple,
+        window: Optional[tuple],
+        kind: str = 'rst',
     ) -> bool:
-        """Download the restart files (.sgd + nsg .rst) of the steps in `window`
-        from the remote case's run directory to the same directory here.
+        """Download the .rst (nsg per step) or .sgd files of the steps in
+        `window` -- every step when None -- from the remote case's run directory
+        to the same directory here.
 
         problem, dir and nsg come from the remote simflow.config -- the run that
         wrote the files -- or the local one when the remote has none.
@@ -1362,11 +1382,11 @@ class CaseUploadCommand:
         except Exception as exc:
             self.console.print(f"[red]Error:[/red] Could not list {remote_dir}: {exc}")
             return False
-        names = self._pick_restart(entries, problem, window, nsg, run_dir, remote_dir)
+        names = self._pick_restart(entries, problem, window, nsg, run_dir, remote_dir, kind)
         if not names:
             return False
         return self._download_names(ssh, remote_dir, os.path.join(local_case_path, run_dir),
-                                    names, 'restart files')
+                                    names, f".{kind} files")
 
     def download_binary_range(
         self,

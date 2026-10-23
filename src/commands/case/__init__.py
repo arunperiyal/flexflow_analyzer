@@ -10,24 +10,26 @@ from src.cli.completers import described, file_flags
 from src.cli.context import case_arg, context_flag, freq_arg, time_window
 
 
-# `case upload|download [binary|rst] [case]`: what to carry. Nothing named is the
-# directories (--dir) and files (--files) as before.
+# `case upload|download [binary|rst|sgd] [case]`: what to carry. Nothing named is
+# the directories (--dir) and files (--files) as before.
 TRANSFER_MODES = {
     'upload': [('binary', 'binary/: every timestep, or just --t1..--t2'),
-               ('rst', 'Restart files (.sgd + .rst) of --t1..--t2 in the run directory')],
+               ('rst', 'Restart .rst files of every step (or --t1..--t2) in the run directory'),
+               ('sgd', 'Restart .sgd files of every step (or --t1..--t2) in the run directory')],
     'download': [('binary', 'binary/: every timestep, or just --t1..--t2 (--freq)'),
-                 ('rst', 'Restart files (.sgd + .rst) of --t1..--t2 from the remote run directory')],
+                 ('rst', 'Restart .rst files of every step (or --t1..--t2) from the remote run directory'),
+                 ('sgd', 'Restart .sgd files of every step (or --t1..--t2) from the remote run directory')],
 }
 
 
 def _mode(args):
-    """binary/rst, or None when the first word is a case (or absent)."""
+    """binary/rst/sgd, or None when the first word is a case (or absent)."""
     what = getattr(args, 'what', None)
-    return what if what in ('binary', 'rst') else None
+    return what if what in ('binary', 'rst', 'sgd') else None
 
 
 def _stepped(args):
-    """The t1/t2/time/freq contexts select timesteps, so they only apply to binary/rst."""
+    """The t1/t2/time/freq contexts select timesteps, so they only apply to binary/rst/sgd."""
     return _mode(args) is not None
 
 
@@ -44,7 +46,7 @@ def _transfer_positionals(parser, direction):
 
     def complete(rt, prefix):
         return modes
-    parser.add_argument('what', nargs='?', metavar='binary|rst' if len(modes) > 1 else 'binary',
+    parser.add_argument('what', nargs='?', metavar='|'.join(m for m, _ in modes),
                         help='What to carry: ' + '; '.join(f"{m}: {h}" for m, h in modes)
                         ).completer = complete
     case_arg(parser, resolve=_transfer_case,
@@ -448,8 +450,8 @@ class CaseCommand(BaseCommand):
         upload_parser.add_argument('--remote-path', type=str, metavar='PATH',
                                   help='Override remote base path (default: use remote config)')
         time_window(upload_parser, when=_stepped,
-                    t1_kwargs=dict(metavar='STEP', help='binary/rst: first timestep to upload (alone: only that step)'),
-                    t2_kwargs=dict(metavar='STEP', help='binary/rst: last timestep to upload'))
+                    t1_kwargs=dict(metavar='STEP', help='binary/rst/sgd: first timestep to upload (alone: only that step)'),
+                    t2_kwargs=dict(metavar='STEP', help='binary/rst/sgd: last timestep to upload'))
         upload_parser.add_argument('--force', action='store_true',
                                   help='Create remote directories if they do not exist')
         upload_parser.add_argument('--resume', action='store_true',
@@ -477,8 +479,8 @@ class CaseCommand(BaseCommand):
         download_parser.add_argument('--remote-path', type=str, metavar='PATH',
                                     help='Override remote base path (default: use remote config)')
         time_window(download_parser, when=_stepped,
-                    t1_kwargs=dict(metavar='STEP', help='binary/rst: first timestep to download (alone: only that step)'),
-                    t2_kwargs=dict(metavar='STEP', help='binary/rst: last timestep to download'))
+                    t1_kwargs=dict(metavar='STEP', help='binary/rst/sgd: first timestep to download (alone: only that step)'),
+                    t2_kwargs=dict(metavar='STEP', help='binary/rst/sgd: last timestep to download'))
         freq_arg(download_parser, metavar='N',
                  resolve=lambda store, ns: (store.get('freq') if _mode(ns) == 'binary'
                                             and store.is_set('freq') else None),
