@@ -1,5 +1,5 @@
 """
-FlexFlow's own shell builtins -- `web`, `quota`, `du` -- the basic file and
+FlexFlow's own shell builtins -- `web`, `quota`, `missing` -- the basic file and
 system commands shellkit does not have (`find`, `mkdir`, `mv`, `touch`,
 `top`), so the shell need not be left for them, and the colours `ls`/`tree`
 give FlexFlow files.
@@ -14,9 +14,7 @@ import subprocess
 import threading
 from pathlib import Path
 
-from rich import box
 from rich.markup import escape
-from rich.table import Table
 
 from shellkit import Builtin
 from shellkit.builtins.files import _expand, _shown_path, _split_flags, _styled
@@ -56,8 +54,6 @@ def builtins():
                 [('start', 'Start the web UI'), ('stop', 'Stop it')],
                 category='FlexFlow', own_help=True),
         Builtin('quota', _quota, help='Disk quota for /home and /scratch', category='FlexFlow'),
-        Builtin('du', _du, help='Disk usage of directory entries', usage='du [path]',
-                complete='path', category='FlexFlow'),
         Builtin('find', _find, help='Find files and directories by name',
                 usage='find [-f|-d|-c] [pattern] [path]',
                 details="  [cyan]-f[/cyan]  Files only\n"
@@ -183,7 +179,7 @@ def _web_stop(rt):
 
 
 # ---------------------------------------------------------------------------
-# quota / du
+# quota
 # ---------------------------------------------------------------------------
 
 def _quota(rt, argv):
@@ -203,50 +199,6 @@ def _quota(rt, argv):
         output = (result.stdout or '') + (result.stderr or '')
         rt.out(output.rstrip() if output.strip() else '(no output)')
         rt.console.print()
-    return 0
-
-
-def _du(rt, argv):
-    """Size of each entry in a directory, largest first."""
-    target = rt.resolve_path(argv[0]) if argv else rt.cwd
-    if not target.is_dir():
-        rt.error(f"Not a directory: {escape(str(target))}")
-        return 1
-
-    entries = []
-    try:
-        with os.scandir(target) as it:
-            for entry in it:
-                try:
-                    if entry.is_dir(follow_symlinks=False):
-                        size = sum(f.stat().st_size for f in Path(entry.path).rglob('*')
-                                   if f.is_file())
-                        entries.append((size, entry.name + '/'))
-                    else:
-                        entries.append((entry.stat(follow_symlinks=False).st_size, entry.name))
-                except OSError:
-                    entries.append((0, entry.name))
-    except OSError as e:
-        rt.error(f"Error reading directory: {escape(str(e))}")
-        return 1
-
-    if not entries:
-        rt.console.print("[dim]Empty directory.[/dim]")
-        return 0
-
-    def fmt(n):
-        for unit in ('B', 'KB', 'MB', 'GB', 'TB'):
-            if n < 1024:
-                return f"{n:.1f} {unit}" if unit != 'B' else f"{n} B"
-            n /= 1024
-        return f"{n:.1f} PB"
-
-    table = Table(title=f"Disk Usage  ({target})", box=box.ROUNDED, header_style='bold')
-    table.add_column('Size', justify='right', style='green', no_wrap=True)
-    table.add_column('Name', style='cyan')
-    for size, label in sorted(entries, reverse=True):
-        table.add_row(fmt(size), escape(label))
-    rt.console.print(table)
     return 0
 
 

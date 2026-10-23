@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### 📊 `du` comes from shellkit, with `-d N`, `-s`, `--dirs`
+
+- `du` moved into shellkit's `files` bundle, so every shellkit app has it.
+- `du -d N [path]` (also `-dN`, `--depth N`) lists entries down to N levels,
+  indented under their parent and sorted largest first within each level,
+  with a total row. The default stays 1 (the entries of the directory).
+- `du -s` (or `-d 0`) prints only the total; `--dirs` leaves out files.
+- Sizes come from one walk of the tree instead of one per entry, and
+  symlinks are not followed. In a pipe, `du` prints `size<TAB>path` lines.
+- Needs a shellkit with `du` (newer than v0.1.0).
+
 ### 🔁 `case upload|download rst` and `sgd` split; every step by default
 
 - `rst` now carries only the `<problem>.T_<k>.rst` files; the new word `sgd`
