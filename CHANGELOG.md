@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### 📥 `case download rst`
+
+- `case download rst [case] --t1 T [--t2 T2]` fetches the restart files of
+  those steps (`<problem>.T.sgd` + the `nsg` `<problem>.T_<k>.rst`) from the
+  remote run directory into the local one, creating it if needed. `problem`,
+  `dir` and `nsg` come from the remote `simflow.config` (the local one if the
+  remote has none). Incomplete steps are reported and skipped, as for upload.
+
 ### 📦 `case upload binary|rst`, `case download binary`
 
 - `--binary` is now a word: `case upload binary [case] --t1 1000 --t2 5000`,

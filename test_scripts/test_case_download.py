@@ -588,7 +588,7 @@ class TestBinaryFreq:
         ({}, "--freq needs `case download binary`"),
         ({"what": "binary", "freq": 0}, "positive integer"),
         ({"binary": True}, "--binary is now a word: `case download binary`"),
-        ({"what": "rst"}, "`rst` is for `case upload` only"),
+        ({"what": "rst"}, "--freq is for binary/"),
     ])
     def test_bad_freq_is_rejected(self, extra, message, capsys, tmp_path):
         import argparse

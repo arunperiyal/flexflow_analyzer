@@ -15,7 +15,8 @@ from src.cli.context import case_arg, context_flag, freq_arg, time_window
 TRANSFER_MODES = {
     'upload': [('binary', 'binary/: every timestep, or just --t1..--t2'),
                ('rst', 'Restart files (.sgd + .rst) of --t1..--t2 in the run directory')],
-    'download': [('binary', 'binary/: every timestep, or just --t1..--t2 (--freq)')],
+    'download': [('binary', 'binary/: every timestep, or just --t1..--t2 (--freq)'),
+                 ('rst', 'Restart files (.sgd + .rst) of --t1..--t2 from the remote run directory')],
 }
 
 
@@ -476,10 +477,10 @@ class CaseCommand(BaseCommand):
         download_parser.add_argument('--remote-path', type=str, metavar='PATH',
                                     help='Override remote base path (default: use remote config)')
         time_window(download_parser, when=_stepped,
-                    t1_kwargs=dict(metavar='STEP', help='binary: first timestep to download (alone: only that step)'),
-                    t2_kwargs=dict(metavar='STEP', help='binary: last timestep to download'))
+                    t1_kwargs=dict(metavar='STEP', help='binary/rst: first timestep to download (alone: only that step)'),
+                    t2_kwargs=dict(metavar='STEP', help='binary/rst: last timestep to download'))
         freq_arg(download_parser, metavar='N',
-                 resolve=lambda store, ns: (store.get('freq') if _stepped(ns)
+                 resolve=lambda store, ns: (store.get('freq') if _mode(ns) == 'binary'
                                             and store.is_set('freq') else None),
                  help='binary: only the timesteps that are multiples of N')
         download_parser.add_argument('--force', action='store_true',
