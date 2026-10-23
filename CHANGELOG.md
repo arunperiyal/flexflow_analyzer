@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### 🐛 `case upload|download sgd`: one file per subgrid, not per step
+
+- The preprocessor writes `<problem>.<k>.sgd`, one per subgrid
+  (k = 0..nsg-1), and every run reads them all. `sgd` was treating the
+  number as a timestep, so `case upload sgd --t1 4000` found nothing.
+- `sgd` now carries all nsg `.sgd` files, and nothing if any is missing
+  (it names the missing k). `--t1`/`--t2` with `sgd` is an error, and the
+  t1/t2/time contexts no longer apply to it.
+
 ### 📊 `du` comes from shellkit, with `-d N`, `-s`, `--dirs`
 
 - `du` moved into shellkit's `files` bundle, so every shellkit app has it.

@@ -2,9 +2,11 @@
 without --t1/--t2), and the new spelling `case upload|download binary` that
 replaces --binary.
 
-A restart from step T needs <problem>.T.sgd and one <problem>.T_<k>.rst per
-subgrid (nsg in simflow.config). `sgd` carries the first, `rst` the second; a
-step short of .rst files cannot restart and its .rst files are not sent.
+A restart from step T needs one <problem>.T_<k>.rst per subgrid (nsg in
+simflow.config), and every run reads the subgrid files <problem>.<k>.sgd,
+k = 0..nsg-1 -- one per subgrid, not per step (preProcOut.c, solProc.c).
+`rst` carries the first, `sgd` the second. A step short of .rst files cannot
+restart and is not sent; sgd sends nothing unless all nsg are there.
 """
 
 import argparse
@@ -13,12 +15,14 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from src.commands.case.download_impl import command as transfer
-from src.commands.case.download_impl.command import CaseDownloadCommand, select_restart
+from src.commands.case.download_impl.command import (CaseDownloadCommand, select_restart,
+                                                     select_sgd)
 
-NAMES = (['riser.4000.sgd'] + [f'riser.4000_{k}.rst' for k in range(4)]
-         + ['riser.4500.sgd'] + [f'riser.4500_{k}.rst' for k in range(3)]      # one .rst short
-         + [f'riser.5000_{k}.rst' for k in range(4)]                            # no .sgd
-         + ['riser.4000_0.out', 'riser.4000.plt', 'riser.othd', 'other.4000.sgd'])
+SGD = [f'riser.{k}.sgd' for k in range(4)]
+NAMES = (SGD + [f'riser.4000_{k}.rst' for k in range(4)]
+         + [f'riser.4500_{k}.rst' for k in range(3)]                            # one .rst short
+         + [f'riser.5000_{k}.rst' for k in range(4)]
+         + ['riser.4000_0.out', 'riser.4000.plt', 'riser.othd', 'other.0.sgd'])
 
 
 RST_4000 = [f'riser.4000_{k}.rst' for k in range(4)]
@@ -27,7 +31,7 @@ RST_5000 = [f'riser.5000_{k}.rst' for k in range(4)]
 
 def test_select_restart_keeps_only_complete_rst_steps():
     complete, incomplete = select_restart(NAMES, 'riser', (4000, 5000), nsg=4)
-    assert complete == {4000: RST_4000, 5000: RST_5000}     # .rst alone: no .sgd needed
+    assert complete == {4000: RST_4000, 5000: RST_5000}
     assert list(incomplete) == [4500]
     # one step alone, and nsg unknown (any .rst will do)
     assert list(select_restart(NAMES, 'riser', (4500, 4500), nsg=None)[0]) == [4500]
@@ -36,8 +40,14 @@ def test_select_restart_keeps_only_complete_rst_steps():
 
 def test_select_restart_without_a_window_takes_every_step():
     assert list(select_restart(NAMES, 'riser', None, nsg=4)[0]) == [4000, 5000]
-    assert select_restart(NAMES, 'riser', None, nsg=4, kind='sgd') == \
-        ({4000: ['riser.4000.sgd'], 4500: ['riser.4500.sgd']}, {})
+
+
+def test_select_sgd_is_one_file_per_subgrid():
+    assert select_sgd(NAMES, 'riser', 4) == (SGD, [])
+    names = ['riser.0.sgd', 'riser.2.sgd', 'riser.10.sgd', 'riser.1_0.rst']
+    assert select_sgd(names, 'riser', 4) == (['riser.0.sgd', 'riser.2.sgd', 'riser.10.sgd'],
+                                             [1, 3])
+    assert select_sgd(names, 'riser', None)[1] == []         # nsg unknown: none missing
 
 
 def test_rst_files_sort_by_subgrid_number():
@@ -71,11 +81,19 @@ def test_upload_restart_sends_the_complete_steps_into_the_remote_run_dir(case, c
     assert 'skipping step 4500' in out and '3/4 .rst' in out
 
 
-def test_upload_sgd_sends_only_the_sgd_files(case):
+def test_upload_sgd_sends_every_subgrid_file(case):
     ssh = MagicMock()
     ssh.remote_path_exists.return_value = True
     assert CaseDownloadCommand().upload_restart(ssh, '/r/CS1', str(case), None, kind='sgd')
-    assert [n for n, _ in uploaded(ssh)] == ['riser.4000.sgd', 'riser.4500.sgd']
+    assert [n for n, _ in uploaded(ssh)] == SGD
+
+
+def test_upload_sgd_with_a_subgrid_missing_sends_nothing(case, capsys):
+    (case / 'RUN_1' / 'riser.2.sgd').unlink()
+    ssh = MagicMock()
+    assert not CaseDownloadCommand().upload_restart(ssh, '/r/CS1', str(case), None, kind='sgd')
+    ssh.upload_file.assert_not_called()
+    assert '1 of 4 .sgd files missing' in ' '.join(capsys.readouterr().out.split())
 
 
 def test_upload_restart_with_nothing_complete_fails(case):
@@ -122,7 +140,7 @@ def test_case_upload_rst_end_to_end(cmd, case):
 
 
 @pytest.mark.parametrize('what, names', [('rst', RST_4000 + RST_5000),
-                                         ('sgd', ['riser.4000.sgd', 'riser.4500.sgd'])])
+                                         ('sgd', SGD)])
 def test_case_upload_rst_sgd_without_steps_sends_every_step(cmd, case, what, names):
     with patch.object(transfer, 'SSHClientWrapper') as ssh_class:
         ssh = ssh_class.return_value
@@ -134,7 +152,8 @@ def test_case_upload_rst_sgd_without_steps_sends_every_step(cmd, case, what, nam
 @pytest.mark.parametrize('kw, message', [
     (dict(what='rst', t1=4000.0, dir='binary'), 'carries the .rst files only'),
     (dict(what='sgd', files=True), 'carries the .sgd files only'),
-    (dict(t1=4000.0), 'need `case upload binary`, `rst` or `sgd`'),
+    (dict(t1=4000.0), 'need `case upload binary` or `rst`'),
+    (dict(what='sgd', t1=4000.0), 'one per subgrid'),
     (dict(binary=True), '--binary is now a word'),
     (dict(what='CS1', case='CS2'), "'CS1' is not binary, rst or sgd"),
 ])
@@ -173,6 +192,9 @@ def test_in_the_shell_the_case_context_fills_only_a_mode(tmp_path, monkeypatch):
     assert (ns.what, ns.case.endswith('CaseA')) == ('rst', True)
     ns = parsed('case upload CS9')
     assert (ns.what, ns.case) == ('CS9', None)        # moved to case by the command
+    assert rt.execute_line('use t1:4000') == 0
+    assert parsed('case upload rst').t1 == 4000.0
+    assert parsed('case upload sgd').t1 is None       # .sgd is per subgrid, not per step
 
 
 # --- case download rst ---------------------------------------------------------
@@ -214,13 +236,12 @@ def test_download_restart_reads_the_remote_config(case, tmp_path):
     assert remote.fetched[0] == '/r/CS1/simflow.config'
 
 
-def test_download_sgd_of_every_step(case, tmp_path):
+def test_download_sgd_fetches_every_subgrid_file(case, tmp_path):
     here = tmp_path / 'local'
     here.mkdir()
     assert CaseDownloadCommand().download_restart(FakeRemote(case), '/r/CS1', str(here),
                                                   None, kind='sgd')
-    assert sorted(p.name for p in (here / 'RUN_1').iterdir()) == \
-        ['riser.4000.sgd', 'riser.4500.sgd']
+    assert sorted(p.name for p in (here / 'RUN_1').iterdir()) == SGD
 
 
 def test_download_restart_falls_back_to_the_local_config(case, tmp_path):
