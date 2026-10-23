@@ -167,7 +167,7 @@ def time_window(parser, t1_flag='--t1', t2_flag='--t2', when=None,
         t1_flag, t2_flag: The flags as this command spells them
                           (plot takes --start-time/--end-time)
         when: namespace -> bool; the contexts apply only when it is true
-              (case upload/download: only with --binary)
+              (case upload/download: only with binary or rst)
     """
     t1_dest = t1_flag.lstrip('-').replace('-', '_')
     t2_dest = t2_flag.lstrip('-').replace('-', '_')

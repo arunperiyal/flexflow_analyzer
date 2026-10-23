@@ -139,7 +139,7 @@ def test_unreachable_remote_does_not_fail_the_job(job):
     result, case, remote = job(FAKE_DOWN='1')
     assert result.returncode == 0, result.stdout + result.stderr
     assert 'will NOT be sent' in result.stdout
-    assert 'case upload --binary --t1 0 --t2 30' in result.stdout
+    assert 'case upload binary --t1 0 --t2 30' in result.stdout
     assert not remote.exists()
     assert (case / 'binary' / 'riser.30.plt').exists()
 
