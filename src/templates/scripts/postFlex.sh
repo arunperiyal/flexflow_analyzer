@@ -222,7 +222,7 @@ setup_send() {
     if ! ssh "${SSH_OPTS[@]}" "$REMOTE_TARGET" "mkdir -p '$RDIR'"; then
         echo "Warning: could not reach ${REMOTE_TARGET} with key authentication."
         echo "         Binary PLT files will NOT be sent; send them later with:"
-        echo "         case upload --binary --t1 ${START_TIME} --t2 ${END_TIME}"
+        echo "         case upload binary --t1 ${START_TIME} --t2 ${END_TIME}"
         return 1
     fi
     if command -v rsync >/dev/null 2>&1 \
@@ -343,7 +343,7 @@ if [ "$SEND" = 1 ]; then
     echo "✓ Sent ${n_sent} file(s) to ${REMOTE_TARGET}:${RDIR} (log: $SEND_LOG)"
     if [ ${#UNSENT[@]} -gt 0 ]; then
         echo "Warning: ${#UNSENT[@]} file(s) could not be sent: ${UNSENT[*]}"
-        echo "         Send them later with: case upload --binary --t1 ${START_TIME} --t2 ${END_TIME}"
+        echo "         Send them later with: case upload binary --t1 ${START_TIME} --t2 ${END_TIME}"
     fi
     echo ""
 fi

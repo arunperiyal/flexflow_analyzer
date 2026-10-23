@@ -265,8 +265,9 @@ def test_transfer_times_only_with_binary(rt):
     use(rt, 't1:10 remote:cluster')
     up = parsed(rt, 'case upload')
     assert (up.t1, up.to) == (None, 'cluster')
-    assert parsed(rt, 'case upload --binary').t1 == 10.0
-    down = parsed(rt, 'case download --binary')
+    assert parsed(rt, 'case upload binary').t1 == 10.0
+    assert parsed(rt, 'case upload rst').t1 == 10.0
+    down = parsed(rt, 'case download binary')
     assert (down.t1, down.from_remote) == (10.0, 'cluster')
 
 
@@ -307,7 +308,9 @@ def test_completion_of_commands_and_subcommands(rt):
 
 def test_completion_of_flags(rt):
     got = texts(rt, 'case upload --')
-    assert {'--to', '--binary', '--t1', '--resume'} <= set(got)
+    assert {'--to', '--t1', '--resume'} <= set(got) and '--binary' not in got
+    assert texts(rt, 'case upload ') == ['binary', 'rst']
+    assert texts(rt, 'case download ') == ['binary']
 
 
 def test_described_positionals(rt):

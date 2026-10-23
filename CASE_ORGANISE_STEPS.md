@@ -250,7 +250,7 @@ case organise plt --delete-ascii
 ```
 
 A single `use time:<N>` (or the `time` context) is injected as the one-step
-window `--t1 N --t2 N`, the same way it works for `case upload/download --binary`.
+window `--t1 N --t2 N`, the same way it works for `case upload/download binary`.
 
 ## Options
 

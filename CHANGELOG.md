@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### 📦 `case upload binary|rst`, `case download binary`
+
+- `--binary` is now a word: `case upload binary [case] --t1 1000 --t2 5000`,
+  `case download binary [case] --t1 1000 --freq 500`. The old flag stops with
+  a pointer to the new spelling. `case upload CS4SG1U1` (no word) works as
+  before; the first word is the case when it is neither `binary` nor `rst`.
+- `case upload rst [case] --t1 T [--t2 T2]` uploads what a restart from step T
+  needs: `<problem>.T.sgd` and the `nsg` (simflow.config) files
+  `<problem>.T_<k>.rst`, from the run directory (`dir`) into the same
+  directory under the remote case. A step without its .sgd, or short of
+  .rst files, cannot restart a run; it is reported and not sent. `--force`
+  creates the remote run directory; `--resume` works as for the other modes.
+
 ### 🐛 `case organise archive --clean` stopped on a part with no time steps
 
 - A run that stops before writing its first step leaves a part with only the

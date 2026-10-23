@@ -546,7 +546,7 @@ if __name__ == "__main__":
 
 
 class TestBinaryFreq:
-    """--freq with --binary: keep only the steps that are multiples of N."""
+    """--freq with `binary`: keep only the steps that are multiples of N."""
 
     NAMES = ["riser.500.plt", "riser.1000.plt", "riser.1000.z1.vtu",
              "riser.1500.plt", "riser.2000.plt", "post.py"]
@@ -585,12 +585,14 @@ class TestBinaryFreq:
         assert fetched == ["riser.1000.plt", "riser.1000.z1.vtu", "riser.2000.plt"]
 
     @pytest.mark.parametrize("extra, message", [
-        ({}, "needs --binary"),
-        ({"binary": True, "freq": 0}, "positive integer"),
+        ({}, "--freq needs `case download binary`"),
+        ({"what": "binary", "freq": 0}, "positive integer"),
+        ({"binary": True}, "--binary is now a word: `case download binary`"),
+        ({"what": "rst"}, "`rst` is for `case upload` only"),
     ])
     def test_bad_freq_is_rejected(self, extra, message, capsys, tmp_path):
         import argparse
-        ns = dict(case=str(tmp_path), from_remote="srv", freq=5, binary=False,
+        ns = dict(case=str(tmp_path), from_remote="srv", freq=5, binary=False, what=None,
                   dir=None, files=None, t1=None, t2=None, force=False,
                   resume=False, help=False, examples=False, remote_path=None)
         ns.update(extra)

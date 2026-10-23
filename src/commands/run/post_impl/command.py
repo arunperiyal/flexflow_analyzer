@@ -557,7 +557,7 @@ def _remote_exports(args, case_dir, script_path, console, check):
     context), or [] when nothing is to be sent. None means: do not submit.
 
     The remote case path is built as `case upload` builds it -- the remote's
-    path, then the case name -- so the files land where `case upload --binary`
+    path, then the case name -- so the files land where `case upload binary`
     would put them. No password is passed: the job sends with ssh keys only.
 
     When ~/.ssh/config defines a Host with the remote's name, that alias is
@@ -898,7 +898,7 @@ This typically runs simPlt (PLT generation) and simPlt2Bin (binary conversion).
     3. With --remote: sends each binary PLT as soon as it is finished
 
 {Colors.BOLD}SENDING TO A REMOTE (--remote):{Colors.RESET}
-    • Files go where `case upload --binary` puts them: <remote path>/<case>/binary/
+    • Files go where `case upload binary` puts them: <remote path>/<case>/binary/
     • Only key-based ssh is used (no password); run post checks the login
       before submitting, and refuses if it would prompt
     • If ~/.ssh/config has a Host named like the remote (`ssh cloud`), that

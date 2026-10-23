@@ -3,15 +3,54 @@ Case command group - Manages simulation cases
 Subcommands: show, create, run, domain, ...
 """
 
+import argparse
 import sys
 from ..base import BaseCommand
 from src.cli.completers import described, file_flags
 from src.cli.context import case_arg, context_flag, freq_arg, time_window
 
 
-def _binary(args):
-    """The t1/t2/time contexts select steps inside binary/, so they only apply with --binary."""
-    return getattr(args, 'binary', False)
+# `case upload|download [binary|rst] [case]`: what to carry. Nothing named is the
+# directories (--dir) and files (--files) as before.
+TRANSFER_MODES = {
+    'upload': [('binary', 'binary/: every timestep, or just --t1..--t2'),
+               ('rst', 'Restart files (.sgd + .rst) of --t1..--t2 in the run directory')],
+    'download': [('binary', 'binary/: every timestep, or just --t1..--t2 (--freq)')],
+}
+
+
+def _mode(args):
+    """binary/rst, or None when the first word is a case (or absent)."""
+    what = getattr(args, 'what', None)
+    return what if what in ('binary', 'rst') else None
+
+
+def _stepped(args):
+    """The t1/t2/time/freq contexts select timesteps, so they only apply to binary/rst."""
+    return _mode(args) is not None
+
+
+def _transfer_case(store, ns):
+    """The case context, unless the first word was the case itself."""
+    what = getattr(ns, 'what', None)
+    if what is not None and _mode(ns) is None:
+        return None
+    return store.get('case') if store.is_set('case') else None
+
+
+def _transfer_positionals(parser, direction):
+    modes = TRANSFER_MODES[direction]
+
+    def complete(rt, prefix):
+        return modes
+    parser.add_argument('what', nargs='?', metavar='binary|rst' if len(modes) > 1 else 'binary',
+                        help='What to carry: ' + '; '.join(f"{m}: {h}" for m, h in modes)
+                        ).completer = complete
+    case_arg(parser, resolve=_transfer_case,
+             help=('Local case directory path' if direction == 'upload'
+                   else 'Local case directory path (destination)'))
+    # The old spelling, kept only to point at the new one.
+    parser.add_argument('--binary', action='store_true', help=argparse.SUPPRESS)
 
 
 class CaseCommand(BaseCommand):
@@ -394,7 +433,7 @@ class CaseCommand(BaseCommand):
         # case upload
         upload_parser = case_subparsers.add_parser('upload', add_help=False,
                                                    help='Upload case directories from local to remote server')
-        case_arg(upload_parser, help='Local case directory path')
+        _transfer_positionals(upload_parser, 'upload')
         upload_parser.add_argument('--dir', type=str, metavar='DIRS',
                                   help='Directories to upload (comma-separated, default: othd_files,oisd_files,binary)')
         upload_parser.add_argument('--files', nargs='?', const=True, default=None,
@@ -407,11 +446,9 @@ class CaseCommand(BaseCommand):
                      help='Remote machine name (or use context with "use remote:name")')
         upload_parser.add_argument('--remote-path', type=str, metavar='PATH',
                                   help='Override remote base path (default: use remote config)')
-        upload_parser.add_argument('--binary', action='store_true',
-                                  help='Upload binary/ only. With --t1/--t2 it carries just the timesteps in that range, instead of the whole directory')
-        time_window(upload_parser, when=_binary, 
-                    t1_kwargs=dict(metavar='STEP', help='With --binary: first timestep to upload (alone: only that step)'),
-                    t2_kwargs=dict(metavar='STEP', help='With --binary: last timestep to upload'))
+        time_window(upload_parser, when=_stepped,
+                    t1_kwargs=dict(metavar='STEP', help='binary/rst: first timestep to upload (alone: only that step)'),
+                    t2_kwargs=dict(metavar='STEP', help='binary/rst: last timestep to upload'))
         upload_parser.add_argument('--force', action='store_true',
                                   help='Create remote directories if they do not exist')
         upload_parser.add_argument('--resume', action='store_true',
@@ -424,7 +461,7 @@ class CaseCommand(BaseCommand):
         # case download
         download_parser = case_subparsers.add_parser('download', add_help=False,
                                                      help='Download case directories from remote to local')
-        case_arg(download_parser, help='Local case directory path (destination)')
+        _transfer_positionals(download_parser, 'download')
         download_parser.add_argument('--dir', type=str, metavar='DIRS',
                                     help='Directories to download (comma-separated, default: othd_files,oisd_files,binary)')
         download_parser.add_argument('--files', nargs='?', const=True, default=None,
@@ -438,15 +475,13 @@ class CaseCommand(BaseCommand):
                      help='Remote machine name (or use context with "use remote:name")')
         download_parser.add_argument('--remote-path', type=str, metavar='PATH',
                                     help='Override remote base path (default: use remote config)')
-        download_parser.add_argument('--binary', action='store_true',
-                                  help='Download binary/ only. With --t1/--t2 it carries just the timesteps in that range, instead of the whole directory')
-        time_window(download_parser, when=_binary, 
-                    t1_kwargs=dict(metavar='STEP', help='With --binary: first timestep to download (alone: only that step)'),
-                    t2_kwargs=dict(metavar='STEP', help='With --binary: last timestep to download'))
+        time_window(download_parser, when=_stepped,
+                    t1_kwargs=dict(metavar='STEP', help='binary: first timestep to download (alone: only that step)'),
+                    t2_kwargs=dict(metavar='STEP', help='binary: last timestep to download'))
         freq_arg(download_parser, metavar='N',
-                 resolve=lambda store, ns: (store.get('freq') if _binary(ns)
+                 resolve=lambda store, ns: (store.get('freq') if _stepped(ns)
                                             and store.is_set('freq') else None),
-                 help='With --binary: only the timesteps that are multiples of N')
+                 help='binary: only the timesteps that are multiples of N')
         download_parser.add_argument('--force', action='store_true',
                                     help='Create the local case directory if it does not exist')
         download_parser.add_argument('--resume', action='store_true',
