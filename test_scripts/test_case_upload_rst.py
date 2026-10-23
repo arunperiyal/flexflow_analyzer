@@ -149,3 +149,70 @@ def test_in_the_shell_the_case_context_fills_only_a_mode(tmp_path, monkeypatch):
     assert (ns.what, ns.case.endswith('CaseA')) == ('rst', True)
     ns = parsed('case upload CS9')
     assert (ns.what, ns.case) == ('CS9', None)        # moved to case by the command
+
+
+# --- case download rst ---------------------------------------------------------
+
+class FakeRemote:
+    """An SSH stand-in over a local directory that plays the remote case."""
+
+    def __init__(self, root):
+        self.root = root
+        self.fetched = []
+
+    def connect(self):
+        return True
+
+    def disconnect(self):
+        pass
+
+    def _local(self, path):
+        return self.root / path.removeprefix('/r/CS1').lstrip('/')
+
+    def remote_path_exists(self, path):
+        return self._local(path).exists()
+
+    def list_remote_dir(self, path):
+        return sorted(p.name for p in self._local(path).iterdir())
+
+    def download_file(self, path, local, callback=None):
+        self.fetched.append(path)
+        import shutil
+        shutil.copy(self._local(path), local)
+
+
+def test_download_restart_reads_the_remote_config(case, tmp_path):
+    here = tmp_path / 'local'
+    here.mkdir()
+    remote = FakeRemote(case)
+    assert CaseDownloadCommand().download_restart(remote, '/r/CS1', str(here), (4000.0, 5000.0))
+    assert sorted(p.name for p in (here / 'RUN_1').iterdir()) == \
+        ['riser.4000.sgd'] + [f'riser.4000_{k}.rst' for k in range(4)]
+    assert remote.fetched[0] == '/r/CS1/simflow.config'
+
+
+def test_download_restart_falls_back_to_the_local_config(case, tmp_path):
+    here = tmp_path / 'local'
+    here.mkdir()
+    (here / 'simflow.config').write_text((case / 'simflow.config').read_text())
+    (case / 'simflow.config').unlink()
+    assert CaseDownloadCommand().download_restart(FakeRemote(case), '/r/CS1', str(here),
+                                                  (4000.0, 4000.0))
+    assert len(list((here / 'RUN_1').iterdir())) == 5
+
+
+def test_download_restart_with_nothing_complete_fails(case, tmp_path):
+    remote = FakeRemote(case)
+    assert not CaseDownloadCommand().download_restart(remote, '/r/CS1', str(tmp_path),
+                                                      (5000.0, 5000.0))
+    assert remote.fetched == ['/r/CS1/simflow.config']
+
+
+def test_case_download_rst_end_to_end(cmd, case, tmp_path):
+    here = tmp_path / 'local' / 'CS1'          # remote case path: /r/CS1
+    here.mkdir(parents=True)
+    remote = FakeRemote(case)
+    with patch.object(transfer, 'SSHClientWrapper', return_value=remote):
+        ns = args(what='rst', case=str(here), t1=4000.0, from_remote='srv', freq=None)
+        assert cmd.execute_download(ns) == 0
+    assert len(list((here / 'RUN_1').iterdir())) == 5
