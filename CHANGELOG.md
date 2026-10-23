@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### 🧹 `case organise output`: `.out` go once converted, keep-freq steps too
+
+- A restart reads only `.rst` (and the `.sgd` subgrid files); `.out` is read
+  only by the conversion that writes `<problem>.<step>.plt`. So `output` now
+  deletes a step's `.out` whenever that `.plt` exists (in `binary/` or the
+  run directory), including the steps `--keep-freq` divides.
+- Steps with no `.plt` yet keep their `.out`, and are listed so you can
+  convert them first.
+- `--keep-freq` (default `10 * freq`) now applies to `.rst` only.
+
 ### 🐛 `case upload|download sgd`: one file per subgrid, not per step
 
 - The preprocessor writes `<problem>.<k>.sgd`, one per subgrid
