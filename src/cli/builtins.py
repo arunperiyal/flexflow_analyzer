@@ -66,20 +66,27 @@ def builtins():
                         "  find -c CS4          # cases with CS4 in the name[/dim]",
                 complete='path', category='Files'),
         Builtin('missing', _missing, help='Missing files in a numbered series',
-                usage='missing [dir] <pattern> [--t1 N] [--t2 N] [--freq N] [--empty] [--extra] [-q]',
-                details="  [cyan]--t1 N[/cyan]    First number (default: the lowest found)\n"
+                usage='missing [dir] [pattern] [--t1 N] [--t2 N] [--freq N] [--empty] [--extra] [-q]',
+                details="  [cyan]dir[/cyan]       Where the files are (default: here)\n"
+                        "  [cyan]pattern[/cyan]   File name with {} for the number; leave it out to\n"
+                        "            check every numbered series in dir\n"
+                        "  [cyan]--t1 N[/cyan]    First number (default: the lowest found)\n"
                         "  [cyan]--t2 N[/cyan]    Last number (default: the highest found)\n"
                         "  [cyan]--freq N[/cyan]  Step between numbers (default: inferred from the files)\n"
                         "  [cyan]--empty[/cyan]   Also report 0-byte files\n"
                         "  [cyan]--extra[/cyan]   Also report files between the expected steps\n"
                         "  [cyan]-q[/cyan]        Only the summary line\n"
-                        "[dim]{} in the pattern stands for the number; zero padding follows the\n"
-                        "files found; a directory may come first or be part of the pattern.\n"
-                        "Expects t1, t1+freq, ... up to t2. Exits 1 if any is\n"
-                        "missing (or empty, with --empty). In a pipe it prints just the names.\n"
-                        "  missing 'slice_xVor_{}.png' --t1 3000 --t2 5000 --freq 50\n"
+                        "[dim]Expects t1, t1+freq, ... up to t2; zero padding follows the files.\n"
+                        "With no pattern, names that differ only in a number form a series\n"
+                        "(riser.{}_0.out, riser.{}_1.out, ... one per subgrid), and each is\n"
+                        "checked with the same flags. The directory can also be part of the\n"
+                        "pattern (post/slice_{}.png). Exits 1 if anything is missing (or\n"
+                        "empty, with --empty). In a pipe it prints just the names.\n"
+                        "  missing post                       # every series in post/\n"
+                        "  missing post 'slice_xVor_{}.png'   # just this one\n"
                         "  missing binary riser.{}.plt --empty\n"
-                        "  missing 'img_{}.png' | wc -l[/dim]",
+                        "  missing post --t1 3000 --t2 5000 --freq 50\n"
+                        "  missing post | wc -l[/dim]",
                 complete='path', category='Files'),
         Builtin('mkdir', _mkdir, help='Make directories', usage='mkdir [-p] <dir> [dirs...]',
                 details="  [cyan]-p[/cyan]  Make parents as needed; no error if it exists",
@@ -256,12 +263,13 @@ def _find(rt, argv):
     return 0
 
 
-_MISSING_USAGE = "usage: missing [dir] <pattern> [--t1 N] [--t2 N] [--freq N] [--empty] [--extra] [-q]"
+_MISSING_USAGE = "usage: missing [dir] [pattern] [--t1 N] [--t2 N] [--freq N] [--empty] [--extra] [-q]"
 
 
 def _missing_args(argv):
     """(pattern, {t1, t2, freq}, flags) or an error message. A directory may
-    come before the pattern: `missing post slice_{}.png` is post/slice_{}.png."""
+    come before the pattern: `missing post slice_{}.png` is post/slice_{}.png;
+    `missing post` alone is every series in post/."""
     numbers, flags, rest = {}, set(), []
     args = iter(argv)
     for arg in args:
@@ -281,6 +289,8 @@ def _missing_args(argv):
             return f"unknown option {arg}"
         else:
             rest.append(arg)
+    if not rest:
+        rest = ['.']
     if len(rest) == 2:
         rest = [rest[0].rstrip('/') + '/' + rest[1] if rest[0].rstrip('/') else '/' + rest[1]]
     if len(rest) != 1:
@@ -292,23 +302,76 @@ def _missing_args(argv):
     return rest[0], numbers, flags
 
 
+def _missing_series(folder):
+    """The numbered series in folder, as (prefix, suffix) around the number.
+    Names are grouped by their text between digit runs; the run that takes
+    the most values is the number, so riser.{}_0.out and riser.{}_1.out are
+    two series, one per subgrid. A series needs two numbers or more."""
+    shapes = {}
+    for entry in os.scandir(folder):
+        if entry.name.startswith('.') or not entry.is_file():
+            continue
+        parts = re.split(r'(\d+)', entry.name)
+        if len(parts) > 1:
+            shapes.setdefault(tuple(parts[0::2]), []).append(tuple(parts[1::2]))
+    series = set()
+    for text, runs in shapes.items():
+        distinct = [len({r[i] for r in runs}) for i in range(len(runs[0]))]
+        vary = max(range(len(distinct)), key=lambda i: (distinct[i], i))
+        groups = {}
+        for r in runs:
+            groups.setdefault(r[:vary] + r[vary + 1:], set()).add(r[vary])
+        for fixed, values in groups.items():
+            if len(values) < 2:
+                continue
+            digits = list(fixed[:vary]) + ['{}'] + list(fixed[vary:])
+            name = ''.join(t + d for t, d in zip(text, digits + ['']))
+            prefix, suffix = name.split('{}')
+            series.add((prefix, suffix))
+    return sorted(series, key=lambda ps: [int(c) if c.isdigit() else c.lower()
+                                          for c in re.split(r'(\d+)', ps[0] + '{}' + ps[1])])
+
+
 def _missing(rt, argv):
-    """The numbers of a series like slice_{}.png that have no file."""
+    """The numbers of a series like slice_{}.png that have no file; given just
+    a directory, every numbered series in it."""
     parsed = _missing_args(argv)
     if isinstance(parsed, str):
         rt.error(f"missing: {parsed}" if not parsed.startswith('usage') else parsed)
         return 2
     pattern, numbers, flags = parsed
+    if '{}' not in pattern and rt.resolve_path(pattern).is_dir():
+        typed_dir = pattern.rstrip('/') or '/'
+        typed_dir = '' if typed_dir == '.' else typed_dir
+        folder = rt.resolve_path(pattern)
+        series = _missing_series(folder)
+        if not series:
+            rt.warn(f"missing: no numbered series in {escape(pattern)}")
+            return 1
+        status = 0
+        for i, (prefix, suffix) in enumerate(series):
+            if i and not rt.capturing and 'q' not in flags:
+                rt.console.print()
+            status = max(status, _missing_check(rt, folder, typed_dir, prefix, suffix,
+                                                numbers, flags, labelled=True))
+        return status
+
     typed_dir, _, name = pattern.rpartition('/')
     if name.count('{}') != 1 or '{}' in typed_dir:
-        rt.error("missing: the file name needs one {} where the number goes")
+        rt.error("missing: the file name needs one {} where the number goes "
+                 "(or give just a directory)")
         return 2
     folder = rt.resolve_path(typed_dir) if typed_dir else rt.cwd
     if not folder.is_dir():
         rt.error(f"missing: not a directory: {escape(str(folder))}")
         return 1
-
     prefix, suffix = name.split('{}')
+    return _missing_check(rt, folder, typed_dir, prefix, suffix, numbers, flags)
+
+
+def _missing_check(rt, folder, typed_dir, prefix, suffix, numbers, flags, labelled=False):
+    """Report one series; labelled puts its pattern on the summary line."""
+    pattern = (f"{typed_dir}/" if typed_dir else '') + f"{prefix}{{}}{suffix}"
     number = re.compile(re.escape(prefix) + r'(\d+)' + re.escape(suffix) + '$')
     found, pad = {}, 0
     for entry in os.scandir(folder):
@@ -325,7 +388,8 @@ def _missing(rt, argv):
         rt.warn(f"missing: no file matches '{pattern}' (give --t1 and --t2 to list them all)")
         return 1
     if t1 > t2:
-        rt.error(f"missing: --t1 {t1} is after the last file, {t2}")
+        rt.error(f"missing: {pattern}: --t1 {t1} is after the last file, {t2}" if labelled
+                 else f"missing: --t1 {t1} is after the last file, {t2}")
         return 2
     freq = numbers.get('freq')
     guessed = freq is None
@@ -345,11 +409,11 @@ def _missing(rt, argv):
     rows = ([('missing', n, 'red') for n in missing] + [('empty', n, 'yellow') for n in empty]
             + [('extra', n, 'cyan') for n in extra])
     rows.sort(key=lambda row: row[1])
-    labelled = bool(flags & {'empty', 'extra'})
+    kinds = bool(flags & {'empty', 'extra'})
     if 'q' not in flags:
         for kind, n, colour in rows:
             if rt.capturing:
-                rt.out(f"{kind:<8} {shown(n)}" if labelled else shown(n))
+                rt.out(f"{kind:<8} {shown(n)}" if kinds else shown(n))
             else:
                 rt.console.print(f"  [{colour}]{kind:<8}[/{colour}] {escape(shown(n))}",
                                  highlight=False)
@@ -365,12 +429,14 @@ def _missing(rt, argv):
         bad = missing or empty
         mark = "[red]✗[/red]" if bad else "[green]✓[/green]"
         text = ", ".join(parts) + f" · {span}"
+        if labelled:
+            text = f"{pattern}  " + text
         if rt.capturing:
             rt.out(("✗ " if bad else "✓ ") + text)
         else:
             if rows and 'q' not in flags:
                 rt.console.print()
-            rt.console.print(f"{mark} {text}", highlight=False)
+            rt.console.print(f"{mark} {escape(text)}", highlight=False)
     return 1 if missing or empty else 0
 
 

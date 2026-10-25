@@ -2,10 +2,15 @@
 
 ## Unreleased
 
-### ✨ `missing [dir] <pattern>`
+### ✨ `missing [dir] [pattern]`
 
 - A directory can come before the pattern: `missing post 'slice_xVor_{}.png'`
   is the same as `missing 'post/slice_xVor_{}.png'`. The flags are unchanged.
+- Leave the pattern out and it finds the series itself: `missing post`
+  checks every group of names that differ only in a number, with the same
+  flags. In `riser.<step>_<k>.out` the step is the number (it takes the
+  most values), so each subgrid is its own series. A single file is no series.
+- With no arguments at all it checks the current directory.
 
 ### 🧹 `case organise output`: `.out` go once converted, keep-freq steps too
 
