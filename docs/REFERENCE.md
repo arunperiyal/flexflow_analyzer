@@ -33,7 +33,7 @@ ff                    # Start interactive shell
 | `grep -r <pattern> <dir>` | Recursive search | `grep -r TODO src/` |
 | `grep -l <pattern>` | Show only filenames | `grep -l error logs/` |
 | `find [-f\|-d\|-c] [pattern] [path]` | Find files/directories by name (`-c`: cases only) | `find *.othd`, `find -c CS4` |
-| `missing <pattern> [--t1 N] [--t2 N] [--freq N] [--empty] [--extra] [-q]` | Missing files in a numbered series; `{}` is the number. Range and freq default to the files found | `missing 'slice_xVor_{}.png' --freq 50` |
+| `missing [dir] <pattern> [--t1 N] [--t2 N] [--freq N] [--empty] [--extra] [-q]` | Missing files in a numbered series; `{}` is the number; an optional directory comes first. Range and freq default to the files found | `missing post 'slice_xVor_{}.png' --freq 50` |
 | `mkdir [-p] <dir>` | Make directories | `mkdir -p post/plots` |
 | `mv [-f] <src...> <dest>` | Move or rename (asks before replacing) | `mv *.png plots` |
 | `touch <file>` | Create a file or update its time | `touch notes.txt` |

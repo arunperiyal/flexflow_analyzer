@@ -1,4 +1,4 @@
-"""`missing PATTERN`: the numbers of a series like slice_xVor_{}.png with no
+"""`missing [DIR] PATTERN`: the numbers of a series like slice_xVor_{}.png with no
 file. t1/t2 default to the files found, freq to the gcd of their gaps; zero
 padding follows the files. It exits 1 when something is missing."""
 
@@ -51,6 +51,14 @@ def test_infers_the_range_and_freq(rt):
     assert '3000..5000 every 25 (inferred)' in shown(rt)
 
 
+def test_directory_before_the_pattern(rt):
+    assert rt.execute_line("missing post 'slice_xVor_{}.png' --freq 50") == 1
+    assert rt.run_captured("missing post/ slice_xVor_{}.png --freq 50").split() == \
+        ['post/slice_xVor_3350.png', 'post/slice_xVor_4100.png']
+    assert rt.execute_line("missing --freq 50 nope slice_xVor_{}.png") == 1
+    assert 'not a directory' in rt.err_console.file.getvalue()
+
+
 def test_empty_and_extra(rt):
     assert rt.execute_line("missing post/slice_xVor_{}.png --freq 50 --empty --extra") == 1
     rows = [l.split()[:2] for l in shown(rt).splitlines() if 'post/' in l]
@@ -86,6 +94,7 @@ def test_no_files_but_a_given_range(rt):
     ("missing img_{}.jpg --t1 50 --t2 10", 'is after'),
     ("missing img_{}.jpg --bogus", 'unknown option --bogus'),
     ("missing", 'usage: missing'),
+    ("missing post a_{}.png b_{}.png", 'usage: missing'),
 ])
 def test_errors(rt, line, message):
     assert rt.execute_line(line) == 2

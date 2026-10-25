@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### ✨ `missing [dir] <pattern>`
+
+- A directory can come before the pattern: `missing post 'slice_xVor_{}.png'`
+  is the same as `missing 'post/slice_xVor_{}.png'`. The flags are unchanged.
+
 ### 🧹 `case organise output`: `.out` go once converted, keep-freq steps too
 
 - A restart reads only `.rst` (and the `.sgd` subgrid files); `.out` is read
