@@ -13,6 +13,7 @@ from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
 from rich import box
+from rich.markup import escape
 
 from ....utils.logger import Logger
 from ....utils.colors import Colors
@@ -542,17 +543,25 @@ def _check_plt(cfg, case_dir: Path, console: Console, freq: Optional[int] = None
 
     `t1`/`t2` restrict both the expected and found sets to a timestep window,
     so the check (and its missing/extra counts) only concern that window.
+
+    A step counts as present in either place (organise moves them from the
+    run directory to binary/). Expected steps after the last one found are
+    not written yet -- the run stopped or is still going -- so they are shown
+    apart from the gaps, which are the files really lost.
     """
-    console.print("[bold]PLT file check[/bold]")
+    import re as _re
+    from shellkit.builtins.files import format_size
 
     problem = cfg.problem
     if not problem:
+        console.print("[bold]PLT file check[/bold]")
         console.print("  [yellow]⚠[/yellow]  'problem' not set in simflow.config — cannot determine PLT file names")
         console.print()
         return
 
     out_freq = freq or cfg.out_freq
     if not out_freq:
+        console.print("[bold]PLT file check[/bold]")
         console.print("  [yellow]⚠[/yellow]  'outFreq' not set in simflow.config — cannot determine expected PLT files")
         console.print("  [dim]give --freq N to check against a frequency anyway[/dim]")
         console.print()
@@ -562,100 +571,122 @@ def _check_plt(cfg, case_dir: Path, console: Console, freq: Optional[int] = None
     def_cfg = DefConfig.find(case_dir, problem)
     max_steps = def_cfg.max_time_steps
     if not max_steps:
+        console.print("[bold]PLT file check[/bold]")
         console.print("  [yellow]⚠[/yellow]  'maxTimeSteps' not found in .def file — cannot determine expected PLT files")
         console.print()
         return
 
+    windowed = t1 is not None or t2 is not None
+    window = f" · steps {_fmt_bound(t1)}..{_fmt_bound(t2)}" if windowed else ''
+    console.print(f"[bold]PLT file check[/bold]  [dim]{escape(problem)}.<step>.plt · every "
+                  f"{out_freq} ({'--freq' if freq else 'outFreq'}) up to {_fmt_tsid(max_steps)} "
+                  f"(maxTimeSteps){window}[/dim]")
+
     # Build expected tsId set: outFreq, 2*outFreq, ..., maxTimeSteps
-    expected = set(range(out_freq, max_steps + 1, out_freq))
+    expected = {t for t in range(out_freq, max_steps + 1, out_freq) if _step_in_bounds(t, t1, t2)}
 
-    if t1 is not None or t2 is not None:
-        expected = {t for t in expected if _step_in_bounds(t, t1, t2)}
-        console.print(f"  [dim]Limiting check to timesteps in [{t1}, {t2}][/dim]")
-
-    total_expected = len(expected)
-
-    # Directories to check: binary/ and run dir
     locations = []
-
     binary_dir = case_dir / 'binary'
     if binary_dir.exists():
         locations.append(('binary/', binary_dir))
-
     run_dir = cfg.run_dir(case_dir)
     if run_dir and run_dir.exists() and run_dir != binary_dir:
-        locations.append((cfg.run_dir_str or 'run dir', run_dir))
-
+        locations.append(((cfg.run_dir_str or 'run dir').rstrip('/') + '/', run_dir))
     if not locations:
         console.print("  [dim]Neither binary/ nor the run directory exists[/dim]")
         console.print()
         return
 
+    pattern = _re.compile(rf'^{_re.escape(problem)}\.(\d+)\.plt$')
+    found: dict = {}            # step -> sizes, one per location holding it
+    tbl = Table(box=box.SIMPLE, show_header=True, header_style="bold yellow", pad_edge=False)
+    tbl.add_column("where", style="bold")
+    tbl.add_column("files", justify="right")
+    tbl.add_column("steps")
+    tbl.add_column("size", justify="right")
     for label, directory in locations:
-        console.print(f"  [bold]{label}[/bold]")
-
-        # Find PLT files matching <problem>.<tsId>.plt
-        import re as _re
-        pattern = _re.compile(rf'^{_re.escape(problem)}\.(\d+)\.plt$')
-        found: dict = {}
+        here = {}
         for f in directory.iterdir():
             m = pattern.match(f.name)
-            if m:
-                found[int(m.group(1))] = f
-
-        if t1 is not None or t2 is not None:
-            found = {t: f for t, f in found.items() if _step_in_bounds(t, t1, t2)}
-
-        if not found:
-            console.print(f"    [dim]No {problem}.*.plt files found[/dim]")
-            console.print()
-            continue
-
-        present   = set(found.keys())
-        missing   = sorted(expected - present)
-        extra     = sorted(present - expected)
-        n_found   = len(present & expected)
-        total_size = sum(f.stat().st_size for f in found.values()) / 1_048_576
-
-        # Summary line
-        if not missing:
-            console.print(
-                f"    [green]✓[/green]  {n_found}/{total_expected} expected files present  "
-                f"({total_size:.1f} MB total)"
-            )
+            if m and _step_in_bounds(int(m.group(1)), t1, t2):
+                here[int(m.group(1))] = f.stat().st_size
+        for step, size in here.items():
+            found.setdefault(step, []).append(size)
+        if here:
+            tbl.add_row(label, str(len(here)),
+                        f"[cyan]{_fmt_tsid(min(here))}[/cyan] → [cyan]{_fmt_tsid(max(here))}[/cyan]",
+                        format_size(sum(here.values())))
         else:
-            console.print(
-                f"    [red]✗[/red]  {n_found}/{total_expected} expected files present  "
-                f"([red]{len(missing)} missing[/red],  {total_size:.1f} MB total)"
-            )
+            tbl.add_row(label, "[dim]0[/dim]", "[dim]—[/dim]", "[dim]—[/dim]")
+    console.print(tbl)
 
-        # tsId range of found files
-        console.print(
-            f"    Range : [cyan]{_fmt_tsid(min(present))}[/cyan]"
-            f" → [cyan]{_fmt_tsid(max(present))}[/cyan]"
-            f"  ({'--freq' if freq else 'outFreq'}={out_freq},  "
-            f"maxTimeSteps={_fmt_tsid(max_steps)})"
-        )
-
-        # Missing tsIds
-        if missing:
-            console.print(f"    [red]Missing tsIds:[/red]")
-            # Print in rows of 10 for readability
-            chunk = 10
-            for i in range(0, len(missing), chunk):
-                row = ', '.join(_fmt_tsid(t) for t in missing[i:i + chunk])
-                console.print(f"      {row}")
-
-        # Extra (not in expected set)
-        if extra:
-            console.print(
-                f"    [dim]Extra (not in expected set): "
-                + ', '.join(_fmt_tsid(t) for t in extra[:20])
-                + (f"  … ({len(extra)} total)" if len(extra) > 20 else '')
-                + "[/dim]"
-            )
-
+    if not found:
+        console.print(f"  [red]✗[/red] no {escape(problem)}.<step>.plt in "
+                      f"{' or '.join(label for label, _ in locations)}; {len(expected)} expected")
         console.print()
+        return
+
+    last = max(found)
+    upto = {t for t in expected if t <= last}
+    missing = sorted(upto - set(found))
+    later = sorted(t for t in expected if t > last)
+    empty = sorted(t for t in expected if t in found and 0 in found[t])
+    extra = sorted(set(found) - expected)
+    both = sorted(t for t, sizes in found.items() if len(sizes) > 1)
+
+    bad = missing or empty
+    mark = "[red]✗[/red]" if bad else "[green]✓[/green]"
+    parts = [f"[red]{len(missing)} missing[/red]" if missing else "none missing"]
+    if empty:
+        parts.append(f"[yellow]{len(empty)} empty[/yellow]")
+    console.print(f"  {mark} {len(upto) - len(missing)} of {len(upto)} present up to "
+                  f"{_fmt_tsid(last)}, the last step found · " + ", ".join(parts))
+
+    # label | steps, so a long list wraps under itself
+    details = Table.grid(padding=(0, 2))
+    details.add_column(no_wrap=True)
+    details.add_column()
+    if missing:
+        details.add_row("    [red]missing[/red]", _fmt_steps(missing, out_freq))
+    if empty:
+        details.add_row("    [yellow]empty[/yellow]", _fmt_steps(empty, out_freq))
+    if extra:
+        details.add_row("    [dim]extra[/dim]",
+                        f"[dim]{_fmt_steps(extra, None)}  (off the every-{out_freq} grid)[/dim]")
+    if both:
+        details.add_row("    [dim]in both[/dim]",
+                        f"[dim]{_fmt_steps(both, out_freq)}  "
+                        f"({' and '.join(label for label, _ in locations)})[/dim]")
+    if later:
+        details.add_row("    [dim]not yet[/dim]",
+                        f"[dim]{_fmt_steps(later, out_freq)}  "
+                        f"(the run is at {_fmt_tsid(last)} of {_fmt_tsid(max(expected))})[/dim]")
+    if details.row_count:
+        console.print(details)
+    console.print()
+
+
+def _fmt_bound(bound: Optional[float]) -> str:
+    if bound is None:
+        return ''
+    return _fmt_tsid(int(bound)) if float(bound).is_integer() else str(bound)
+
+
+def _fmt_steps(steps: List[int], freq: Optional[int], limit: int = 12) -> str:
+    """Steps as runs: '300 · 650–750 (3) · 1200'. A run is consecutive steps
+    `freq` apart; without freq every step stands alone. Past `limit` runs the
+    middle is elided."""
+    runs = []
+    for t in steps:
+        if runs and freq and t - runs[-1][-1] == freq:
+            runs[-1].append(t)
+        else:
+            runs.append([t])
+    text = [_fmt_tsid(r[0]) if len(r) == 1 else
+            f"{_fmt_tsid(r[0])}–{_fmt_tsid(r[-1])} ({len(r)})" for r in runs]
+    if len(text) > limit:
+        text = text[:limit // 2] + [f"… {len(text) - limit} more …"] + text[-(limit // 2):]
+    return " · ".join(text)
 
 
 # ---------------------------------------------------------------------------
