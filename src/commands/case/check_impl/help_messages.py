@@ -62,6 +62,11 @@ Pick one subcommand.
           • Steps after the last one found are {Colors.DIM}not yet{Colors.RESET} written (the run
             stopped or is still going), apart from the gaps
           • Also lists extra files (off the freq grid) and steps in both places
+          • After a restart (restartFlag, restartTsId R), flags as {Colors.RED}stale{Colors.RESET} each
+            PLT past R older than the resumed run's .out/.rst for that step or
+            an earlier one: it was made from the earlier run's output, which the
+            restart computed again, so it does not join up with the frames around
+            it. Steps before the first .out/.rst left past R cannot be dated.
 
     {Colors.CYAN}def{Colors.RESET}
         Check that every file referenced via File( "..." ) in the .def file
