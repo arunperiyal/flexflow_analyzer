@@ -66,7 +66,7 @@ def builtins():
                         "  find -c CS4          # cases with CS4 in the name[/dim]",
                 complete='path', category='Files'),
         Builtin('missing', _missing, help='Missing files in a numbered series',
-                usage='missing <pattern> [--t1 N] [--t2 N] [--freq N] [--empty] [--extra] [-q]',
+                usage='missing [dir] <pattern> [--t1 N] [--t2 N] [--freq N] [--empty] [--extra] [-q]',
                 details="  [cyan]--t1 N[/cyan]    First number (default: the lowest found)\n"
                         "  [cyan]--t2 N[/cyan]    Last number (default: the highest found)\n"
                         "  [cyan]--freq N[/cyan]  Step between numbers (default: inferred from the files)\n"
@@ -74,10 +74,11 @@ def builtins():
                         "  [cyan]--extra[/cyan]   Also report files between the expected steps\n"
                         "  [cyan]-q[/cyan]        Only the summary line\n"
                         "[dim]{} in the pattern stands for the number; zero padding follows the\n"
-                        "files found. Expects t1, t1+freq, ... up to t2. Exits 1 if any is\n"
+                        "files found; a directory may come first or be part of the pattern.\n"
+                        "Expects t1, t1+freq, ... up to t2. Exits 1 if any is\n"
                         "missing (or empty, with --empty). In a pipe it prints just the names.\n"
                         "  missing 'slice_xVor_{}.png' --t1 3000 --t2 5000 --freq 50\n"
-                        "  missing binary/riser.{}.plt --empty\n"
+                        "  missing binary riser.{}.plt --empty\n"
                         "  missing 'img_{}.png' | wc -l[/dim]",
                 complete='path', category='Files'),
         Builtin('mkdir', _mkdir, help='Make directories', usage='mkdir [-p] <dir> [dirs...]',
@@ -255,11 +256,12 @@ def _find(rt, argv):
     return 0
 
 
-_MISSING_USAGE = "usage: missing <pattern> [--t1 N] [--t2 N] [--freq N] [--empty] [--extra] [-q]"
+_MISSING_USAGE = "usage: missing [dir] <pattern> [--t1 N] [--t2 N] [--freq N] [--empty] [--extra] [-q]"
 
 
 def _missing_args(argv):
-    """(pattern, {t1, t2, freq}, flags) or an error message."""
+    """(pattern, {t1, t2, freq}, flags) or an error message. A directory may
+    come before the pattern: `missing post slice_{}.png` is post/slice_{}.png."""
     numbers, flags, rest = {}, set(), []
     args = iter(argv)
     for arg in args:
@@ -279,6 +281,8 @@ def _missing_args(argv):
             return f"unknown option {arg}"
         else:
             rest.append(arg)
+    if len(rest) == 2:
+        rest = [rest[0].rstrip('/') + '/' + rest[1] if rest[0].rstrip('/') else '/' + rest[1]]
     if len(rest) != 1:
         return _MISSING_USAGE
     if numbers.get('freq', 1) < 1:
