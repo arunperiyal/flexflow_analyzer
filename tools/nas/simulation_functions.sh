@@ -7,8 +7,9 @@
 #   show_archive   the othd/oisd parts of a case: steps, range, redundant ones
 #   clean_archive  delete othd/oisd parts by number (asks first)
 #   clean_plt      delete binary PLT files in a timestep window (asks first)
+#   missing        the gaps in any numbered series of files (slice_{}.png, ...)
 #
-# Every function takes --case DIR (default: the current directory) and
+# The case functions take --case DIR (default: the current directory) and
 # --problem NAME (default: `problem` in the case's simflow.config, else riser).
 # Options may be written --t1 50 or --t1=50; -h shows a function's usage.
 
@@ -416,23 +417,228 @@ clean_plt() {
 }
 
 # ---------------------------------------------------------------------------
+# missing
+# ---------------------------------------------------------------------------
+
+# _sf_listing DIR EMPTY: "F name" per file in DIR ("E name" for a 0-byte one
+# when EMPTY is 1); hidden files and directories are left out
+_sf_listing() {
+    local f
+    for f in "$1"/*; do
+        [ -f "$f" ] || continue
+        if [ "$2" -eq 1 ] && [ ! -s "$f" ]; then echo "E ${f##*/}"; else echo "F ${f##*/}"; fi
+    done
+}
+
+# _sf_series < listing: "prefix<TAB>suffix" of each numbered series. Names
+# with the same text between their digit runs are one shape; the run with the
+# most values is the number, so riser.{}_0.out and riser.{}_1.out are two
+# series (one per subgrid). A series needs two numbers or more.
+_sf_series() {
+    awk '
+        {
+            s = substr($0, 3); k = 0; key = ""
+            while (match(s, /[0-9]+/)) {
+                k++; txt[k] = substr(s, 1, RSTART - 1); run[k] = substr(s, RSTART, RLENGTH)
+                key = key txt[k] "\034"; s = substr(s, RSTART + RLENGTH)
+            }
+            if (!k) next
+            key = key s
+            if (!(key in nf)) { nk[key] = k; tail[key] = s; for (i = 1; i <= k; i++) text[key, i] = txt[i] }
+            c = ++nf[key]; runs = run[1]
+            for (i = 2; i <= k; i++) runs = runs "\034" run[i]
+            file[key, c] = runs
+            for (i = 1; i <= k; i++)
+                if (!((key, i, run[i]) in seen)) { seen[key, i, run[i]] = 1; distinct[key, i]++ }
+        }
+        END {
+            for (key in nf) {
+                k = nk[key]; vary = 1
+                for (i = 2; i <= k; i++) if (distinct[key, i] >= distinct[key, vary]) vary = i
+                for (c = 1; c <= nf[key]; c++) {
+                    split(file[key, c], r, "\034"); pre = ""; suf = ""
+                    for (i = 1; i <= k; i++) {
+                        if (i < vary) pre = pre text[key, i] r[i]
+                        else if (i == vary) pre = pre text[key, i]
+                        else suf = suf text[key, i] r[i]
+                    }
+                    suf = suf tail[key]; g = pre "\t" suf
+                    if (!((g, r[vary]) in val)) { val[g, r[vary]] = 1; nval[g]++ }
+                }
+            }
+            for (g in nval) if (nval[g] >= 2) print g
+        }' | sort
+}
+
+# _sf_check SHOWN PREFIX SUFFIX T1 T2 FREQ FLAGS LABEL < listing: report one
+# series. SHOWN goes before each name; FLAGS holds e(mpty) x(tra) q(uiet)
+# p(ipe: names only); LABEL puts the pattern on the summary line.
+_sf_check() {
+    awk -v at="$1" -v pre="$2" -v suf="$3" -v t1="$4" -v t2="$5" -v freq="$6" \
+        -v flags="$7" -v label="$8" '
+        function gcd(a, b) { while (b) { t = a % b; a = b; b = t } return a }
+        {
+            kind = substr($0, 1, 1); name = substr($0, 3)
+            lp = length(pre); ls = length(suf); mid = length(name) - lp - ls
+            if (mid < 1 || substr(name, 1, lp) != pre || substr(name, lp + mid + 1) != suf) next
+            d = substr(name, lp + 1, mid)
+            if (d ~ /[^0-9]/) next
+            n = d + 0; found[n] = 1; if (kind == "E") empty[n] = 1
+            if (length(d) > 1 && d ~ /^0/) pad = length(d)
+            if (lo == "" || n < lo) lo = n; if (hi == "" || n > hi) hi = n
+        }
+        END {
+            pattern = at pre "{}" suf
+            a = (t1 != "") ? t1 + 0 : lo; b = (t2 != "") ? t2 + 0 : hi
+            if (a == "" || b == "") {
+                printf "missing: no file matches %s (give --t1 and --t2 to list them all)\n", pattern > "/dev/stderr"
+                exit 1
+            }
+            if (a > b) { printf "Error: --t1 %d is after the last step, %d\n", a, b > "/dev/stderr"; exit 2 }
+            f = freq + 0; guessed = (freq == "")
+            if (guessed) { f = 0; for (n in found) if (n >= a && n <= b) f = gcd(f, n - a); if (!f) f = 1 }
+            if ((b - a) / f > 5000000) { printf "Error: %d..%d every %d is too many steps; give --freq\n", a, b, f > "/dev/stderr"; exit 2 }
+            if (index(flags, "x")) {
+                for (n in found) if (n >= a && n <= b && (n - a) % f) xs[++nx] = n + 0
+                for (i = 2; i <= nx; i++) { v = xs[i]; for (j = i - 1; j >= 1 && xs[j] > v; j--) xs[j + 1] = xs[j]; xs[j + 1] = v }
+            }
+            kinds = index(flags, "e") || index(flags, "x"); quiet = index(flags, "q"); pipe = index(flags, "p")
+            fmt = "%s%s" (pad ? "%0" pad "d" : "%d") "%s\n"; x = 1
+            for (t = a; t <= b; t += f) {
+                while (x <= nx && xs[x] < t) { row("extra", xs[x]); x++ }
+                expected++
+                if (!(t in found)) { missing++; row("missing", t) }
+                else if (index(flags, "e") && (t in empty)) { empties++; row("empty", t) }
+            }
+            while (x <= nx) { row("extra", xs[x]); x++ }
+            if (!pipe || quiet) {
+                text = missing ? sprintf("%d of %d missing", missing, expected) : sprintf("all %d present", expected)
+                if (index(flags, "e")) text = text sprintf(", %d empty", empties)
+                if (index(flags, "x")) text = text sprintf(", %d extra", nx)
+                text = text sprintf("; %d..%d every %d", a, b, f) (guessed ? " (inferred)" : "")
+                if (label) text = pattern ": " text
+                if (shown && !quiet) print ""
+                print ((missing || empties) ? "x " : "ok ") text
+            }
+            exit (missing || empties) ? 1 : 0
+        }
+        function row(k, n) {
+            if (quiet) return
+            shown = 1
+            if (pipe && !kinds) printf fmt, at, pre, n, suf
+            else printf "%-8s " fmt, k, at, pre, n, suf
+        }'
+}
+
+missing() {
+    local t1="" t2="" freq="" flags="" args="" n=0 a b
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            --t1)   _sf_val "$1" "$#" || return 2; t1=$2; shift ;;
+            --t2)   _sf_val "$1" "$#" || return 2; t2=$2; shift ;;
+            --freq) _sf_val "$1" "$#" || return 2; freq=$2; shift ;;
+            --t1=*) t1=${1#*=} ;; --t2=*) t2=${1#*=} ;; --freq=*) freq=${1#*=} ;;
+            --empty) flags="${flags}e" ;;
+            --extra) flags="${flags}x" ;;
+            -q)      flags="${flags}q" ;;
+            -h|--help)
+                echo "Usage: missing [dir] [pattern] [--t1 N] [--t2 N] [--freq N] [--empty] [--extra] [-q]"
+                echo "  The numbers of a series like slice_xVor_{}.png that have no file; {} is"
+                echo "  the number. Without a pattern, every numbered series in dir (default: here):"
+                echo "  names that differ only in a number, so riser.{}_0.out, riser.{}_1.out, ..."
+                echo "  one per subgrid. The directory can also be part of the pattern."
+                echo "  --t1/--t2  first/last number (default: the lowest/highest found)"
+                echo "  --freq N   step (default: inferred from the files)"
+                echo "  --empty    also report 0-byte files;  --extra  files between the steps"
+                echo "  -q         only the summary line"
+                echo "  Zero padding follows the files. Exits 1 if any is missing (or empty)."
+                echo "  In a pipe it prints just the names:  missing post | wc -l"
+                echo "  Examples:  missing post"
+                echo "             missing post 'slice_xVor_{}.png' --t1 3000 --t2 5000 --freq 50"
+                echo "             missing binary 'riser.{}.plt' --empty"
+                return 0 ;;
+            -?*) _sf_err "missing: unknown option '$1' (missing -h)"; return 2 ;;
+            *) n=$((n + 1)); [ "$n" -eq 1 ] && a=$1 || b=$1 ;;
+        esac
+        shift
+    done
+    [ "$n" -le 2 ] || { _sf_err "missing: too many arguments (missing -h)"; return 2; }
+    [ -z "$t1" ] || _sf_int --t1 "$t1" || return 2
+    [ -z "$t2" ] || _sf_int --t2 "$t2" || return 2
+    [ -z "$freq" ] || _sf_int --freq "$freq" || return 2
+    [ -z "$freq" ] || [ "$freq" -gt 0 ] || { _sf_err "--freq must be 1 or more"; return 2; }
+    if [ -n "$t1" ] && [ -n "$t2" ] && [ "$t1" -gt "$t2" ]; then
+        _sf_err "--t1 ($t1) is after --t2 ($t2)"; return 2
+    fi
+    [ -t 1 ] || flags="${flags}p"
+    local empty=0
+    case "$flags" in *e*) empty=1 ;; esac
+
+    local dir pattern=""
+    case "$n" in
+        0) dir=. ;;
+        1) if [ -d "$a" ]; then dir=$a; else pattern=$a; dir=""; fi ;;
+        2) dir=$a; pattern=$b ;;
+    esac
+    if [ -n "$pattern" ]; then
+        case "$pattern" in */*)
+            [ -z "$dir" ] && dir=${pattern%/*} || dir="${dir%/}/${pattern%/*}"
+            pattern=${pattern##*/} ;; esac
+        case "$pattern" in
+            *"{}"*"{}"*|"") _sf_err "missing: the file name needs one {} where the number goes"; return 2 ;;
+            *"{}"*) ;;
+            *) _sf_err "missing: the file name needs one {} where the number goes (or give just a directory)"; return 2 ;;
+        esac
+    fi
+    [ -n "$dir" ] || dir=.
+    [ -d "$dir" ] || { _sf_err "missing: not a directory: $dir"; return 1; }
+    local at="${dir%/}/"
+    [ "$dir" = . ] && at=""
+    [ "$dir" = / ] && at=/
+
+    local listing status=0 rc tab
+    listing=$(_sf_listing "$dir" "$empty")
+    if [ -n "$pattern" ]; then
+        echo "$listing" | _sf_check "$at" "${pattern%%"{}"*}" "${pattern#*"{}"}" "$t1" "$t2" "$freq" "$flags" ""
+        return $?
+    fi
+    tab=$(printf '\t')
+    local series pre suf first=1
+    series=$(echo "$listing" | _sf_series)
+    [ -n "$series" ] || { echo "missing: no numbered series in $dir" >&2; return 1; }
+    while IFS=$tab read -r pre suf; do
+        case "$flags" in *[qp]*) ;; *) [ "$first" -eq 1 ] || echo ;; esac
+        first=0
+        echo "$listing" | _sf_check "$at" "$pre" "$suf" "$t1" "$t2" "$freq" "$flags" 1
+        rc=$?
+        [ "$rc" -le "$status" ] || status=$rc
+    done <<EOF
+$series
+EOF
+    return $status
+}
+
+# ---------------------------------------------------------------------------
 # help, and the old names
 # ---------------------------------------------------------------------------
 
 sf_help() {
     cat <<'EOF'
-FlexFlow case helpers (each takes --case DIR and --problem NAME; -h for details)
+FlexFlow case helpers (the case ones take --case DIR and --problem NAME; -h for details)
 
   show_plt      [--t1 N] [--t2 N] [--freq N]       missing/empty binary PLT files
   show_archive  [--type othd|oisd]                 othd/oisd parts, ranges, redundant ones
   clean_archive --n N1:N2 [--type othd|oisd]       delete parts (asks; --dry-run)
   clean_plt     --t1 N --t2 N [--freq N]           delete PLT files (asks; --dry-run)
+  missing       [dir] [pattern] [--freq N]         gaps in a numbered series (no --case)
 
 Examples
   show_plt --case CS4SG3U1P0 --t1 4000 --t2 4300 --freq 5
   show_archive --case CS4SG3U1P0
   clean_archive --case CS4SG3U1P0 --type othd --n 2:
   clean_plt --case CS4SG3U1P0 --t1 4005 --t2 4295 --freq 5 --dry-run
+  missing CS4SG3U1P0/post                     # every series in post/
+  missing CS4SG3U1P0/post 'slice_xVor_{}.png' --freq 50
 EOF
 }
 

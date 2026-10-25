@@ -10,14 +10,26 @@ plain POSIX `sh` plus the BusyBox tools (`awk`, `sed`, `grep`, `stat`).
 | `show_archive [--type othd\|oisd]` | The othd/oisd parts: size, steps, tsId range; marks redundant parts, restarts and gaps |
 | `clean_archive --n N1:N2 [--type othd\|oisd]` | Deletes parts by number (`N`, `N1:N2`, `N1:`, `:N2`) |
 | `clean_plt --t1 N --t2 N [--freq N]` | Deletes PLT files for steps t1..t2 (every freq-th with `--freq`) |
+| `missing [dir] [pattern] [--t1 N] [--t2 N] [--freq N] [--empty] [--extra] [-q]` | The gaps in a numbered series (`slice_xVor_{}.png`); with no pattern, every series in dir |
 
-Each takes `--case DIR` (default: current directory) and `--problem NAME`.
+The case functions take `--case DIR` (default: current directory) and `--problem NAME`.
 `problem` and `outFreq` default to the case's `simflow.config`. `-h` on a
 function shows its usage; `sf_help` lists them all.
 
 The clean functions show what they would delete and ask first; `--dry-run`
 only shows. Deleting a part that is not redundant, or every part of a type,
 needs `DELETE` typed out.
+
+`missing` is the flexflow shell's `missing` for any files: `{}` in the
+pattern is the number, and the range and step default to the files found.
+Without a pattern it checks each group of names that differ only in a
+number (`riser.{}_0.out`, `riser.{}_1.out`, ... one per subgrid). In a pipe
+it prints just the names (`missing post | wc -l`).
+
+```sh
+missing CS4SG3U1P0/post
+missing CS4SG3U1P0/post 'slice_xVor_{}.png' --t1 3000 --t2 5000 --freq 50
+```
 
 ## Install / update on the NAS
 
