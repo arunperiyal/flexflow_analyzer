@@ -548,6 +548,11 @@ def _check_plt(cfg, case_dir: Path, console: Console, freq: Optional[int] = None
     run directory to binary/). Expected steps after the last one found are
     not written yet -- the run stopped or is still going -- so they are shown
     apart from the gaps, which are the files really lost.
+
+    After a restart from restartTsId R, the steps past R are computed again,
+    and a PLT made from the earlier run's output is stale: the flow drifts
+    apart between the two runs, so it does not join up with the frames
+    around it. See _stale_plts for how such a file is told apart.
     """
     import re as _re
     from shellkit.builtins.files import format_size
@@ -599,6 +604,7 @@ def _check_plt(cfg, case_dir: Path, console: Console, freq: Optional[int] = None
 
     pattern = _re.compile(rf'^{_re.escape(problem)}\.(\d+)\.plt$')
     found: dict = {}            # step -> sizes, one per location holding it
+    stats: dict = {}            # label -> {step: os.stat_result}
     tbl = Table(box=box.SIMPLE, show_header=True, header_style="bold yellow", pad_edge=False)
     tbl.add_column("where", style="bold")
     tbl.add_column("files", justify="right")
@@ -606,10 +612,13 @@ def _check_plt(cfg, case_dir: Path, console: Console, freq: Optional[int] = None
     tbl.add_column("size", justify="right")
     for label, directory in locations:
         here = {}
+        stats[label] = {}
         for f in directory.iterdir():
             m = pattern.match(f.name)
             if m and _step_in_bounds(int(m.group(1)), t1, t2):
-                here[int(m.group(1))] = f.stat().st_size
+                st = f.stat()
+                stats[label][int(m.group(1))] = st
+                here[int(m.group(1))] = st.st_size
         for step, size in here.items():
             found.setdefault(step, []).append(size)
         if here:
@@ -633,12 +642,17 @@ def _check_plt(cfg, case_dir: Path, console: Console, freq: Optional[int] = None
     empty = sorted(t for t in expected if t in found and 0 in found[t])
     extra = sorted(set(found) - expected)
     both = sorted(t for t, sizes in found.items() if len(sizes) > 1)
+    restart = cfg.restart_tsid if cfg.restart_flag else None
+    stale, dated_from = ({}, None) if restart is None else \
+        _stale_plts(stats, run_dir, problem, restart)
 
-    bad = missing or empty
+    bad = missing or empty or stale
     mark = "[red]✗[/red]" if bad else "[green]✓[/green]"
     parts = [f"[red]{len(missing)} missing[/red]" if missing else "none missing"]
     if empty:
         parts.append(f"[yellow]{len(empty)} empty[/yellow]")
+    if stale:
+        parts.append(f"[red]{sum(len(v) for v in stale.values())} from before the restart[/red]")
     console.print(f"  {mark} {len(upto) - len(missing)} of {len(upto)} present up to "
                   f"{_fmt_tsid(last)}, the last step found · " + ", ".join(parts))
 
@@ -650,6 +664,17 @@ def _check_plt(cfg, case_dir: Path, console: Console, freq: Optional[int] = None
         details.add_row("    [red]missing[/red]", _fmt_steps(missing, out_freq))
     if empty:
         details.add_row("    [yellow]empty[/yellow]", _fmt_steps(empty, out_freq))
+    for label, steps in stale.items():
+        details.add_row("    [red]stale[/red]",
+                        f"{_fmt_steps(steps, out_freq)}  [dim](in {label}; older than the "
+                        f"resumed run's output, so made before the restart at {restart})[/dim]")
+    if restart is not None and not stale:
+        details.add_row("    [dim]restart[/dim]",
+                        f"[dim]at {restart}: " +
+                        (f"none older than the resumed run (dated by its output from "
+                         f"{dated_from} on)" if dated_from is not None else
+                         f"no .out/.rst past it in the run directory to date the files by")
+                        + "[/dim]")
     if extra:
         details.add_row("    [dim]extra[/dim]",
                         f"[dim]{_fmt_steps(extra, None)}  (off the every-{out_freq} grid)[/dim]")
@@ -664,6 +689,45 @@ def _check_plt(cfg, case_dir: Path, console: Console, freq: Optional[int] = None
     if details.row_count:
         console.print(details)
     console.print()
+
+
+def _stale_plts(stats: dict, run_dir: Optional[Path], problem: str, restart: int):
+    """The PLT files past the restart step made from the earlier run's output.
+
+    The resumed run computes its steps in order, so by the time it reached
+    step t it had already written its .out/.rst for every step from restart+1
+    to t. A PLT of step t older than the latest of those files was made
+    before the resumed run got to t -- from the earlier run's output, which
+    the restart computed again. Steps before the first .out/.rst left past
+    the restart cannot be dated, and are not flagged.
+
+    Returns ({label: [steps]}, the first step dated by, or None).
+    """
+    import bisect
+    import re as _re
+    if not run_dir or not run_dir.is_dir():
+        return {}, None
+    pattern = _re.compile(rf'^{_re.escape(problem)}\.(\d+)_\d+\.(out|rst)$')
+    written: dict = {}          # step -> latest mtime of the resumed run's files
+    for f in run_dir.iterdir():
+        m = pattern.match(f.name)
+        if m and int(m.group(1)) > restart:
+            step, mtime = int(m.group(1)), f.stat().st_mtime
+            written[step] = max(mtime, written.get(step, mtime))
+    if not written:
+        return {}, None
+    steps = sorted(written)
+    reached = []                # reached[i]: the run was past steps[i] no earlier than this
+    for step in steps:
+        reached.append(max(written[step], reached[-1]) if reached else written[step])
+
+    stale = {}
+    for label, files in stats.items():
+        for t, st in sorted(files.items()):
+            i = bisect.bisect_right(steps, t) - 1
+            if t > restart and i >= 0 and st.st_mtime < reached[i]:
+                stale.setdefault(label, []).append(t)
+    return stale, steps[0]
 
 
 def _fmt_bound(bound: Optional[float]) -> str:

@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### 🔎 `case check plt`: PLT files from before a restart
+
+- After a restart from `restartTsId` R, the steps past R are computed again
+  and drift from the first run, so a PLT made from the earlier run's output
+  does not join up with the frames around it (a jump in a rendered sweep).
+- Such a file is flagged `stale`: past R, and older than the resumed run's
+  `.out`/`.rst` for its step or an earlier one, so it was made before the
+  resumed run got there. Steps before the first `.out`/`.rst` left past R
+  cannot be dated and are not flagged; the check says so.
+
 ### 🎨 `case check plt`: one check over both places, gaps apart from the tail
 
 - binary/ and the run directory were each checked against every expected
