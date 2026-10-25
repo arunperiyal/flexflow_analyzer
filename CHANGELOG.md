@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### 🎨 `case check plt`: one check over both places, gaps apart from the tail
+
+- binary/ and the run directory were each checked against every expected
+  step, so files moved to binary/ were "missing" from the run directory and
+  the other way round. Now a step counts as present in either place, with a
+  small table of what each holds (files, steps, size).
+- Only the steps up to the last one found can be missing; the ones after it
+  are shown as `not yet` (the run stopped or is still going).
+- Missing steps print as runs (`300 · 650–750 (3) · 1200`); 0-byte files are
+  flagged `empty`; off-grid files and steps in both places are listed too.
+
 ### ✨ NAS helpers: `missing`
 
 - `tools/nas/simulation_functions.sh` gains `missing [dir] [pattern]`, the

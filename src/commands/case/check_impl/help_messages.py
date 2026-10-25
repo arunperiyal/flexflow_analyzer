@@ -55,9 +55,13 @@ Pick one subcommand.
           • {Colors.YELLOW}--t1{Colors.RESET}/{Colors.YELLOW}--t2{Colors.RESET} restrict both the expected and found sets to a
             timestep window (either alone is a one-sided bound); usable via
             context too: {Colors.DIM}use t1:0 t2:1000{Colors.RESET}
-          • Reports how many expected files are present / missing
-          • Lists each missing tsId explicitly
-          • Reports extra files not in the expected set
+          • A table of binary/ and the run directory: files, steps, size
+          • A step counts as present in either place; up to the last step
+            found, the ones with no file are {Colors.RED}missing{Colors.RESET} and 0-byte ones
+            {Colors.YELLOW}empty{Colors.RESET}, shown as runs: {Colors.DIM}300 · 650–750 (3) · 1200{Colors.RESET}
+          • Steps after the last one found are {Colors.DIM}not yet{Colors.RESET} written (the run
+            stopped or is still going), apart from the gaps
+          • Also lists extra files (off the freq grid) and steps in both places
 
     {Colors.CYAN}def{Colors.RESET}
         Check that every file referenced via File( "..." ) in the .def file
