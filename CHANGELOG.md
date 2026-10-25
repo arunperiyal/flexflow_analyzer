@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### ✨ NAS helpers: `missing`
+
+- `tools/nas/simulation_functions.sh` gains `missing [dir] [pattern]`, the
+  shell's `missing` in BusyBox ash: the gaps in a numbered series, or in
+  every series of a directory when no pattern is given. Same flags
+  (`--t1 --t2 --freq --empty --extra -q`), names only in a pipe.
+
 ### ✨ `missing [dir] [pattern]`
 
 - A directory can come before the pattern: `missing post 'slice_xVor_{}.png'`

@@ -124,3 +124,67 @@ def test_clean_plt_window_and_freq(case):
     assert left.isdisjoint({100, 500, 700, 900}) and {50, 200, 1000} <= left
     r = ash('clean_plt --case C1 --t1 10', case.parent)
     assert r.returncode == 2 and 'needs --t1 and --t2' in r.stderr
+
+
+@pytest.fixture
+def series(tmp_path):
+    post = tmp_path / 'post'
+    post.mkdir()
+    for n in range(3000, 5001, 50):
+        if n not in (3350, 4100):
+            (post / f'slice_xVor_{n}.png').write_text('x')
+    (post / 'slice_xVor_4500.png').write_text('')            # empty
+    (post / 'slice_xVor_3025.png').write_text('x')           # off the grid
+    (post / 'slice_yVor_3350.png').write_text('x')           # one file: no series
+    for t in (100, 200, 300, 400):
+        for k in (0, 1):
+            if (t, k) != (200, 1):
+                (post / f'riser.{t}_{k}.out').write_text('x')
+    for n in (10, 20, 40):
+        (tmp_path / f'img_{n:04d}.jpg').write_text('x')
+    return tmp_path
+
+
+def test_missing_with_a_pattern(series):
+    r = ash("missing post 'slice_xVor_{}.png' --freq 50", series)
+    assert r.returncode == 1, r.stderr
+    assert r.stdout.split() == ['post/slice_xVor_3350.png', 'post/slice_xVor_4100.png']
+    r = ash("missing 'post/slice_xVor_{}.png' --freq=50 --t1 3000 --empty --extra", series)
+    assert [l.split() for l in r.stdout.splitlines()] == [
+        ['extra', 'post/slice_xVor_3025.png'], ['missing', 'post/slice_xVor_3350.png'],
+        ['missing', 'post/slice_xVor_4100.png'], ['empty', 'post/slice_xVor_4500.png']]
+    r = ash("missing post/slice_xVor_{}.png --freq 50 -q", series)
+    assert r.stdout.strip() == 'x 2 of 41 missing; 3000..5000 every 50'
+
+
+def test_missing_padding_and_all_present(series):
+    assert ash("missing 'img_{}.jpg' --freq 10", series).stdout.split() == ['img_0030.jpg']
+    r = ash("missing img_{}.jpg --t2 20 -q", series)
+    assert r.returncode == 0 and r.stdout.strip() == 'ok all 2 present; 10..20 every 10 (inferred)'
+
+
+def test_missing_finds_the_series_in_a_directory(series):
+    r = ash("missing post --freq 100 -q", series)
+    assert r.returncode == 1, r.stderr
+    assert r.stdout.splitlines() == [
+        'ok post/riser.{}_0.out: all 4 present; 100..400 every 100',
+        'x post/riser.{}_1.out: 1 of 4 missing; 100..400 every 100',
+        'x post/slice_xVor_{}.png: 1 of 21 missing; 3000..5000 every 100']
+    r = ash("cd post; missing --freq 100", series)                # no argument: here
+    assert r.stdout.split() == ['riser.200_1.out', 'slice_xVor_4100.png']
+
+
+@pytest.mark.parametrize('line, message, code', [
+    ("missing img.jpg", 'needs one {}', 2),
+    ("missing 'a_{}_{}.png'", 'needs one {}', 2),
+    ("missing img_{}.jpg --freq 0", '--freq must be 1 or more', 2),
+    ("missing img_{}.jpg --t1 x", 'needs a whole number', 2),
+    ("missing img_{}.jpg --t1 50 --t2 10", 'is after', 2),
+    ("missing img_{}.jpg --bogus", "unknown option '--bogus'", 2),
+    ("missing a b c", 'too many arguments', 2),
+    ("missing nope 'a_{}.png'", 'not a directory', 1),
+    ("missing nope_{}.png", 'no file matches', 1),
+])
+def test_missing_errors(series, line, message, code):
+    r = ash(line, series)
+    assert r.returncode == code and message in r.stderr
