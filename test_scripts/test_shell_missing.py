@@ -1,5 +1,5 @@
-"""`missing [DIR] PATTERN`: the numbers of a series like slice_xVor_{}.png with no
-file. t1/t2 default to the files found, freq to the gcd of their gaps; zero
+"""`missing [DIR] [PATTERN]`: the numbers of a series like slice_xVor_{}.png with
+no file; with no pattern, every numbered series in DIR. t1/t2 default to the files found, freq to the gcd of their gaps; zero
 padding follows the files. It exits 1 when something is missing."""
 
 import io
@@ -59,6 +59,32 @@ def test_directory_before_the_pattern(rt):
     assert 'not a directory' in rt.err_console.file.getvalue()
 
 
+def test_a_directory_alone_checks_every_series(rt, tmp_path):
+    post = tmp_path / 'work' / 'post'
+    for step in (100, 200, 400):
+        for k in (0, 1):
+            if (step, k) != (200, 1):
+                (post / f'riser.{step}_{k}.out').write_text('x')
+    (post / 'notes_1.txt').write_text('x')                   # a single file is no series
+    assert rt.execute_line("missing post --freq 50") == 1
+    text = shown(rt)
+    summaries = [l for l in text.splitlines() if l.startswith(('✓', '✗'))]
+    assert [l.split()[1] for l in summaries] == [
+        'post/riser.{}_0.out', 'post/riser.{}_1.out', 'post/slice_xVor_{}.png']
+    assert 'post/riser.{}_0.out  4 of 7 missing · 100..400 every 50' in text
+    assert 'post/riser.{}_1.out  5 of 7 missing' in text
+    assert 'post/riser.200_1.out' in text
+    assert 'notes' not in text and 'yVor' not in text      # one file each
+
+
+def test_no_arguments_is_here(rt):
+    rt.execute_line("cd post")
+    assert rt.run_captured("missing --freq 50 -q").splitlines() == [
+        '✗ slice_xVor_{}.png  2 of 41 missing · 3000..5000 every 50']
+    assert rt.run_captured("missing . --freq 50").split() == \
+        ['slice_xVor_3350.png', 'slice_xVor_4100.png']
+
+
 def test_empty_and_extra(rt):
     assert rt.execute_line("missing post/slice_xVor_{}.png --freq 50 --empty --extra") == 1
     rows = [l.split()[:2] for l in shown(rt).splitlines() if 'post/' in l]
@@ -93,7 +119,6 @@ def test_no_files_but_a_given_range(rt):
     ("missing img_{}.jpg --t1 x", 'needs a whole number'),
     ("missing img_{}.jpg --t1 50 --t2 10", 'is after'),
     ("missing img_{}.jpg --bogus", 'unknown option --bogus'),
-    ("missing", 'usage: missing'),
     ("missing post a_{}.png b_{}.png", 'usage: missing'),
 ])
 def test_errors(rt, line, message):
