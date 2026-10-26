@@ -695,6 +695,7 @@ class CaseOrganizer:
             self.console.print("  [yellow]⚠[/yellow]  'problem' not set — cannot name the compiled files")
             return
 
+        recorded = False
         for ext, src_dir, out_path, parts in self._archive_types():
             if not parts:
                 self.console.print(f"  [dim]No {ext.upper()} files in {ext}_files/ — skipped[/dim]")
@@ -708,6 +709,10 @@ class CaseOrganizer:
                 self.console.print("  [dim](dry run — not written)[/dim]")
                 continue
 
+            # The restarts are the same in OTHD and OISD: one record, from the first
+            if not recorded:
+                self._record_restarts(plan)
+                recorded = True
             self._write_compiled(plan, out_path)
             self.stats['compiled'].append(
                 f"{out_path.relative_to(self.case_dir)} ({len(plan['merged']):,} steps, "
@@ -771,11 +776,22 @@ class CaseOrganizer:
 
         merged: List[Tuple[int, Path, int, int]] = []  # (tsId, file, start, end), tsId increasing
         superseded = 0
-        for path, _, blocks in scanned:
-            for ts_id, start, end in blocks:
+        # Where a run took over from the one before: the first block of every
+        # part but the first (a part is one run), and any block at or below
+        # the last one taken (a restart appended inside a file).
+        restarts = []
+        for n, (path, _, blocks) in enumerate(scanned):
+            for i, (ts_id, start, end) in enumerate(blocks):
+                before = merged[-1] if merged else None
+                replaced = 0
                 while merged and merged[-1][0] >= ts_id:
                     merged.pop()
-                    superseded += 1
+                    replaced += 1
+                superseded += replaced
+                if before and (replaced or (i == 0 and n > 0)):
+                    restarts.append({'after': ts_id - 1, 'first': ts_id, 'reached': before[0],
+                                     'replaced': replaced, 'part': path, 'previous': before[1],
+                                     'start': start})
                 merged.append((ts_id, path, start, end))
 
         return {
@@ -783,7 +799,25 @@ class CaseOrganizer:
             'merged': merged,
             'parts': [path for path, _, _ in scanned],
             'superseded': superseded,
+            'restarts': restarts,
         }
+
+    def _record_restarts(self, plan: dict):
+        """Keep where the runs took over (.restarts): the compiled file is one
+        history, and once --prune deletes the parts there is no telling."""
+        from ....core import restarts
+        if not plan.get('restarts') and not restarts.path_for(self.case_dir).exists():
+            return
+        try:
+            rows = restarts.record(self.case_dir, plan.get('restarts', []))
+        except OSError as e:
+            self.console.print(f"  [yellow]⚠[/yellow]  could not write {restarts.FILENAME}: {e}")
+            return
+        if rows:
+            shown = ', '.join(f"{r['after']}" + (f" ({r['replaced']} replaced)"
+                                                 if r['replaced'] not in ('0', '-') else '')
+                              for r in rows)
+            self.console.print(f"  Restarts after {shown} [dim]→ {restarts.FILENAME}[/dim]")
 
     def _report_plan(self, plan: dict, out_path: Path, file_type: str):
         merged = plan['merged']
@@ -890,6 +924,9 @@ class CaseOrganizer:
                 )
                 continue
             plan = self._plan_compile(parts, label)
+            if plan is not None and not dry_run and ext == 'othd':
+                # the parts are about to go, and with them the restarts
+                self._record_restarts(plan)
             if plan is None or not self._compiled_is_current(plan, out_path):
                 self.console.print(
                     f"  [yellow]⚠[/yellow]  {label}: {out_path.relative_to(self.case_dir)} is "

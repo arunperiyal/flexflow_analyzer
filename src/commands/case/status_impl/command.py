@@ -133,6 +133,12 @@ def _facts(case_dir: Path) -> Table:
         grid.add_row('reached', f"step {last}{of}")
     if cfg.restart_flag and cfg.restart_tsid is not None:
         grid.add_row('restart', f"from {cfg.restart_tsid}")
+    from ....core import restarts
+    past = restarts.read(case_dir)
+    if past:
+        afters = [r['after'] for r in past]
+        shown = ', '.join(afters if len(afters) <= 8 else afters[:4] + ['…'] + afters[-3:])
+        grid.add_row('restarts', f"after {shown}  [dim]({len(past)} in {restarts.FILENAME})[/dim]")
     if problem:
         plt = _last_binary_plt_timestep(case_dir, problem)
         if plt is not None:
