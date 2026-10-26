@@ -23,13 +23,13 @@
 - A step that fails in a worker is reported and the rest carry on; Ctrl-C
   drops the steps not yet started. Default `-j 1`, as before.
 
-### ┆ `plot` marks the restarts
+### ┆ `plot --restart` marks the restarts
 
-- Time plots draw a grey dashed line at each restart recorded in `.restarts`
+- With `--restart` (`restarts: true` in a YAML input), time plots draw a
+  grey dashed line at each restart recorded in `.restarts`
   (written by `case organise archive --compile/--prune`): at step `after`·dt,
   where the resumed run took over. Only those inside the plotted window;
   the y range is left as it was. The `--gnu` terminal plots show them too.
-- `--no-restarts` leaves them off (`restarts: false` in a YAML input).
 
 ### 📈 `plot`: t1/t2 are steps; `--start-step`/`--end-step` work
 
