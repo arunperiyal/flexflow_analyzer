@@ -9,6 +9,10 @@ _COMMON_INPUT = f"""\
     {Colors.YELLOW}<case> --t1 A --t2 B{Colors.RESET}   {Colors.BOLD}One figure per timestep{Colors.RESET} in the range
                            {Colors.YELLOW}--freq N{Colors.RESET} keeps only steps that are multiples of N
                            {Colors.DIM}(the t1/t2/freq context supplies these: use t1:100 t2:500){Colors.RESET}
+                           {Colors.YELLOW}-j N{Colors.RESET} renders them in N processes: the first step
+                           alone (it fixes the colour scale), the rest in
+                           parallel. Each holds one .vtu in memory (0.8 GB
+                           for a 170 MB PLT), so N is bounded by memory too
     {Colors.YELLOW}*{Colors.RESET}                      {Colors.BOLD}Every case{Colors.RESET} in the .cases registry of the working
                            directory, as `case out` and `run` take it. Each
                            writes into its own <case>/NAME/, and one failing
@@ -113,6 +117,7 @@ Given a case, the PLT is auto-converted to a cached .vtu first.
     flexflow field render iso myCase --timestep 100 --values 20 --color W
     flexflow field render slice myCase --normal z --color Pressure
     flexflow field render iso myCase --t1 100 --t2 500 --color-range -1 1
+    flexflow field render slice myCase --t1 100 --t2 5000 -j 8 --camera cam.yml
     flexflow field render slice myCase --normal x --output cut.vtp
     flexflow field render colorbar --color Pressure --color-range -1 1 --output legend.pdf
 
