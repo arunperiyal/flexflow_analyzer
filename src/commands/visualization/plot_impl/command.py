@@ -21,6 +21,17 @@ except ImportError:
     HAS_PLOTEXT = False
 
 
+def _pt(*names):
+    """The first of these plotext functions this version has (the names
+    changed between 4.x and 5.x: clear_plot/clear_figure, figsize/plotsize),
+    or None."""
+    for name in names:
+        fn = getattr(plt_terminal, name, None)
+        if callable(fn):
+            return fn
+    return None
+
+
 def plot_in_terminal(fig, axes, logger):
     """
     Plot the data in terminal using plotext.
@@ -43,21 +54,30 @@ def plot_in_terminal(fig, axes, logger):
     if not isinstance(axes, list):
         axes = [axes]
 
-    # Clear any previous plots
-    plt_terminal.clear_figure()
+    clear = _pt('clear_figure', 'clf', 'clear_plot', 'clp')
+    size = _pt('plotsize', 'plot_size', 'figsize', 'figure_size')
+    # plotext 4.x has no subplots: there each axes is shown on its own
+    subplots, subplot = _pt('subplots'), _pt('subplot')
+    stacked = len(axes) > 1 and subplots and subplot
 
-    # Set plot size (width, height in characters)
-    # You can change these values to adjust the terminal plot size
-    # Default: width=100, height=30
-    plt_terminal.plotsize(100, 30)
+    def start():
+        if clear:
+            clear()
+        if size:
+            # width, height in characters
+            size(100, 30)
 
-    # Track if we actually plotted anything
+    start()
+    if stacked:
+        subplots(len(axes), 1)
     plots_added = 0
 
-    # For each subplot
     for idx, ax in enumerate(axes):
-        if len(axes) > 1:
-            plt_terminal.subplot(len(axes), 1, idx + 1)
+        if stacked:
+            subplot(idx + 1, 1)
+        elif idx > 0:
+            plt_terminal.show()
+            start()
 
         # Get all lines from the matplotlib axes
         lines = ax.get_lines()
@@ -85,16 +105,11 @@ def plot_in_terminal(fig, axes, logger):
                 logger.debug(f"Plotted line with {len(x_list)} points")
 
         # Set labels
-        xlabel = ax.get_xlabel()
-        ylabel = ax.get_ylabel()
-        title = ax.get_title()
-
-        if xlabel:
-            plt_terminal.xlabel(xlabel)
-        if ylabel:
-            plt_terminal.ylabel(ylabel)
-        if title:
-            plt_terminal.title(title)
+        for text, setter in ((ax.get_xlabel(), 'xlabel'), (ax.get_ylabel(), 'ylabel'),
+                             (ax.get_title(), 'title')):
+            fn = _pt(setter)
+            if text and fn:
+                fn(text)
 
     if plots_added == 0:
         logger.warning("No data found to plot in terminal")
