@@ -44,8 +44,13 @@ def read(case_dir) -> List[Dict[str, str]]:
     path = path_for(case_dir)
     if not path.is_file():
         return []
+    return parse(path.read_text(errors='replace'))
+
+
+def parse(text: str) -> List[Dict[str, str]]:
+    """The rows of a .restarts file's text, in step order."""
     rows = []
-    for line in path.read_text(errors='replace').splitlines():
+    for line in text.splitlines():
         if not line.strip() or line.lstrip().startswith('#'):
             continue
         cells = line.split(None, len(COLUMNS) - 1)
@@ -93,11 +98,25 @@ def record(case_dir, found: List[dict], when: Optional[float] = None) -> List[Di
 
 
 def write(case_dir, rows: List[Dict[str, str]]):
+    path = path_for(case_dir)
+    tmp = path.with_name(path.name + '.tmp')
+    tmp.write_text(render(rows, Path(case_dir).resolve().name))
+    tmp.replace(path)
+
+
+def render(rows: List[Dict[str, str]], case: str) -> str:
+    """The file's text for these rows."""
     table = [('# ' + COLUMNS[0],) + COLUMNS[1:]] + [tuple(r[c] for c in COLUMNS) for r in rows]
     widths = [max(len(row[i]) for row in table) for i in range(len(COLUMNS) - 1)]
     lines = ['  '.join(cell.ljust(w) for cell, w in zip(row[:-1], widths)) + '  ' + row[-1]
              for row in table]
-    path = path_for(case_dir)
-    tmp = path.with_name(path.name + '.tmp')
-    tmp.write_text(_HEADER.format(case=Path(case_dir).resolve().name) + '\n'.join(lines) + '\n')
-    tmp.replace(path)
+    return _HEADER.format(case=case) + '\n'.join(lines) + '\n'
+
+
+def merge(dest: str, source: str) -> List[Dict[str, str]]:
+    """The rows of two copies (here and on a remote): every restart once, in
+    step order. A restart in both keeps dest's line, as a line once written
+    is kept."""
+    rows = {int(r['after']): r for r in parse(source)}
+    rows.update({int(r['after']): r for r in parse(dest)})
+    return [rows[k] for k in sorted(rows)]
