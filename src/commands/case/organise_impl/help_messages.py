@@ -122,11 +122,23 @@ Organize and clean up case directories. Pick one subcommand.
         {Colors.CYAN}--keep-freq N{Colors.RESET}  (with --delete-binary)
             Keep the steps divisible by N
 
+    {Colors.CYAN}vtu{Colors.RESET}
+        The .vtu files `field render` keeps beside each PLT in binary/
+        ({{problem}}.{{step}}.vtu, .z{{N}}.vtu per zone, and .partial/.deriving
+        leftovers of an interrupted run). A cache: deleting them loses
+        nothing, the next render converts the PLT again. Other .vtu files
+        in binary/ are not touched.
+          • Without --clean: lists them with their sizes
+          • A .vtu whose .plt is gone is marked: it cannot be rebuilt
+
+        {Colors.CYAN}--clean{Colors.RESET}
+            Delete them (within --t1/--t2), after confirmation
+
 {Colors.BOLD}TARGETING BY TIMESTEP:{Colors.RESET}
     --t1 STEP                 Only target timesteps >= STEP
     --t2 STEP                 Only target timesteps <= STEP
     (either alone is a one-sided bound; both together is an inclusive range)
-    Available on archive --update, output and plt.
+    Available on archive --update, output, plt and vtu.
     NOT applied to the other archive flags, which always use everything.
 
 {Colors.BOLD}OTHER OPTIONS:{Colors.RESET}
@@ -173,6 +185,10 @@ Organize and clean up case directories. Pick one subcommand.
 
     # Delete PLT files from binary/ for a timestep range
     flexflow case organise plt CS4SG1U1 --delete-binary --t1 0 --t2 1000
+
+    # List, then delete, the .vtu caches field render left in binary/
+    flexflow case organise vtu CS4SG1U1
+    flexflow case organise vtu CS4SG1U1 --clean
 
     # Only target a timestep range
     flexflow case organise output CS4SG1U1 --t1 0 --t2 1000
@@ -268,6 +284,10 @@ def print_organise_examples():
     # Both directions in one call
     flexflow case organise plt CS4SG1U1 --delete-ascii --delete-binary --t1 1000 --t2 2000
 
+    # The .vtu caches of field render: list them, delete those up to step 3000
+    flexflow case organise vtu CS4SG1U1
+    flexflow case organise vtu CS4SG1U1 --clean --t2 3000
+
 {Colors.BOLD}Using Context:{Colors.RESET}
 
     # Set case context
@@ -325,7 +345,7 @@ def print_organise_examples():
 
 {Colors.BOLD}Notes:{Colors.RESET}
     • archive --update, --verify and --compile run immediately, no confirmation needed
-    • archive --clean, output and plt ask for confirmation unless --no-confirm
+    • archive --clean, output, plt and vtu --clean ask for confirmation unless --no-confirm
     • --delete-ascii never touches binary/; --delete-binary never touches the run dir
     • --delete-binary with no --t1/--t2/--freq/--keep-freq deletes every PLT file in binary/
 """)

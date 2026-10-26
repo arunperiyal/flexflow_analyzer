@@ -108,6 +108,8 @@ class CaseOrganizer:
             'plt_clean_space_freed': 0,
             'plt_binary_deleted': 0,
             'plt_binary_space_freed': 0,
+            'vtu_deleted': 0,
+            'vtu_space_freed': 0,
             'compiled': [],  # one line per compiled file, for the final summary
             'verify_ok': True,
             'pruned': 0,
@@ -318,6 +320,17 @@ class CaseOrganizer:
                 self.console.print("[bold]Step: Delete PLT files from binary/[/bold]")
                 self._analyze_delete_binary_plt(t1, t2)
                 self.console.print()
+
+        # --- VTU ---
+        elif subcommand == 'vtu':
+            self.console.print("[bold]Step: .vtu caches in binary/[/bold]")
+            self._analyze_vtu(t1, t2)
+            self.console.print()
+            if not getattr(self.args, 'clean', False):
+                if self.files_to_delete:
+                    self.console.print("[dim]Listed only: --clean deletes them[/dim]")
+                self.files_to_delete = []
+                return
 
         has_deletions = len(self.files_to_delete) > 0
         dry_run = getattr(self.args, 'dry_run', False)
@@ -1182,6 +1195,58 @@ class CaseOrganizer:
             self.stats['plt_binary_deleted'] += 1
             self.stats['plt_binary_space_freed'] += f.stat().st_size
 
+    def _analyze_vtu(self, t1: Optional[float] = None, t2: Optional[float] = None):
+        """
+        vtu: the .vtu files `field render` (and `field convert`) leave beside
+        each PLT in binary/ -- {problem}.{step}.vtu, .z{N}.vtu for a zone, and
+        the .partial/.deriving leftovers of a run killed mid-write. They are
+        a cache: the next render converts the PLT again, so deleting them
+        loses nothing but that time. Only these names are touched; another
+        .vtu in binary/ is someone's own file.
+        """
+        binary_dir = self.case_dir / 'binary'
+        if not binary_dir.exists():
+            self.console.print("  [dim]—[/dim]  binary/ directory not found — nothing to do")
+            return
+        problem = self.case.problem_name
+        if not problem:
+            self.console.print("  [yellow]⚠[/yellow]  'problem' not set — cannot tell the .vtu caches by name")
+            return
+
+        pattern = re.compile(rf'^{re.escape(problem)}\.(\d+)(\.z\d+)?(\.partial|\.deriving)?\.vtu$')
+        found = []
+        for path in binary_dir.glob(f'{problem}.*.vtu'):
+            match = pattern.match(path.name)
+            if match and self._step_in_bounds(int(match.group(1)), t1, t2):
+                found.append((int(match.group(1)), path, match))
+        if not found:
+            self.console.print(f"  [dim]No .vtu caches in binary/"
+                               f"{' for the given range' if t1 is not None or t2 is not None else ''}[/dim]")
+            return
+
+        found.sort(key=lambda f: (f[0], f[1].name))
+        clean = getattr(self.args, 'clean', False)
+        tbl = Table(box=box.SIMPLE, show_header=True, header_style="bold")
+        tbl.add_column("", width=2)
+        tbl.add_column("File", style="cyan")
+        tbl.add_column("Size", justify="right")
+        tbl.add_column("Note", style="dim")
+        total = 0
+        for step, path, match in found:
+            size = path.stat().st_size
+            total += size
+            plt = binary_dir / f'{problem}.{step}.plt'
+            note = ("left by an interrupted run" if match.group(3)
+                    else f"zone {match.group(2)[2:]}" if match.group(2) else "")
+            if not plt.exists():
+                note = (note + "; " if note else "") + "no .plt: not rebuildable"
+            tbl.add_row("[red]✗[/red]" if clean else "", path.name, self._format_size(size), note)
+            self.files_to_delete.append(path)
+            self.stats['vtu_deleted'] += 1
+            self.stats['vtu_space_freed'] += size
+        self.console.print(tbl)
+        self.console.print(f"  {len(found)} file(s), {self._format_size(total)}")
+
     def _analyze_clean_plt(self, t1: Optional[float] = None, t2: Optional[float] = None):
         """
         plt --delete-ascii: Mark PLT files in the run directory for deletion where
@@ -1555,6 +1620,13 @@ class CaseOrganizer:
                 self._format_size(self.stats['plt_binary_space_freed'])
             )
 
+        if self.stats['vtu_deleted'] > 0:
+            table.add_row(
+                ".vtu caches to delete (binary/)",
+                str(self.stats['vtu_deleted']),
+                self._format_size(self.stats['vtu_space_freed'])
+            )
+
         if self.stats['output_space_freed'] > 0:
             table.add_row(
                 "Output space to free",
@@ -1579,7 +1651,8 @@ class CaseOrganizer:
                 self.stats['oisd_space_freed'] +
                 self.stats['output_space_freed'] +
                 self.stats['plt_clean_space_freed'] +
-                self.stats['plt_binary_space_freed'])
+                self.stats['plt_binary_space_freed'] +
+                self.stats['vtu_space_freed'])
 
     def _confirm_deletion(self) -> bool:
         """Ask user to confirm deletion."""
@@ -1704,6 +1777,11 @@ class CaseOrganizer:
                 n = self.stats['plt_binary_deleted']
                 lines.append(f"PLT deleted (binary/): {n} file{'s' if n != 1 else ''} removed  "
                              f"({self._format_size(self.stats['plt_binary_space_freed'])} freed)")
+
+        if subcommand == 'vtu':
+            n = self.stats['vtu_deleted']
+            lines.append(f".vtu deleted (binary/): {n} file{'s' if n != 1 else ''} removed  "
+                         f"({self._format_size(self.stats['vtu_space_freed'])} freed)")
 
         summary_text = "\n".join(lines) if lines else "Nothing to do"
 

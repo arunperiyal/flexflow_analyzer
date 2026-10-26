@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### 🧹 `case organise vtu [--clean]`
+
+- Lists the .vtu caches `field render` keeps beside the PLTs in binary/
+  (`{problem}.{step}.vtu`, `.z{N}.vtu` per zone, and the `.partial`/
+  `.deriving` leftovers of an interrupted run), with their sizes; `--clean`
+  deletes them, after confirmation, within `--t1/--t2`. They are a cache:
+  the next render converts the PLT again. A .vtu whose .plt is gone is
+  marked (it cannot be rebuilt); other .vtu files in binary/ are not touched.
+  `--dry-run`, `--log`, `--no-confirm` and `*` work as for `organise plt`.
+
 ### 🖼 `field render`: clearer output
 
 - A header first: the case, the steps (`3 steps, 100–300 every 100`), the
