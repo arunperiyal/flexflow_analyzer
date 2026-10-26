@@ -584,7 +584,7 @@ def execute_plot(args):
         apply_plot_properties(fig, axes, args)
 
         if (plot_type == 'time' or args.data_type in ('moment', 'pressure')) \
-                and not getattr(args, 'no_restarts', False):
+                and getattr(args, 'restart', False):
             mark_restarts(axes, args.case, case.get_time_increment(), logger)
 
         # Terminal output (--gnu flag)
@@ -973,8 +973,8 @@ def execute_plot_from_yaml(config, args):
         else:
             axes.set_ylabel(ylabel)
     
-    if (data_type == 'force' or plot_type == 'time') and config.get('restarts', True) \
-            and not getattr(args, 'no_restarts', False):
+    if (data_type == 'force' or plot_type == 'time') \
+            and (config.get('restarts', False) or getattr(args, 'restart', False)):
         mark_restarts(axes, case_dir, case.get_time_increment(), logger)
 
     # Terminal output (--gnu flag)
