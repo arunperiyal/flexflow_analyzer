@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### 🧾 `case upload/download` carry `.restarts`
+
+- Whatever is transferred, `.restarts` goes too, after `.casestatus.md`:
+  copied when the other side has none; with both, the destination gains the
+  restarts it lacks, and a restart it already has keeps its line. A copy
+  that has been pruned holds rows no compile can find again, so neither
+  side's rows are dropped. Only the destination is written; a failure warns
+  and does not fail the transfer.
+
 ### ⚡ `field render iso/slice -j N`: timesteps in parallel
 
 - A `--t1/--t2` range renders in N processes: the first step alone, since

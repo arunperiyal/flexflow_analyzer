@@ -135,6 +135,8 @@ Upload case directories from local machine to a remote server.
 Whatever is carried, the case's notes ({Colors.CYAN}.casestatus.md{Colors.RESET}, `case status`) go
 too: copied if the remote has none, else merged -- the notes of the copy
 changed last, the log lines of both, in time order.
+So do the restarts ({Colors.CYAN}.restarts{Colors.RESET}, `case organise archive`): copied, or
+the remote gets the restarts it lacks.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
     flexflow case upload [{Colors.YELLOW}case{Colors.RESET}] --to {Colors.YELLOW}REMOTE{Colors.RESET} [options]
@@ -239,6 +241,8 @@ Whatever is carried, the case's notes ({Colors.CYAN}.casestatus.md{Colors.RESET}
 too: copied if there are none here, else merged -- the notes of the copy
 changed last, the log lines of both (the job scripts' among them), in time
 order.
+So do the restarts ({Colors.CYAN}.restarts{Colors.RESET}, `case organise archive`): copied, or
+the restarts found only on the remote are added here.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
     flexflow case download [{Colors.YELLOW}case{Colors.RESET}] --from {Colors.YELLOW}REMOTE{Colors.RESET} [options]
@@ -832,6 +836,8 @@ class CaseUploadCommand:
                     synced.add(target['case_path'])
                     self.sync_case_status(ssh, target['remote_case_path'],
                                           target['case_path'], is_upload)
+                    self.sync_restarts(ssh, target['remote_case_path'],
+                                       target['case_path'], is_upload)
 
             ssh.disconnect()
             self.console.print()
@@ -907,6 +913,55 @@ class CaseUploadCommand:
             self.console.print(f"[green]✓[/green] {cs.FILENAME}: {how}")
         except Exception as exc:
             self.console.print(f"[yellow]⚠[/yellow]  {cs.FILENAME} not carried: {exc}")
+
+    def sync_restarts(self, ssh, remote_case_path: str, local_case_path: str,
+                      is_upload: bool) -> None:
+        """Carry .restarts (`case organise archive`) to the other side.
+
+        The restarts are found from the archive parts, which --prune deletes:
+        a copy that has been pruned holds rows no compile can find again. So
+        the destination gets the rows of both copies, a restart it already has
+        keeping its line. Only the destination is written; never fails the
+        transfer.
+        """
+        from ....core import restarts
+        local = Path(local_case_path) / restarts.FILENAME
+        remote = f"{remote_case_path}/{restarts.FILENAME}"
+        try:
+            here = local.read_text(errors='replace') if local.is_file() else None
+            there = None
+            if ssh.remote_path_exists(remote):
+                with ssh.sftp_client.open(remote) as f:
+                    there = f.read().decode(errors='replace')
+            source, dest = (here, there) if is_upload else (there, here)
+            if source is None:
+                return                  # nothing to send; the other copy stays
+            if dest is None:
+                text, how = source, f"copied ({len(restarts.parse(source))} restart(s))"
+            else:
+                rows = restarts.merge(dest, source)
+                added = len(rows) - len(restarts.parse(dest))
+                if added == 0:
+                    self.console.print(f"[dim]{restarts.FILENAME}: already up to date[/dim]")
+                    return
+                text = restarts.render(rows, Path(local_case_path).resolve().name)
+                how = f"merged ({added} restart(s) added)"
+            if is_upload:
+                import tempfile
+                fd, tmp = tempfile.mkstemp(suffix='.restarts')
+                try:
+                    with os.fdopen(fd, 'w') as f:
+                        f.write(text)
+                    ssh.upload_file(tmp, remote)
+                finally:
+                    os.unlink(tmp)
+            else:
+                tmp = local.with_name(local.name + '.tmp')
+                tmp.write_text(text)
+                tmp.replace(local)
+            self.console.print(f"[green]✓[/green] {restarts.FILENAME}: {how}")
+        except Exception as exc:
+            self.console.print(f"[yellow]⚠[/yellow]  {restarts.FILENAME} not carried: {exc}")
 
     def validate_remote(self, remote_name: str) -> Optional[dict]:
         """
