@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### 🔎 NAS `show_plt --since DATE`: stale PLT files from before a restart
+
+- The NAS has no `.out`/`.rst` of the resumed run, and a PLT's date there is
+  its arrival, so `case check plt`'s dating does not carry over. Given when
+  the resumed job started, `show_plt --since DATE` lists as `stale` each PLT
+  past `restartTsId` (or `--restart N`) that arrived before then.
+
 ### 🔎 `case check plt`: PLT files from before a restart
 
 - After a restart from `restartTsId` R, the steps past R are computed again
