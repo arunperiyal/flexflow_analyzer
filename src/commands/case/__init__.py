@@ -244,6 +244,28 @@ class CaseCommand(BaseCommand):
         plt_parser.add_argument('--examples', action='store_true',
                                     help='Show usage examples')
 
+        # case organise vtu
+        vtu_parser = organise_subparsers.add_parser('vtu', add_help=False,
+                                    help='List or delete the .vtu caches field render keeps in binary/')
+        case_arg(vtu_parser, help='Case directory path')
+        vtu_parser.add_argument('--clean', action='store_true',
+                                    help='Delete them (within --t1/--t2); without it they are only listed')
+        time_window(vtu_parser,
+                    t1_kwargs=dict(metavar='STEP', help='Only target timesteps >= STEP'),
+                    t2_kwargs=dict(metavar='STEP', help='Only target timesteps <= STEP'))
+        vtu_parser.add_argument('--log', action='store_true',
+                                    help='Create log file of deletions')
+        vtu_parser.add_argument('--no-confirm', action='store_true',
+                                    help='Skip confirmation prompts')
+        vtu_parser.add_argument('--dry-run', action='store_true',
+                                    help='Show what would be deleted without deleting anything')
+        vtu_parser.add_argument('-v', '--verbose', action='store_true',
+                                    help='Enable verbose output')
+        vtu_parser.add_argument('-h', '--help', action='store_true',
+                                    help='Show help for vtu command')
+        vtu_parser.add_argument('--examples', action='store_true',
+                                    help='Show usage examples')
+
         # case check
         check_parser = case_subparsers.add_parser('check', add_help=False,
                                                   help='Inspect OTHD/OISD ranges and validate config')
@@ -631,6 +653,7 @@ class CaseCommand(BaseCommand):
         console.print("    flexflow case organise output CS4SG1U1")
         console.print("    flexflow case organise plt CS4SG1U1 --delete-ascii")
         console.print("    flexflow case organise plt CS4SG1U1 --delete-binary --t1 0 --t2 1000")
+        console.print("    flexflow case organise vtu CS4SG1U1 --clean")
         console.print("    flexflow case check run CS4SG1U1")
         console.print("    flexflow case check plt CS4SG1U1 --t1 0 --t2 1000")
         console.print("    flexflow case check out CS4SG1U1")
