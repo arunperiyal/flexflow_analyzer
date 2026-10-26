@@ -1,499 +1,221 @@
 """
-Case status command implementation.
+case status: the case's notes (.casestatus.md) with what its files say now.
 
-Checks the completeness of case data files.
+    case status [case]                    show it (writes the file the first time)
+    case status update [case]             edit it in $EDITOR
+    case status update [case] -m TEXT     add a line to its log
+    case status update [case] --state S   set the state (logged too)
+    case status '*'                       one line per registered case
+
+The file holds only what a person knows; the step the run reached, the last
+PLT and the job in the queue are read from the case each time, so they are
+never out of date. See src/core/case_status.py for the format.
 """
 
 import os
+import shlex
+import shutil
+import subprocess
 from pathlib import Path
-from typing import Optional, List, Set, Tuple
-from rich.console import Console
-from rich.table import Table
-from rich.panel import Panel
-from rich import box
 
-from ....core.case import FlexFlowCase
-from ....core.readers.othd_reader import OTHDReader
-from ....core.readers.oisd_reader import OISDReader
+from rich import box
+from rich.console import Console
+from rich.markdown import Markdown
+from rich.markup import escape
+from rich.panel import Panel
+from rich.table import Table
+
+from ....core import case_status as cs
+from ...case_iteration import is_wildcard_case
+
+STATE_STYLE = {'new': 'cyan', 'meshing': 'cyan', 'running': 'green', 'stopped': 'yellow',
+               'done': 'bold green', 'failed': 'bold red', 'archived': 'dim'}
 
 
 def execute_status(args):
-    """Execute case status command."""
     console = Console()
+    if getattr(args, 'help', False):
+        from .help_messages import print_status_help
+        print_status_help()
+        return 0
 
-    # Get case directory
-    case_path = args.case if hasattr(args, 'case') and args.case else os.getcwd()
-    case_path = Path(case_path).resolve()
+    update = getattr(args, 'what', None) == 'update'
+    name = args.case if update else (getattr(args, 'what', None) or args.case)
+    if name is None:
+        from src.cli.context import current_case
+        name = current_case() or '.'
 
-    if not case_path.exists():
-        console.print(f"[red]Error:[/red] Case directory not found: {case_path}")
-        return
+    if is_wildcard_case(name):
+        if update:
+            console.print("[red]Error:[/red] `case status update` takes one case, not '*'")
+            return 2
+        return _list_cases(console)
 
-    # Load case
+    case_dir = Path(name).expanduser()
+    if not case_dir.is_dir():
+        console.print(f"[red]Error:[/red] Case directory not found: {escape(str(case_dir))}")
+        return 1
+    if update:
+        return _update(console, case_dir, args)
+    return _show(console, case_dir, create=not getattr(args, 'no_create', False))
+
+
+# ---------------------------------------------------------------------------
+# show
+# ---------------------------------------------------------------------------
+
+def _show(console, case_dir: Path, create: bool) -> int:
+    path = cs.path_for(case_dir)
+    created = False
+    if create and not path.exists():
+        try:
+            created = cs.ensure(case_dir)
+        except OSError as e:
+            console.print(f"[yellow]⚠[/yellow]  could not write {path.name}: {e}")
+    loaded = cs.read(case_dir)
+    meta, body = loaded if loaded else ({}, '')
+
+    state = meta.get('state') or '—'
+    tags = meta.get('tags') or []
+    title = (f"[bold cyan]{escape(case_dir.resolve().name)}[/bold cyan]  "
+             f"[{STATE_STYLE.get(state, 'white')}]{escape(state)}[/]"
+             + (f"  [dim]{escape(' · '.join(tags))}[/dim]" if tags else ''))
+    console.print()
+    console.print(Panel(_facts(case_dir), title=title, title_align='left',
+                        border_style='cyan', box=box.ROUNDED))
+    if created:
+        console.print(f"[dim]wrote {path.name} -- `case status update` to fill it in[/dim]")
+    if loaded is None:
+        console.print(f"[dim]no {path.name} here[/dim]")
+    elif body.strip():
+        console.print(Markdown(body))
+    console.print()
+    return 0
+
+
+def _facts(case_dir: Path) -> Table:
+    """What the files say now: setup, how far the run got, PLTs, the queue."""
+    from ....core.simflow_config import SimflowConfig
+    from ....core.def_config import DefConfig
+    from ..report_impl.command import (_last_othd_timestep, _last_othd_timestep_in_dir,
+                                       _last_binary_plt_timestep)
+
+    grid = Table.grid(padding=(0, 2))
+    grid.add_column(style='dim', no_wrap=True)
+    grid.add_column()
     try:
-        case = FlexFlowCase(str(case_path))
-    except Exception as e:
-        console.print(f"[red]Error:[/red] Failed to load case: {e}")
-        return
+        cfg = SimflowConfig.find(case_dir)
+    except Exception:
+        grid.add_row('config', '[yellow]no simflow.config[/yellow]')
+        return grid
 
-    # Display header
-    console.print()
-    console.print(Panel(
-        f"[bold cyan]Case Status Check[/bold cyan]\n"
-        f"[white]Case:[/white] {case_path.name}\n"
-        f"[white]Problem:[/white] {case.problem_name}",
-        border_style="cyan",
-        box=box.DOUBLE
-    ))
-
-    # Determine time step range and frequency
-    freq = get_frequency(case, case_path)
-    if not freq:
-        console.print()
-        console.print("[yellow]⚠[/yellow]  Could not determine frequency from config or output files")
-        console.print("[dim]   Status check requires frequency information[/dim]")
-        console.print()
-        return
-
-    # Get expected time steps for output files (at frequency intervals)
-    output_time_steps = get_expected_time_steps(case, case_path, freq)
-    if not output_time_steps:
-        console.print()
-        console.print("[yellow]⚠[/yellow]  Could not determine time step range")
-        console.print()
-        return
-
-    # Get expected time steps for OTHD/OISD files (all time steps)
-    all_time_steps = get_all_time_steps(case, case_path)
-    if not all_time_steps:
-        console.print()
-        console.print("[yellow]⚠[/yellow]  Could not determine full time step range")
-        console.print()
-        return
-
-    # Check each file type
-    # PLT files should match frequency intervals (output steps)
-    plt_status, plt_coverage = check_plt_files(case_path, case.problem_name, output_time_steps)
-    # OTHD/OISD files should have all time steps
-    othd_status, othd_coverage = check_othd_files(case_path, all_time_steps)
-    oisd_status, oisd_coverage = check_oisd_files(case_path, all_time_steps)
-
-    # Check output directory progress
-    output_dir_path = get_output_directory(case, case_path)
-    out_progress, rst_progress, plt_out_progress, othd_out_progress, oisd_out_progress = check_output_directory_progress(
-        output_dir_path, case.problem_name, output_time_steps, all_time_steps
-    )
-
-    # Display simulation info
-    console.print()
-    console.print("[bold cyan]Simulation Configuration[/bold cyan]")
-    console.print(f"  Output Frequency:  [yellow]{freq}[/yellow] steps")
-    console.print(f"  Output Steps:      [yellow]{min(output_time_steps)}[/yellow] → [yellow]{max(output_time_steps)}[/yellow]  ([dim]{len(output_time_steps)} steps[/dim])")
-    console.print(f"  Total Steps:       [yellow]{min(all_time_steps)}[/yellow] → [yellow]{max(all_time_steps)}[/yellow]  ([dim]{len(all_time_steps)} steps[/dim])")
-
-    # Display data file status
-    console.print()
-    console.print("[bold cyan]Data Files (Final Storage)[/bold cyan]")
-
-    table = Table(box=box.SIMPLE, show_header=False, padding=(0, 2))
-    table.add_column("Type", style="white", width=25)
-    table.add_column("Location", style="dim", width=20)
-    table.add_column("Status", justify="center", width=12)
-    table.add_column("Coverage", justify="right", style="yellow", width=10)
-
-    # PLT files
-    status_icon = "[green]✓[/green]" if plt_status else "[red]✗[/red]"
-    status_text = "[green]Complete[/green]" if plt_status else "[red]Incomplete[/red]"
-    table.add_row("  Binary PLT files", "binary/", status_icon + " " + status_text, f"{plt_coverage:.1f}%")
-
-    # OTHD files
-    status_icon = "[green]✓[/green]" if othd_status else "[red]✗[/red]"
-    status_text = "[green]Complete[/green]" if othd_status else "[red]Incomplete[/red]"
-    table.add_row("  OTHD files", "othd_files/", status_icon + " " + status_text, f"{othd_coverage:.1f}%")
-
-    # OISD files
-    status_icon = "[green]✓[/green]" if oisd_status else "[red]✗[/red]"
-    status_text = "[green]Complete[/green]" if oisd_status else "[red]Incomplete[/red]"
-    table.add_row("  OISD files", "oisd_files/", status_icon + " " + status_text, f"{oisd_coverage:.1f}%")
-
-    console.print(table)
-
-    # Display output directory progress
-    if output_dir_path and output_dir_path.exists():
-        console.print()
-        console.print("[bold cyan]Output Directory (Work in Progress)[/bold cyan]")
-        console.print(f"  [dim]Location: {output_dir_path.relative_to(case_path) if output_dir_path.is_relative_to(case_path) else output_dir_path}[/dim]")
-        console.print()
-
-        progress_table = Table(box=box.SIMPLE, show_header=False, padding=(0, 2))
-        progress_table.add_column("Type", style="white", width=25)
-        progress_table.add_column("Progress", justify="right", style="yellow", width=10)
-        progress_table.add_column("Bar", width=30)
-
-        # Helper function to create progress bar
-        def make_bar(percentage: float) -> str:
-            filled = int(percentage / 5)  # 20 blocks = 100%
-            empty = 20 - filled
-            if percentage == 100.0:
-                return f"[green]{'█' * filled}[/green]"
-            elif percentage >= 75.0:
-                return f"[yellow]{'█' * filled}[/yellow][dim]{'░' * empty}[/dim]"
-            elif percentage >= 50.0:
-                return f"[yellow]{'█' * filled}[/yellow][dim]{'░' * empty}[/dim]"
-            else:
-                return f"[red]{'█' * filled}[/red][dim]{'░' * empty}[/dim]"
-
-        progress_table.add_row("  OUT files", f"{out_progress:.1f}%", make_bar(out_progress))
-        progress_table.add_row("  RST files", f"{rst_progress:.1f}%", make_bar(rst_progress))
-        progress_table.add_row("  PLT files (ASCII)", f"{plt_out_progress:.1f}%", make_bar(plt_out_progress))
-        progress_table.add_row("  OTHD files", f"{othd_out_progress:.1f}%", make_bar(othd_out_progress))
-        progress_table.add_row("  OISD files", f"{oisd_out_progress:.1f}%", make_bar(oisd_out_progress))
-
-        console.print(progress_table)
-
-    # Overall status
-    console.print()
-    overall_complete = plt_status and othd_status and oisd_status
-
-    if overall_complete:
-        console.print(Panel(
-            "[bold green]✓ COMPLETE[/bold green]\n"
-            "[white]All data files are present for all expected time steps[/white]",
-            border_style="green",
-            box=box.HEAVY
-        ))
-    else:
-        console.print(Panel(
-            "[bold red]✗ INCOMPLETE[/bold red]\n"
-            "[white]Some data files are missing or incomplete[/white]",
-            border_style="red",
-            box=box.HEAVY
-        ))
-    console.print()
-
-
-def get_output_directory(case: FlexFlowCase, case_path: Path) -> Optional[Path]:
-    """Get output directory from case config."""
-    if 'dir' not in case.config:
-        return None
-
-    output_dir_str = case.config['dir']
-
-    if not os.path.isabs(output_dir_str):
-        output_dir_path = case_path / output_dir_str
-    else:
-        output_dir_path = Path(output_dir_str)
-
-    return output_dir_path
-
-
-def get_frequency(case: FlexFlowCase, case_path: Path) -> Optional[int]:
-    """Get output frequency from config or auto-detect."""
-    # Try simflow.config
-    if 'outFreq' in case.config:
+    problem = cfg.problem
+    max_steps = None
+    if problem:
         try:
-            return int(case.config['outFreq'])
-        except ValueError:
+            max_steps = DefConfig.find(case_dir, problem).max_time_steps
+        except Exception:
             pass
+    setup = [f"problem {problem or '?'}"]
+    for label, value in (('np', cfg.np), ('nsg', cfg.nsg), ('outFreq', cfg.out_freq),
+                         ('maxTimeSteps', max_steps)):
+        if value:
+            setup.append(f"{label} {value}")
+    grid.add_row('setup', escape(' · '.join(setup)))
 
-    # Auto-detect from output files
-    return auto_detect_frequency(case_path, case.problem_name, case)
-
-
-def auto_detect_frequency(case_path: Path, problem: str, case: FlexFlowCase) -> Optional[int]:
-    """Auto-detect frequency from output file time steps."""
-    # Get output directory from config
-    output_dir_path = get_output_directory(case, case_path)
-    if not output_dir_path or not output_dir_path.exists():
-        return None
-
-    out_pattern = f'{problem}.*_*.out'
-
-    steps = []
-    for file in output_dir_path.glob(out_pattern):
-        step = extract_step_from_filename(file.name, problem)
-        if step is not None:
-            steps.append(step)
-
-    if len(steps) < 2:
-        return None
-
-    steps.sort()
-
-    # Find smallest gap
-    min_gap = min(steps[i+1] - steps[i] for i in range(len(steps) - 1))
-    return min_gap
+    run_dir = cfg.run_dir(case_dir)
+    reached = [s for s in (_last_othd_timestep(case_dir),
+                           _last_othd_timestep_in_dir(run_dir) if run_dir and run_dir.is_dir()
+                           else None) if s is not None]
+    if reached:
+        last = max(reached)
+        of = f" of {max_steps} ({100 * last / max_steps:.0f}%)" if max_steps else ''
+        grid.add_row('reached', f"step {last}{of}")
+    if cfg.restart_flag and cfg.restart_tsid is not None:
+        grid.add_row('restart', f"from {cfg.restart_tsid}")
+    if problem:
+        plt = _last_binary_plt_timestep(case_dir, problem)
+        if plt is not None:
+            grid.add_row('PLT', f"binary/ up to {plt}  [dim](case check plt for gaps)[/dim]")
+    jobs = _queued_jobs(case_dir.resolve().name)
+    if jobs:
+        grid.add_row('queue', escape(', '.join(jobs)))
+    return grid
 
 
-def extract_step_from_filename(filename: str, problem: str) -> Optional[int]:
-    """Extract time step from filename."""
-    import re
-    # Pattern: {problem}.{step}_*.out or {problem}.{step}_*.rst
-    pattern = rf'{re.escape(problem)}\.(\d+)_.*\.(?:out|rst)'
-    match = re.match(pattern, filename)
-    if match:
-        return int(match.group(1))
-    return None
+def _queued_jobs(case_name: str):
+    """This case's jobs in the SLURM queue, as 'name id STATE'; [] without SLURM."""
+    if not shutil.which('squeue'):
+        return []
+    try:
+        out = subprocess.run(['squeue', '-h', '-u', os.environ.get('USER', ''),
+                              '-o', '%j %i %T'], capture_output=True, text=True,
+                             timeout=10).stdout
+    except (OSError, subprocess.SubprocessError):
+        return []
+    return [line.strip() for line in out.splitlines() if case_name in line.split(' ')[0]]
 
 
-def get_expected_time_steps(case: FlexFlowCase, case_path: Path, freq: int) -> Set[int]:
-    """
-    Determine expected time steps from output files.
+# ---------------------------------------------------------------------------
+# update
+# ---------------------------------------------------------------------------
 
-    Returns the set of time steps that actually exist (multiples of frequency).
-    This represents what we expect for complete output.
-    """
-    # Get output directory from config
-    output_dir_path = get_output_directory(case, case_path)
-    if not output_dir_path or not output_dir_path.exists():
-        return set()
-
-    problem = case.problem_name
-    out_pattern = f'{problem}.*_*.out'
-
-    steps = set()
-    for file in output_dir_path.glob(out_pattern):
-        step = extract_step_from_filename(file.name, problem)
-        if step is not None:
-            # Only include steps that are multiples of frequency (but not step 0)
-            if step > 0 and step % freq == 0:
-                steps.add(step)
-
-    return steps
+def _update(console, case_dir: Path, args) -> int:
+    message = getattr(args, 'message', None)
+    state = getattr(args, 'state', None)
+    path = cs.path_for(case_dir)
+    if cs.ensure(case_dir):
+        console.print(f"[dim]wrote {path.name}[/dim]")
+    if state:
+        old = cs.set_state(case_dir, state)
+        console.print(f"state: {old or '—'} → [{STATE_STYLE.get(state, 'white')}]{state}[/]")
+    if message:
+        cs.add_log(case_dir, message)
+        console.print(f"logged: {escape(message.strip().splitlines()[0])}")
+    if state or message:
+        return 0
+    return _edit(console, path)
 
 
-def get_all_time_steps(case: FlexFlowCase, case_path: Path) -> Set[int]:
-    """
-    Get all time steps (for OTHD/OISD files).
-
-    OTHD/OISD files contain all time steps from the simulation,
-    not just ones at frequency intervals.
-
-    Returns a set from 1 to maxTimeSteps.
-    """
-    # Try to get maxTimeSteps from .def file
-    max_steps = get_max_timesteps_from_def(case_path, case.problem_name)
-
-    if max_steps:
-        return set(range(1, max_steps + 1))
-
-    # Fallback: get from existing OTHD/OISD files
-    return get_timesteps_from_data_files(case_path)
+def _edit(console, path: Path) -> int:
+    """Open the file in $VISUAL/$EDITOR (else nano, vim, vi)."""
+    editor = os.environ.get('VISUAL') or os.environ.get('EDITOR')
+    cmd = shlex.split(editor) if editor else next(
+        ([e] for e in ('nano', 'vim', 'vi') if shutil.which(e)), None)
+    if not cmd:
+        console.print("[red]Error:[/red] no editor: set $EDITOR, or use "
+                      "`case status update -m TEXT`")
+        return 1
+    try:
+        return subprocess.call(cmd + [str(path)])
+    except OSError as e:
+        console.print(f"[red]Error:[/red] could not start {escape(cmd[0])}: {e}")
+        return 1
 
 
-def get_max_timesteps_from_def(case_path: Path, problem: str) -> Optional[int]:
-    """Get maxTimeSteps from .def file."""
-    from src.core.def_config import DefConfig
-    return DefConfig.find(case_path, problem).max_time_steps
+# ---------------------------------------------------------------------------
+# '*': every registered case
+# ---------------------------------------------------------------------------
 
-
-def get_timesteps_from_data_files(case_path: Path) -> Set[int]:
-    """Get time steps from existing OTHD files."""
-    othd_dir = case_path / 'othd_files'
-
-    if not othd_dir.exists():
-        return set()
-
-    othd_files = list(othd_dir.glob('*.othd'))
-    if not othd_files:
-        return set()
-
-    all_steps = set()
-
-    for othd_file in othd_files:
-        try:
-            reader = OTHDReader(str(othd_file), range_only=True)
-            all_steps.update(reader.tsIds)
-        except Exception:
+def _list_cases(console) -> int:
+    from src.cli.context import current_dir
+    from ...case_iteration import load_cases_from_directory
+    cases = load_cases_from_directory(current_dir())
+    if not cases:
+        console.print("[red]Error:[/red] No cases found in .cases file (run `case add` first)")
+        return 1
+    tbl = Table(box=box.SIMPLE, header_style='bold yellow', pad_edge=False)
+    tbl.add_column('case', style='cyan', no_wrap=True)
+    tbl.add_column('state')
+    tbl.add_column('last log line')
+    for entry in cases:
+        loaded = cs.read(entry['path']) if Path(entry['path']).is_dir() else None
+        if loaded is None:
+            tbl.add_row(escape(entry['name']), '[dim]—[/dim]', f'[dim]no {cs.FILENAME}[/dim]')
             continue
-
-    return all_steps
-
-
-def check_output_directory_progress(
-    output_dir: Optional[Path],
-    problem: str,
-    output_steps: Set[int],
-    all_steps: Set[int]
-) -> Tuple[float, float, float, float, float]:
-    """
-    Check progress of files in output directory.
-
-    Returns:
-        Tuple of (out_progress, rst_progress, plt_progress, othd_progress, oisd_progress)
-    """
-    if not output_dir or not output_dir.exists():
-        return 0.0, 0.0, 0.0, 0.0, 0.0
-
-    # Check .out files (should match output_steps)
-    out_files = list(output_dir.glob(f'{problem}.*_*.out'))
-    out_steps = set()
-    for file in out_files:
-        step = extract_step_from_filename(file.name, problem)
-        if step:
-            out_steps.add(step)
-
-    out_progress = (len(out_steps & output_steps) / len(output_steps) * 100) if output_steps else 0.0
-
-    # Check .rst files (should match output_steps)
-    rst_files = list(output_dir.glob(f'{problem}.*_*.rst'))
-    rst_steps = set()
-    for file in rst_files:
-        step = extract_step_from_filename(file.name, problem)
-        if step:
-            rst_steps.add(step)
-
-    rst_progress = (len(rst_steps & output_steps) / len(output_steps) * 100) if output_steps else 0.0
-
-    # Check ASCII PLT files (should match output_steps)
-    plt_files = list(output_dir.glob(f'{problem}.*.plt'))
-    plt_steps = set()
-    for file in plt_files:
-        step = extract_plt_step(file.name, problem)
-        if step:
-            plt_steps.add(step)
-
-    plt_progress = (len(plt_steps & output_steps) / len(output_steps) * 100) if output_steps else 0.0
-
-    # Check OTHD files in output directory (should have all_steps)
-    othd_files = list(output_dir.glob('*.othd'))
-    othd_steps = set()
-    for othd_file in othd_files:
-        try:
-            reader = OTHDReader(str(othd_file), range_only=True)
-            othd_steps.update(reader.tsIds)
-        except Exception:
-            continue
-
-    othd_progress = (len(othd_steps & all_steps) / len(all_steps) * 100) if all_steps else 0.0
-
-    # Check OISD files in output directory (should have all_steps)
-    oisd_files = list(output_dir.glob('*.oisd'))
-    oisd_steps = set()
-    for oisd_file in oisd_files:
-        try:
-            reader = OISDReader(str(oisd_file), range_only=True)
-            oisd_steps.update(reader.tsIds)
-        except Exception:
-            continue
-
-    oisd_progress = (len(oisd_steps & all_steps) / len(all_steps) * 100) if all_steps else 0.0
-
-    return out_progress, rst_progress, plt_progress, othd_progress, oisd_progress
-
-
-def extract_plt_step(filename: str, problem: str) -> Optional[int]:
-    """Extract time step from PLT filename."""
-    import re
-    # Pattern: {problem}.{step}.plt
-    pattern = rf'{re.escape(problem)}\.(\d+)\.plt'
-    match = re.match(pattern, filename)
-    if match:
-        return int(match.group(1))
-    return None
-
-
-def check_plt_files(case_path: Path, problem: str, expected_steps: Set[int]) -> Tuple[bool, float]:
-    """
-    Check PLT files in binary directory.
-
-    Returns:
-        Tuple of (is_complete, coverage_percentage)
-    """
-    binary_dir = case_path / 'binary'
-
-    if not binary_dir.exists():
-        return False, 0.0
-
-    found_steps = set()
-
-    # Find all PLT files: {problem}.{step}.plt
-    for plt_file in binary_dir.glob(f'{problem}.*.plt'):
-        import re
-        pattern = rf'{re.escape(problem)}\.(\d+)\.plt'
-        match = re.match(pattern, plt_file.name)
-        if match:
-            step = int(match.group(1))
-            found_steps.add(step)
-
-    if not expected_steps:
-        return False, 0.0
-
-    coverage = (len(found_steps & expected_steps) / len(expected_steps)) * 100
-    is_complete = found_steps >= expected_steps
-
-    return is_complete, coverage
-
-
-def check_othd_files(case_path: Path, expected_steps: Set[int]) -> Tuple[bool, float]:
-    """
-    Check OTHD files coverage.
-
-    Returns:
-        Tuple of (is_complete, coverage_percentage)
-    """
-    othd_dir = case_path / 'othd_files'
-
-    if not othd_dir.exists():
-        return False, 0.0
-
-    othd_files = list(othd_dir.glob('*.othd'))
-
-    if not othd_files:
-        return False, 0.0
-
-    # Collect all time steps covered by OTHD files
-    covered_steps = set()
-
-    for othd_file in othd_files:
-        try:
-            reader = OTHDReader(str(othd_file), range_only=True)
-            covered_steps.update(reader.tsIds)
-        except Exception:
-            # Skip files that can't be read
-            continue
-
-    if not expected_steps:
-        return False, 0.0
-
-    coverage = (len(covered_steps & expected_steps) / len(expected_steps)) * 100
-    is_complete = expected_steps.issubset(covered_steps)
-
-    return is_complete, coverage
-
-
-def check_oisd_files(case_path: Path, expected_steps: Set[int]) -> Tuple[bool, float]:
-    """
-    Check OISD files coverage.
-
-    Returns:
-        Tuple of (is_complete, coverage_percentage)
-    """
-    oisd_dir = case_path / 'oisd_files'
-
-    if not oisd_dir.exists():
-        return False, 0.0
-
-    oisd_files = list(oisd_dir.glob('*.oisd'))
-
-    if not oisd_files:
-        return False, 0.0
-
-    # Collect all time steps covered by OISD files
-    covered_steps = set()
-
-    for oisd_file in oisd_files:
-        try:
-            reader = OISDReader(str(oisd_file), range_only=True)
-            covered_steps.update(reader.tsIds)
-        except Exception:
-            # Skip files that can't be read
-            continue
-
-    if not expected_steps:
-        return False, 0.0
-
-    coverage = (len(covered_steps & expected_steps) / len(expected_steps)) * 100
-    is_complete = expected_steps.issubset(covered_steps)
-
-    return is_complete, coverage
+        meta, body = loaded
+        state = meta.get('state') or '—'
+        tbl.add_row(escape(entry['name']), f"[{STATE_STYLE.get(state, 'white')}]{escape(state)}[/]",
+                    escape(cs.last_log_line(body) or ''))
+    console.print(tbl)
+    return 0

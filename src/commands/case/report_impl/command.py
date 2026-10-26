@@ -81,6 +81,7 @@ def execute_report(args):
         header_style='bold',
     )
     tbl.add_column('Case',              style='cyan', no_wrap=True)
+    tbl.add_column('State')
     tbl.add_column('Last (archive)',    justify='right')
     tbl.add_column('Last (binary PLT)', justify='right')
     if show_run:
@@ -94,7 +95,7 @@ def execute_report(args):
         name      = entry['name']
 
         if not case_path.is_dir():
-            row = [name, '[red]missing[/red]', dash]
+            row = [name, dash, '[red]missing[/red]', dash]
             if show_run:
                 row.append(dash)
             if show_size:
@@ -114,7 +115,8 @@ def execute_report(args):
         # --- Column 2: last PLT from binary/ ---
         binary_last = cached(case_cache, 'binary',
                              lambda: _last_binary_plt_timestep(case_path, problem), match=problem)
-        row = [name, _fmt_step(archive_last), _fmt_step(binary_last)]
+        # --- State: from the case's notes (cheap, so never cached) ---
+        row = [name, _state(case_path), _fmt_step(archive_last), _fmt_step(binary_last)]
 
         # --- Column 3 (optional): last timestep from rundir ---
         if show_run:
@@ -141,6 +143,20 @@ def execute_report(args):
     else:
         console.print(f"[dim]Could not write {search_dir / _CACHE_FILE}[/dim]")
     console.print()
+
+
+def _state(case_path: Path) -> str:
+    """The state in the case's .casestatus.md (`case status`), coloured."""
+    from ....core import case_status
+    from ..status_impl.command import STATE_STYLE
+    try:
+        loaded = case_status.read(case_path)
+    except OSError:
+        loaded = None
+    state = (loaded[0].get('state') if loaded else None) or None
+    if not state:
+        return '[dim]—[/dim]'
+    return f"[{STATE_STYLE.get(state, 'white')}]{state}[/]"
 
 
 def _fmt_step(step) -> str:

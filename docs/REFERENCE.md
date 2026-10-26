@@ -62,6 +62,10 @@ case show              # Show case info (uses current case)
 case show <case>       # Show specific case info
 case create <name>     # Create new case
 case run <case>        # Submit SLURM jobs
+case status [case]     # The case's notes (.casestatus.md) and where it is
+case status update [case] [-m TEXT] [--state STATE]   # edit ($EDITOR), log a line, set the state
+case status '*'        # State and last log line of every registered case
+case check data <case> # Data file completeness (was: case status)
 ```
 
 ### Data Operations

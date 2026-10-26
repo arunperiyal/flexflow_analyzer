@@ -101,6 +101,12 @@ class CaseRunCommand:
             dependency = job_ids.get('preFlex')
             job_ids['mainFlex'] = self.submit_job('mainFlex.sh', dependency=dependency)
             print(f"[FlexFlow] mainFlex job submitted: {job_ids['mainFlex']}")
+            from ...core import case_status
+            try:
+                case_status.add_log(self.case_dir, f"main job {job_ids['mainFlex']} submitted: "
+                                    + ("first run" if is_first_run else f"resume from {last_tsid}"))
+            except OSError:
+                pass
         else:
             print("[DRY-RUN] Would submit: mainFlex.sh")
             if is_first_run:

@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+### 📝 `case status`: the case's own notes, `.casestatus.md`
+
+- `case status [case]` shows the notes under what the case's files say now:
+  setup, the step reached (of maxTimeSteps), the restart, the last binary
+  PLT, its jobs in the queue. Those are read each time, never saved. The
+  first time, it writes the file from a template (`--no-create` not to).
+- The file: a header (`state`, `tags`) and free markdown, ending in a
+  `## Log` section, oldest first.
+- `case status update [case]` opens it in `$VISUAL`/`$EDITOR`; `-m TEXT`
+  adds a timestamped log line; `--state` sets new / meshing / running /
+  stopped / done / failed / archived (logged too). `case status '*'` lists
+  every registered case's state and last log line.
+- Logged on their own: `mainFlex.sh` (started, resumed from R, ended at step
+  N, failed, cancelled or out of walltime -- and the state), `postFlex.sh`
+  (steps converted, how it ended), and `run main` / `run post` / `case run`
+  (the job submitted). Existing cases keep their old job scripts: the
+  submit lines come anyway, the job's own lines with new scripts.
+- `case report` gains a State column.
+- **Moved:** the old `case status` (data file completeness) is
+  `case check data`.
+
 ### 🔎 NAS `show_plt --since DATE`: stale PLT files from before a restart
 
 - The NAS has no `.out`/`.rst` of the resumed run, and a PLT's date there is

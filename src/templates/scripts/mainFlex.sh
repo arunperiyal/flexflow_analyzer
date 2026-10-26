@@ -55,6 +55,47 @@ if [ -z "$RUN_DIR" ]; then
 fi
 
 # -----------------------------------------------------------------------------
+# Case notes: .casestatus.md (`case status`)
+# -----------------------------------------------------------------------------
+# The job adds its own lines to the ## Log section -- started, resumed from,
+# ended -- and sets the state. Never fatal: a job does not fail over its notes.
+
+CASESTATUS="${SLURM_SUBMIT_DIR:-$PWD}/.casestatus.md"
+
+casestatus_log() {
+    local f="$CASESTATUS" line tmp="$CASESTATUS.tmp.$$"
+    line="- $(date '+%Y-%m-%d %H:%M')  $*"
+    if [ ! -f "$f" ]; then
+        printf -- '---\nstate: new\ntags: []\n---\n# %s\n\n## Notes\n\n## Log\n' \
+            "$(basename "${SLURM_SUBMIT_DIR:-$PWD}")" > "$f" 2>/dev/null || return 0
+    fi
+    # at the end of the ## Log section, before the next heading (made if absent)
+    awk -v line="$line" '
+        inlog && /^##? / { print line; for (i = 0; i < nb; i++) print ""; if (!nb) print ""
+                           nb = 0; inlog = 0; done = 1 }
+        inlog && /^[ \t]*$/ { nb++; next }
+        inlog { for (i = 0; i < nb; i++) print ""; nb = 0 }
+        { print }
+        $0 == "## Log" && !done { inlog = 1 }
+        END { if (inlog) print line; else if (!done) { print ""; print "## Log"; print line } }
+    ' "$f" > "$tmp" 2>/dev/null && mv -f "$tmp" "$f" || rm -f "$tmp"
+    return 0
+}
+
+# casestatus_state STATE: set the header's state, and log the change
+casestatus_state() {
+    local f="$CASESTATUS" old tmp="$CASESTATUS.tmp.$$"
+    [ -f "$f" ] || casestatus_log "notes started by job ${SLURM_JOB_ID:-?}"
+    old=$(awk '/^---[ \t]*$/ { if (++n == 2) exit; next }
+               n == 1 && /^state:/ { sub(/^state:[ \t]*/, ""); sub(/[ \t]+#.*/, ""); print; exit }' "$f")
+    [ "$old" = "$1" ] && return 0
+    awk -v s="$1" '/^---[ \t]*$/ { n++ }
+                   n == 1 && /^state:/ && !d { print "state: " s; d = 1; next } { print }' \
+        "$f" > "$tmp" 2>/dev/null && mv -f "$tmp" "$f" || rm -f "$tmp"
+    casestatus_log "state: ${old:--} -> $1"
+}
+
+# -----------------------------------------------------------------------------
 # Display job configuration
 # -----------------------------------------------------------------------------
 
@@ -151,6 +192,26 @@ export OMP_NUM_THREADS=${OMP_NUM_THREADS:-$SLURM_CPUS_PER_TASK}
 # Step 2: Run main simulation
 # -----------------------------------------------------------------------------
 
+# The restart as the run will see it (after any auto-restart above)
+RESTART_FLAG=$(grep -oP '^\s*restartFlag\s*=\s*\K\d+' "$CONFIG_FILE" | head -1)
+RESTART_TSID=$(grep -oP '^\s*restartTsId\s*=\s*\K\d+' "$CONFIG_FILE" | head -1)
+MAX_STEPS=$(grep -oP 'maxTimeSteps\s*=\s*\K\d+' "${PROBLEM}.def" 2>/dev/null | head -1)
+if [ "${RESTART_FLAG:-0}" != 0 ] && [ -n "$RESTART_TSID" ]; then
+    casestatus_log "main job ${SLURM_JOB_ID:-?} started: resumed from ${RESTART_TSID} (np ${SLURM_NTASKS:-?})"
+else
+    casestatus_log "main job ${SLURM_JOB_ID:-?} started: from step 0 (np ${SLURM_NTASKS:-?})"
+fi
+casestatus_state running
+
+# The step the run got to, from the .othd it writes
+last_step() {
+    grep '^tsId ' "${RUN_DIR}/${PROBLEM}.othd" 2>/dev/null | tail -1 | awk '{print $2}'
+}
+
+# scancel and the walltime limit send SIGTERM first
+trap 'casestatus_log "main job ${SLURM_JOB_ID:-?} stopped at step $(last_step): cancelled or out of walltime"
+      casestatus_state stopped; exit 143' TERM
+
 echo "Step 2: Running main simulation..."
 echo "Command: $MPISIMFLOW -n $SLURM_NTASKS"
 echo ""
@@ -167,7 +228,17 @@ echo ""
 
 if [ $SIMFLOW_EXIT -ne 0 ]; then
     echo "Error: mpiSimflow failed with exit code $SIMFLOW_EXIT"
+    casestatus_log "main job ${SLURM_JOB_ID:-?} failed at step $(last_step): mpiSimflow exit $SIMFLOW_EXIT"
+    casestatus_state failed
     exit $SIMFLOW_EXIT
+fi
+
+STEP=$(last_step)
+casestatus_log "main job ${SLURM_JOB_ID:-?} ended: exit 0 at step ${STEP:-?}${MAX_STEPS:+ of $MAX_STEPS}"
+if [ -n "$STEP" ] && [ -n "$MAX_STEPS" ] && [ "$STEP" -ge "$MAX_STEPS" ]; then
+    casestatus_state done
+else
+    casestatus_state stopped
 fi
 
 echo "✓ Simulation completed successfully"

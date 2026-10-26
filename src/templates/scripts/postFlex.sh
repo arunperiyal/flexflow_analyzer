@@ -95,6 +95,35 @@ END_TIME=${END_TIME:-${3:-$MAX_STEPS}}
 # CONVERT_ONLY: skip simPlt and run only simPlt2Bin (env var, default: 0)
 CONVERT_ONLY=${CONVERT_ONLY:-0}
 
+# -----------------------------------------------------------------------------
+# Case notes: .casestatus.md (`case status`)
+# -----------------------------------------------------------------------------
+# The job adds its own lines to the ## Log section: which steps it converted,
+# how it ended. The state is the run's, so post leaves it alone. Never fatal.
+
+CASESTATUS="${SLURM_SUBMIT_DIR:-$PWD}/.casestatus.md"
+
+casestatus_log() {
+    local f="$CASESTATUS" line tmp="$CASESTATUS.tmp.$$"
+    line="- $(date '+%Y-%m-%d %H:%M')  $*"
+    if [ ! -f "$f" ]; then
+        printf -- '---\nstate: new\ntags: []\n---\n# %s\n\n## Notes\n\n## Log\n' \
+            "$(basename "${SLURM_SUBMIT_DIR:-$PWD}")" > "$f" 2>/dev/null || return 0
+    fi
+    # at the end of the ## Log section, before the next heading (made if absent)
+    awk -v line="$line" '
+        inlog && /^##? / { print line; for (i = 0; i < nb; i++) print ""; if (!nb) print ""
+                           nb = 0; inlog = 0; done = 1 }
+        inlog && /^[ \t]*$/ { nb++; next }
+        inlog { for (i = 0; i < nb; i++) print ""; nb = 0 }
+        { print }
+        $0 == "## Log" && !done { inlog = 1 }
+        END { if (inlog) print line; else if (!done) { print ""; print "## Log"; print line } }
+    ' "$f" > "$tmp" 2>/dev/null && mv -f "$tmp" "$f" || rm -f "$tmp"
+    return 0
+}
+
+
 # REMOTE_TARGET (user@host, or a Host alias from ~/.ssh/config), REMOTE_PORT,
 # REMOTE_DIR: set by `run post --remote NAME`. Empty REMOTE_TARGET = send
 # nothing; empty REMOTE_PORT = whatever ssh would use (the alias's Port).
@@ -146,6 +175,9 @@ fi
 # Set OpenMP threads
 export OMP_NUM_THREADS=${OMP_NUM_THREADS:-$SLURM_CPUS_PER_TASK}
 
+casestatus_log "post job ${SLURM_JOB_ID:-?} started: steps ${START_TIME}..${END_TIME} every ${FREQ}$([ "$CONVERT_ONLY" = 1 ] && echo ', convert only')${REMOTE_TARGET:+, sending to $REMOTE_TARGET}"
+trap 'casestatus_log "post job ${SLURM_JOB_ID:-?} stopped: cancelled or out of walltime"; exit 143' TERM
+
 # -----------------------------------------------------------------------------
 # Step 1: Convert .out files to ASCII PLT files (simPlt)
 # -----------------------------------------------------------------------------
@@ -178,6 +210,7 @@ else
             echo "      Lookahead beyond END_TIME=$END_TIME is expected when using --t2."
         else
             echo "Error: simPlt failed with exit code $SIMPLT_EXIT"
+            casestatus_log "post job ${SLURM_JOB_ID:-?} failed: simPlt exit $SIMPLT_EXIT"
             exit $SIMPLT_EXIT
         fi
     fi
@@ -326,6 +359,7 @@ if [ $SIMPLT2BIN_EXIT -ne 0 ]; then
     echo "Error: simPlt2Bin failed with exit code $SIMPLT2BIN_EXIT"
     [ "$SEND" = 1 ] && echo "       Files sent before the failure are listed in $SEND_LOG"
     rm -f "$START_MARK"
+    casestatus_log "post job ${SLURM_JOB_ID:-?} failed: simPlt2Bin exit $SIMPLT2BIN_EXIT"
     exit $SIMPLT2BIN_EXIT
 fi
 
@@ -352,6 +386,8 @@ rm -f "$START_MARK"
 # -----------------------------------------------------------------------------
 # Job Complete
 # -----------------------------------------------------------------------------
+
+casestatus_log "post job ${SLURM_JOB_ID:-?} ended: binary PLT for steps ${START_TIME}..${END_TIME}${n_sent:+, $n_sent sent}"
 
 echo "=========================================="
 echo "Postprocessing completed successfully!"

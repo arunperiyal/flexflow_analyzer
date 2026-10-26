@@ -65,12 +65,12 @@ def run(project, capsys, **flags):
 
 
 def lasts(text):
-    """{case: [archive, binary, ...]} from the table."""
+    """{case: [archive, binary, ...]} from the table (after the State column)."""
     rows = {}
     for line in text.splitlines():
         cells = [c.strip() for c in line.strip('│ ').split('│')]
         if cells and cells[0] in ('C1', 'C2'):
-            rows[cells[0]] = cells[1:]
+            rows[cells[0]] = cells[2:]
     return rows
 
 
@@ -118,3 +118,15 @@ def test_a_bad_or_missing_cache_is_rebuilt(project, capsys):
     (project / '.case_report').write_text('not json')
     assert lasts(run(project, capsys))['C1'][0] == '100'
     assert 'x' not in json.loads((project / '.case_report').read_text())['cases']
+
+
+def test_state_column_from_the_case_notes(project, capsys):
+    from src.core import case_status
+    case_status.ensure(project / 'C1')
+    case_status.set_state(project / 'C1', 'running')
+    states = {}
+    for line in run(project, capsys).splitlines():
+        cells = [c.strip() for c in line.strip('│ ').split('│')]
+        if cells and cells[0] in ('C1', 'C2'):
+            states[cells[0]] = cells[1]
+    assert states == {'C1': 'running', 'C2': '—'}

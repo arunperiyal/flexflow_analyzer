@@ -803,6 +803,15 @@ def handle_restart(case_dir, restart_tsid, console):
     return True
 
 
+def _log_submit(case_dir, line):
+    """A line in the case's notes (`case status`); never fatal."""
+    try:
+        from src.core import case_status
+        case_status.add_log(case_dir, line)
+    except OSError:
+        pass
+
+
 def submit_main_job(script_path, case_dir, args, console):
     """Submit main simulation job to SLURM."""
 
@@ -960,6 +969,10 @@ def submit_main_job(script_path, case_dir, args, console):
             job_id = output.split()[-1]
 
         if job_id:
+            how = (f"resume from {args.restart}" if has_restart else
+                   f"after job {args.dependency}, resuming where it stops" if has_dependency
+                   else "fresh start" if getattr(args, 'reset', False) else None)
+            _log_submit(case_dir, f"main job {job_id} submitted" + (f": {how}" if how else ''))
             console.print(f"[green]✓ Job submitted successfully[/green]")
             console.print()
             console.print(f"[bold]Job ID:[/bold] {job_id}")
