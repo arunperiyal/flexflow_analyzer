@@ -178,10 +178,10 @@ def _update(console, case_dir: Path, args) -> int:
 
 
 def _edit(console, path: Path) -> int:
-    """Open the file in $VISUAL/$EDITOR (else nano, vim, vi)."""
+    """Open the file in $VISUAL/$EDITOR (else vi, vim, nano)."""
     editor = os.environ.get('VISUAL') or os.environ.get('EDITOR')
     cmd = shlex.split(editor) if editor else next(
-        ([e] for e in ('nano', 'vim', 'vi') if shutil.which(e)), None)
+        ([e] for e in ('vi', 'vim', 'nano') if shutil.which(e)), None)
     if not cmd:
         console.print("[red]Error:[/red] no editor: set $EDITOR, or use "
                       "`case status update -m TEXT`")

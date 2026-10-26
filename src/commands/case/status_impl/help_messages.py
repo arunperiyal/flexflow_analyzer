@@ -25,7 +25,7 @@ saved, so they cannot go stale).
     The markdown is rendered as it is written.
 
 {Colors.BOLD}UPDATE:{Colors.RESET}
-    With nothing else, opens the file in $VISUAL / $EDITOR (else nano, vim, vi).
+    With nothing else, opens the file in $VISUAL / $EDITOR (else vi, vim, nano).
     {Colors.YELLOW}-m TEXT{Colors.RESET}        Add a timestamped line to the ## Log section
     {Colors.YELLOW}--state STATE{Colors.RESET}  new | meshing | running | stopped | done | failed | archived
                    (the change is logged too)
