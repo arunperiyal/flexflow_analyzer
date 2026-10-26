@@ -315,7 +315,7 @@ def texts(rt, line):
 def test_completion_of_commands_and_subcommands(rt):
     assert 'case' in texts(rt, 'ca')
     assert {'show', 'create', 'organise', 'check', 'upload'} <= set(texts(rt, 'case '))
-    assert texts(rt, 'case organise ') == ['archive', 'output', 'plt']
+    assert texts(rt, 'case organise ') == ['archive', 'output', 'plt', 'vtu']
 
 
 def test_completion_of_flags(rt):
