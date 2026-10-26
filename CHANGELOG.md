@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### ✨ `missing [case] --dir A,B`
+
+- Checks the series in the case's directories A, B and in each directory one
+  level inside them -- where `field render` files its camera views
+  (`<case>/slice_xVor/<view>/slice_xVor_<step>.png`). The case is the first
+  word, else `use case:`, else the current directory; a pattern may follow
+  it to check one series only. Names print relative to here, so a pipe
+  gets paths that work.
+
 ### 📝 `case upload|download` carry `.casestatus.md`
 
 - Whatever is carried, the case's notes go too, once per case. With no copy

@@ -66,7 +66,8 @@ def builtins():
                         "  find -c CS4          # cases with CS4 in the name[/dim]",
                 complete='path', category='Files'),
         Builtin('missing', _missing, help='Missing files in a numbered series',
-                usage='missing [dir] [pattern] [--t1 N] [--t2 N] [--freq N] [--empty] [--extra] [-q]',
+                usage='missing [dir] [pattern] [--t1 N] [--t2 N] [--freq N] [--empty] [--extra] [-q]\n'
+                      '       missing [case] [pattern] --dir NAME[,NAME...] [same flags]',
                 details="  [cyan]dir[/cyan]       Where the files are (default: here)\n"
                         "  [cyan]pattern[/cyan]   File name with {} for the number; leave it out to\n"
                         "            check every numbered series in dir\n"
@@ -76,6 +77,9 @@ def builtins():
                         "  [cyan]--empty[/cyan]   Also report 0-byte files\n"
                         "  [cyan]--extra[/cyan]   Also report files between the expected steps\n"
                         "  [cyan]-q[/cyan]        Only the summary line\n"
+                        "  [cyan]--dir A,B[/cyan] Directories of the case to check, each with the\n"
+                        "            directories one level in it (field render's camera views).\n"
+                        "            The first word is then the case, by default `use case:`\n"
                         "[dim]Expects t1, t1+freq, ... up to t2; zero padding follows the files.\n"
                         "With no pattern, names that differ only in a number form a series\n"
                         "(riser.{}_0.out, riser.{}_1.out, ... one per subgrid), and each is\n"
@@ -86,7 +90,10 @@ def builtins():
                         "  missing post 'slice_xVor_{}.png'   # just this one\n"
                         "  missing binary riser.{}.plt --empty\n"
                         "  missing post --t1 3000 --t2 5000 --freq 50\n"
-                        "  missing post | wc -l[/dim]",
+                        "  missing post | wc -l\n"
+                        "  use case:CS4SG3U6P0\n"
+                        "  missing --dir slice_xVor,slice_zVor_yplane   # each view of both\n"
+                        "  missing CS4SG3U1P0 --dir slice_xVor --freq 50[/dim]",
                 complete='path', category='Files'),
         Builtin('mkdir', _mkdir, help='Make directories', usage='mkdir [-p] <dir> [dirs...]',
                 details="  [cyan]-p[/cyan]  Make parents as needed; no error if it exists",
@@ -263,18 +270,26 @@ def _find(rt, argv):
     return 0
 
 
-_MISSING_USAGE = "usage: missing [dir] [pattern] [--t1 N] [--t2 N] [--freq N] [--empty] [--extra] [-q]"
+_MISSING_USAGE = ("usage: missing [dir] [pattern] [--t1 N] [--t2 N] [--freq N] [--empty] [--extra] [-q]\n"
+                  "       missing [case] [pattern] --dir NAME[,NAME...] [same flags]")
 
 
 def _missing_args(argv):
-    """(pattern, {t1, t2, freq}, flags) or an error message. A directory may
-    come before the pattern: `missing post slice_{}.png` is post/slice_{}.png;
-    `missing post` alone is every series in post/."""
-    numbers, flags, rest = {}, set(), []
+    """(words, {t1, t2, freq}, flags, dirs) or an error message. dirs is the
+    --dir list, or None without it."""
+    numbers, flags, rest, dirs = {}, set(), [], None
     args = iter(argv)
     for arg in args:
         name, eq, value = arg.partition('=')
-        if name in ('--t1', '--t2', '--freq'):
+        if name == '--dir':
+            if not eq:
+                value = next(args, None)
+                if value is None:
+                    return "--dir needs a value: NAME[,NAME...]"
+            dirs = (dirs or []) + [d.strip().strip('/') for d in value.split(',') if d.strip()]
+            if not dirs:
+                return "--dir needs a value: NAME[,NAME...]"
+        elif name in ('--t1', '--t2', '--freq'):
             if not eq:
                 value = next(args, None)
                 if value is None:
@@ -289,17 +304,13 @@ def _missing_args(argv):
             return f"unknown option {arg}"
         else:
             rest.append(arg)
-    if not rest:
-        rest = ['.']
-    if len(rest) == 2:
-        rest = [rest[0].rstrip('/') + '/' + rest[1] if rest[0].rstrip('/') else '/' + rest[1]]
-    if len(rest) != 1:
+    if len(rest) > 2:
         return _MISSING_USAGE
     if numbers.get('freq', 1) < 1:
         return "--freq must be 1 or more"
     if 't1' in numbers and 't2' in numbers and numbers['t1'] > numbers['t2']:
         return f"--t1 {numbers['t1']} is after --t2 {numbers['t2']}"
-    return rest[0], numbers, flags
+    return rest, numbers, flags, dirs
 
 
 def _missing_series(folder):
@@ -339,7 +350,16 @@ def _missing(rt, argv):
     if isinstance(parsed, str):
         rt.error(f"missing: {parsed}" if not parsed.startswith('usage') else parsed)
         return 2
-    pattern, numbers, flags = parsed
+    rest, numbers, flags, dirs = parsed
+    if dirs is not None:
+        return _missing_in_case(rt, rest, numbers, flags, dirs)
+    # A directory may come before the pattern: `missing post slice_{}.png` is
+    # post/slice_{}.png; `missing post` alone is every series in post/.
+    if not rest:
+        rest = ['.']
+    if len(rest) == 2:
+        rest = [rest[0].rstrip('/') + '/' + rest[1] if rest[0].rstrip('/') else '/' + rest[1]]
+    pattern = rest[0]
     if '{}' not in pattern and rt.resolve_path(pattern).is_dir():
         typed_dir = pattern.rstrip('/') or '/'
         typed_dir = '' if typed_dir == '.' else typed_dir
@@ -367,6 +387,68 @@ def _missing(rt, argv):
         return 1
     prefix, suffix = name.split('{}')
     return _missing_check(rt, folder, typed_dir, prefix, suffix, numbers, flags)
+
+
+def _missing_in_case(rt, rest, numbers, flags, dirs):
+    """`missing [case] [pattern] --dir A,B`: the series under each of the
+    case's directories A, B -- in it and in each subdirectory one level down,
+    which is where `field render` files each camera view. The case is the
+    `use case:` context when not given, else the current directory."""
+    pattern = rest.pop() if rest and '{}' in rest[-1] else None
+    if len(rest) > 1:
+        rt.error(_MISSING_USAGE)
+        return 2
+    if pattern is not None and (pattern.count('{}') != 1 or '/' in pattern):
+        rt.error("missing: with --dir the pattern is a file name with one {} (no /)")
+        return 2
+    case = rest[0] if rest else rt.get('case')
+    if case == '*':
+        rt.error("missing: --dir checks one case, and `use case:` is '*'; give the case")
+        return 2
+    case_dir = rt.resolve_path(case) if case else rt.cwd
+    if not case_dir.is_dir():
+        rt.error(f"missing: not a directory: {escape(str(case_dir))}")
+        return 1
+
+    def shown(folder):
+        try:
+            rel = os.path.relpath(folder, rt.cwd)
+        except ValueError:
+            rel = str(folder)
+        rel = str(folder) if rel.startswith('..') else rel
+        return '' if rel == '.' else rel
+
+    status, printed = 0, False
+    for name in dirs:
+        base = case_dir / name
+        if not base.is_dir():
+            rt.warn(f"missing: no {escape(name)}/ in {escape(str(case_dir))}")
+            status = max(status, 1)
+            continue
+        folders = [base] + sorted((Path(e.path) for e in os.scandir(base)
+                                   if e.is_dir() and not e.name.startswith('.')),
+                                  key=lambda p: p.name)
+        checked = 0
+        for folder in folders:
+            if pattern is None:
+                series = _missing_series(folder)
+            else:
+                prefix, suffix = pattern.split('{}')
+                hit = re.compile(re.escape(prefix) + r'\d+' + re.escape(suffix) + '$')
+                series = ([(prefix, suffix)] if any(hit.match(e.name) for e in os.scandir(folder))
+                          else [])
+            for prefix, suffix in series:
+                if printed and not rt.capturing and 'q' not in flags:
+                    rt.console.print()
+                printed = True
+                checked += 1
+                status = max(status, _missing_check(rt, folder, shown(folder), prefix, suffix,
+                                                    numbers, flags, labelled=True))
+        if not checked:
+            what = f"'{pattern}'" if pattern else "numbered series"
+            rt.warn(f"missing: no {escape(what)} in {escape(name)}/ or the directories in it")
+            status = max(status, 1)
+    return status
 
 
 def _missing_check(rt, folder, typed_dir, prefix, suffix, numbers, flags, labelled=False):
