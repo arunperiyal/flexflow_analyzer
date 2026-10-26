@@ -62,6 +62,8 @@ class PlotCommand(BaseCommand):
 
         # Output options
         parser.add_argument('--output', type=str, help='Output file path (supports .png, .pdf, .svg, .eps)')
+        parser.add_argument('--no-restarts', action='store_true',
+                          help='Do not mark the restarts in .restarts with dashed lines')
         parser.add_argument('--gnu', action='store_true',
                           help='Display plot in terminal (gnuplot-style, useful for HPC)')
         parser.add_argument('--no-display', action='store_true',

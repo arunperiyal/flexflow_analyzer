@@ -124,6 +124,12 @@ def plot_in_terminal(fig, axes, logger):
                 # Use empty label if it starts with '_' (internal matplotlib convention)
                 display_label = "" if label.startswith('_') else label
 
+                if line.get_gid() == RESTART_GID:
+                    try:
+                        plt_terminal.plot(x_list, y_list, color='gray')
+                    except TypeError:
+                        plt_terminal.plot(x_list, y_list)
+                    continue
                 plt_terminal.plot(x_list, y_list, label=display_label)
                 plots_added += 1
                 logger.debug(f"Plotted line with {len(x_list)} points")
@@ -402,6 +408,46 @@ def apply_plot_properties(fig, axes, args):
             axes[0].legend([legend_info['text']])
 
 
+RESTART_GID = 'restart'
+
+
+def restart_times(case_dir, dt):
+    """The times the runs in `.restarts` resumed at: step `after` at after*dt,
+    the last step kept of the run before (the recorded time of the first new
+    step when there is no dt)."""
+    from ....core import restarts
+    times = []
+    for row in restarts.read(case_dir):
+        if dt:
+            times.append(int(row['after']) * dt)
+        elif row.get('time', '-') != '-':
+            times.append(float(row['time']))
+    return times
+
+
+def mark_restarts(axes, case_dir, dt, logger):
+    """A grey dashed line at each restart within each axes' time range.
+    Drawn as ordinary data lines (not axvline, whose y is in axes units) so
+    the terminal plots carry them too; the y limits are kept as they were."""
+    times = restart_times(case_dir, dt)
+    if not times:
+        return 0
+    marked = set()
+    for ax in (axes if isinstance(axes, (list, tuple)) else [axes]):
+        x0, x1 = ax.get_xlim()
+        ylim = ax.get_ylim()
+        for t in times:
+            if x0 <= t <= x1:
+                ax.plot([t, t], ylim, linestyle='--', linewidth=0.8, color='0.5',
+                        label='_restart', gid=RESTART_GID, scalex=False, scaley=False)
+                marked.add(t)
+        ax.set_ylim(ylim)
+    if marked:
+        logger.info(f"Marked {len(marked)} restart(s) from .restarts at t = "
+                    + ', '.join(f"{t:g}" for t in sorted(marked)))
+    return len(marked)
+
+
 def apply_step_window(args, case, logger):
     """--start-step/--end-step (or the t1/t2 context) as --start-time/--end-time:
     step n is at time n*dt. A time typed on the command line wins."""
@@ -536,6 +582,10 @@ def execute_plot(args):
         
         # Apply plot properties
         apply_plot_properties(fig, axes, args)
+
+        if (plot_type == 'time' or args.data_type in ('moment', 'pressure')) \
+                and not getattr(args, 'no_restarts', False):
+            mark_restarts(axes, args.case, case.get_time_increment(), logger)
 
         # Terminal output (--gnu flag)
         if hasattr(args, 'gnu') and args.gnu:
@@ -923,6 +973,10 @@ def execute_plot_from_yaml(config, args):
         else:
             axes.set_ylabel(ylabel)
     
+    if (data_type == 'force' or plot_type == 'time') and config.get('restarts', True) \
+            and not getattr(args, 'no_restarts', False):
+        mark_restarts(axes, case_dir, case.get_time_increment(), logger)
+
     # Terminal output (--gnu flag)
     if hasattr(args, 'gnu') and args.gnu:
         plot_in_terminal(fig, axes, logger)
