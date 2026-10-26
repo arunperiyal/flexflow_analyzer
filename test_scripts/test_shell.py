@@ -251,6 +251,8 @@ def test_plot_t1_is_a_step(rt):
     a = parsed(rt, 'plot')
     assert (a.start_step, a.start_time, a.end_time) == (3000, None, None)
     assert parsed(rt, 'plot --start-step 0').start_step == 0
+    a = parsed(rt, 'plot --t1 0 --t2 250')
+    assert (a.start_step, a.end_step) == (0, 250)
 
 
 def test_case_check_freq(rt):

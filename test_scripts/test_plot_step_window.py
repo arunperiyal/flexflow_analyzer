@@ -50,3 +50,23 @@ def test_no_dt_warns_and_keeps_times():
     a, log = args(start_step=10), Log()
     apply_step_window(a, Case(None), log)
     assert a.start_time is None and log.warned
+
+
+def test_gnu_with_a_plotext_that_cannot_plot(monkeypatch, tmp_path):
+    # A directory named plotext on the path imports as an empty namespace
+    # package: say where it came from instead of "has no attribute 'plot'"
+    import types
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    from src.commands.visualization.plot_impl import command as c
+    empty = types.ModuleType('plotext')
+    empty.__path__ = [str(tmp_path / 'plotext')]
+    monkeypatch.setattr(c, 'plt_terminal', empty, raising=False)
+    monkeypatch.setattr(c, 'HAS_PLOTEXT', True)
+    errors = []
+    log = types.SimpleNamespace(error=errors.append, info=print, debug=print, warning=print)
+    fig, ax = plt.subplots()
+    ax.plot([0, 1], [0, 1])
+    assert c.plot_in_terminal(fig, ax, log) is False
+    assert 'plain directory' in errors[0] and 'pip install -U plotext' in errors[0]

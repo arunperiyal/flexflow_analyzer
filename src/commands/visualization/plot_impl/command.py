@@ -21,6 +21,16 @@ except ImportError:
     HAS_PLOTEXT = False
 
 
+def _plotext_where():
+    """Where the imported plotext came from: a directory named plotext on
+    the path imports as an empty namespace package, with no plot()."""
+    where = getattr(plt_terminal, '__file__', None)
+    if where is None:
+        where = ', '.join(getattr(plt_terminal, '__path__', [])) or '?'
+        return f"{where} (a plain directory, not the package)"
+    return where
+
+
 def _pt(*names):
     """The first of these plotext functions this version has (the names
     changed between 4.x and 5.x: clear_plot/clear_figure, figsize/plotsize),
@@ -48,6 +58,11 @@ def plot_in_terminal(fig, axes, logger):
     if not HAS_PLOTEXT:
         logger.error("plotext library not installed. Install with: pip install plotext")
         logger.info("Falling back to regular matplotlib display")
+        return False
+
+    if not (_pt('plot') and _pt('show')):
+        logger.error(f"plotext imported from {_plotext_where()} has no plot()/show(); "
+                     "reinstall it with: pip install -U plotext")
         return False
 
     # Handle single or multiple axes

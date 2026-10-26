@@ -46,7 +46,7 @@ class PlotCommand(BaseCommand):
         parser.add_argument('--start-time', type=float, help='Start time')
         parser.add_argument('--end-time', type=float, help='End time')
         # t1/t2 are steps, as everywhere else: they fill --start-step/--end-step
-        time_window(parser, '--start-step', '--end-step',
+        time_window(parser, ('--start-step', '--t1'), ('--end-step', '--t2'),
                     t1_kwargs=dict(type=_step, help='Start timestep'),
                     t2_kwargs=dict(type=_step, help='End timestep'))
 
