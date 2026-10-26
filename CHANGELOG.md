@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### 📝 `case upload|download` carry `.casestatus.md`
+
+- Whatever is carried, the case's notes go too, once per case. With no copy
+  at the destination it is copied; with one, the two are merged: the notes
+  of the copy changed last, and the log entries of both in time order, so
+  neither the cluster's job lines nor your own are lost. Only the
+  destination is written. A failure here warns and does not fail the
+  transfer.
+
 ### 📝 `case status`: the case's own notes, `.casestatus.md`
 
 - `case status [case]` shows the notes under what the case's files say now:

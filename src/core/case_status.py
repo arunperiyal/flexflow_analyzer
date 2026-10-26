@@ -157,3 +157,63 @@ def last_log_line(body: str) -> Optional[str]:
     lines = [l[2:] for l in body[start:nxt.start() if nxt else len(body)].splitlines()
              if l.startswith('- ')]
     return lines[-1] if lines else None
+
+
+# ---------------------------------------------------------------------------
+# Two copies of the file (here and on a remote): merging them
+# ---------------------------------------------------------------------------
+
+_STAMP = re.compile(r'^- (\d{4}-\d\d-\d\d \d\d:\d\d)\b')
+
+
+def _log_bounds(text: str):
+    """(start, end) of the Log section's lines in text, or None."""
+    at = text.find(f"\n{LOG_HEADING}\n")
+    if at >= 0:
+        start = at + 1 + len(LOG_HEADING) + 1
+    elif text.startswith(f"{LOG_HEADING}\n"):
+        start = len(LOG_HEADING) + 1
+    else:
+        return None
+    nxt = _HEADING.search(text, start)
+    return start, nxt.start() if nxt else len(text)
+
+
+def log_entries(text: str):
+    """The log as entries: an entry is a '- ' line and the lines under it."""
+    bounds = _log_bounds(text)
+    if not bounds:
+        return []
+    entries = []
+    for line in text[bounds[0]:bounds[1]].rstrip('\n').splitlines():
+        if line.startswith('- ') or not entries:
+            entries.append([line])
+        else:
+            entries[-1].append(line)
+    return ['\n'.join(e) for e in entries if ''.join(e).strip()]
+
+
+def merge(newer: str, older: str) -> str:
+    """One file from two copies: `newer`'s header and notes, and the log of
+    both -- every entry once, in time order (an entry with no timestamp
+    keeps its place after the one before it)."""
+    ours = log_entries(newer)
+    seen = set(ours)
+    extra = [e for e in log_entries(older) if e not in seen]
+    if not extra:
+        return newer
+
+    def keyed(entries, side):
+        out, last = [], ''
+        for i, e in enumerate(entries):
+            m = _STAMP.match(e)
+            last = m.group(1) if m else last
+            out.append(((last, side, i), e))
+        return out
+    entries = [e for _, e in sorted(keyed(ours, 0) + keyed(extra, 1))]
+    block = '\n'.join(entries) + '\n'
+    bounds = _log_bounds(newer)
+    if not bounds:
+        return newer.rstrip('\n') + f"\n\n{LOG_HEADING}\n" + block
+    rest = newer[bounds[1]:]
+    return newer[:bounds[0]] + block + ('\n' + rest if rest else '')

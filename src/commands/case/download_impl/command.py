@@ -132,6 +132,10 @@ def show_upload_help() -> None:
 
 Upload case directories from local machine to a remote server.
 
+Whatever is carried, the case's notes ({Colors.CYAN}.casestatus.md{Colors.RESET}, `case status`) go
+too: copied if the remote has none, else merged -- the notes of the copy
+changed last, the log lines of both, in time order.
+
 {Colors.BOLD}USAGE:{Colors.RESET}
     flexflow case upload [{Colors.YELLOW}case{Colors.RESET}] --to {Colors.YELLOW}REMOTE{Colors.RESET} [options]
     flexflow case upload binary [{Colors.YELLOW}case{Colors.RESET}] [--t1 STEP] [--t2 STEP] [options]
@@ -230,6 +234,11 @@ def show_download_help() -> None:
 {Colors.BOLD}{Colors.CYAN}FlexFlow Case Download Command{Colors.RESET}
 
 Download case directories from a remote server to the local machine.
+
+Whatever is carried, the case's notes ({Colors.CYAN}.casestatus.md{Colors.RESET}, `case status`) come
+too: copied if there are none here, else merged -- the notes of the copy
+changed last, the log lines of both (the job scripts' among them), in time
+order.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
     flexflow case download [{Colors.YELLOW}case{Colors.RESET}] --from {Colors.YELLOW}REMOTE{Colors.RESET} [options]
@@ -816,6 +825,14 @@ class CaseUploadCommand:
                 if len(case_entries) > 1:
                     self.console.print()
 
+            # The case's notes travel with it, whatever was carried
+            synced = set()
+            for target in all_targets:
+                if target['case_path'] not in synced:
+                    synced.add(target['case_path'])
+                    self.sync_case_status(ssh, target['remote_case_path'],
+                                          target['case_path'], is_upload)
+
             ssh.disconnect()
             self.console.print()
 
@@ -838,6 +855,58 @@ class CaseUploadCommand:
             if state is not None:
                 self._finalize_transfer_state(state, success=False)
             return 1
+
+    def sync_case_status(self, ssh, remote_case_path: str, local_case_path: str,
+                         is_upload: bool) -> None:
+        """Carry .casestatus.md (`case status`) to the other side, merged.
+
+        A plain copy would lose lines: the cluster's job scripts log to its
+        copy while you write in yours. So with both copies there, the one
+        changed last gives the header and notes and the log is the entries of
+        both, in time order. Only the destination is written -- the source
+        catches up on a transfer the other way. Never fails the transfer.
+        """
+        from ....core import case_status as cs
+        local = Path(local_case_path) / cs.FILENAME
+        remote = f"{remote_case_path}/{cs.FILENAME}"
+        try:
+            here = local.read_text(errors='replace') if local.is_file() else None
+            there = there_mtime = None
+            if ssh.remote_path_exists(remote):
+                with ssh.sftp_client.open(remote) as f:
+                    there = f.read().decode(errors='replace')
+                there_mtime = ssh.sftp_client.stat(remote).st_mtime
+            if here is None and there is None:
+                return
+            source, dest = (here, there) if is_upload else (there, here)
+            if source is None:
+                return                  # nothing to send; the other copy stays
+            if dest is None:
+                text, how = source, "copied"
+            else:
+                here_newer = local.stat().st_mtime >= (there_mtime or 0)
+                newer, older = (here, there) if here_newer else (there, here)
+                text = cs.merge(newer, older)
+                if text == dest:
+                    self.console.print(f"[dim]{cs.FILENAME}: already up to date[/dim]")
+                    return
+                added = len(cs.log_entries(text)) - len(cs.log_entries(dest))
+                how = (f"merged ({'notes from ' + ('here' if here_newer else 'the remote')}"
+                       f"{f', {added} log line(s) added' if added > 0 else ''})")
+            if is_upload:
+                import tempfile
+                fd, tmp = tempfile.mkstemp(suffix='.md')
+                try:
+                    with os.fdopen(fd, 'w') as f:
+                        f.write(text)
+                    ssh.upload_file(tmp, remote)
+                finally:
+                    os.unlink(tmp)
+            else:
+                cs._write(local, text)
+            self.console.print(f"[green]✓[/green] {cs.FILENAME}: {how}")
+        except Exception as exc:
+            self.console.print(f"[yellow]⚠[/yellow]  {cs.FILENAME} not carried: {exc}")
 
     def validate_remote(self, remote_name: str) -> Optional[dict]:
         """
