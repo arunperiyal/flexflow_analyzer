@@ -205,6 +205,9 @@ class FieldCommand(BaseCommand):
                      help='End step of a range: one figure per step in it')
         freq_arg(render_parser,
                  help='With --t1/--t2: keep only steps that are multiples of FREQ')
+        render_parser.add_argument('-j', '--jobs', type=int, metavar='N',
+                                   help='Render the timesteps of a range in N processes '
+                                        '(each holds one .vtu in memory; default 1)')
         context_flag(render_parser, 'zone', '--zone', type=str, help='Zone to render')
         render_parser.add_argument('--nen', type=int,
                                    help='Force nodes-per-element when converting')

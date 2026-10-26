@@ -623,6 +623,125 @@ def _render_all_cases(args, mode, logger):
         sys.exit(1)
 
 
+def _render_step(args, cfg, mode, step, binary_dir, problem, out_dir, stem, ext,
+                 state, logger):
+    """Convert and render one timestep; the files it wrote."""
+    renderer = render.render_iso if mode == "iso" else render.render_slice
+    step_cfg = copy.deepcopy(cfg)
+    step_cfg["input"]["vtu"] = _vtu_for_step(args, cfg, step, binary_dir,
+                                             problem, logger)
+    step_cfg["body"]["vtu"] = _body_vtu_for_step(cfg, step, binary_dir,
+                                                 problem, args, logger)
+    step_cfg["domain"] = _follow_body_for_step(step_cfg, step, binary_dir,
+                                               problem, args, logger)
+    base = str(out_dir / (stem if step is None else f"{stem}_{step}"))
+    if ext in GEOMETRY_EXT:
+        step_cfg["output"]["geometry"] = base + ext
+        step_cfg["output"]["images"] = False
+    else:
+        step_cfg["output"]["prefix"] = base
+        if ext == ".png":
+            step_cfg["output"]["image_path"] = base + ".png"
+            step_cfg["output"]["save_vtp"] = False
+        elif ext == ".html":
+            # The page carries the surface inside it, so a .vtp beside it
+            # would be the same geometry twice.
+            step_cfg["output"]["html"] = base + ".html"
+            step_cfg["output"]["save_vtp"] = False
+
+    try:
+        outs = renderer(step_cfg, log=logger.info, warn=logger.warning,
+                        state=state)
+    except ImportError:
+        logger.error(f"pyvista is required for `field render {mode}`. "
+                     f"Install with: pip install pyvista")
+        sys.exit(1)
+    except Exception as e:
+        where = f" (timestep {step})" if step is not None else ""
+        logger.error(f"rendering failed{where}: {e}")
+        sys.exit(1)
+
+    if not outs:
+        logger.warning(f"nothing written for "
+                       f"{'timestep ' + str(step) if step is not None else 'this input'}"
+                       f" (empty {mode}?)")
+    return outs
+
+
+def _hold_colour_scale(cfg, state, step, total, shared, logger):
+    """An automatic colour scale is worked out from the first step's surface
+    and then held: rescaling every frame to its own data is what makes a
+    sweep's frames incomparable, and holding one scale is the whole point
+    of asking for a range at all."""
+    if cfg["color"].get("range") is None and state.get("color_range"):
+        cfg["color"]["range"] = list(state["color_range"])
+        if total > 1:
+            logger.info(f"holding the colour scale from timestep {step}: "
+                        f"{cfg['color']['range']}")
+        if shared is not None:
+            shared.setdefault("color_range", list(state["color_range"]))
+
+
+def _step_worker(job):
+    """One timestep in a worker process: (step, files written, error or None).
+    sys.exit in the helpers (after they have said why) is an error here, not
+    the end of the run: the other steps carry on."""
+    (step, args, cfg, mode, binary_dir, problem, out_dir, stem, ext, verbose) = job
+    logger = Logger(verbose=verbose)
+    try:
+        return step, _render_step(args, cfg, mode, step, binary_dir, problem,
+                                  out_dir, stem, ext, {"range_checked": True}, logger), None
+    except SystemExit:
+        return step, [], "see the error above"
+    except Exception as e:
+        return step, [], str(e)
+
+
+def _render_parallel(args, cfg, mode, steps, binary_dir, problem, out_dir, stem,
+                     ext, jobs, logger):
+    """The steps over `jobs` processes, each converting and rendering its own
+    PLT. Spawned, not forked: a forked VTK/OpenGL context is not one to share.
+    Each holds a whole .vtu in memory, so jobs is bounded by memory as much as
+    by cores."""
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor, as_completed
+
+    # Only what the helpers read from args, so the job pickles whatever else
+    # the parser hung on the namespace.
+    from types import SimpleNamespace
+    lean = SimpleNamespace(vtu=getattr(args, "vtu", None), zone=getattr(args, "zone", None),
+                           nen=getattr(args, "nen", None))
+    verbose = getattr(args, "verbose", False)
+    jobs = min(jobs, len(steps))
+    print(f"  rendering {len(steps)} more timestep{'' if len(steps) == 1 else 's'} "
+          f"in {jobs} processes", flush=True)
+    written, failed = [], []
+    first = 2                           # the first step was [1/total]
+    total = len(steps) + 1
+    pool = ProcessPoolExecutor(max_workers=jobs, mp_context=mp.get_context("spawn"))
+    try:
+        futures = [pool.submit(_step_worker, (step, lean, cfg, mode, binary_dir, problem,
+                                              out_dir, stem, ext, verbose))
+                   for step in steps]
+        for n, fut in enumerate(as_completed(futures), first):
+            step, outs, error = fut.result()
+            if error:
+                failed.append(step)
+                print(f"  [{n}/{total}] timestep {step} failed: {error}", flush=True)
+            else:
+                print(f"  [{n}/{total}] timestep {step}", flush=True)
+            written += outs
+    except BaseException:
+        # Ctrl-C: drop what has not started rather than rendering it anyway
+        pool.shutdown(wait=False, cancel_futures=True)
+        raise
+    pool.shutdown()
+    if failed:
+        logger.warning(f"{len(failed)} timestep{'' if len(failed) == 1 else 's'} failed: "
+                       f"{', '.join(str(s) for s in sorted(failed))}")
+    return written
+
+
 def _render_one_case(args, mode, logger, shared=None):
     """Render the one case named by args.case (or --vtu)."""
     args.normal = _parse_vector(getattr(args, "normal", None), "normal", logger)
@@ -663,68 +782,26 @@ def _render_one_case(args, mode, logger, shared=None):
     out_dir = _output_dir(args, name)
     stem = Path(name).name
 
-    renderer = render.render_iso if mode == "iso" else render.render_slice
-    written = []
     total = len(steps)
+    jobs = max(1, min(getattr(args, "jobs", None) or 1, total))
     # Scratch shared by every step of the run: the colour scale the first one
     # settled on, and which one-off warnings have already been said.
     state = {}
-    for i, step in enumerate(steps, 1):
+    written = []
+    for i, step in enumerate(steps if jobs == 1 else steps[:1], 1):
         if total > 1:
             # A sweep converts and renders one PLT per step and can run for many
             # minutes. Say where it is, or it looks hung and gets interrupted.
             print(f"  [{i}/{total}] timestep {step}", flush=True)
-        step_cfg = copy.deepcopy(cfg)
-        step_cfg["input"]["vtu"] = _vtu_for_step(args, cfg, step, binary_dir,
-                                                 problem, logger)
-        step_cfg["body"]["vtu"] = _body_vtu_for_step(cfg, step, binary_dir,
-                                                     problem, args, logger)
-        step_cfg["domain"] = _follow_body_for_step(step_cfg, step, binary_dir,
-                                                   problem, args, logger)
-        base = str(out_dir / (stem if step is None else f"{stem}_{step}"))
-        if ext in GEOMETRY_EXT:
-            step_cfg["output"]["geometry"] = base + ext
-            step_cfg["output"]["images"] = False
-        else:
-            step_cfg["output"]["prefix"] = base
-            if ext == ".png":
-                step_cfg["output"]["image_path"] = base + ".png"
-                step_cfg["output"]["save_vtp"] = False
-            elif ext == ".html":
-                # The page carries the surface inside it, so a .vtp beside it
-                # would be the same geometry twice.
-                step_cfg["output"]["html"] = base + ".html"
-                step_cfg["output"]["save_vtp"] = False
-
-        try:
-            outs = renderer(step_cfg, log=logger.info, warn=logger.warning,
-                            state=state)
-        except ImportError:
-            logger.error(f"pyvista is required for `field render {mode}`. "
-                         f"Install with: pip install pyvista")
-            sys.exit(1)
-        except Exception as e:
-            where = f" (timestep {step})" if step is not None else ""
-            logger.error(f"rendering failed{where}: {e}")
-            sys.exit(1)
-
-        # An automatic colour scale is worked out from the first step's surface
-        # and then held: rescaling every frame to its own data is what makes a
-        # sweep's frames incomparable, and holding one scale is the whole point
-        # of asking for a range at all.
-        if cfg["color"].get("range") is None and state.get("color_range"):
-            cfg["color"]["range"] = list(state["color_range"])
-            if total > 1:
-                logger.info(f"holding the colour scale from timestep {step}: "
-                            f"{cfg['color']['range']}")
-            if shared is not None:
-                shared.setdefault("color_range", list(state["color_range"]))
-
-        if not outs:
-            logger.warning(f"nothing written for "
-                           f"{'timestep ' + str(step) if step is not None else 'this input'}"
-                           f" (empty {mode}?)")
-        written += outs
+        written += _render_step(args, cfg, mode, step, binary_dir, problem,
+                                out_dir, stem, ext, state, logger)
+        _hold_colour_scale(cfg, state, step, total, shared, logger)
+    if jobs > 1:
+        # The first step ran above, alone: it fixes the colour scale (and
+        # starts xvfb, whose DISPLAY the workers inherit), so every frame the
+        # workers draw is on the same scale as if they had run in order.
+        written += _render_parallel(args, cfg, mode, steps[1:], binary_dir, problem,
+                                    out_dir, stem, ext, jobs, logger)
 
     if not written:
         logger.warning(f"nothing written (empty {mode}?)")

@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### ⚡ `field render iso/slice -j N`: timesteps in parallel
+
+- A `--t1/--t2` range renders in N processes: the first step alone, since
+  it fixes the automatic colour scale (and starts xvfb when there is no
+  display), then the rest on that scale across N spawned processes. The
+  frames are the same as in order: identical pixels on the example case.
+- Each process converts and renders its own PLT, so the conversion is
+  parallel too (5 steps of the example: 36 s → 23 s with `-j 3`). Each holds
+  one .vtu in memory, so N is bounded by memory as well as cores.
+- A step that fails in a worker is reported and the rest carry on; Ctrl-C
+  drops the steps not yet started. Default `-j 1`, as before.
+
 ### ┆ `plot` marks the restarts
 
 - Time plots draw a grey dashed line at each restart recorded in `.restarts`
