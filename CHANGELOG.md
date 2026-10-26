@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### 🧾 `.restarts`: where each run took over, kept past compile and prune
+
+- `case organise archive --compile` (and `--prune`, before it deletes the
+  parts) records each restart in `.restarts` in the case: the step the run
+  resumed after, its first step and simulation time, the step the run
+  before had reached, how many steps were computed again, and the parts.
+  A part is one run, so every part after the first is a row; a restart
+  appended inside one file is too.
+- Plain columns (`numpy.loadtxt(..., usecols=(0, 1, 2))` reads after, first,
+  time). Lines are only added, never rewritten: after --prune the parts are
+  gone, and a later compile cannot find those restarts again.
+- `case status` lists them.
+
 ### ✨ `missing [case] --dir A,B`
 
 - Checks the series in the case's directories A, B and in each directory one

@@ -65,6 +65,10 @@ Organize and clean up case directories. Pick one subcommand.
               • Parts with different headers (probe/surface sets) are not
                 combined
               • Rewrites the compiled file each time; ignores --t1/--t2
+              • Records where each run took over in {Colors.CYAN}.restarts{Colors.RESET} in the case:
+                the step it resumed after, its first step and simulation time,
+                the steps it computed again. Lines are only ever added, so
+                the record outlives --prune (which deletes the parts)
 
         {Colors.CYAN}--prune{Colors.RESET}
             Replace the parts with the compiled file: the parts in
@@ -77,6 +81,7 @@ Organize and clean up case directories. Pick one subcommand.
               • The compiled data stays on disk throughout: it is moved
                 into place first, then the parts are deleted
               • A compiled file with no parts left is just moved into place
+              • Records the restarts in .restarts first, as --compile does
               • Asks before deleting. RCV files are not touched.
 
     {Colors.CYAN}output{Colors.RESET}

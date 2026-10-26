@@ -88,6 +88,14 @@ def test_show_writes_the_file_the_first_time(case, monkeypatch):
     assert 'wrote' not in again
 
 
+def test_show_lists_the_recorded_restarts(case, monkeypatch):
+    from src.core import restarts
+    restarts.write(case, [dict(after=str(a), first=str(a + 1), time='-', reached='-', replaced='0',
+                               part='-', previous='-', recorded='-') for a in (100, 200)])
+    _, text = run(case, monkeypatch)
+    assert 'after 100, 200  (2 in .restarts)' in text
+
+
 def test_show_no_create(case, monkeypatch):
     code, text = run(case, monkeypatch, no_create=True)
     assert code == 0 and not cs.path_for(case).exists() and 'no .casestatus.md here' in text

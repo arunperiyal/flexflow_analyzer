@@ -8,6 +8,8 @@ redundant file in turn; a file the user keeps must survive and be renumbered.
 """
 
 from argparse import Namespace
+
+import pytest
 from types import SimpleNamespace
 
 from rich.console import Console
@@ -282,3 +284,71 @@ def test_clean_still_aborts_on_a_part_it_cannot_read(tmp_path, monkeypatch):
     with pytest.raises(SystemExit):
         make_organizer(tmp_path, clean=True).organize('archive')
     assert sorted(p.name for p in othd_dir.glob('*.othd')) == ['riser1.othd', 'riser2.othd']
+
+
+# --- .restarts: where the runs took over, kept past --compile and --prune -----
+
+from src.core import restarts as rs
+
+
+def _rows(case_dir):
+    return [(int(r['after']), int(r['first']), r['time'], int(r['reached']), int(r['replaced']),
+             r['part'], r['previous']) for r in rs.read(case_dir)]
+
+
+def test_compile_records_the_restarts(tmp_path):
+    write_parts(tmp_path, {
+        'riser1.othd': othd(range(1, 8)),
+        'riser2.othd': othd(range(5, 11)),     # resumed after 4: 5..7 computed again
+        'riser3.othd': othd(range(11, 15)),    # resumed after 10, no overlap
+    })
+    make_organizer(tmp_path, compile=True).organize('archive')
+    assert _rows(tmp_path) == [
+        (4, 5, f"{5 * 0.05:.6e}", 7, 3, 'riser2.othd', 'riser1.othd'),
+        (10, 11, f"{11 * 0.05:.6e}", 10, 0, 'riser3.othd', 'riser2.othd')]
+    text = rs.path_for(tmp_path).read_text()
+    assert text.startswith('# Restarts of ') and '# after' in text
+
+
+def test_restart_inside_one_file_is_recorded(tmp_path):
+    write_parts(tmp_path, {'riser1.othd': othd([1, 2, 3, 4, 3, 4, 5])})
+    make_organizer(tmp_path, compile=True).organize('archive')
+    assert _rows(tmp_path) == [(2, 3, f"{3 * 0.05:.6e}", 4, 2, 'riser1.othd', 'riser1.othd')]
+
+
+def test_restarts_survive_prune_and_grow(tmp_path):
+    othd_dir = write_parts(tmp_path, {
+        'riser1.othd': othd(range(1, 8), value=1.0),
+        'riser2.othd': othd(range(5, 11), value=2.0),
+    })
+    make_organizer(tmp_path, compile=True, prune=True, no_confirm=True).organize('archive')
+    assert [r[0] for r in _rows(tmp_path)] == [4]
+    first = rs.path_for(tmp_path).read_text()
+
+    # the parts are gone; compiling again must not forget the restart after 4
+    make_organizer(tmp_path, compile=True).organize('archive')
+    assert rs.path_for(tmp_path).read_text() == first
+
+    run_dir = tmp_path / 'RUN_1'
+    run_dir.mkdir()
+    (run_dir / 'riser.othd').write_text(othd(range(9, 13), value=3.0))   # after 8
+    make_organizer(tmp_path, update=True, compile=True).organize('archive')
+    assert [(r[0], r[4], r[5]) for r in _rows(tmp_path)] == [(4, 3, 'riser2.othd'),
+                                                              (8, 2, 'riser2.othd')]
+
+
+def test_no_restart_no_file_and_dry_run_writes_none(tmp_path):
+    write_parts(tmp_path, {'riser1.othd': othd(range(1, 8))})
+    make_organizer(tmp_path, compile=True).organize('archive')
+    assert not rs.path_for(tmp_path).exists()
+    write_parts(tmp_path, {'riser2.othd': othd(range(5, 11))})
+    make_organizer(tmp_path, compile=True, dry_run=True).organize('archive')
+    assert not rs.path_for(tmp_path).exists()
+
+
+def test_restarts_file_reads_with_numpy(tmp_path):
+    import numpy as np
+    write_parts(tmp_path, {'riser1.othd': othd(range(1, 8)), 'riser2.othd': othd(range(5, 11))})
+    make_organizer(tmp_path, compile=True).organize('archive')
+    after, first, t = np.loadtxt(rs.path_for(tmp_path), usecols=(0, 1, 2), ndmin=2).T
+    assert list(after) == [4] and list(first) == [5] and t[0] == pytest.approx(0.25)
