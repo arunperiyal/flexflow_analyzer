@@ -124,3 +124,62 @@ def test_no_files_but_a_given_range(rt):
 def test_errors(rt, line, message):
     assert rt.execute_line(line) == 2
     assert message in rt.err_console.file.getvalue()
+
+
+# --- missing [case] --dir A,B: the case's render directories, view by view ----
+
+@pytest.fixture
+def case(rt, tmp_path):
+    """work/C1/<name>/<view>/<name>_<step>.png, the way `field render` files them."""
+    c1 = tmp_path / 'work' / 'C1'
+    for name, views, gaps in (('slice_xVor', ('front', 'top'), {'front': (150,), 'top': ()}),
+                              ('slice_zVor_yplane', ('view',), {'view': (100, 200)})):
+        for view in views:
+            d = c1 / name / view
+            d.mkdir(parents=True)
+            for t in range(50, 301, 50):
+                if t not in gaps[view]:
+                    (d / f'{name}_{t}.png').write_text('x')
+    (c1 / 'slice_xVor' / 'slice_xVor_50.vtp').write_text('x')        # one file: no series
+    return c1
+
+
+def test_dir_uses_the_case_context(rt, case):
+    assert rt.execute_line("use case:C1") == 0
+    text = rt.run_captured("missing --dir slice_xVor,slice_zVor_yplane --freq 50")
+    assert text.split() == ['C1/slice_xVor/front/slice_xVor_150.png',
+                            'C1/slice_zVor_yplane/view/slice_zVor_yplane_100.png',
+                            'C1/slice_zVor_yplane/view/slice_zVor_yplane_200.png']
+    assert rt.execute_line("missing --dir slice_xVor,slice_zVor_yplane --freq 50") == 1
+
+
+def test_dir_summaries_per_view(rt, case):
+    assert rt.execute_line("missing C1 --dir slice_xVor -q") == 1
+    lines = rt.run_captured("missing C1 --dir=slice_xVor -q").splitlines()
+    assert lines == ['✗ C1/slice_xVor/front/slice_xVor_{}.png  1 of 6 missing · 50..300 every 50 (inferred)',
+                     '✓ C1/slice_xVor/top/slice_xVor_{}.png  all 6 present · 50..300 every 50 (inferred)']
+
+
+def test_dir_with_a_pattern(rt, case):
+    text = rt.run_captured("missing C1 'slice_xVor_{}.png' --dir slice_xVor,slice_zVor_yplane --freq 50")
+    assert text.split() == ['C1/slice_xVor/front/slice_xVor_150.png']
+    assert 'no' in rt.err_console.file.getvalue() and 'slice_zVor_yplane/' in rt.err_console.file.getvalue()
+
+
+def test_dir_without_a_case_is_here(rt, case):
+    rt.execute_line("cd C1")
+    assert rt.run_captured("missing --dir slice_zVor_yplane --freq 50").split() == [
+        'slice_zVor_yplane/view/slice_zVor_yplane_100.png',
+        'slice_zVor_yplane/view/slice_zVor_yplane_200.png']
+
+
+@pytest.mark.parametrize('line, message, code', [
+    ("missing C1 --dir nope", 'no nope/ in', 1),
+    ("missing C1 --dir", '--dir needs a value', 2),
+    ("missing C1 'a/b_{}.png' --dir slice_xVor", 'the pattern is a file name', 2),
+    ("missing C1 C2 --dir slice_xVor", 'usage: missing', 2),
+    ("missing nowhere --dir slice_xVor", 'not a directory', 1),
+])
+def test_dir_errors(rt, case, line, message, code):
+    assert rt.execute_line(line) == code
+    assert message in rt.err_console.file.getvalue()
