@@ -10,6 +10,8 @@
   word, else `use case:`, else the current directory; a pattern may follow
   it to check one series only. Names print relative to here, so a pipe
   gets paths that work.
+- With `use case:*` (or `missing '*' --dir ...`) it goes over every case
+  in `.cases` here: a block per case, then how many have something missing.
 
 ### 📝 `case upload|download` carry `.casestatus.md`
 
