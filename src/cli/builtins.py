@@ -79,7 +79,8 @@ def builtins():
                         "  [cyan]-q[/cyan]        Only the summary line\n"
                         "  [cyan]--dir A,B[/cyan] Directories of the case to check, each with the\n"
                         "            directories one level in it (field render's camera views).\n"
-                        "            The first word is then the case, by default `use case:`\n"
+                        "            The first word is then the case, by default `use case:`;\n"
+                        "            '*' (or use case:*) is every case in .cases here\n"
                         "[dim]Expects t1, t1+freq, ... up to t2; zero padding follows the files.\n"
                         "With no pattern, names that differ only in a number form a series\n"
                         "(riser.{}_0.out, riser.{}_1.out, ... one per subgrid), and each is\n"
@@ -93,7 +94,8 @@ def builtins():
                         "  missing post | wc -l\n"
                         "  use case:CS4SG3U6P0\n"
                         "  missing --dir slice_xVor,slice_zVor_yplane   # each view of both\n"
-                        "  missing CS4SG3U1P0 --dir slice_xVor --freq 50[/dim]",
+                        "  missing CS4SG3U1P0 --dir slice_xVor --freq 50\n"
+                        "  use case:*; missing --dir slice_xVor -q      # every case, a line per view[/dim]",
                 complete='path', category='Files'),
         Builtin('mkdir', _mkdir, help='Make directories', usage='mkdir [-p] <dir> [dirs...]',
                 details="  [cyan]-p[/cyan]  Make parents as needed; no error if it exists",
@@ -393,7 +395,8 @@ def _missing_in_case(rt, rest, numbers, flags, dirs):
     """`missing [case] [pattern] --dir A,B`: the series under each of the
     case's directories A, B -- in it and in each subdirectory one level down,
     which is where `field render` files each camera view. The case is the
-    `use case:` context when not given, else the current directory."""
+    `use case:` context when not given, else the current directory; '*' is
+    every case in the .cases registry here."""
     pattern = rest.pop() if rest and '{}' in rest[-1] else None
     if len(rest) > 1:
         rt.error(_MISSING_USAGE)
@@ -403,12 +406,52 @@ def _missing_in_case(rt, rest, numbers, flags, dirs):
         return 2
     case = rest[0] if rest else rt.get('case')
     if case == '*':
-        rt.error("missing: --dir checks one case, and `use case:` is '*'; give the case")
-        return 2
+        return _missing_in_all_cases(rt, pattern, numbers, flags, dirs)
     case_dir = rt.resolve_path(case) if case else rt.cwd
     if not case_dir.is_dir():
         rt.error(f"missing: not a directory: {escape(str(case_dir))}")
         return 1
+    return _missing_dirs(rt, case_dir, pattern, numbers, flags, dirs)
+
+
+def _missing_in_all_cases(rt, pattern, numbers, flags, dirs):
+    """--dir over every case in .cases, one block per case, then a count."""
+    from src.commands.case_iteration import load_cases_from_directory
+    cases = load_cases_from_directory(rt.cwd)
+    if not cases:
+        rt.error(f"missing: case is '*' but there is no .cases in {escape(str(rt.cwd))} "
+                 f"(case add builds it)")
+        return 2
+    status, bad = 0, []
+    for i, entry in enumerate(cases):
+        case_dir = Path(entry['path'])
+        name = entry.get('name') or case_dir.name
+        if not rt.capturing and 'q' not in flags:
+            if i:
+                rt.console.print()
+            rt.console.print(f"[bold cyan]{escape(name)}[/bold cyan]", highlight=False)
+        if not case_dir.is_dir():
+            rt.warn(f"missing: {escape(name)}: not a directory: {escape(str(case_dir))}")
+            code = 1
+        else:
+            code = _missing_dirs(rt, case_dir, pattern, numbers, flags, dirs)
+        status = max(status, code)
+        if code:
+            bad.append(name)
+    if not rt.capturing or 'q' in flags:
+        text = (f"{len(bad)} of {len(cases)} cases with something missing: {', '.join(bad)}"
+                if bad else f"all {len(cases)} cases complete")
+        if rt.capturing:
+            rt.out(("✗ " if bad else "✓ ") + text)
+        else:
+            rt.console.print()
+            rt.console.print(("[red]✗[/red] " if bad else "[green]✓[/green] ") + escape(text),
+                             highlight=False)
+    return status
+
+
+def _missing_dirs(rt, case_dir, pattern, numbers, flags, dirs):
+    """The series under each of case_dir's directories `dirs` (and one level in)."""
 
     def shown(folder):
         try:

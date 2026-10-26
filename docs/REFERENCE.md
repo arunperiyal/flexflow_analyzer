@@ -34,7 +34,7 @@ ff                    # Start interactive shell
 | `grep -l <pattern>` | Show only filenames | `grep -l error logs/` |
 | `find [-f\|-d\|-c] [pattern] [path]` | Find files/directories by name (`-c`: cases only) | `find *.othd`, `find -c CS4` |
 | `missing [dir] [pattern] [--t1 N] [--t2 N] [--freq N] [--empty] [--extra] [-q]` | Missing files in a numbered series; `{}` is the number. With no pattern, checks every numbered series in dir (default: here). Range and freq default to the files found | `missing post` · `missing post 'slice_xVor_{}.png' --freq 50` |
-| `missing [case] [pattern] --dir A,B [flags]` | The same over the case's directories A, B and the directories one level in them (`field render`'s camera views); the case defaults to `use case:` | `missing --dir slice_xVor,slice_zVor_yplane` |
+| `missing [case] [pattern] --dir A,B [flags]` | The same over the case's directories A, B and the directories one level in them (`field render`'s camera views); the case defaults to `use case:`; `*` is every case in `.cases` | `missing --dir slice_xVor,slice_zVor_yplane` |
 | `mkdir [-p] <dir>` | Make directories | `mkdir -p post/plots` |
 | `mv [-f] <src...> <dest>` | Move or rename (asks before replacing) | `mv *.png plots` |
 | `touch <file>` | Create a file or update its time | `touch notes.txt` |

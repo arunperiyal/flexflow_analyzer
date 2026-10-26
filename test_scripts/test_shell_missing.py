@@ -183,3 +183,36 @@ def test_dir_without_a_case_is_here(rt, case):
 def test_dir_errors(rt, case, line, message, code):
     assert rt.execute_line(line) == code
     assert message in rt.err_console.file.getvalue()
+
+
+@pytest.fixture
+def registry(case, tmp_path):
+    """.cases in work/ listing C1 (above), C2 (complete) and C3 (gone)."""
+    import json
+    c2 = tmp_path / 'work' / 'C2' / 'slice_xVor' / 'front'
+    c2.mkdir(parents=True)
+    for t in range(50, 301, 50):
+        (c2 / f'slice_xVor_{t}.png').write_text('x')
+    (tmp_path / 'work' / '.cases').write_text(json.dumps(
+        [{'name': n, 'path': str(tmp_path / 'work' / n)} for n in ('C1', 'C2', 'C3')]))
+    return tmp_path / 'work'
+
+
+def test_dir_over_every_registered_case(rt, registry):
+    assert rt.execute_line("use case:*") == 0
+    assert rt.execute_line("missing --dir slice_xVor --freq 50") == 1
+    text = rt.console.file.getvalue()
+    assert [l for l in text.splitlines() if l in ('C1', 'C2', 'C3')] == ['C1', 'C2', 'C3']
+    assert '✗ 2 of 3 cases with something missing: C1, C3' in text
+    assert 'C3: not a directory' in rt.err_console.file.getvalue()
+    # in a pipe: just the names, from every case
+    assert rt.run_captured("missing --dir slice_xVor --freq 50").split() == [
+        'C1/slice_xVor/front/slice_xVor_150.png']
+    lines = rt.run_captured("missing '*' --dir slice_xVor --freq 50 -q").splitlines()
+    assert lines[-1] == '✗ 2 of 3 cases with something missing: C1, C3'
+    assert '✓ C2/slice_xVor/front/slice_xVor_{}.png  all 6 present · 50..300 every 50' in lines
+
+
+def test_dir_star_without_a_registry(rt, case):
+    assert rt.execute_line("missing '*' --dir slice_xVor") == 2
+    assert 'no .cases' in rt.err_console.file.getvalue()
