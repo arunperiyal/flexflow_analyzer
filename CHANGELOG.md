@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### 🖼 `field render`: clearer output
+
+- A header first: the case, the steps (`3 steps, 100–300 every 100`), the
+  surface (`QCriterion = auto`, or the slice normal), the colour and its
+  range, the views and the output directory (relative when it can be).
+- One line per step: converted (and how long) or cached, the surface's
+  points, the isovalue when it is automatic, the images written, the time.
+  On a terminal the line shows `…` while the step runs.
+- A warning is said once, not once per step; the number that changes per
+  step (the automatic isovalue) is on the step line instead.
+- Under `-j` each step's messages are printed with its line, not mixed
+  with another step's; `-v` adds them indented under it.
+- The tally: `✓ 12 images over 3 steps in 6.1 s  →  render_iso/ {iso,xy,xz,yz}`.
+- Ranges print as numbers (`[-323, 907.1]`), not `np.float32(...)`.
+
 ### 🧾 `case upload/download` carry `.restarts`
 
 - Whatever is transferred, `.restarts` goes too, after `.casestatus.md`:
