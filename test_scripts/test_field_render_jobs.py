@@ -54,7 +54,7 @@ def test_jobs_first_step_alone_then_the_rest_on_its_scale(fake, tmp_path, capsys
     assert fake["serial"] == [(100, None)]
     rest, scale, jobs = fake["parallel"]
     assert rest == [200, 300, 400, 500] and scale == [-1.0, 1.0] and jobs == 3
-    assert "5 images over 5 timesteps" in capsys.readouterr().out
+    assert "5 images over 5 steps" in capsys.readouterr().out
 
 
 def test_jobs_capped_by_the_steps(fake, tmp_path, capsys):
@@ -71,5 +71,34 @@ def test_worker_turns_exit_and_errors_into_a_result(monkeypatch, tmp_path):
     monkeypatch.setattr(render_cmd, "_follow_body_for_step", lambda cfg, *a: cfg["domain"])
     cfg = render.default_config("slice")
     job = (200, args(tmp_path), cfg, "slice", tmp_path, "riser", tmp_path, "out", None, False)
-    step, outs, error = render_cmd._step_worker(job)
+    step, outs, error, steplog, seconds = render_cmd._step_worker(job)
     assert (step, outs, error) == (200, [], "see the error above")
+    # the worker's messages come back to be printed with its line
+    assert ("error", "rendering failed (timestep 200): no surface") in steplog.lines
+
+
+def test_progress_says_a_warning_once_and_the_step_line(capsys):
+    p = render_cmd._Progress(3, "iso", None, verbose=False)
+    for n, (step, v) in enumerate([(100, 341.1), (200, 281.8)], 1):
+        log = render_cmd._StepLog()
+        log.warning(f"isosurface at its 99% percentile, {v}")
+        log.notes.update(converted=4.2, points=6892, isovalues=[v])
+        p.done(n, step, log, ["a.png", "b.png"], 5.0)
+    out = capsys.readouterr().out
+    assert out.count("percentile") == 1
+    assert "converted 4.2 s" in out and "6,892 points" in out and "iso 281.8" in out
+    assert "2 images" in out
+
+
+def test_progress_header_covers_a_warning(capsys):
+    p = render_cmd._Progress(2, "iso", None, verbose=False)
+    p.covered.append("no isosurface value given")
+    p.warn("no isosurface value given: contouring at 341")
+    assert capsys.readouterr().out == ""
+
+
+def test_steps_text():
+    assert render_cmd._steps_text([None]) == "latest step"
+    assert render_cmd._steps_text([500]) == "step 500"
+    assert render_cmd._steps_text([100, 200, 300]) == "3 steps, 100–300 every 100"
+    assert render_cmd._steps_text([100, 200, 400]) == "3 steps, 100–400"

@@ -406,7 +406,7 @@ def _prepare(cfg, mode, log=print):
         _write_back(mesh, vtu, log)
 
     color = cfg["color"]["variable"]
-    log("colour  '%s' range: %s" % (color, mesh.get_data_range(color)))
+    log("colour  '%s' range: [%.4g, %.4g]" % ((color,) + tuple(mesh.get_data_range(color))))
     mesh = _apply_domain_clip(mesh, cfg["domain"])
     return _apply_threshold(mesh, cfg["threshold"])
 
@@ -471,7 +471,7 @@ def _default_isovalue(mesh, cvar, log=print, warn=None):
 def _iso_surface(mesh, cfg, log=print, warn=None):
     """The isosurface(s) of contour.variable at contour.isosurfaces."""
     cvar = cfg["contour"]["variable"]
-    log("contour '%s' range: %s" % (cvar, mesh.get_data_range(cvar)))
+    log("contour '%s' range: [%.4g, %.4g]" % ((cvar,) + tuple(mesh.get_data_range(cvar))))
     values = cfg["contour"].get("isosurfaces")
     if values is None or (hasattr(values, "__len__") and len(values) == 0):
         values = [_default_isovalue(mesh, cvar, log, warn)]
@@ -1146,6 +1146,10 @@ def _render(cfg, mode, log=print, warn=None, state=None):
     outputs = render_surface(merged, surf, log, warn, state)
     if state is not None:
         state["color_range"] = merged["color"].get("range")
+        # What the step made, for the caller's one line about it
+        state["points"] = 0 if surf is None else surf.n_points
+        if mode == "iso":
+            state["isovalues"] = [float(v) for v in merged["contour"].get("isosurfaces") or []]
     return outputs
 
 

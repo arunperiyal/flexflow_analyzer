@@ -12,9 +12,12 @@ why they are one subcommand with a mode rather than two subcommands.
 
 import copy
 import os
+import re
 import sys
+import time
 from pathlib import Path
 
+from ....utils.colors import Colors
 from ....utils.logger import Logger
 from ....plt import render
 from ....plt.convert import to_vtu
@@ -240,18 +243,6 @@ def _resolve_steps(args, cfg, mode, logger):
         logger.error(f"No PLT files in the range given "
                      f"({args.t1} .. {args.t2}) under {binary_dir}")
         sys.exit(1)
-    # The *effective* range, not the flag: a config file's color.range fixes the
-    # scale just as well as --color-range, and warning about a range that is
-    # already set trains people to ignore the warning.
-    if how == "range" and len(steps) > 1 and cfg["color"].get("range") is None:
-        # The scale is taken from the first step and held for the rest, so the
-        # frames are comparable -- but the first step is not necessarily the
-        # strongest, and anything past its range clips.
-        logger.warning(f"{len(steps)} timesteps on an automatic colour scale: "
-                       f"it is taken from the first step and held for the rest, "
-                       f"so later steps with stronger structures clip at the "
-                       f"ends. Give --color-range MIN MAX (or color.range in a "
-                       f"--config file) to set it yourself.")
     return steps, binary_dir, problem
 
 
@@ -332,11 +323,13 @@ def _convert_zone(plt_path, zone_name, args, logger):
     if sidecar.exists() and sidecar.stat().st_mtime >= plt_path.stat().st_mtime:
         if _vtu_complete(sidecar):
             logger.info(f"using cached {sidecar.name}")
+            _note(logger, "cached", sidecar.name)
             return str(sidecar)
         logger.warning(f"{sidecar.name} is truncated -- an interrupted "
                        f"conversion. Rebuilding it.")
 
     logger.info(f"converting {plt_path.name} -> {sidecar.name}")
+    started = time.time()
     # Convert to a temporary name and rename into place, so a run killed
     # mid-conversion leaves no sidecar rather than half of one. A half-written
     # .vtu is newer than its .plt, so the cache check above would have trusted
@@ -357,7 +350,124 @@ def _convert_zone(plt_path, zone_name, args, logger):
         raise
     if info.get("truncated"):
         logger.warning(f"connectivity incomplete: {info['nhex_valid']:,}/{info['nelem']:,} cells")
+    _note(logger, "converted", time.time() - started)
     return str(sidecar)
+
+
+def _note(logger, key, value):
+    """Something about this step for its line (a _StepLog keeps it; the
+    plain Logger of --pick-camera has nowhere to put it)."""
+    notes = getattr(logger, "notes", None)
+    if notes is not None and key not in notes:
+        notes[key] = value
+
+
+class _StepLog:
+    """One step's messages, kept to be printed with its line: in order, and not
+    mixed into another step's under -j (a worker hands it back to the parent).
+    Plain attributes only, so it pickles."""
+
+    def __init__(self, verbose=False):
+        self.verbose = verbose
+        self.lines = []                  # (level, message)
+        self.notes = {}
+
+    def info(self, message):
+        self.lines.append(("info", str(message)))
+
+    def warning(self, message):
+        self.lines.append(("warn", str(message)))
+
+    def error(self, message):
+        self.lines.append(("error", str(message)))
+
+    def success(self, message):
+        pass
+
+
+_NUMBER = re.compile(r"[-+]?\d[\d.,]*(?:e[-+]?\d+)?")
+
+
+def _shown(path):
+    """A path as it is shown: relative to here when it is below here."""
+    rel = os.path.relpath(path)
+    return str(path) if rel.startswith("..") else rel
+
+
+def _fmt_seconds(s):
+    return f"{s:.1f} s" if s < 60 else f"{int(s // 60)} min {int(s % 60):02d} s"
+
+
+class _Progress:
+    """The step lines of a run and its warnings, each kind said once: the
+    same sentence with another number in it every step is noise (the number
+    that changes goes on the step line instead)."""
+
+    def __init__(self, total, mode, ext, verbose):
+        self.total, self.mode, self.ext, self.verbose = total, mode, ext, verbose
+        self.said = set()
+        self.covered = []                # warnings the header already gave
+        self.started = time.time()
+        self.failed = []
+
+    def warn(self, message):
+        key = _NUMBER.sub("#", message)
+        if key in self.said or message.startswith(tuple(self.covered)):
+            return
+        self.said.add(key)
+        print(f"  {Colors.YELLOW}⚠{Colors.RESET}  {message}", flush=True)
+
+    def start(self, n, step):
+        """The start of a step's line, finished by done(): a serial step can
+        take minutes, so say which one is under way."""
+        if sys.stdout.isatty() and not self.verbose:
+            print(self._head(n, step) + f"  {Colors.DIM}…{Colors.RESET}", end="", flush=True)
+            return True
+        return False
+
+    def _head(self, n, step):
+        width = len(str(self.total))
+        what = f"step {step}" if step is not None else "input"
+        return f"  {Colors.DIM}[{n:>{width}}/{self.total}]{Colors.RESET} {what}"
+
+    def done(self, n, step, steplog, outs, seconds, error=None, started=False):
+        notes = steplog.notes
+        parts = []
+        if "converted" in notes:
+            parts.append(f"converted {notes['converted']:.1f} s")
+        elif "cached" in notes:
+            parts.append(f"{Colors.DIM}cached{Colors.RESET}")
+        if error:
+            parts.append(f"{Colors.RED}failed{Colors.RESET}")
+        else:
+            points = notes.get("points")
+            if points == 0:
+                parts.append(f"{Colors.YELLOW}empty {self.mode}{Colors.RESET}")
+            elif points is not None:
+                parts.append(f"{points:,} points")
+            iso = notes.get("isovalues")
+            if iso:
+                parts.append("iso " + ", ".join(f"{v:.4g}" for v in iso))
+            noun = {".html": "page"}.get(self.ext, "file" if self.ext in GEOMETRY_EXT else "image")
+            parts.append(f"{len(outs)} {noun}{'' if len(outs) == 1 else 's'}")
+        parts.append(f"{Colors.DIM}{_fmt_seconds(seconds)}{Colors.RESET}")
+        line = "  ·  ".join(parts)
+        if started:
+            print(f"\r\033[K", end="")
+        print(f"{self._head(n, step)}  {line}", flush=True)
+        for level, message in steplog.lines:
+            if level == "warn":
+                self.warn(message)
+            elif level == "error":
+                print(f"      {Colors.RED}{message}{Colors.RESET}", file=sys.stderr, flush=True)
+            elif self.verbose:
+                message = message.replace(os.getcwd() + os.sep, "")
+                print(f"      {Colors.DIM}{message}{Colors.RESET}", flush=True)
+        if error:
+            self.failed.append(step)
+            if error != "see the error above":
+                print(f"      {Colors.RED}{error}{Colors.RESET}", file=sys.stderr, flush=True)
+
 
 
 def _vtu_complete(path):
@@ -595,7 +705,8 @@ def _render_all_cases(args, mode, logger):
     for i, entry in enumerate(cases, 1):
         name = entry.get("name", "?")
         path = Path(entry.get("path", ""))
-        print(f"\n{'=' * 70}\n  [{i}/{len(cases)}] {name}\n{'=' * 70}", flush=True)
+        print(f"\n{Colors.BOLD}[{i}/{len(cases)}]{Colors.RESET} {Colors.CYAN}{name}{Colors.RESET}"
+              f"  {Colors.DIM}{'─' * max(0, 60 - len(name))}{Colors.RESET}", flush=True)
         if not path.exists():
             logger.warning(f"case directory not found: {path} -- skipping")
             skipped.append((name, "no such directory"))
@@ -612,10 +723,10 @@ def _render_all_cases(args, mode, logger):
 
     # print, not logger.success: the tally of a twenty-case run is the one line
     # that must not need --verbose to appear.
-    print(f"\n{'=' * 70}")
-    scale = (f" on one colour scale {shared['color_range']}"
-             if shared.get("color_range") else "")
-    print(f"rendered {len(done)}/{len(cases)} case"
+    scale = (f" on one colour scale [{shared['color_range'][0]:.4g}, "
+             f"{shared['color_range'][1]:.4g}]" if shared.get("color_range") else "")
+    mark = f"{Colors.GREEN}✓{Colors.RESET}" if not skipped else f"{Colors.YELLOW}⚠{Colors.RESET}"
+    print(f"\n{mark} rendered {len(done)}/{len(cases)} case"
           f"{'' if len(cases) == 1 else 's'}{scale}")
     for name, why in skipped:
         logger.warning(f"  skipped {name}: {why}")
@@ -661,10 +772,9 @@ def _render_step(args, cfg, mode, step, binary_dir, problem, out_dir, stem, ext,
         logger.error(f"rendering failed{where}: {e}")
         sys.exit(1)
 
-    if not outs:
-        logger.warning(f"nothing written for "
-                       f"{'timestep ' + str(step) if step is not None else 'this input'}"
-                       f" (empty {mode}?)")
+    _note(logger, "points", state.get("points"))
+    if state.get("isovalues") and cfg["contour"].get("isosurfaces") is None:
+        _note(logger, "isovalues", state["isovalues"])    # automatic: it changes per step
     return outs
 
 
@@ -676,8 +786,9 @@ def _hold_colour_scale(cfg, state, step, total, shared, logger):
     if cfg["color"].get("range") is None and state.get("color_range"):
         cfg["color"]["range"] = list(state["color_range"])
         if total > 1:
+            lo, hi = cfg["color"]["range"]
             logger.info(f"holding the colour scale from timestep {step}: "
-                        f"{cfg['color']['range']}")
+                        f"[{lo:.4g}, {hi:.4g}]")
         if shared is not None:
             shared.setdefault("color_range", list(state["color_range"]))
 
@@ -687,22 +798,24 @@ def _step_worker(job):
     sys.exit in the helpers (after they have said why) is an error here, not
     the end of the run: the other steps carry on."""
     (step, args, cfg, mode, binary_dir, problem, out_dir, stem, ext, verbose) = job
-    logger = Logger(verbose=verbose)
+    logger = _StepLog(verbose)
+    started = time.time()
     try:
-        return step, _render_step(args, cfg, mode, step, binary_dir, problem,
-                                  out_dir, stem, ext, {"range_checked": True}, logger), None
+        outs, error = _render_step(args, cfg, mode, step, binary_dir, problem, out_dir,
+                                   stem, ext, {"range_checked": True}, logger), None
     except SystemExit:
-        return step, [], "see the error above"
+        outs, error = [], "see the error above"
     except Exception as e:
-        return step, [], str(e)
+        outs, error = [], str(e)
+    return step, outs, error, logger, time.time() - started
 
 
 def _render_parallel(args, cfg, mode, steps, binary_dir, problem, out_dir, stem,
-                     ext, jobs, logger):
+                     ext, jobs, progress):
     """The steps over `jobs` processes, each converting and rendering its own
     PLT. Spawned, not forked: a forked VTK/OpenGL context is not one to share.
     Each holds a whole .vtu in memory, so jobs is bounded by memory as much as
-    by cores."""
+    by cores. A step's line is printed as it finishes."""
     import multiprocessing as mp
     from concurrent.futures import ProcessPoolExecutor, as_completed
 
@@ -711,35 +824,64 @@ def _render_parallel(args, cfg, mode, steps, binary_dir, problem, out_dir, stem,
     from types import SimpleNamespace
     lean = SimpleNamespace(vtu=getattr(args, "vtu", None), zone=getattr(args, "zone", None),
                            nen=getattr(args, "nen", None))
-    verbose = getattr(args, "verbose", False)
     jobs = min(jobs, len(steps))
-    print(f"  rendering {len(steps)} more timestep{'' if len(steps) == 1 else 's'} "
-          f"in {jobs} processes", flush=True)
-    written, failed = [], []
-    first = 2                           # the first step was [1/total]
-    total = len(steps) + 1
+    print(f"  {Colors.DIM}the other {len(steps)} in {jobs} processes, "
+          f"in the order they finish{Colors.RESET}", flush=True)
+    written = []
     pool = ProcessPoolExecutor(max_workers=jobs, mp_context=mp.get_context("spawn"))
     try:
         futures = [pool.submit(_step_worker, (step, lean, cfg, mode, binary_dir, problem,
-                                              out_dir, stem, ext, verbose))
+                                              out_dir, stem, ext, progress.verbose))
                    for step in steps]
-        for n, fut in enumerate(as_completed(futures), first):
-            step, outs, error = fut.result()
-            if error:
-                failed.append(step)
-                print(f"  [{n}/{total}] timestep {step} failed: {error}", flush=True)
-            else:
-                print(f"  [{n}/{total}] timestep {step}", flush=True)
+        for n, fut in enumerate(as_completed(futures), progress.total - len(steps) + 1):
+            step, outs, error, steplog, seconds = fut.result()
+            progress.done(n, step, steplog, outs, seconds, error)
             written += outs
     except BaseException:
         # Ctrl-C: drop what has not started rather than rendering it anyway
         pool.shutdown(wait=False, cancel_futures=True)
         raise
     pool.shutdown()
-    if failed:
-        logger.warning(f"{len(failed)} timestep{'' if len(failed) == 1 else 's'} failed: "
-                       f"{', '.join(str(s) for s in sorted(failed))}")
     return written
+
+
+def _steps_text(steps):
+    if steps == [None]:
+        return "latest step"
+    if len(steps) == 1:
+        return f"step {steps[0]}"
+    gaps = {b - a for a, b in zip(steps, steps[1:])}
+    every = f" every {gaps.pop()}" if len(gaps) == 1 else ""
+    return f"{len(steps)} steps, {steps[0]}–{steps[-1]}{every}"
+
+
+def _print_header(args, cfg, mode, steps, out_dir, jobs):
+    """What this run is: the case, the steps, the surface and the colour, the
+    views, and where the pictures go -- before the first step's minutes."""
+    source = Path(args.case).resolve().name if getattr(args, "case", None) \
+        else Path(args.vtu or cfg["input"].get("vtu") or "?").name
+    if mode == "iso":
+        values = cfg["contour"].get("isosurfaces")
+        surface = (f"{cfg['contour']['variable']} = "
+                   + (", ".join(f"{v:g}" for v in values) if values else "auto"))
+    else:
+        sl = cfg["slice"]
+        normal = sl.get("normal")
+        normal = normal if isinstance(normal, str) else ",".join(f"{v:g}" for v in normal)
+        surface = f"normal {normal}" + (f", {sl['count']} planes" if (sl.get("count") or 1) > 1 else "")
+    rng = cfg["color"].get("range")
+    colour = cfg["color"]["variable"] + (f" [{rng[0]:g}, {rng[1]:g}]" if rng else "")
+    views = [v.get("name", "view") for v in cfg.get("views", [])]
+    print(f"{Colors.BOLD}field render {mode}{Colors.RESET}  {Colors.CYAN}{source}{Colors.RESET}"
+          f"  {Colors.DIM}·{Colors.RESET}  {_steps_text(steps)}"
+          + (f"  {Colors.DIM}·{Colors.RESET}  -j {jobs}" if jobs > 1 else ""))
+    rows = [(mode, surface), ("colour", colour)]
+    if views:
+        rows.append(("views", ", ".join(views)))
+    rows.append(("output", _shown(out_dir) + os.sep))
+    for label, value in rows:
+        print(f"  {Colors.DIM}{label:<7}{Colors.RESET}{value}")
+    print(flush=True)
 
 
 def _render_one_case(args, mode, logger, shared=None):
@@ -784,29 +926,58 @@ def _render_one_case(args, mode, logger, shared=None):
 
     total = len(steps)
     jobs = max(1, min(getattr(args, "jobs", None) or 1, total))
+    verbose = getattr(args, "verbose", False)
+    _print_header(args, cfg, mode, steps, out_dir, jobs)
+    progress = _Progress(total, mode, ext, verbose)
+    if total > 1 and cfg["color"].get("range") is None:
+        # The *effective* range, not the flag: a config file's color.range
+        # fixes the scale just as well as --color-range. The first step is
+        # not necessarily the strongest, and anything past its range clips.
+        progress.warn(f"automatic colour scale: taken from step {steps[0]} and held, so "
+                      f"stronger later steps clip. --color-range MIN MAX sets it.")
+    if mode == "iso" and cfg["contour"].get("isosurfaces") is None:
+        progress.warn(f"no isosurface value: {cfg['contour']['variable']} is contoured at "
+                      f"a percentile of each step's data (the value is on each line). "
+                      f"--values V fixes it.")
+        progress.covered.append("no isosurface value given")
+
     # Scratch shared by every step of the run: the colour scale the first one
     # settled on, and which one-off warnings have already been said.
     state = {}
     written = []
-    for i, step in enumerate(steps if jobs == 1 else steps[:1], 1):
-        if total > 1:
-            # A sweep converts and renders one PLT per step and can run for many
-            # minutes. Say where it is, or it looks hung and gets interrupted.
-            print(f"  [{i}/{total}] timestep {step}", flush=True)
-        written += _render_step(args, cfg, mode, step, binary_dir, problem,
-                                out_dir, stem, ext, state, logger)
-        _hold_colour_scale(cfg, state, step, total, shared, logger)
+    for n, step in enumerate(steps if jobs == 1 else steps[:1], 1):
+        steplog = _StepLog(verbose)
+        shown = progress.start(n, step)
+        started = time.time()
+        try:
+            outs = _render_step(args, cfg, mode, step, binary_dir, problem,
+                                out_dir, stem, ext, state, steplog)
+        except SystemExit:
+            # The step said why; the line and its messages still go out
+            progress.done(n, step, steplog, [], time.time() - started,
+                          "see the error above", shown)
+            raise
+        _hold_colour_scale(cfg, state, step, total, shared, steplog)
+        progress.done(n, step, steplog, outs, time.time() - started, None, shown)
+        written += outs
     if jobs > 1:
         # The first step ran above, alone: it fixes the colour scale (and
         # starts xvfb, whose DISPLAY the workers inherit), so every frame the
         # workers draw is on the same scale as if they had run in order.
         written += _render_parallel(args, cfg, mode, steps[1:], binary_dir, problem,
-                                    out_dir, stem, ext, jobs, logger)
+                                    out_dir, stem, ext, jobs, progress)
 
+    noun = {".html": "page"}.get(ext, "file" if ext in GEOMETRY_EXT else "image")
     if not written:
         logger.warning(f"nothing written (empty {mode}?)")
         sys.exit(1)
-    noun = {".html": "page"}.get(ext, "file" if ext in GEOMETRY_EXT else "image")
-    print(f"{len(written)} {noun}{'' if len(written) == 1 else 's'} "
-          f"over {len(steps)} timestep{'' if len(steps) == 1 else 's'} "
-          f"-> {out_dir}{os.sep}")
+    views = sorted({Path(f).parent.name for f in written
+                    if Path(f).parent != out_dir and Path(f).parent.parent == out_dir})
+    where = _shown(out_dir) + os.sep + (f" {{{','.join(views)}}}" if views else "")
+    ok = len(steps) - len(progress.failed)
+    print(f"{Colors.GREEN}✓{Colors.RESET} {len(written)} {noun}{'' if len(written) == 1 else 's'}"
+          f" over {ok} step{'' if ok == 1 else 's'}"
+          f" in {_fmt_seconds(time.time() - progress.started)}  →  {where}")
+    if progress.failed:
+        logger.warning(f"{len(progress.failed)} step{'' if len(progress.failed) == 1 else 's'} "
+                       f"failed: {', '.join(str(s) for s in sorted(progress.failed))}")
