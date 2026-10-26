@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### ┆ `plot` marks the restarts
+
+- Time plots draw a grey dashed line at each restart recorded in `.restarts`
+  (written by `case organise archive --compile/--prune`): at step `after`·dt,
+  where the resumed run took over. Only those inside the plotted window;
+  the y range is left as it was. The `--gnu` terminal plots show them too.
+- `--no-restarts` leaves them off (`restarts: false` in a YAML input).
+
 ### 📈 `plot`: t1/t2 are steps; `--start-step`/`--end-step` work
 
 - The t1/t2 context now fills `--start-step`/`--end-step` (steps, as in every
