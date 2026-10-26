@@ -26,6 +26,9 @@ Plot displacement or force data for a specific node.
                             {Colors.DIM}Pendulum:{Colors.RESET} displacement, velocity, acceleration, all
     {Colors.YELLOW}--start-time{Colors.RESET} T       Start time for plot
     {Colors.YELLOW}--end-time{Colors.RESET} T         End time for plot
+    {Colors.YELLOW}--start-step{Colors.RESET} N       Start timestep (time N*dt; default: the t1 context)
+    {Colors.YELLOW}--end-step{Colors.RESET} N         End timestep (default: the t2 context)
+                            {Colors.DIM}A --start-time/--end-time typed wins over the step.{Colors.RESET}
 
 {Colors.BOLD}STYLING OPTIONS:{Colors.RESET}
     {Colors.YELLOW}--plot-style{Colors.RESET} STR     Style: "<color>,<width>,<linestyle>,<marker>"

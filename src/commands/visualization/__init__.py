@@ -7,6 +7,14 @@ from ..base import BaseCommand
 from src.cli.context import case_arg, node_arg, othid_arg, time_window
 
 
+def _step(text):
+    """A step: '3000' or the context's '3000.0'."""
+    value = float(text)
+    if not value.is_integer():
+        raise ValueError(f"not a whole step: {text}")
+    return int(value)
+
+
 class PlotCommand(BaseCommand):
     """Plot displacement or force data"""
 
@@ -35,10 +43,12 @@ class PlotCommand(BaseCommand):
                           help='Plot type')
         parser.add_argument('--component', type=str, nargs='+',
                           help='Components to plot (x, y, z)')
-        time_window(parser, '--start-time', '--end-time',
-                    t1_kwargs=dict(help='Start time'), t2_kwargs=dict(help='End time'))
-        parser.add_argument('--start-step', type=int, help='Start timestep')
-        parser.add_argument('--end-step', type=int, help='End timestep')
+        parser.add_argument('--start-time', type=float, help='Start time')
+        parser.add_argument('--end-time', type=float, help='End time')
+        # t1/t2 are steps, as everywhere else: they fill --start-step/--end-step
+        time_window(parser, '--start-step', '--end-step',
+                    t1_kwargs=dict(type=_step, help='Start timestep'),
+                    t2_kwargs=dict(type=_step, help='End timestep'))
 
         # Styling options
         parser.add_argument('--plot-style', type=str, help='Plot style string')
