@@ -164,13 +164,16 @@ def time_window(parser, t1_flag='--t1', t2_flag='--t2', when=None,
     typed --t1 is never paired with an end the user did not ask for.
 
     Parameters:
-        t1_flag, t2_flag: The flags as this command spells them
-                          (plot takes --start-time/--end-time)
+        t1_flag, t2_flag: The flags as this command spells them, or a tuple
+                          of spellings, the first naming the dest (plot takes
+                          --start-step/--t1 and --end-step/--t2)
         when: namespace -> bool; the contexts apply only when it is true
               (case upload/download: only with binary or rst)
     """
-    t1_dest = t1_flag.lstrip('-').replace('-', '_')
-    t2_dest = t2_flag.lstrip('-').replace('-', '_')
+    t1_flags = (t1_flag,) if isinstance(t1_flag, str) else tuple(t1_flag)
+    t2_flags = (t2_flag,) if isinstance(t2_flag, str) else tuple(t2_flag)
+    t1_dest = t1_flags[0].lstrip('-').replace('-', '_')
+    t2_dest = t2_flags[0].lstrip('-').replace('-', '_')
 
     def end(key, other_dest):
         def resolve(store, ns):
@@ -183,11 +186,11 @@ def time_window(parser, t1_flag='--t1', t2_flag='--t2', when=None,
             return None
         return resolve
 
-    for key, flag, other, kw in (('t1', t1_flag, t2_dest, t1_kwargs),
-                                 ('t2', t2_flag, t1_dest, t2_kwargs)):
+    for key, flags, other, kw in (('t1', t1_flags, t2_dest, t1_kwargs),
+                                  ('t2', t2_flags, t1_dest, t2_kwargs)):
         kw = dict(kw or {})
         kw.setdefault('type', float)
-        context_flag(parser, key, flag, resolve=end(key, other), **kw)
+        context_flag(parser, key, *flags, resolve=end(key, other), **kw)
 
 
 def timestep_arg(parser, from_t1=False, **kwargs):
