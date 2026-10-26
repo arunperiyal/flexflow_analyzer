@@ -3,7 +3,8 @@
 #
 #   . ~/simulation_functions.sh      then   sf_help
 #
-#   show_plt       list the missing binary PLT files of a case
+#   show_plt       list the missing binary PLT files of a case (and, with
+#                  --since, the ones made before the last restart)
 #   show_archive   the othd/oisd parts of a case: steps, range, redundant ones
 #   clean_archive  delete othd/oisd parts by number (asks first)
 #   clean_plt      delete binary PLT files in a timestep window (asks first)
@@ -82,9 +83,12 @@ _sf_plt_dir() {
 # ---------------------------------------------------------------------------
 
 show_plt() {
-    local t1="" t2="" freq="" case_dir="." problem=""
+    local t1="" t2="" freq="" case_dir="." problem="" since="" restart=""
     while [ "$#" -gt 0 ]; do
         case "$1" in
+            --since)   _sf_val "$1" "$#" || return 2; since=$2; shift ;;
+            --restart) _sf_val "$1" "$#" || return 2; restart=$2; shift ;;
+            --since=*) since=${1#*=} ;; --restart=*) restart=${1#*=} ;;
             --t1)      _sf_val "$1" "$#" || return 2; t1=$2; shift ;;
             --t2)      _sf_val "$1" "$#" || return 2; t2=$2; shift ;;
             --freq)    _sf_val "$1" "$#" || return 2; freq=$2; shift ;;
@@ -94,9 +98,16 @@ show_plt() {
             --case=*) case_dir=${1#*=} ;; --problem=*) problem=${1#*=} ;;
             -h|--help)
                 echo "Usage: show_plt [--t1 N] [--t2 N] [--freq N] [--case DIR] [--problem NAME]"
+                echo "                [--since DATE] [--restart N]"
                 echo "  Lists the missing (and empty) binary PLT files for steps t1..t2, every freq."
                 echo "  Defaults: freq = outFreq from simflow.config (else 50), t1 = freq,"
                 echo "  t2 = the last PLT present."
+                echo "  --since DATE  when the resumed job started ('2026-10-20 14:00', or @EPOCH):"
+                echo "                a PLT past the restart step that reached the NAS before then"
+                echo "                is listed as stale -- it came from the run before the restart,"
+                echo "                whose steps past it were computed again. A file sent late"
+                echo "                can slip through; a new one is never called stale."
+                echo "  --restart N   the restart step (default: restartTsId in simflow.config)"
                 return 0 ;;
             *) _sf_err "show_plt: unknown option '$1' (show_plt -h)"; return 2 ;;
         esac
@@ -120,8 +131,23 @@ show_plt() {
     [ "$freq" -gt 0 ] || { _sf_err "--freq must be above 0"; return 2; }
     [ "$t1" -le "$t2" ] || { _sf_err "--t1 ($t1) is after --t2 ($t2)"; return 2; }
 
+    # The restart: restartTsId counts only while restartFlag is on, the way
+    # the resume writes them
+    if [ -z "$restart" ]; then
+        case "$(_sf_config "$cfg" restartFlag)" in ''|0) ;;
+            *) restart=$(_sf_config "$cfg" restartTsId) ;; esac
+    fi
+    [ -z "$restart" ] || _sf_int --restart "$restart" || return 2
+    local since_s=""
+    if [ -n "$since" ]; then
+        [ -n "$restart" ] || { _sf_err "--since: no restart in $cfg/simflow.config (restartFlag/restartTsId); give --restart N"; return 2; }
+        since_s=$(date -d "$since" +%s 2>/dev/null) \
+            || { _sf_err "--since: not a date: '$since' (e.g. '2026-10-20 14:00')"; return 2; }
+    fi
+
     echo "Checking $dir/$problem.<step>.plt, steps $t1..$t2 every $freq"
-    local t=$t1 expected=0 missing=0 empty=0 f
+    [ -z "$since_s" ] || echo "Stale: steps past $restart that arrived before $(date -d "@$since_s" '+%Y-%m-%d %H:%M')"
+    local t=$t1 expected=0 missing=0 empty=0 stale=0 f
     while [ "$t" -le "$t2" ]; do
         f="$dir/$problem.$t.plt"
         expected=$((expected + 1))
@@ -131,16 +157,31 @@ show_plt() {
         elif [ ! -s "$f" ]; then
             echo "empty    $f"
             empty=$((empty + 1))
+        elif [ -n "$since_s" ] && [ "$t" -gt "$restart" ] && [ "$(stat -c %Y "$f")" -lt "$since_s" ]; then
+            echo "stale    $f"
+            stale=$((stale + 1))
         fi
         t=$((t + freq))
     done
 
     echo "----------------------------------------"
-    if [ $((missing + empty)) -eq 0 ]; then
+    if [ $((missing + empty + stale)) -eq 0 ]; then
         echo "All $expected PLT files are present."
+        if [ -n "$since_s" ]; then
+            echo "None past the restart at $restart arrived before the resumed job started."
+        elif [ -n "$restart" ]; then
+            echo "Restarted at $restart: add --since DATE (when the resumed job started) to find"
+            echo "PLT files made before it."
+        fi
         return 0
     fi
-    echo "$missing missing, $empty empty, of $expected expected."
+    if [ -n "$since_s" ]; then
+        echo "$missing missing, $empty empty, $stale stale, of $expected expected."
+        [ "$stale" -eq 0 ] || echo "Stale files are from the run before the restart at $restart: make them again from the resumed run."
+    else
+        echo "$missing missing, $empty empty, of $expected expected."
+        [ -z "$restart" ] || echo "Restarted at $restart: add --since DATE to find PLT files made before it."
+    fi
     return 1
 }
 
@@ -627,6 +668,7 @@ sf_help() {
 FlexFlow case helpers (the case ones take --case DIR and --problem NAME; -h for details)
 
   show_plt      [--t1 N] [--t2 N] [--freq N]       missing/empty binary PLT files
+                [--since DATE]                     ... and stale ones from before a restart
   show_archive  [--type othd|oisd]                 othd/oisd parts, ranges, redundant ones
   clean_archive --n N1:N2 [--type othd|oisd]       delete parts (asks; --dry-run)
   clean_plt     --t1 N --t2 N [--freq N]           delete PLT files (asks; --dry-run)
@@ -634,6 +676,7 @@ FlexFlow case helpers (the case ones take --case DIR and --problem NAME; -h for 
 
 Examples
   show_plt --case CS4SG3U1P0 --t1 4000 --t2 4300 --freq 5
+  show_plt --case CS4SG3U1P0 --since '2026-10-20 14:00'
   show_archive --case CS4SG3U1P0
   clean_archive --case CS4SG3U1P0 --type othd --n 2:
   clean_plt --case CS4SG3U1P0 --t1 4005 --t2 4295 --freq 5 --dry-run

@@ -5,6 +5,7 @@ The clean functions must delete only after a yes, and need DELETE typed for
 data no other part has.
 """
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -125,6 +126,50 @@ def test_clean_plt_window_and_freq(case):
     r = ash('clean_plt --case C1 --t1 10', case.parent)
     assert r.returncode == 2 and 'needs --t1 and --t2' in r.stderr
 
+
+
+def _restarted(case, at=500):
+    """Resumed from `at`; every PLT arrived at time 1000 except 550 and 600,
+    sent again after the resumed job started at 2000."""
+    with open(case / 'simflow.config', 'a') as f:
+        f.write(f'restartFlag = 1\nrestartTsId = {at}\n')
+    for plt in (case / 'binary').glob('*.plt'):
+        os.utime(plt, (1000, 1000))
+    for t in (550, 600):
+        os.utime(case / 'binary' / f'riser.{t}.plt', (3000, 3000))
+
+
+def test_show_plt_stale_since_the_restart(case):
+    _restarted(case)
+    r = ash('show_plt --case C1 --since @2000', case.parent)
+    assert r.returncode == 1, r.stderr
+    stale = [l.split()[1] for l in r.stdout.splitlines() if l.startswith('stale')]
+    # past 500 and before 2000: all but 550 and 600; 650 is missing, 700 empty
+    assert stale == [f'C1/binary/riser.{t}.plt' for t in range(750, 1001, 50)]
+    assert '2 missing, 1 empty, 6 stale, of 20 expected.' in r.stdout
+    assert 'from the run before the restart at 500' in r.stdout
+
+
+def test_show_plt_stale_restart_flag_and_override(case):
+    _restarted(case)
+    r = ash('show_plt --case C1 --t1 400 --t2 600', case.parent)        # no --since
+    assert r.returncode == 0 and 'stale' not in r.stdout.replace('Restarted', '')
+    assert 'Restarted at 500: add --since DATE' in r.stdout
+    r = ash("show_plt --case C1 --t1 550 --t2 600 --since '@2000'", case.parent)
+    assert r.returncode == 0 and 'None past the restart at 500 arrived before' in r.stdout
+    r = ash('show_plt --case C1 --t1 400 --t2 600 --since @2000 --restart=350', case.parent)
+    assert [l.split()[1] for l in r.stdout.splitlines() if l.startswith('stale')] == \
+        ['C1/binary/riser.400.plt', 'C1/binary/riser.450.plt', 'C1/binary/riser.500.plt']
+
+
+@pytest.mark.parametrize('line, message', [
+    ("show_plt --case C1 --since @2000", 'no restart'),             # restartFlag off
+    ("show_plt --case C1 --since yesterday-ish --restart 5", 'not a date'),
+    ("show_plt --case C1 --restart x", 'needs a whole number'),
+])
+def test_show_plt_stale_errors(case, line, message):
+    r = ash(line, case.parent)
+    assert r.returncode == 2 and message in r.stderr
 
 @pytest.fixture
 def series(tmp_path):
