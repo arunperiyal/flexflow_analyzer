@@ -111,6 +111,19 @@ def test_update_opens_the_editor(case, monkeypatch):
     assert calls == [['myedit', '--wait', str(cs.path_for(case))]]
 
 
+def test_without_editor_set_vi_comes_first(case, monkeypatch):
+    calls = []
+    monkeypatch.delenv('VISUAL', raising=False)
+    monkeypatch.delenv('EDITOR', raising=False)
+    monkeypatch.setattr(status.shutil, 'which', lambda e: f'/usr/bin/{e}' if e != 'vi' else None)
+    monkeypatch.setattr(status.subprocess, 'call', lambda cmd: calls.append(cmd) or 0)
+    run(case, monkeypatch, what='update')
+    assert calls[0][0] == 'vim'                       # no vi: vim, before nano
+    monkeypatch.setattr(status.shutil, 'which', lambda e: f'/usr/bin/{e}')
+    run(case, monkeypatch, what='update')
+    assert calls[1][0] == 'vi'
+
+
 def test_missing_case_and_wildcard_update(case, monkeypatch, tmp_path):
     assert run(case, monkeypatch, case=str(tmp_path / 'nope'))[0] == 1
     assert run(case, monkeypatch, what='update', case='*')[0] == 2
