@@ -768,6 +768,8 @@ def submit_postprocessing_job(script_path, case_dir, args, console):
             job_id = output.split()[-1]
 
         if job_id:
+            from ..main_impl.command import _log_submit
+            _log_submit(case_dir, f"post job {job_id} submitted")
             console.print(f"[green]✓ Job submitted successfully[/green]")
             console.print()
             console.print(f"[bold]Job ID:[/bold] {job_id}")

@@ -43,6 +43,12 @@ def execute_case_check(args):
         print_check_help()
         return
 
+    if subcommand == 'data':
+        # the old `case status`: data file completeness
+        from .data import execute_check_data
+        execute_check_data(args)
+        return
+
     do_run     = subcommand in ('run', 'all')
     do_archive = subcommand in ('archive', 'all')
     do_config  = subcommand in ('config', 'all')

@@ -85,6 +85,9 @@ Pick one subcommand.
             or the last step found) and lists each one with neither file
             as missing
 
+    {Colors.CYAN}data{Colors.RESET}
+        The completeness of the case's data files (was `case status`).
+
     {Colors.CYAN}all{Colors.RESET}
         Run every check in order: config, def, run, archive, plt, out.
         Takes --freq (passed through to the plt check); not --t1/--t2 — use
@@ -120,6 +123,9 @@ Pick one subcommand.
     case check out CS4SG1U1
     case check out CS4SG1U1 --t1 0 --t2 1000
     case check out CS4SG1U1 --freq 1000          # flag missing restart steps
+
+    # Data file completeness (was `case status`)
+    case check data CS4SG1U1
 
     # Run everything
     case check all CS4SG1U1

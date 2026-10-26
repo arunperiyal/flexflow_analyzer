@@ -57,6 +57,22 @@ def _transfer_positionals(parser, direction):
     parser.add_argument('--binary', action='store_true', help=argparse.SUPPRESS)
 
 
+STATUS_STATES = ('new', 'meshing', 'running', 'stopped', 'done', 'failed', 'archived')
+
+
+def _status_words(rt, prefix):
+    from shellkit.completion import path_candidates
+    return [('update', "Edit the notes, or -m TEXT / --state STATE")] + path_candidates(rt, prefix)
+
+
+def _status_case(store, ns):
+    """The case context -- unless the first word was the case itself."""
+    what = getattr(ns, 'what', None)
+    if what is not None and what != 'update':
+        return None
+    return store.get('case') if store.is_set('case') else None
+
+
 class CaseCommand(BaseCommand):
     """Case operations (show, create, run)"""
 
@@ -305,6 +321,15 @@ class CaseCommand(BaseCommand):
         out_check_parser.add_argument('-h', '--help', action='store_true',
                                     help='Show help for out command')
 
+        # case check data (was `case status`)
+        data_check_parser = check_subparsers.add_parser('data', add_help=False,
+                                    help='Check case data file completeness (was: case status)')
+        case_arg(data_check_parser, help='Case directory path')
+        data_check_parser.add_argument('-v', '--verbose', action='store_true',
+                                    help='Enable verbose output')
+        data_check_parser.add_argument('-h', '--help', action='store_true',
+                                    help='Show help for data command')
+
         # case check all
         all_check_parser = check_subparsers.add_parser('all', add_help=False,
                                     help='Run every check (run + archive + config + plt + def + out)')
@@ -317,16 +342,21 @@ class CaseCommand(BaseCommand):
         all_check_parser.add_argument('-h', '--help', action='store_true',
                                     help='Show help for all command')
 
-        # case status
+        # case status [update] [case]
         status_parser = case_subparsers.add_parser('status', add_help=False,
-                                                   help='Check case data file completeness')
-        case_arg(status_parser, help='Case directory path')
-        status_parser.add_argument('-v', '--verbose', action='store_true',
-                                  help='Enable verbose output')
+                                                   help="The case's notes (.casestatus.md) and where it is")
+        status_parser.add_argument('what', nargs='?', metavar='update|case',
+                                   help="'update' to change the notes, else the case"
+                                   ).completer = _status_words
+        case_arg(status_parser, resolve=_status_case, help='Case directory path')
+        status_parser.add_argument('-m', '--message', metavar='TEXT',
+                                   help='update: add a timestamped line to the log')
+        status_parser.add_argument('--state', choices=STATUS_STATES,
+                                   help='update: set the state (logged too)')
+        status_parser.add_argument('--no-create', action='store_true',
+                                   help='Do not write .casestatus.md if it is not there')
         status_parser.add_argument('-h', '--help', action='store_true',
                                   help='Show help for status command')
-        status_parser.add_argument('--examples', action='store_true',
-                                  help='Show usage examples')
 
         # case add
         add_parser = case_subparsers.add_parser('add', add_help=False,
@@ -529,7 +559,9 @@ class CaseCommand(BaseCommand):
             execute_case_check(args)
         elif hasattr(args, 'case_subcommand') and args.case_subcommand == 'status':
             from .status_impl import execute_status
-            execute_status(args)
+            code = execute_status(args)
+            if code:
+                sys.exit(code)
         elif hasattr(args, 'case_subcommand') and args.case_subcommand == 'add':
             from .add_impl import execute_add
             execute_add(args)
@@ -578,7 +610,7 @@ class CaseCommand(BaseCommand):
         table.add_row("run", "Submit and monitor SLURM simulation jobs")
         table.add_row("organise", "Organize and clean up case directory")
         table.add_row("check", "Inspect OTHD/OISD ranges and validate config")
-        table.add_row("status", "Check case data file completeness")
+        table.add_row("status", "The case's notes (.casestatus.md) and where it is")
         table.add_row("out", "Inspect a case's declared outputs and write othd node maps")
         table.add_row("domain", "Declare the field and bodies the domain is made of")
         table.add_row("add", "Scan a directory and build the .cases registry")
@@ -604,6 +636,8 @@ class CaseCommand(BaseCommand):
         console.print("    flexflow case check out CS4SG1U1")
         console.print("    flexflow case check all CS4SG1U1")
         console.print("    flexflow case status CS4SG1U1")
+        console.print("    flexflow case status update CS4SG1U1 -m \"resubmitted with np 240\"")
+        console.print("    flexflow case check data CS4SG1U1")
         console.print("    flexflow case domain CS4SG1U1 --init")
         console.print("    flexflow case domain body --list")
         console.print("    flexflow case domain body --add --name cyl --type beam")
