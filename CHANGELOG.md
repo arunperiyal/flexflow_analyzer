@@ -9,7 +9,8 @@
   250 s run was cut from t=3000 and `--gnu` said "No data found".
 - `--start-step`/`--end-step` on the command line were ignored; they now
   become times n·dt (initialTimeIncrement). A typed time wins over a step.
-- `--gnu` works with plotext 4.x as well as 5.x.
+- `--gnu` works with plotext 4.x, 5.x and 6.x (6.x has no `plot()`: the
+  matplotlib figure goes through `plotext.matplotlib`).
 
 ### 🧾 `.restarts`: where each run took over, kept past compile and prune
 

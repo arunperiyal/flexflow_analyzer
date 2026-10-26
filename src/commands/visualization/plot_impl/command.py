@@ -60,6 +60,15 @@ def plot_in_terminal(fig, axes, logger):
         logger.info("Falling back to regular matplotlib display")
         return False
 
+    # plotext 6.x has no plot(): its figure object takes a matplotlib figure
+    convert = _pt('matplotlib')
+    if not _pt('plot') and convert and hasattr(plt_terminal, 'figure'):
+        if not any(len(line.get_xdata()) for ax in fig.axes for line in ax.get_lines()):
+            logger.warning("No data found to plot in terminal")
+            return False
+        convert(fig).show()
+        return True
+
     if not (_pt('plot') and _pt('show')):
         logger.error(f"plotext imported from {_plotext_where()} has no plot()/show(); "
                      "reinstall it with: pip install -U plotext")
