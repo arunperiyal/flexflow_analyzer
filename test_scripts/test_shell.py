@@ -227,7 +227,7 @@ def test_single_time_is_a_window(rt):
         'data table': ('t1', 't2'),
         'case organise archive': ('t1', 't2'),
         'case check plt': ('t1', 't2'),
-        'plot': ('start_time', 'end_time'),
+        'plot': ('start_step', 'end_step'),
     }.items():
         a = parsed(rt, line)
         assert (getattr(a, d1), getattr(a, d2)) == (7.0, 7.0), line
@@ -243,6 +243,14 @@ def test_range_ends_fill_independently(rt):
     use(rt, 't1:3')
     a = parsed(rt, 'data table --t2 9')
     assert (a.t1, a.t2) == (3.0, 9.0)
+
+
+def test_plot_t1_is_a_step(rt):
+    # t1/t2 are steps: in plot they fill --start-step/--end-step, not the times
+    use(rt, 't1:3000')
+    a = parsed(rt, 'plot')
+    assert (a.start_step, a.start_time, a.end_time) == (3000, None, None)
+    assert parsed(rt, 'plot --start-step 0').start_step == 0
 
 
 def test_case_check_freq(rt):

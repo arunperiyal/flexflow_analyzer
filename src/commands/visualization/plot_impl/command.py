@@ -378,6 +378,28 @@ def apply_plot_properties(fig, axes, args):
             axes[0].legend([legend_info['text']])
 
 
+def apply_step_window(args, case, logger):
+    """--start-step/--end-step (or the t1/t2 context) as --start-time/--end-time:
+    step n is at time n*dt. A time typed on the command line wins."""
+    steps = {'start_time': getattr(args, 'start_step', None),
+             'end_time': getattr(args, 'end_step', None)}
+    if all(v is None or getattr(args, k, None) is not None for k, v in steps.items()):
+        return
+    try:
+        dt = case.get_time_increment()
+    except Exception:
+        dt = None
+    if not dt:
+        logger.warning("No initialTimeIncrement in the .def: --start-step/--end-step ignored")
+        return
+    for key, step in steps.items():
+        if step is not None and getattr(args, key, None) is None:
+            setattr(args, key, step * dt)
+    show = lambda v: '…' if v is None else f"{v:g}"
+    logger.info(f"Steps {show(steps['start_time'])}–{show(steps['end_time'])}"
+                f" → time {show(args.start_time)}–{show(args.end_time)}")
+
+
 def execute_plot(args):
     """
     Execute the plot command
@@ -460,6 +482,8 @@ def execute_plot(args):
         if getattr(args, 'othid', None) is not None:
             case.load_othd_data(group=args.othid)
         
+        apply_step_window(args, case, logger)
+
         # Parse plot style
         plot_style = parse_plot_style(args.plot_style)
         

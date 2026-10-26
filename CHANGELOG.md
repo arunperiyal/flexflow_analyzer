@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### 📈 `plot`: t1/t2 are steps; `--start-step`/`--end-step` work
+
+- The t1/t2 context now fills `--start-step`/`--end-step` (steps, as in every
+  other command) instead of `--start-time`/`--end-time`: with `t1:3000` a
+  250 s run was cut from t=3000 and `--gnu` said "No data found".
+- `--start-step`/`--end-step` on the command line were ignored; they now
+  become times n·dt (initialTimeIncrement). A typed time wins over a step.
+- `--gnu` works with plotext 4.x as well as 5.x.
+
 ### 🧾 `.restarts`: where each run took over, kept past compile and prune
 
 - `case organise archive --compile` (and `--prune`, before it deletes the
