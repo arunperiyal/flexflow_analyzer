@@ -321,8 +321,8 @@ def test_completion_of_commands_and_subcommands(rt):
 def test_completion_of_flags(rt):
     got = texts(rt, 'case upload --')
     assert {'--to', '--t1', '--resume'} <= set(got) and '--binary' not in got
-    assert texts(rt, 'case upload ') == ['binary', 'rst', 'sgd']
-    assert texts(rt, 'case download ') == ['binary', 'rst', 'sgd']
+    assert texts(rt, 'case upload ') == ['binary', 'rst', 'input']
+    assert texts(rt, 'case download ') == ['binary', 'rst', 'input']
 
 
 def test_described_positionals(rt):

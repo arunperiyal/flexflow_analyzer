@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### 📦 `case upload/download input` replaces `sgd`
+
+- Every launch of mpiSimflow runs the preprocessor again (solStart.c): it
+  reads `<problem>.def` and the files it names, and rewrites the
+  `.sgd`/`.cas` from them. So a backed-up `.sgd` is overwritten and never
+  used; what a restart needs, besides the `.rst`, is the inputs unchanged.
+  `case upload|download sgd` is gone.
+- `case upload input` sends `<problem>.def` and every file it names with
+  `File(...)` (the mesh `.crd`/`.cnn`, the `.nbc`/`.srf` lists, ...; lines
+  commented out are skipped), at the same paths under the remote case.
+  `case download input` reads the remote `.def` and fetches the same.
+  If one of them is missing nothing is sent; a path outside the case is
+  refused. simflow.config is not included, so the other side's restart
+  settings are left alone (`--files` carries it).
+
 ### 🧹 `case organise vtu [--clean]`
 
 - Lists the .vtu caches `field render` keeps beside the PLTs in binary/
