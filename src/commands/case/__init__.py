@@ -10,27 +10,27 @@ from src.cli.completers import described, file_flags
 from src.cli.context import case_arg, context_flag, freq_arg, time_window
 
 
-# `case upload|download [binary|rst|sgd] [case]`: what to carry. Nothing named is
+# `case upload|download [binary|rst|input] [case]`: what to carry. Nothing named is
 # the directories (--dir) and files (--files) as before.
 TRANSFER_MODES = {
     'upload': [('binary', 'binary/: every timestep, or just --t1..--t2'),
                ('rst', 'Restart .rst files of every step (or --t1..--t2) in the run directory'),
-               ('sgd', 'Subgrid files <problem>.<k>.sgd (all nsg) in the run directory')],
+               ('input', 'The <problem>.def and every File(...) it names (mesh, .nbc, .srf ...)')],
     'download': [('binary', 'binary/: every timestep, or just --t1..--t2 (--freq)'),
                  ('rst', 'Restart .rst files of every step (or --t1..--t2) from the remote run directory'),
-                 ('sgd', 'Subgrid files <problem>.<k>.sgd (all nsg) from the remote run directory')],
+                 ('input', 'The remote <problem>.def and every File(...) it names')],
 }
 
 
 def _mode(args):
-    """binary/rst/sgd, or None when the first word is a case (or absent)."""
+    """binary/rst/input, or None when the first word is a case (or absent)."""
     what = getattr(args, 'what', None)
-    return what if what in ('binary', 'rst', 'sgd') else None
+    return what if what in ('binary', 'rst', 'input') else None
 
 
 def _stepped(args):
     """The t1/t2/time/freq contexts select timesteps, so they only apply to
-    binary/rst (.sgd files are per subgrid, not per step)."""
+    binary/rst (the input files are not per step)."""
     return _mode(args) in ('binary', 'rst')
 
 
