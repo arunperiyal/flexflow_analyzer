@@ -347,7 +347,7 @@ class HistoryMixin:
             scanned.append((n, path, header, blocks, dropped))
         if not scanned:
             return {'header': b'', 'merged': [], 'runs': {}, 'superseded': 0, 'restarts': [],
-                    'dropped': []}
+                    'dropped': [], 'swapped': []}
         if len({header for _, _, header, blocks, _ in scanned if blocks}) > 1:
             say(f"  [red]✗[/red]  {label} runs have different headers "
                 f"(different probe/surface sets) — cannot join them")
@@ -372,6 +372,16 @@ class HistoryMixin:
                                      'start': start})
                 merged.append((ts_id, n, path, start, end))
 
+        # A run wiped out by a later-numbered run that ends on the step just
+        # before it starts most likely ran after it: the two are numbered in
+        # the wrong order. Only noted -- the run number still decides.
+        kept = {m[1] for m in merged}
+        spans = [(n, path, blocks[0][0], blocks[-1][0]) for n, path, _, blocks, _ in scanned if blocks]
+        swapped = [(path, first, last, later_path, later_last)
+                   for k, (n, path, first, last) in enumerate(spans) if n not in kept
+                   for _, later_path, later_first, later_last in spans[k + 1:]
+                   if later_first <= first and later_last + 1 == first]
+
         header = next((header for _, _, header, blocks, _ in scanned if blocks), b'')
         return {
             'header': header,
@@ -380,6 +390,7 @@ class HistoryMixin:
             'superseded': superseded,
             'restarts': restarts,
             'dropped': [(path, d[0]) for _, path, _, _, d in scanned if d],
+            'swapped': swapped,
         }
 
     @staticmethod
@@ -464,6 +475,12 @@ class HistoryMixin:
             for path, ts in plan['dropped']:
                 self.console.print(f"  [yellow]⚠[/yellow]  {label}: {self._rel(path)}: last step "
                                    f"(tsId {ts}) cut off — left out")
+            for path, first, last, later, later_last in plan['swapped']:
+                self.console.print(
+                    f"  [yellow]⚠[/yellow]  {label}: {self._rel(path)} (tsId {first:,}–{last:,}) "
+                    f"starts right after {self._rel(later)} ends (tsId {later_last:,}) but is "
+                    f"numbered before it, so all of it counts as redone. If it ran after, "
+                    f"swap their numbers in archive/ and clean again.")
             if not dry_run and not written:
                 self._record_restarts(plan)   # the same in OTHD and OISD: one record
                 written = True

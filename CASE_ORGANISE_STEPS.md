@@ -59,6 +59,10 @@ favour of the later run. This also covers a restart appended inside one file.
 
 - A last step cut off by a killed job is left out (and reported)
 - A run with nothing left — every step redone later — has no cleaned file
+- A run that starts on the step right after a later-numbered run ends, and
+  is wiped by it, is warned about: the two are most likely numbered in the
+  wrong order. The number still decides; swap them in `archive/` and clean
+  again if the warning is right
 - Runs whose headers differ (`mask`/`nOths`, `nOsfs`: different probe or
   surface sets) cannot be joined: nothing is written
 - Any other problem in a file (a step with a different layout in the middle,

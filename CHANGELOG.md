@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### ⚠️ `case organise history --clean` warns about swapped run numbers
+
+A run that starts on the step right after a later-numbered run ends, and is
+wiped by it, is most likely numbered in the wrong order (seen in a case
+whose `riser6`/`riser7` were swapped: 800 steps dropped and the compiled file
+stopping short). `--clean` now says so; the run number still decides.
+
 ### 🔤 `case check history` replaces `case check archive`
 
 Renamed to match `case organise history`. It lists every OTHD/OISD history

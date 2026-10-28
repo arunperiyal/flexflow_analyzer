@@ -140,6 +140,26 @@ def test_clean_follows_the_run_number_not_the_first_tsid(tmp_path):
     assert values(cleaned / 'riser3.othd') == {t: 3.0 for t in range(4, 8)}
 
 
+def test_clean_warns_when_two_runs_look_swapped(tmp_path):
+    # run 3 carries on right after run 2 ends but is numbered first: it is
+    # still dropped (the number decides), with a warning to swap them
+    archive(tmp_path, {'riser1.othd': othd(range(1, 11), 1.0),
+                       'riser2.othd': othd(range(13, 21), 2.0),
+                       'riser3.othd': othd(range(8, 13), 3.0)})
+    _, out = run(tmp_path, clean=True)
+    assert names(tmp_path / 'othd_files' / 'cleaned') == ['riser1.othd', 'riser3.othd']
+    assert 'riser2.othd (tsId 13–20) starts right after' in out
+    assert 'swap their numbers' in out
+
+
+def test_clean_does_not_warn_about_an_ordinary_restart(tmp_path):
+    archive(tmp_path, {'riser1.othd': othd(range(1, 11), 1.0),
+                       'riser2.othd': othd(range(6, 15), 2.0),
+                       'riser3.othd': othd(range(4, 8), 3.0)})
+    _, out = run(tmp_path, clean=True)
+    assert 'swap their numbers' not in out
+
+
 def test_clean_leaves_out_a_cut_off_last_step(tmp_path):
     archive(tmp_path, {'riser1.othd': othd([1, 2, 3])[:-12]})
     _, out = run(tmp_path, clean=True)
