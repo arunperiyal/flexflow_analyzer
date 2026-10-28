@@ -5,8 +5,10 @@
 ### 🔤 `case check history` replaces `case check archive`
 
 Renamed to match `case organise history`. It lists every OTHD/OISD history
-file (`archive/`, `cleaned/`, the compiled file) with its tsId range, as
-before; `case check all` runs it under the new name.
+file with its tsId range in one table per group (`archive/`, `cleaned/`, the
+compiled file, any parts in the old flat layout) instead of one interleaved
+table. `--archive`, `--cleaned` and `--compiled` show only those groups and
+combine; `case check all` shows every group.
 
 ### 🗂️ `case organise history` replaces `case organise archive`
 

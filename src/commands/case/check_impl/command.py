@@ -64,6 +64,9 @@ def execute_case_check(args):
     # on the `plt` subcommand — `all` runs plt unwindowed).
     t1 = getattr(args, 't1', None)
     t2 = getattr(args, 't2', None)
+    # --archive/--cleaned/--compiled pick which `history` tables to print
+    # (only on the `history` subcommand; none chosen prints them all).
+    history_parts = tuple(p for p in HISTORY_PARTS if getattr(args, p, False))
 
     # Get case name from args or interactive context
     case_name = _get_case_name(args)
@@ -72,7 +75,8 @@ def execute_case_check(args):
 
     # Check if wildcard - if so, iterate over all cases
     if is_wildcard_case(case_name):
-        _execute_check_on_all_cases(args, do_run, do_history, do_config, do_plt, do_def, do_out, freq, t1, t2)
+        _execute_check_on_all_cases(args, do_run, do_history, do_config, do_plt, do_def, do_out, freq, t1, t2,
+                                    history_parts)
         return
 
     # Single case execution
@@ -80,7 +84,8 @@ def execute_case_check(args):
     if case_dir is None:
         return
 
-    _execute_check_on_case(case_dir, do_run, do_history, do_config, do_plt, do_def, do_out, freq, t1, t2)
+    _execute_check_on_case(case_dir, do_run, do_history, do_config, do_plt, do_def, do_out, freq, t1, t2,
+                           history_parts)
 
 
 def _get_case_name(args) -> Optional[str]:
@@ -99,7 +104,7 @@ def _get_case_name(args) -> Optional[str]:
 
 
 def _execute_check_on_all_cases(args, do_run, do_history, do_config, do_plt, do_def, do_out,
-                                freq=None, t1=None, t2=None):
+                                freq=None, t1=None, t2=None, history_parts=None):
     """Execute check on all cases from .cases file."""
     from src.cli.context import current_dir
 
@@ -129,7 +134,8 @@ def _execute_check_on_all_cases(args, do_run, do_history, do_config, do_plt, do_
             console.print(f"[red]Error:[/red] Case directory not found: {case_path}\n")
             continue
 
-        _execute_check_on_case(case_path, do_run, do_history, do_config, do_plt, do_def, do_out, freq, t1, t2)
+        _execute_check_on_case(case_path, do_run, do_history, do_config, do_plt, do_def, do_out, freq, t1, t2,
+                               history_parts)
 
     console.print(f"[cyan]{'─' * 60}[/cyan]")
     console.print(f"[green]✓ Processed {len(cases)} cases[/green]")
@@ -137,7 +143,7 @@ def _execute_check_on_all_cases(args, do_run, do_history, do_config, do_plt, do_
 
 
 def _execute_check_on_case(case_dir: Path, do_run, do_history, do_config, do_plt, do_def, do_out,
-                           freq=None, t1=None, t2=None):
+                           freq=None, t1=None, t2=None, history_parts=None):
     """Execute check on a single case."""
     logger  = Logger(verbose=False)
     console = Console()
@@ -169,7 +175,7 @@ def _execute_check_on_case(case_dir: Path, do_run, do_history, do_config, do_plt
         any_error = any_error or not ok
 
     if do_history:
-        _check_history(cfg, case_dir, console)
+        _check_history(cfg, case_dir, console, history_parts)
 
     if do_plt:
         _check_plt(cfg, case_dir, console, freq, t1, t2)
@@ -415,62 +421,74 @@ def _check_run(cfg: dict, case_dir: Path, console: Console) -> bool:
 # history check
 # ---------------------------------------------------------------------------
 
-def _check_history(cfg: dict, case_dir: Path, console: Console):
-    """Show the time step range of every OTHD/OISD history file: archive/,
-    cleaned/, the compiled file, and parts still in the old flat layout."""
+HISTORY_PARTS = ('archive', 'cleaned', 'compiled')
+
+
+def _check_history(cfg, case_dir: Path, console: Console, parts=None):
+    """Show the time step range of every OTHD/OISD history file, one table per
+    group: archive/, cleaned/, the compiled file, and parts still in the old
+    flat layout. `parts` limits it to some of archive/cleaned/compiled; the
+    flat parts are shown only when no part is chosen."""
+    from ....core import history
+
     console.print("[bold]History check[/bold]")
+    problem = getattr(cfg, 'problem', None) or history.problem_of(case_dir)
+    show_flat = not parts
+    parts = parts or HISTORY_PARTS
 
     found_any = False
 
-    for subdir_name, ext in (('othd_files', 'othd'), ('oisd_files', 'oisd')):
-        subdir = case_dir / subdir_name
-        if not subdir.exists():
-            console.print(f"  [dim]—[/dim]  {subdir_name}/ not found")
-            continue
+    for ext in history.TYPES:
+        subdir = history.type_dir(case_dir, ext)
+        groups = []
+        if 'archive' in parts:
+            groups.append(('archive/', list(history.archived(case_dir, ext, problem).values())))
+        if 'cleaned' in parts:
+            groups.append(('cleaned/', list(history.cleaned(case_dir, ext, problem).values())))
+        if 'compiled' in parts:
+            compiled = history.compiled_path(case_dir, ext, problem) if problem else None
+            groups.append(('compiled', [compiled] if compiled and compiled.is_file() else []))
+        if show_flat:
+            groups.append(('old flat layout', list(history.flat(case_dir, ext, problem).values())))
 
-        files = sorted((p for p in subdir.rglob(f'*.{ext}') if p.parent.name != 'compiled'),
-                       key=lambda p: (len(p.relative_to(subdir).parts) == 1
-                                      and not p.stem[-1:].isdigit(),
-                                      natural_sort_key(str(p.relative_to(subdir)))))
-        if not files:
-            console.print(f"  [dim]—[/dim]  No .{ext} files in {subdir_name}/")
-            continue
-
-        found_any = True
-
-        tbl = Table(
-            title=f"{subdir_name}/",
-            box=box.SIMPLE,
-            show_header=True,
-            header_style="bold yellow",
-        )
-        tbl.add_column("File",    style="cyan")
-        tbl.add_column("Start",   justify="right", style="white")
-        tbl.add_column("End",     justify="right", style="white")
-        tbl.add_column("Steps",   justify="right", style="dim")
-        tbl.add_column("Size",    justify="right", style="dim")
-
-        for fp in files:
-            rng = _read_data_file_range(fp)
-            size_mb = fp.stat().st_size / 1_048_576
-            if rng is None:
-                tbl.add_row(str(fp.relative_to(subdir)), '[red]error[/red]', '', '', f'{size_mb:.1f} MB')
-            else:
-                start_ts, end_ts = rng
-                tbl.add_row(
-                    str(fp.relative_to(subdir)),
-                    _fmt_tsid(start_ts),
-                    _fmt_tsid(end_ts),
-                    _fmt_tsid(end_ts - start_ts),
-                    f'{size_mb:.1f} MB',
-                )
-
-        console.print(tbl)
+        for label, files in groups:
+            title = f"{subdir.name}/ — {label}"
+            if not files:
+                if label != 'old flat layout':
+                    console.print(f"  [dim]—[/dim]  {title}: none")
+                continue
+            found_any = True
+            console.print(_history_table(title, files))
         console.print()
 
     if not found_any:
-        console.print("  [dim]No archived files found (othd_files/ and oisd_files/ are empty or missing)[/dim]")
+        console.print("  [dim]No history files found (othd_files/ and oisd_files/ are empty or missing)[/dim]")
         console.print()
+
+
+def _history_table(title: str, files) -> Table:
+    tbl = Table(
+        title=title,
+        box=box.SIMPLE,
+        show_header=True,
+        header_style="bold yellow",
+    )
+    tbl.add_column("File",    style="cyan")
+    tbl.add_column("Start",   justify="right", style="white")
+    tbl.add_column("End",     justify="right", style="white")
+    tbl.add_column("Steps",   justify="right", style="dim")
+    tbl.add_column("Size",    justify="right", style="dim")
+
+    for fp in files:
+        rng = _read_data_file_range(fp)
+        size_mb = fp.stat().st_size / 1_048_576
+        if rng is None:
+            tbl.add_row(fp.name, '[red]error[/red]', '', '', f'{size_mb:.1f} MB')
+        else:
+            start_ts, end_ts = rng
+            tbl.add_row(fp.name, _fmt_tsid(start_ts), _fmt_tsid(end_ts),
+                        _fmt_tsid(end_ts - start_ts), f'{size_mb:.1f} MB')
+    return tbl
 
 
 # ---------------------------------------------------------------------------

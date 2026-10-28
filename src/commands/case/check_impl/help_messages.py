@@ -33,8 +33,13 @@ Pick one subcommand.
 
     {Colors.CYAN}history{Colors.RESET}
         List every .othd/.oisd history file in othd_files/ and oisd_files/
-        (archive/, cleaned/, the compiled file) with its start tsId, end tsId,
-        step count and size.
+        with its start tsId, end tsId, step count and size, in one table per
+        group: archive/, cleaned/, the compiled file (and any parts still in
+        the old flat layout).
+          {Colors.YELLOW}--archive{Colors.RESET}   only archive/
+          {Colors.YELLOW}--cleaned{Colors.RESET}   only cleaned/
+          {Colors.YELLOW}--compiled{Colors.RESET}  only the compiled file
+        The flags combine; with none, every group is shown.
 
     {Colors.CYAN}config{Colors.RESET}
         Validate simflow.config for consistency:
@@ -106,8 +111,11 @@ Pick one subcommand.
     # Check run directory OTHD/OISD files
     case check run CS4SG1U1
 
-    # Show the OTHD/OISD history files
+    # Show the OTHD/OISD history files, one table per group
     case check history CS4SG1U1
+
+    # Only cleaned/ and the compiled file
+    case check history CS4SG1U1 --cleaned --compiled
 
     # Validate simflow.config
     case check config CS4SG1U1

@@ -287,6 +287,12 @@ class CaseCommand(BaseCommand):
         history_check_parser = check_subparsers.add_parser('history', add_help=False,
                                     help='Show the time step range of every OTHD/OISD history file')
         case_arg(history_check_parser, help='Case directory path')
+        history_check_parser.add_argument('--archive', action='store_true',
+                                    help='Show only archive/ (combinable; none shows every group)')
+        history_check_parser.add_argument('--cleaned', action='store_true',
+                                    help='Show only cleaned/ (combinable)')
+        history_check_parser.add_argument('--compiled', action='store_true',
+                                    help='Show only the compiled file (combinable)')
         history_check_parser.add_argument('-v', '--verbose', action='store_true',
                                     help='Enable verbose output')
         history_check_parser.add_argument('-h', '--help', action='store_true',
