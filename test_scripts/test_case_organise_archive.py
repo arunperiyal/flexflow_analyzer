@@ -162,7 +162,7 @@ def test_verify_flags_a_cut_off_last_step_and_stops_compile(tmp_path):
     assert organizer.stats['verify_ok'] is False
     assert not (othd_dir / 'compiled').exists()
 
-    _, _, problems, _ = organizer._check_file(othd_dir / 'riser2.othd')
+    _, _, problems, _, _ = organizer._check_file(othd_dir / 'riser2.othd')
     assert any('incomplete last step (tsId 3)' in p for p in problems)
 
 
@@ -171,7 +171,36 @@ def test_verify_accepts_good_files_and_restarts(tmp_path):
     organizer = make_organizer(tmp_path, verify=True)
     organizer.organize('archive')
     assert organizer.stats['verify_ok'] is True
-    assert organizer._check_file(othd_dir / 'riser1.othd') == (6, (1, 4), [], 1)
+    assert organizer._check_file(othd_dir / 'riser1.othd') == (6, (1, 4), [], 1, {1, 2, 3, 4})
+
+
+def _verify_output(tmp_path):
+    import io
+    organizer = make_organizer(tmp_path, verify=True)
+    organizer.console = Console(file=io.StringIO(), width=200)
+    organizer.organize('archive')
+    return organizer, ' '.join(organizer.console.file.getvalue().split())
+
+
+def test_verify_fails_a_compiled_file_missing_tsids_the_parts_have(tmp_path):
+    othd_dir = write_parts(tmp_path, {'riser1.othd': othd(range(1, 11))})
+    (othd_dir / 'compiled').mkdir()
+    (othd_dir / 'compiled' / 'riser.othd').write_text(othd([1, 2, 3, 7, 8, 9, 10]))
+    organizer, out = _verify_output(tmp_path)
+    assert organizer.stats['verify_ok'] is False
+    assert '3 tsId(s) of the parts missing (4 – 6) — run --compile' in out
+
+
+def test_verify_reports_tsids_in_no_file_without_failing(tmp_path):
+    # the second run restarted from 15 while the first only reached 10
+    othd_dir = write_parts(tmp_path, {'riser1.othd': othd(range(1, 11)),
+                                      'riser2.othd': othd(range(15, 20))})
+    make_organizer(tmp_path, compile=True).organize('archive')
+    organizer, out = _verify_output(tmp_path)
+    assert organizer.stats['verify_ok'] is True
+    assert organizer.stats['verify_lost'] == 4
+    assert 'OTHD: 4 tsId(s) in no file (11 – 14)' in out
+    assert 'missing' not in out           # the compiled file has all the parts have
 
 
 def test_prune_puts_the_compiled_file_in_place_of_the_parts(tmp_path):
