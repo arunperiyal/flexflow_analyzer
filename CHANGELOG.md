@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### 🔤 `case check history` replaces `case check archive`
+
+Renamed to match `case organise history`. It lists every OTHD/OISD history
+file (`archive/`, `cleaned/`, the compiled file) with its tsId range, as
+before; `case check all` runs it under the new name.
+
 ### 🗂️ `case organise history` replaces `case organise archive`
 
 The OTHD/OISD history now lives in three stages, the same under

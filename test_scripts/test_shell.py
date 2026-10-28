@@ -134,7 +134,7 @@ def test_remote_must_be_configured(rt):
 @pytest.mark.parametrize('line', [
     'case show', 'case run', 'case status', 'case out', 'case upload', 'case download',
     'case organise history', 'case organise output', 'case organise plt',
-    'case check run', 'case check archive', 'case check config', 'case check plt',
+    'case check run', 'case check history', 'case check config', 'case check plt',
     'case check def', 'case check out', 'case check all', 'case check data',
     'case status update',
     'data show', 'data table', 'data stats',

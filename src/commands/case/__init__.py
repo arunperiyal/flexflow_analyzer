@@ -283,14 +283,14 @@ class CaseCommand(BaseCommand):
         run_check_parser.add_argument('-h', '--help', action='store_true',
                                     help='Show help for run command')
 
-        # case check archive
-        archive_check_parser = check_subparsers.add_parser('archive', add_help=False,
-                                    help='Check all archived files in othd_files/oisd_files')
-        case_arg(archive_check_parser, help='Case directory path')
-        archive_check_parser.add_argument('-v', '--verbose', action='store_true',
+        # case check history
+        history_check_parser = check_subparsers.add_parser('history', add_help=False,
+                                    help='Show the time step range of every OTHD/OISD history file')
+        case_arg(history_check_parser, help='Case directory path')
+        history_check_parser.add_argument('-v', '--verbose', action='store_true',
                                     help='Enable verbose output')
-        archive_check_parser.add_argument('-h', '--help', action='store_true',
-                                    help='Show help for archive command')
+        history_check_parser.add_argument('-h', '--help', action='store_true',
+                                    help='Show help for history command')
 
         # case check config
         config_check_parser = check_subparsers.add_parser('config', add_help=False,
@@ -354,7 +354,7 @@ class CaseCommand(BaseCommand):
 
         # case check all
         all_check_parser = check_subparsers.add_parser('all', add_help=False,
-                                    help='Run every check (run + archive + config + plt + def + out)')
+                                    help='Run every check (run + history + config + plt + def + out)')
         case_arg(all_check_parser, help='Case directory path')
         freq_arg(all_check_parser, metavar='N',
                  help='PLT output frequency to check against, '

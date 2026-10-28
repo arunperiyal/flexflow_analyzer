@@ -2,7 +2,7 @@
 Case check command implementation
 
 Checks OTHD/OISD file time step ranges in the run directory and/or
-archive directories, and validates simflow.config consistency.
+the history files (archive/, cleaned/, compiled), and validates simflow.config consistency.
 """
 
 import sys
@@ -50,7 +50,7 @@ def execute_case_check(args):
         return
 
     do_run     = subcommand in ('run', 'all')
-    do_archive = subcommand in ('archive', 'all')
+    do_history = subcommand in ('history', 'all')
     do_config  = subcommand in ('config', 'all')
     do_plt     = subcommand in ('plt', 'all')
     do_def     = subcommand in ('def', 'all')
@@ -72,7 +72,7 @@ def execute_case_check(args):
 
     # Check if wildcard - if so, iterate over all cases
     if is_wildcard_case(case_name):
-        _execute_check_on_all_cases(args, do_run, do_archive, do_config, do_plt, do_def, do_out, freq, t1, t2)
+        _execute_check_on_all_cases(args, do_run, do_history, do_config, do_plt, do_def, do_out, freq, t1, t2)
         return
 
     # Single case execution
@@ -80,7 +80,7 @@ def execute_case_check(args):
     if case_dir is None:
         return
 
-    _execute_check_on_case(case_dir, do_run, do_archive, do_config, do_plt, do_def, do_out, freq, t1, t2)
+    _execute_check_on_case(case_dir, do_run, do_history, do_config, do_plt, do_def, do_out, freq, t1, t2)
 
 
 def _get_case_name(args) -> Optional[str]:
@@ -98,7 +98,7 @@ def _get_case_name(args) -> Optional[str]:
         return None
 
 
-def _execute_check_on_all_cases(args, do_run, do_archive, do_config, do_plt, do_def, do_out,
+def _execute_check_on_all_cases(args, do_run, do_history, do_config, do_plt, do_def, do_out,
                                 freq=None, t1=None, t2=None):
     """Execute check on all cases from .cases file."""
     from src.cli.context import current_dir
@@ -129,14 +129,14 @@ def _execute_check_on_all_cases(args, do_run, do_archive, do_config, do_plt, do_
             console.print(f"[red]Error:[/red] Case directory not found: {case_path}\n")
             continue
 
-        _execute_check_on_case(case_path, do_run, do_archive, do_config, do_plt, do_def, do_out, freq, t1, t2)
+        _execute_check_on_case(case_path, do_run, do_history, do_config, do_plt, do_def, do_out, freq, t1, t2)
 
     console.print(f"[cyan]{'─' * 60}[/cyan]")
     console.print(f"[green]✓ Processed {len(cases)} cases[/green]")
     console.print(f"[cyan]{'─' * 60}[/cyan]\n")
 
 
-def _execute_check_on_case(case_dir: Path, do_run, do_archive, do_config, do_plt, do_def, do_out,
+def _execute_check_on_case(case_dir: Path, do_run, do_history, do_config, do_plt, do_def, do_out,
                            freq=None, t1=None, t2=None):
     """Execute check on a single case."""
     logger  = Logger(verbose=False)
@@ -168,8 +168,8 @@ def _execute_check_on_case(case_dir: Path, do_run, do_archive, do_config, do_plt
         ok = _check_run(cfg, case_dir, console)
         any_error = any_error or not ok
 
-    if do_archive:
-        _check_archive(cfg, case_dir, console)
+    if do_history:
+        _check_history(cfg, case_dir, console)
 
     if do_plt:
         _check_plt(cfg, case_dir, console, freq, t1, t2)
@@ -412,13 +412,13 @@ def _check_run(cfg: dict, case_dir: Path, console: Console) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# --archive check
+# history check
 # ---------------------------------------------------------------------------
 
-def _check_archive(cfg: dict, case_dir: Path, console: Console):
+def _check_history(cfg: dict, case_dir: Path, console: Console):
     """Show the time step range of every OTHD/OISD history file: archive/,
     cleaned/, the compiled file, and parts still in the old flat layout."""
-    console.print("[bold]Archive check[/bold]")
+    console.print("[bold]History check[/bold]")
 
     found_any = False
 

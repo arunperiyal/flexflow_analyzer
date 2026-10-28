@@ -31,9 +31,10 @@ Pick one subcommand.
               - If mismatch → ✗ (restart config may be wrong)
               - If restartTsId not set but file starts >0 → ⚠
 
-    {Colors.CYAN}archive{Colors.RESET}
-        List all archived .othd/.oisd files in othd_files/ and oisd_files/
-        with their start tsId, end tsId, step count and size.
+    {Colors.CYAN}history{Colors.RESET}
+        List every .othd/.oisd history file in othd_files/ and oisd_files/
+        (archive/, cleaned/, the compiled file) with its start tsId, end tsId,
+        step count and size.
 
     {Colors.CYAN}config{Colors.RESET}
         Validate simflow.config for consistency:
@@ -89,7 +90,7 @@ Pick one subcommand.
         The completeness of the case's data files (was `case status`).
 
     {Colors.CYAN}all{Colors.RESET}
-        Run every check in order: config, def, run, archive, plt, out.
+        Run every check in order: config, def, run, history, plt, out.
         Takes --freq (passed through to the plt check); not --t1/--t2 — use
         the `plt`/`out` subcommands directly for a windowed check.
 
@@ -105,8 +106,8 @@ Pick one subcommand.
     # Check run directory OTHD/OISD files
     case check run CS4SG1U1
 
-    # Check all archived files
-    case check archive CS4SG1U1
+    # Show the OTHD/OISD history files
+    case check history CS4SG1U1
 
     # Validate simflow.config
     case check config CS4SG1U1
