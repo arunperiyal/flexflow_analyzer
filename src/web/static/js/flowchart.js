@@ -110,11 +110,12 @@ const FlowChart = (() => {
     },
     {
       title: 'Organise the output',
-      command: 'case organise myCase --archive',
+      command: 'case organise history myCase --update --clean --compile',
       optional: true,
       detail: `Housekeeping once post-processing is done: moves
-        .othd/.oisd/.rcv into othd_files/oisd_files, dedupes overlapping
-        files, and prunes intermediate .out/.rst/.plt files.`,
+        .othd/.oisd into othd_files/archive/, writes each run without the
+        steps later runs redid into cleaned/, joins them into one file, and
+        (case organise output/plt) prunes intermediate .out/.rst/.plt files.`,
     },
     {
       title: 'Check the output is sound',

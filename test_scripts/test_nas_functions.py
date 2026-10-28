@@ -233,3 +233,17 @@ def test_missing_finds_the_series_in_a_directory(series):
 def test_missing_errors(series, line, message, code):
     r = ash(line, series)
     assert r.returncode == code and message in r.stderr
+
+
+def test_show_and_clean_archive_use_archive_dir_when_there(case):
+    othd = case / 'othd_files'
+    (othd / 'archive').mkdir()
+    for p in othd.glob('riser*.othd'):
+        p.rename(othd / 'archive' / p.name)
+    _part(othd / 'riser.othd', range(1, 171))                 # compiled
+    r = ash('show_archive --case C1 --type othd', case.parent)
+    assert f'== C1/othd_files/archive' in r.stdout and '5 part(s), tsId 1..170' in r.stdout
+    assert 'compiled: C1/othd_files/riser.othd' in r.stdout
+    ash('clean_archive --case C1 --type othd --n 5:', case.parent, 'y\n')
+    assert sorted(p.name for p in (othd / 'archive').iterdir()) == [
+        'riser1.othd', 'riser2.othd', 'riser3.othd', 'riser4.othd']

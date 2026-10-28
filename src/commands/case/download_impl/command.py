@@ -140,7 +140,7 @@ Upload case directories from local machine to a remote server.
 Whatever is carried, the case's notes ({Colors.CYAN}.casestatus.md{Colors.RESET}, `case status`) go
 too: copied if the remote has none, else merged -- the notes of the copy
 changed last, the log lines of both, in time order.
-So do the restarts ({Colors.CYAN}.restarts{Colors.RESET}, `case organise archive`): copied, or
+So do the restarts ({Colors.CYAN}.restarts{Colors.RESET}, `case organise history`): copied, or
 the remote gets the restarts it lacks.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
@@ -251,7 +251,7 @@ Whatever is carried, the case's notes ({Colors.CYAN}.casestatus.md{Colors.RESET}
 too: copied if there are none here, else merged -- the notes of the copy
 changed last, the log lines of both (the job scripts' among them), in time
 order.
-So do the restarts ({Colors.CYAN}.restarts{Colors.RESET}, `case organise archive`): copied, or
+So do the restarts ({Colors.CYAN}.restarts{Colors.RESET}, `case organise history`): copied, or
 the restarts found only on the remote are added here.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
@@ -939,7 +939,7 @@ class CaseUploadCommand:
 
     def sync_restarts(self, ssh, remote_case_path: str, local_case_path: str,
                       is_upload: bool) -> None:
-        """Carry .restarts (`case organise archive`) to the other side.
+        """Carry .restarts (`case organise history`) to the other side.
 
         The restarts are found from the archive parts, which --prune deletes:
         a copy that has been pruned holds rows no compile can find again. So

@@ -1,7 +1,7 @@
 """
 Case organise command implementation
 
-Cleans up redundant OTHD/OISD files and output directory files.
+Keeps the OTHD/OISD history (archive/ → cleaned/ → compiled) and cleans output files.
 Supports wildcard mode for batch operations on all cases.
 """
 
@@ -43,7 +43,7 @@ def execute_organise(args):
         print_organise_examples()
         return
 
-    # No subcommand (archive/plt/output) → show help
+    # No subcommand (history/output/plt/vtu) → show help
     subcommand = getattr(args, 'organise_subcommand', None)
     if not subcommand:
         print_organise_help()
@@ -115,7 +115,7 @@ def _execute_organise_on_all_cases(args, logger, console, subcommand):
     console : Console
         Rich console instance
     subcommand : str
-        'archive', 'plt' or 'output'
+        'history', 'output', 'plt' or 'vtu'
     """
     import json
     from pathlib import Path

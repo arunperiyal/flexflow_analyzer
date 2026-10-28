@@ -11,8 +11,9 @@
 # This script runs the main FlexFlow simulation (mpiSimflow)
 #
 # The script auto-detects PROBLEM and RUN_DIR from simflow.config
-# Before running, it archives any previous output files (.othd, .oisd, .rcv)
-# into their respective archive directories (othd_files/, oisd_files/, rcv_files/)
+# Before running, it archives the previous run's output as the next run number:
+# .othd/.oisd into othd_files/archive/, oisd_files/archive/ and .rcv into
+# rcv_files/ (`case organise history` cleans and joins them)
 #
 # Usage:
 #   sbatch mainFlex.sh
@@ -116,25 +117,33 @@ echo ""
 
 echo "Step 1: Archiving previous output files..."
 
-# Create archive directories if they don't exist
-mkdir -p othd_files
-mkdir -p oisd_files
+mkdir -p othd_files/archive
+mkdir -p oisd_files/archive
 mkdir -p rcv_files
 
-# Archive previous run's output if it exists
-# .othd, .oisd, and .rcv are all archived together as a set
-if [ -f "${RUN_DIR}/${PROBLEM}.othd" ]; then
-    file_count=$(ls -p othd_files | grep -v / | wc -l)
-    ((file_count++))
+# The highest run number kept: in archive/, in cleaned/ (archive/ pruned), or
+# directly in othd_files/ (the layout before archive/)
+last_run() {
+    ls othd_files/archive othd_files/cleaned othd_files \
+       oisd_files/archive oisd_files/cleaned oisd_files rcv_files 2>/dev/null \
+        | sed -n "s/^${PROBLEM}\([0-9][0-9]*\)\.\(othd\|oisd\|rcv\)\$/\1/p" | sort -n | tail -1
+}
 
-    mv "${RUN_DIR}/${PROBLEM}.othd" "othd_files/${PROBLEM}${file_count}.othd"
-    mv "${RUN_DIR}/${PROBLEM}.oisd" "oisd_files/${PROBLEM}${file_count}.oisd"
+# Archive previous run's output if it exists
+# .othd, .oisd, and .rcv are all archived together as a set, under one number
+if [ -f "${RUN_DIR}/${PROBLEM}.othd" ]; then
+    run_n=$(last_run)
+    run_n=$(( ${run_n:-0} + 1 ))
+
+    mv "${RUN_DIR}/${PROBLEM}.othd" "othd_files/archive/${PROBLEM}${run_n}.othd"
+    [ -f "${RUN_DIR}/${PROBLEM}.oisd" ] \
+        && mv "${RUN_DIR}/${PROBLEM}.oisd" "oisd_files/archive/${PROBLEM}${run_n}.oisd"
 
     if [ -f "${PROBLEM}.rcv" ]; then
-        cp "${PROBLEM}.rcv" "rcv_files/${PROBLEM}${file_count}.rcv"
-        echo "  ✓ Archived run ${file_count}: .othd, .oisd, .rcv"
+        cp "${PROBLEM}.rcv" "rcv_files/${PROBLEM}${run_n}.rcv"
+        echo "  ✓ Archived run ${run_n}: .othd, .oisd, .rcv"
     else
-        echo "  ✓ Archived run ${file_count}: .othd, .oisd (no .rcv found)"
+        echo "  ✓ Archived run ${run_n}: .othd, .oisd (no .rcv found)"
     fi
 else
     echo "  No previous output files to archive"
@@ -151,9 +160,9 @@ APPLY_RESTART=0
 if [ "$APPLY_RESTART" -eq 1 ]; then
     echo "Step 1b: Configuring auto-restart..."
 
-    LATEST_OTHD=$(ls -t othd_files/*.othd 2>/dev/null | head -1)
+    LATEST_OTHD=$(ls -t othd_files/archive/*.othd othd_files/cleaned/*.othd othd_files/*.othd 2>/dev/null | head -1)
     if [ -z "$LATEST_OTHD" ]; then
-        echo "Error: APPLY_RESTART=1 but no .othd files found in othd_files/"
+        echo "Error: APPLY_RESTART=1 but no .othd files found under othd_files/"
         exit 1
     fi
 

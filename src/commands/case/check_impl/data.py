@@ -12,6 +12,7 @@ from rich.table import Table
 from rich.panel import Panel
 from rich import box
 
+from ....core import history
 from ....core.case import FlexFlowCase
 from ....core.readers.othd_reader import OTHDReader
 from ....core.readers.oisd_reader import OISDReader
@@ -289,12 +290,7 @@ def get_max_timesteps_from_def(case_path: Path, problem: str) -> Optional[int]:
 
 def get_timesteps_from_data_files(case_path: Path) -> Set[int]:
     """Get time steps from existing OTHD files."""
-    othd_dir = case_path / 'othd_files'
-
-    if not othd_dir.exists():
-        return set()
-
-    othd_files = list(othd_dir.glob('*.othd'))
+    othd_files = history.read_files(case_path, 'othd')
     if not othd_files:
         return set()
 
@@ -432,12 +428,7 @@ def check_othd_files(case_path: Path, expected_steps: Set[int]) -> Tuple[bool, f
     Returns:
         Tuple of (is_complete, coverage_percentage)
     """
-    othd_dir = case_path / 'othd_files'
-
-    if not othd_dir.exists():
-        return False, 0.0
-
-    othd_files = list(othd_dir.glob('*.othd'))
+    othd_files = history.read_files(case_path, 'othd')
 
     if not othd_files:
         return False, 0.0
@@ -469,12 +460,7 @@ def check_oisd_files(case_path: Path, expected_steps: Set[int]) -> Tuple[bool, f
     Returns:
         Tuple of (is_complete, coverage_percentage)
     """
-    oisd_dir = case_path / 'oisd_files'
-
-    if not oisd_dir.exists():
-        return False, 0.0
-
-    oisd_files = list(oisd_dir.glob('*.oisd'))
+    oisd_files = history.read_files(case_path, 'oisd')
 
     if not oisd_files:
         return False, 0.0

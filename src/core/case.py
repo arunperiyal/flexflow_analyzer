@@ -23,7 +23,7 @@ class FlexFlowCase:
     A FlexFlow case directory contains:
     - simflow.config: Configuration file
     - *.def: Definition file with simulation parameters
-    - othd_files/: Directory containing OTHD output files
+    - othd_files/, oisd_files/: the OTHD/OISD history (see core/history.py)
     - Other simulation files (.geo, .srfs, etc.)
     """
     
@@ -99,15 +99,10 @@ class FlexFlowCase:
             
         Returns:
         --------
-        list : Sorted list of OTHD file paths
+        list : OTHD file paths, in reading order (a later file wins a step)
         """
         if self._othd_files is None:
-            if self.othd_dir is None:
-                self._othd_files = []
-            else:
-                search_path = os.path.join(self.othd_dir, pattern)
-                self._othd_files = sorted(glob.glob(search_path), key=natural_sort_key)
-        
+            self._othd_files = self._history_files('othd', pattern)
         return self._othd_files
     
     def find_oisd_files(self, pattern='*.oisd'):
@@ -121,16 +116,18 @@ class FlexFlowCase:
             
         Returns:
         --------
-        list : Sorted list of OISD file paths
+        list : OISD file paths, in reading order (a later file wins a step)
         """
         if self._oisd_files is None:
-            if self.oisd_dir is None:
-                self._oisd_files = []
-            else:
-                search_path = os.path.join(self.oisd_dir, pattern)
-                self._oisd_files = sorted(glob.glob(search_path), key=natural_sort_key)
-        
+            self._oisd_files = self._history_files('oisd', pattern)
         return self._oisd_files
+
+    def _history_files(self, ext, pattern):
+        """The files holding the whole history, in reading order (history.read_files)."""
+        import fnmatch
+        from .history import read_files
+        return [str(p) for p in read_files(self.case_directory, ext, self.problem_name)
+                if fnmatch.fnmatch(p.name, pattern)]
     
     def load_othd_data(self, use_def_time=True, tsId_filter=None, group=None):
         """

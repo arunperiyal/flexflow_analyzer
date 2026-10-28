@@ -159,34 +159,34 @@ class CaseCommand(BaseCommand):
         organise_subparsers = organise_parser.add_subparsers(dest='organise_subcommand',
                                                              help='Organise subcommands')
 
-        # case organise archive
-        archive_parser = organise_subparsers.add_parser('archive', add_help=False,
-                                    help='Update, verify, clean, compile and prune the OTHD/OISD archive')
-        case_arg(archive_parser, help='Case directory path')
-        archive_parser.add_argument('--update', action='store_true',
-                                    help='Move .othd/.oisd/.rcv from run dir into the archive dirs')
-        archive_parser.add_argument('--clean', action='store_true',
-                                    help='Deduplicate archived OTHD/OISD files, confirming each deletion')
-        archive_parser.add_argument('--verify', action='store_true',
-                                    help='Check every archived OTHD/OISD file reads through to the end, and for missing tsIds')
-        archive_parser.add_argument('--compile', action='store_true',
-                                    help='Combine archived OTHD/OISD files into compiled/{problem}.othd|oisd')
-        archive_parser.add_argument('--prune', action='store_true',
-                                    help='Delete the parts once the compiled file holds all their data')
-        time_window(archive_parser, 
+        # case organise history
+        history_parser = organise_subparsers.add_parser('history', add_help=False,
+                                    help='OTHD/OISD history: archive/ → cleaned/ → compiled file')
+        case_arg(history_parser, help='Case directory path')
+        history_parser.add_argument('--update', action='store_true',
+                                    help='Move .othd/.oisd from the run dir into {othd,oisd}_files/archive/ (.rcv to rcv_files/)')
+        history_parser.add_argument('--clean', action='store_true',
+                                    help='Write cleaned/: each run without the steps a later run redid')
+        history_parser.add_argument('--compile', action='store_true',
+                                    help='Join cleaned/ into {othd,oisd}_files/{problem}.othd|oisd')
+        history_parser.add_argument('--verify', action='store_true',
+                                    help='Check archive/, cleaned/ and the compiled file, and for missing tsIds')
+        history_parser.add_argument('--prune', action='store_true',
+                                    help='Delete archive/ once cleaned/ checks out and is up to date')
+        time_window(history_parser,
                     t1_kwargs=dict(metavar='STEP', help='Only --update files reaching timesteps >= STEP'),
                     t2_kwargs=dict(metavar='STEP', help='Only --update files reaching timesteps <= STEP'))
-        archive_parser.add_argument('--log', action='store_true',
+        history_parser.add_argument('--log', action='store_true',
                                     help='Create log file of deletions')
-        archive_parser.add_argument('--no-confirm', action='store_true',
+        history_parser.add_argument('--no-confirm', action='store_true',
                                     help='Skip confirmation prompts')
-        archive_parser.add_argument('--dry-run', action='store_true',
-                                    help='Show what would be deleted without deleting anything')
-        archive_parser.add_argument('-v', '--verbose', action='store_true',
+        history_parser.add_argument('--dry-run', action='store_true',
+                                    help='Show what would be done without changing anything')
+        history_parser.add_argument('-v', '--verbose', action='store_true',
                                     help='Enable verbose output')
-        archive_parser.add_argument('-h', '--help', action='store_true',
-                                    help='Show help for archive command')
-        archive_parser.add_argument('--examples', action='store_true',
+        history_parser.add_argument('-h', '--help', action='store_true',
+                                    help='Show help for history command')
+        history_parser.add_argument('--examples', action='store_true',
                                     help='Show usage examples')
 
         # case organise output
@@ -648,8 +648,8 @@ class CaseCommand(BaseCommand):
         console.print("    flexflow case create myCase --problem-name test")
         console.print("    flexflow case run CS4SG1U1")
         console.print("    flexflow case run CS4SG1U1 --no-monitor")
-        console.print("    flexflow case organise archive CS4SG1U1 --update")
-        console.print("    flexflow case organise archive CS4SG1U1 --clean --compile")
+        console.print("    flexflow case organise history CS4SG1U1 --update")
+        console.print("    flexflow case organise history CS4SG1U1 --clean --compile --verify")
         console.print("    flexflow case organise output CS4SG1U1")
         console.print("    flexflow case organise plt CS4SG1U1 --delete-ascii")
         console.print("    flexflow case organise plt CS4SG1U1 --delete-binary --t1 0 --t2 1000")

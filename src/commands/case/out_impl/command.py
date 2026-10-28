@@ -168,7 +168,7 @@ def _stale_prediction(case_dir, blocks):
     otherwise silent.
     """
     case_dir = Path(case_dir)
-    othd = list(case_dir.glob("othd_files/*.othd")) + list(case_dir.glob("*.othd"))
+    othd = list(case_dir.glob("othd_files/**/*.othd")) + list(case_dir.glob("*.othd"))
     if not othd:
         return []
     newest = max(f.stat().st_mtime for f in othd)
