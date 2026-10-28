@@ -168,7 +168,7 @@ class CaseCommand(BaseCommand):
         archive_parser.add_argument('--clean', action='store_true',
                                     help='Deduplicate archived OTHD/OISD files, confirming each deletion')
         archive_parser.add_argument('--verify', action='store_true',
-                                    help='Check every archived OTHD/OISD file reads through to the end')
+                                    help='Check every archived OTHD/OISD file reads through to the end, and for missing tsIds')
         archive_parser.add_argument('--compile', action='store_true',
                                     help='Combine archived OTHD/OISD files into compiled/{problem}.othd|oisd')
         archive_parser.add_argument('--prune', action='store_true',

@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### 🔍 `case organise archive --verify` checks the tsIds
+
+- A compiled file without a tsId that some part has is now a problem
+  (`N tsId(s) of the parts missing (a – b) — run --compile`), and stops
+  `--clean`/`--compile`/`--prune` like the other problems. Before, only
+  the block layout and the values were checked, so a stale or badly
+  written compiled file passed.
+- tsIds in no file at all, where a run restarted from later than the one
+  before reached, are listed under the table as lost and counted in the
+  summary. They do not fail the check: no compile can bring them back.
+
 ### 📦 `case upload/download input` replaces `sgd`
 
 - Every launch of mpiSimflow runs the preprocessor again (solStart.c): it

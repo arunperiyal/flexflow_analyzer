@@ -38,8 +38,11 @@ Organize and clean up case directories. Pick one subcommand.
               • a last step cut off by a killed job
               • steps whose layout differs from the rest of the file
               • non-numeric values, or no newline at the end
+              • a compiled file missing tsIds the parts have (--compile again)
             Restarts inside a file are listed but are fine. If anything is
-            wrong, --clean / --compile / --prune do not run.
+            wrong, --clean / --compile / --prune do not run. tsIds in no file
+            at all (a run restarted from later than the last one reached)
+            are reported as lost, but do not stop the later steps.
 
         {Colors.CYAN}--clean{Colors.RESET}
             Deduplicate othd_files/ and oisd_files/ under manual supervision

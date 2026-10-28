@@ -22,6 +22,33 @@ def _fmt_tsid(tsid: int) -> str:
     return f"{tsid:,}"
 
 
+def _interval(ts_ids) -> int:
+    """The usual step between output tsIds (1 when every step is written)."""
+    diffs = [b - a for a, b in zip(ts_ids, ts_ids[1:]) if b > a]
+    return max(set(diffs), key=diffs.count) if diffs else 1
+
+
+def _runs(ts_ids, interval: int) -> List[Tuple[int, int]]:
+    """Sorted tsIds as (first, last) runs, each one interval apart."""
+    runs = []
+    for t in ts_ids:
+        if runs and t - runs[-1][1] == interval:
+            runs[-1][1] = t
+        else:
+            runs.append([t, t])
+    return [tuple(r) for r in runs]
+
+
+def _fmt_runs(runs, limit: int = 5) -> str:
+    shown = [_fmt_tsid(a) if a == b else f"{_fmt_tsid(a)} – {_fmt_tsid(b)}"
+             for a, b in runs[:limit]]
+    return ", ".join(shown) + (", …" if len(runs) > limit else "")
+
+
+def _missing(gaps, interval: int) -> int:
+    return sum((b - a) // interval + 1 for a, b in gaps)
+
+
 class FileInfo:
     """Information about a data file."""
 
@@ -112,6 +139,7 @@ class CaseOrganizer:
             'vtu_space_freed': 0,
             'compiled': [],  # one line per compiled file, for the final summary
             'verify_ok': True,
+            'verify_lost': 0,
             'pruned': 0,
             'pruned_space_freed': 0,
             'pruned_moved': [],  # compiled files that became {problem}1.{ext}
@@ -1015,6 +1043,13 @@ class CaseOrganizer:
         value that is not a number, or a missing final newline is a problem.
         Restarts inside a file (tsId going back) are reported but are fine.
 
+        The tsIds are checked too. A compiled file without a tsId some part
+        has is a problem (out of date, or written badly: --compile again).
+        A tsId in no file at all — a run restarted from later than the one
+        before got to — is lost data rather than a bad file: it is reported,
+        but does not fail the check, as no compile could bring it back (and
+        after a --prune the gap sits inside {problem}1 for good).
+
         Returns False if any file has a problem.
         """
         table = Table(title="Archive check", box=box.ROUNDED)
@@ -1025,11 +1060,26 @@ class CaseOrganizer:
 
         all_ok = True
         any_file = False
+        lost = []        # (ext, gaps, interval): tsIds in no part
         for ext, src_dir, out_path, parts in self._archive_types():
-            files = parts + ([out_path] if out_path.exists() else [])
-            for path in files:
+            rows = [(path, self._check_file(path), []) for path in parts]
+            covered = set().union(*(check[4] for _, check, _ in rows))
+            interval = _interval(sorted(covered))
+            runs = _runs(sorted(covered), interval)
+            gaps = [(a[1] + interval, b[0] - interval) for a, b in zip(runs, runs[1:])]
+            if gaps:
+                lost.append((ext, gaps, interval))
+
+            if out_path.exists():
+                check = self._check_file(out_path)
+                absent = sorted(covered - check[4])
+                notes = [f"{len(absent):,} tsId(s) of the parts missing "
+                         f"({_fmt_runs(_runs(absent, interval))}) — run --compile"] if absent else []
+                rows.append((out_path, check, notes))
+
+            for path, (n_blocks, ts_range, problems, restarts, _), notes in rows:
                 any_file = True
-                n_blocks, ts_range, problems, restarts = self._check_file(path)
+                problems = problems + notes
                 if problems:
                     all_ok = False
                     status = "[red]" + "; ".join(problems) + "[/red]"
@@ -1046,12 +1096,19 @@ class CaseOrganizer:
             return True
 
         self.console.print(table)
+        for ext, gaps, interval in lost:
+            n = _missing(gaps, interval)
+            self.stats['verify_lost'] += n
+            self.console.print(
+                f"  [yellow]⚠[/yellow]  {ext.upper()}: {n:,} tsId(s) in no file "
+                f"({_fmt_runs(gaps)}) — lost: a run restarted later than the one before reached"
+            )
         self.stats['verify_ok'] = all_ok
         return all_ok
 
     @staticmethod
     def _check_file(path: Path):
-        """(blocks, (first, last) tsId, problems, restarts) for one OTHD/OISD file."""
+        """(blocks, (first, last) tsId, problems, restarts, tsIds) for one OTHD/OISD file."""
         shapes = []      # (tsId, shape) per block
         shape = None
         bad_values = []  # tsIds with a non-numeric value
@@ -1089,7 +1146,7 @@ class CaseOrganizer:
 
         problems = []
         if not shapes:
-            return 0, None, ["no timesteps"], 0
+            return 0, None, ["no timesteps"], 0, set()
         if not last_line.endswith(b'\n'):
             problems.append("no newline at end (cut off mid-line)")
         if any(t is None for t, _ in shapes):
@@ -1108,7 +1165,8 @@ class CaseOrganizer:
 
         ts_ids = [t for t, _ in shapes if t is not None]
         restarts = sum(1 for a, b in zip(ts_ids, ts_ids[1:]) if b <= a)
-        return len(shapes), (min(ts_ids), max(ts_ids)) if ts_ids else None, problems, restarts
+        return (len(shapes), (min(ts_ids), max(ts_ids)) if ts_ids else None, problems, restarts,
+                set(ts_ids))
 
     def _check_cross_type_consistency(self, othd_files: List[FileInfo], oisd_files: List[FileInfo]):
         """Warn if OTHD and OISD coverage diverges after deduplication."""
@@ -1750,8 +1808,10 @@ class CaseOrganizer:
                              f"{self.stats['archived_oisd']} OISD, "
                              f"{self.stats['archived_rcv']} RCV  (total {total_archived} files)")
             if 'verify' in steps:
-                lines.append("Verified: all files ok" if self.stats['verify_ok']
-                             else "Verified: [red]problems found[/red]")
+                lines.append(("Verified: all files ok" if self.stats['verify_ok']
+                              else "Verified: [red]problems found[/red]")
+                             + (f"  [yellow]({self.stats['verify_lost']:,} tsId(s) lost)[/yellow]"
+                                if self.stats['verify_lost'] else ""))
             if self.stats['verify_ok']:  # a failed --verify stops the later steps
                 if 'clean' in steps:
                     lines.append(f"Deduplicated: {self.stats['othd_redundant']} OTHD, "
