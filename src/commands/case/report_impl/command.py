@@ -110,7 +110,7 @@ def execute_report(args):
         cfg     = _parse_config(case_path / 'simflow.config')
         problem = cfg.get('problem', '').strip().strip('"').strip("'") or None
 
-        # --- Column 1: last timestep from othd_files/ archive ---
+        # --- Column 1: last timestep of the OTHD history in othd_files/ ---
         archive_last = cached(case_cache, 'archive', lambda: _last_othd_timestep(case_path))
         # --- Column 2: last PLT from binary/ ---
         binary_last = cached(case_cache, 'binary',
@@ -257,11 +257,17 @@ def _last_othd_timestep_in_dir(directory: Path):
 
 
 def _last_othd_timestep(case_path: Path):
-    """Return the highest end-timestep across all .othd files in othd_files/."""
-    othd_dir = case_path / 'othd_files'
-    if not othd_dir.is_dir():
-        return None
-    return _last_othd_timestep_in_dir(othd_dir)
+    """Return the highest end-timestep across the case's OTHD history."""
+    from src.core import history
+    max_ts = None
+    for fp in history.read_files(case_path, 'othd'):
+        try:
+            ts = _last_tsid(fp)
+        except OSError:
+            continue
+        if ts is not None and (max_ts is None or ts > max_ts):
+            max_ts = ts
+    return max_ts
 
 
 def _last_binary_plt_timestep(case_path: Path, problem: str):
@@ -379,7 +385,7 @@ def _show_help(console):
     console.print()
     console.print("[bold]COLUMNS:[/bold]")
     console.print("    Case              Case directory name")
-    console.print("    Last (archive)    Last timestep reached by the .othd files in othd_files/")
+    console.print("    Last (archive)    Last timestep reached by the OTHD history in othd_files/")
     console.print("    Last (binary PLT) Highest PLT timestep in binary/")
     console.print("    Last (rundir)     Last timestep reached by the .othd files in the run directory (--run)")
     console.print("    Disk Usage        Total size of the case directory (--size)")

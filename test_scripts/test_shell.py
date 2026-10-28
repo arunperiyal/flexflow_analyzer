@@ -133,7 +133,7 @@ def test_remote_must_be_configured(rt):
 
 @pytest.mark.parametrize('line', [
     'case show', 'case run', 'case status', 'case out', 'case upload', 'case download',
-    'case organise archive', 'case organise output', 'case organise plt',
+    'case organise history', 'case organise output', 'case organise plt',
     'case check run', 'case check archive', 'case check config', 'case check plt',
     'case check def', 'case check out', 'case check all', 'case check data',
     'case status update',
@@ -225,7 +225,7 @@ def test_single_time_is_a_window(rt):
     use(rt, 'time:7')
     for line, (d1, d2) in {
         'data table': ('t1', 't2'),
-        'case organise archive': ('t1', 't2'),
+        'case organise history': ('t1', 't2'),
         'case check plt': ('t1', 't2'),
         'plot': ('start_step', 'end_step'),
     }.items():
@@ -315,7 +315,7 @@ def texts(rt, line):
 def test_completion_of_commands_and_subcommands(rt):
     assert 'case' in texts(rt, 'ca')
     assert {'show', 'create', 'organise', 'check', 'upload'} <= set(texts(rt, 'case '))
-    assert texts(rt, 'case organise ') == ['archive', 'output', 'plt', 'vtu']
+    assert texts(rt, 'case organise ') == ['history', 'output', 'plt', 'vtu']
 
 
 def test_completion_of_flags(rt):

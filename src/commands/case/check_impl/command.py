@@ -416,7 +416,8 @@ def _check_run(cfg: dict, case_dir: Path, console: Console) -> bool:
 # ---------------------------------------------------------------------------
 
 def _check_archive(cfg: dict, case_dir: Path, console: Console):
-    """Show time step ranges for all archived OTHD/OISD files."""
+    """Show the time step range of every OTHD/OISD history file: archive/,
+    cleaned/, the compiled file, and parts still in the old flat layout."""
     console.print("[bold]Archive check[/bold]")
 
     found_any = False
@@ -427,7 +428,10 @@ def _check_archive(cfg: dict, case_dir: Path, console: Console):
             console.print(f"  [dim]—[/dim]  {subdir_name}/ not found")
             continue
 
-        files = sorted(subdir.glob(f'*.{ext}'), key=natural_sort_key)
+        files = sorted((p for p in subdir.rglob(f'*.{ext}') if p.parent.name != 'compiled'),
+                       key=lambda p: (len(p.relative_to(subdir).parts) == 1
+                                      and not p.stem[-1:].isdigit(),
+                                      natural_sort_key(str(p.relative_to(subdir)))))
         if not files:
             console.print(f"  [dim]—[/dim]  No .{ext} files in {subdir_name}/")
             continue
@@ -450,11 +454,11 @@ def _check_archive(cfg: dict, case_dir: Path, console: Console):
             rng = _read_data_file_range(fp)
             size_mb = fp.stat().st_size / 1_048_576
             if rng is None:
-                tbl.add_row(fp.name, '[red]error[/red]', '', '', f'{size_mb:.1f} MB')
+                tbl.add_row(str(fp.relative_to(subdir)), '[red]error[/red]', '', '', f'{size_mb:.1f} MB')
             else:
                 start_ts, end_ts = rng
                 tbl.add_row(
-                    fp.name,
+                    str(fp.relative_to(subdir)),
                     _fmt_tsid(start_ts),
                     _fmt_tsid(end_ts),
                     _fmt_tsid(end_ts - start_ts),

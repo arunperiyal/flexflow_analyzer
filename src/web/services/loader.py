@@ -24,10 +24,6 @@ from src.utils.file_utils import natural_sort_key
 
 DEFAULT_MAX_CASES = 3
 
-_GLOBS = {
-    'othd': ('*.othd', 'othd_files/*.othd'),
-    'oisd': ('*.oisd', 'oisd_files/*.oisd'),
-}
 
 
 class _CacheEntry:
@@ -45,10 +41,10 @@ class Loader:
 
     @staticmethod
     def _paths(case_dir: Path, kind: str) -> list:
+        from src.core import history
         case_dir = Path(case_dir)
-        flat, archived = _GLOBS[kind]
-        return (sorted(case_dir.glob(flat), key=natural_sort_key)
-                + sorted(case_dir.glob(archived), key=natural_sort_key))
+        return (sorted(case_dir.glob(f'*.{kind}'), key=natural_sort_key)
+                + history.read_files(case_dir, kind))
 
     @staticmethod
     def _newest_mtime(paths: list) -> float:

@@ -694,9 +694,9 @@ APPLY_RESTART=0
 if [ "$APPLY_RESTART" -eq 1 ]; then
     echo "Step 1b: Configuring auto-restart..."
 
-    LATEST_OTHD=$(ls -t othd_files/*.othd 2>/dev/null | head -1)
+    LATEST_OTHD=$(ls -t othd_files/archive/*.othd othd_files/cleaned/*.othd othd_files/*.othd 2>/dev/null | head -1)
     if [ -z "$LATEST_OTHD" ]; then
-        echo "Error: APPLY_RESTART=1 but no .othd files found in othd_files/"
+        echo "Error: APPLY_RESTART=1 but no .othd files found under othd_files/"
         exit 1
     fi
 

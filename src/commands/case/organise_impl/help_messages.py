@@ -20,72 +20,59 @@ Organize and clean up case directories. Pick one subcommand.
 
 {Colors.BOLD}SUBCOMMANDS:{Colors.RESET}
 
-    {Colors.CYAN}archive{Colors.RESET}
-        Manage the OTHD/OISD archive. Pass at least one flag; they combine
-        and always run in the order
-        --update → --verify → --clean → --compile → --prune.
+    {Colors.CYAN}history{Colors.RESET}
+        Keep the OTHD/OISD history in three stages (the same for oisd_files/):
+
+            othd_files/archive/{{problem}}N.othd   as each job wrote it
+            othd_files/cleaned/{{problem}}N.othd   run N without the steps a
+                                                 later run redid
+            othd_files/{{problem}}.othd            cleaned/ joined: one file
+
+        N numbers the jobs in the order they ran. Pass at least one flag;
+        they combine and always run in the order
+        --update → --clean → --compile → --verify → --prune.
+        Parts still in the old layout (othd_files/{{problem}}N.othd) are moved
+        into archive/ first.
 
         {Colors.CYAN}--update{Colors.RESET}
-            Move .othd, .oisd (and .rcv if present) from the run directory
-            into othd_files/, oisd_files/, rcv_files/ under the next free
-            number (riser.othd → riser6.othd). With --t1/--t2, only files
-            whose timestep range overlaps that window are moved.
-            No confirmation required — moves, never deletes.
-
-        {Colors.CYAN}--verify{Colors.RESET}
-            Read every archived part and compiled file to the end and
-            report, per file, the steps, tsId range and any problem:
-              • a last step cut off by a killed job
-              • steps whose layout differs from the rest of the file
-              • non-numeric values, or no newline at the end
-              • a compiled file missing tsIds the parts have (--compile again)
-            Restarts inside a file are listed but are fine. If anything is
-            wrong, --clean / --compile / --prune do not run. tsIds in no file
-            at all (a run restarted from later than the last one reached)
-            are reported as lost, but do not stop the later steps.
+            Move .othd/.oisd from the run directory into archive/ as the next
+            run (riser.othd → archive/riser6.othd), and .rcv into
+            rcv_files/riser6.rcv. With --t1/--t2, only files whose timestep
+            range overlaps that window. Moves, never deletes.
+            mainFlex.sh does the same at the start of every job.
 
         {Colors.CYAN}--clean{Colors.RESET}
-            Deduplicate othd_files/ and oisd_files/ under manual supervision
-            (works on the archive only, never the run directory):
-              • Shows every archived file with its tsId range and the
-                proposed action (keep / delete + reason)
-              • Duplicates (same tsId range) and subsets (covered by a
-                larger file) are proposed for deletion; overlaps are kept
-              • Asks about each proposed deletion: y = delete, n = keep,
-                a = delete this and the rest, q = abort (change nothing)
-              • Then shows the renumbering by starting tsId and asks once
-              • --no-confirm accepts the whole plan unattended
-              • Always analyzes the complete archived set — --t1/--t2 do
-                NOT scope --clean
+            Write cleaned/{{problem}}N for every run: its steps that no later
+            run redid ("the later run wins" — a restart from step 4000
+            replaces everything the run before wrote after 4000). A last
+            step cut off by a killed job is left out; a run with nothing
+            left has no cleaned file. Records where each run took over in
+            {Colors.CYAN}.restarts{Colors.RESET}. Once archive/ is pruned a cleaned file is the
+            run's only copy: cutting one shorter asks first.
 
         {Colors.CYAN}--compile{Colors.RESET}
-            Combine the archived parts into othd_files/compiled/{{problem}}.othd
-            and oisd_files/compiled/{{problem}}.oisd (parts are kept):
-              • Parts are taken in order of their first tsId
-              • A restart (a tsId at or below one already taken) replaces
-                everything from that tsId on with the restarted run's data
-              • Gaps in the combined tsIds are reported
-              • Parts with different headers (probe/surface sets) are not
-                combined
-              • Rewrites the compiled file each time; ignores --t1/--t2
-              • Records where each run took over in {Colors.CYAN}.restarts{Colors.RESET} in the case:
-                the step it resumed after, its first step and simulation time,
-                the steps it computed again. Lines are only ever added, so
-                the record outlives --prune (which deletes the parts)
+            Join cleaned/ into othd_files/{{problem}}.othd and
+            oisd_files/{{problem}}.oisd. Only from a cleaned/ that is up to date
+            with archive/. Every command reads this file while it is newer
+            than archive/ and cleaned/, and the runs otherwise.
+
+        {Colors.CYAN}--verify{Colors.RESET}
+            Read every file to the end and report its steps, tsId range and
+            any problem: a cut-off last step, steps with a different layout,
+            non-numeric values, no newline at the end. Also:
+              • a cleaned file must follow on from the runs before it and be
+                what --clean would write now
+              • the compiled file must be cleaned/ joined
+            A cut-off last step in archive/ is only noted (--clean leaves it
+            out). tsIds in no run at all (a run restarted from later than the
+            one before reached) are reported as lost. Anything else wrong
+            stops --prune.
 
         {Colors.CYAN}--prune{Colors.RESET}
-            Replace the parts with the compiled file: the parts in
-            othd_files/ and oisd_files/ are deleted and the compiled file
-            becomes {{problem}}1.othd / {{problem}}1.oisd, an ordinary part that
-            every command reads. The next --update numbers from 2.
-              • Only when the compiled file holds all of the parts' data —
-                compiling again would write exactly the same file;
-                out-of-date or missing compiled files are refused
-              • The compiled data stays on disk throughout: it is moved
-                into place first, then the parts are deleted
-              • A compiled file with no parts left is just moved into place
-              • Records the restarts in .restarts first, as --compile does
-              • Asks before deleting. RCV files are not touched.
+            Delete archive/ once cleaned/ reads through and is up to date
+            with it: every step that counts is then in cleaned/. Asks first.
+            Later jobs add to archive/ again, and --clean folds them in.
+            rcv_files/ is not touched.
 
     {Colors.CYAN}output{Colors.RESET}
         Remove intermediate .out/.rst files from the run directory:
@@ -141,8 +128,8 @@ Organize and clean up case directories. Pick one subcommand.
     --t1 STEP                 Only target timesteps >= STEP
     --t2 STEP                 Only target timesteps <= STEP
     (either alone is a one-sided bound; both together is an inclusive range)
-    Available on archive --update, output, plt and vtu.
-    NOT applied to the other archive flags, which always use everything.
+    Available on history --update, output, plt and vtu.
+    NOT applied to the other history flags, which always use everything.
 
 {Colors.BOLD}OTHER OPTIONS:{Colors.RESET}
     --dry-run                 Show what would be deleted without deleting anything
@@ -154,31 +141,28 @@ Organize and clean up case directories. Pick one subcommand.
 
 {Colors.BOLD}CONTEXT:{Colors.RESET}
     Set case context:     use case CS4SG1U1
-    Then run:             case organise archive --update
+    Then run:             case organise history --update
 
     Set timestep context: use t1:0 t2:1000
     Then run:              case organise output
 
 {Colors.BOLD}SAFETY:{Colors.RESET}
-    • archive --update, --verify and --compile never delete anything
-    • archive --clean asks about each file, --prune asks once and only
-      deletes parts already in a current compiled file; output and plt
-      show a summary and ask for confirmation
+    • history --update, --clean, --compile and --verify never delete a
+      job's data (--clean asks before cutting a run's only copy); --prune
+      asks once and only deletes archive/ when cleaned/ holds it; output
+      and plt show a summary and ask for confirmation
     • --delete-binary is unconditional: it does not check the run dir first
     • A t1/t2 context left over from something else never silently narrows
-      archive --clean — it always cleans the complete archived set
+      history --clean — it always cleans the whole history
     • Use --no-confirm to skip confirmation
     • Fails if any OTHD/OISD file cannot be read (prevents data loss)
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
-    # Move the latest .othd/.oisd/.rcv from the run dir into the archive
-    flexflow case organise archive CS4SG1U1 --update
+    # Move the latest .othd/.oisd/.rcv from the run dir into archive/
+    flexflow case organise history CS4SG1U1 --update
 
-    # Update, deduplicate (asking per file), then build one file per type
-    flexflow case organise archive CS4SG1U1 --update --clean --compile
-
-    # Check the archive, build one file per type, then drop the parts
-    flexflow case organise archive CS4SG1U1 --verify --compile --prune
+    # Clean and join the runs, check everything, then drop archive/
+    flexflow case organise history CS4SG1U1 --clean --compile --verify --prune
 
     # Remove intermediate output files
     flexflow case organise output CS4SG1U1
@@ -198,7 +182,7 @@ Organize and clean up case directories. Pick one subcommand.
 
     # Use context
     use case CS4SG1U1
-    case organise archive --update
+    case organise history --update
 
 {Colors.BOLD}SEE ALSO:{Colors.RESET}
     case show    - Display case information
@@ -211,47 +195,28 @@ def print_organise_examples():
     print(f"""
 {Colors.BOLD}CASE ORGANISE - EXAMPLES{Colors.RESET}
 
-{Colors.BOLD}Archiving Run Output:{Colors.RESET}
+{Colors.BOLD}The OTHD/OISD History:{Colors.RESET}
 
-    # Move .othd/.oisd/.rcv from run dir to archive directories
-    flexflow case organise archive CS4SG1U1 --update
-
-    # Files get the next free number:
-    #   riser.othd  → othd_files/riser6.othd
-    #   riser.oisd  → oisd_files/riser6.oisd
+    # Move .othd/.oisd/.rcv from the run dir: the next run number
+    #   riser.othd  → othd_files/archive/riser6.othd
+    #   riser.oisd  → oisd_files/archive/riser6.oisd
     #   riser.rcv   → rcv_files/riser6.rcv (if present)
+    flexflow case organise history CS4SG1U1 --update
 
-    # Only archive files whose timestep range overlaps [0, 1000]
-    flexflow case organise archive CS4SG1U1 --update --t1 0 --t2 1000
+    # Each run without what later runs redid, into cleaned/
+    flexflow case organise history CS4SG1U1 --clean
 
-{Colors.BOLD}Deduplicating OTHD/OISD Files:{Colors.RESET}
+    # One file per type: othd_files/riser.othd, oisd_files/riser.oisd
+    flexflow case organise history CS4SG1U1 --clean --compile
 
-    # Remove duplicate/subset files, confirming each one (y/n/a/q)
-    # --clean always inspects the full archived set, even with a t1/t2
-    # context left over from something else
-    flexflow case organise archive CS4SG1U1 --clean
+    # Check archive/, cleaned/ and the compiled files
+    flexflow case organise history CS4SG1U1 --verify
 
-    # Accept the whole plan unattended
-    flexflow case organise archive CS4SG1U1 --clean --no-confirm
+    # The whole round, deleting archive/ at the end (asks first)
+    flexflow case organise history CS4SG1U1 --update --clean --compile --verify --prune
 
-{Colors.BOLD}Compiling OTHD/OISD Files:{Colors.RESET}
-
-    # One file per type in othd_files/compiled/ and oisd_files/compiled/
-    flexflow case organise archive CS4SG1U1 --compile
-
-    # Show what would be combined without writing
-    flexflow case organise archive CS4SG1U1 --compile --dry-run
-
-{Colors.BOLD}Verifying and Pruning:{Colors.RESET}
-
-    # Check every archived file reads through to the end
-    flexflow case organise archive CS4SG1U1 --verify
-
-    # Keep only the compiled files (asks first)
-    flexflow case organise archive CS4SG1U1 --verify --compile --prune
-
-    # Later runs are added as riser2, riser3, ... and folded in again
-    flexflow case organise archive CS4SG1U1 --update --compile --prune
+    # See what would happen, changing nothing
+    flexflow case organise history CS4SG1U1 --clean --compile --dry-run
 
 {Colors.BOLD}Cleaning Output Directory:{Colors.RESET}
 
@@ -297,8 +262,8 @@ def print_organise_examples():
     use case CS4SG1U1
 
     # Run operations
-    case organise archive --update
-    case organise archive --clean
+    case organise history --update
+    case organise history --clean --compile
     case organise output
 
     # Set a timestep window and reuse it across subcommands
@@ -306,24 +271,12 @@ def print_organise_examples():
     case organise output
     case organise plt --delete-ascii
 
-{Colors.BOLD}What archive --clean Does:{Colors.RESET}
+{Colors.BOLD}What history --clean and --compile Do:{Colors.RESET}
 
-    Before:
-    • riser1.othd [0-1000]    → Keep (unique range)
-    • riser2.othd [0-1000]    → Delete (duplicate)
-    • riser3.othd [0-500]     → Delete (subset of riser1)
-    • riser4.othd [1000-2000] → Keep (unique range)
-    • riser5.othd [500-1500]  → Keep (partial overlap, kept)
-
-    Each "Delete" is asked about first (y/n/a/q). After cleanup, files are
-    renamed sequentially by starting step (also confirmed):
-    riser1.othd [0-1000], riser2.othd [500-1500], riser3.othd [1000-2000]
-
-{Colors.BOLD}What archive --compile Does:{Colors.RESET}
-
-    • riser1.othd [1-1073], riser2.othd [1001-2084] (restart from 1000)
-    → compiled/riser.othd [1-2084]: steps 1-1000 from riser1,
-      1001-2084 from riser2
+    • archive/riser1.othd [1-1073], archive/riser2.othd [1001-2084]
+      (riser2 restarted from 1000)
+    → cleaned/riser1.othd [1-1000], cleaned/riser2.othd [1001-2084]
+    → riser.othd [1-2084]
 
 {Colors.BOLD}What output Does (freq=50, no --keep-freq):{Colors.RESET}
 
@@ -347,8 +300,8 @@ def print_organise_examples():
     • binary/riser.1550.plt      → Delete
 
 {Colors.BOLD}Notes:{Colors.RESET}
-    • archive --update, --verify and --compile run immediately, no confirmation needed
-    • archive --clean, output, plt and vtu --clean ask for confirmation unless --no-confirm
+    • history --update, --clean, --compile and --verify run immediately
+    • history --prune, output, plt and vtu --clean ask for confirmation unless --no-confirm
     • --delete-ascii never touches binary/; --delete-binary never touches the run dir
     • --delete-binary with no --t1/--t2/--freq/--keep-freq deletes every PLT file in binary/
 """)

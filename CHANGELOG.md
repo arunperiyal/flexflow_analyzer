@@ -2,6 +2,47 @@
 
 ## Unreleased
 
+### 🗂️ `case organise history` replaces `case organise archive`
+
+The OTHD/OISD history now lives in three stages, the same under
+`oisd_files/`:
+
+```
+othd_files/archive/riserN.othd   as job N wrote it          --update (and mainFlex.sh)
+othd_files/cleaned/riserN.othd   run N without the steps     --clean
+                                 a later run redid
+othd_files/riser.othd            cleaned/ joined             --compile
+```
+
+- The steps run in the order `--update → --clean → --compile → --verify →
+  --prune`, whichever are given.
+- `--clean` no longer deletes duplicate parts. It writes `cleaned/` instead,
+  resolving restarts by run number ("the later run wins" = the later job,
+  the same order the readers use). Before, `--compile` went by each part's
+  first tsId, which could disagree with them. A last step cut off by a killed
+  job is left out. `.restarts` is recorded here now.
+- `--verify` checks all three stages: `cleaned/` must be what `--clean` would
+  write now, and the compiled file must be `cleaned/` joined. A cut-off last
+  step in `archive/` is only noted, and tsIds in no run are reported as lost.
+- `--prune` deletes `archive/` once `cleaned/` reads through and is up to
+  date. The compiled file is no longer renamed to `riser1.othd`. Later jobs
+  add to `archive/` again, and `--clean` folds them in against `cleaned/`,
+  asking before it cuts a run's only copy.
+- Every reader (`plot`, `case show/check/report/status`, the web app) goes
+  through `src/core/history.py`. It takes the compiled file while it is newer
+  than `archive/` and `cleaned/`, and every run otherwise, so a new job shows
+  up before the next `--compile`.
+- `mainFlex.sh` archives each job into `archive/` as one past every number
+  kept, including the `cleaned/` ones once `archive/` is pruned. The restart
+  block (`run main --dependency`) looks there too.
+- Existing cases: every `history` call first moves `othd_files/riserN.othd`
+  into `archive/`, renumbering a number that is already taken. A
+  `mainFlex.sh` copied into a case before this keeps writing there, and those
+  files are read (as the newest runs) until moved. The old `compiled/`
+  directory is no longer read.
+- The NAS `show_archive`/`clean_archive` functions work on `archive/` when it
+  is there.
+
 ### 🔍 `case organise archive --verify` checks the tsIds
 
 - A compiled file without a tsId that some part has is now a problem

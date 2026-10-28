@@ -30,7 +30,7 @@ Plot displacement or force data for a specific node.
     {Colors.YELLOW}--end-step{Colors.RESET} N         End timestep, also --t2 (default: the t2 context)
                             {Colors.DIM}A --start-time/--end-time typed wins over the step.{Colors.RESET}
     {Colors.YELLOW}--restart{Colors.RESET}             Mark each restart recorded in .restarts (by case
-                            organise archive) with a grey dashed line (time plots)
+                            organise history) with a grey dashed line (time plots)
 
 {Colors.BOLD}STYLING OPTIONS:{Colors.RESET}
     {Colors.YELLOW}--plot-style{Colors.RESET} STR     Style: "<color>,<width>,<linestyle>,<marker>"

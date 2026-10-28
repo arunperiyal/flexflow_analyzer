@@ -206,6 +206,12 @@ _sf_scan() {
 #   note: inside:K  every step of it is in part K too (safe to delete)
 #         restart   starts at or before a step an earlier part already has
 #         gap       steps are missing between it and the earlier parts
+# _sf_parts_dir CASE TYPE: where the parts are, archive/ or (older cases) TYPE_files/
+_sf_parts_dir() {
+    if [ -d "$1/${2}_files/archive" ]; then echo "$1/${2}_files/archive"
+    else echo "$1/${2}_files"; fi
+}
+
 _sf_archive_rows() {
     local n f
     for n in $(_sf_parts "$1" "$2" "$3"); do
@@ -260,8 +266,9 @@ show_archive() {
             --case=*) case_dir=${1#*=} ;; --problem=*) problem=${1#*=} ;; --type=*) types=${1#*=} ;;
             -h|--help)
                 echo "Usage: show_archive [--case DIR] [--problem NAME] [--type othd|oisd]"
-                echo "  Lists othd_files/ and oisd_files/: size, steps and tsId range of each part,"
-                echo "  and which parts are redundant (every step is in another part)."
+                echo "  Lists the parts in othd_files/archive/ and oisd_files/archive/ (or directly in"
+                echo "  othd_files/ for a case from before archive/): size, steps and tsId range of"
+                echo "  each part, and which are redundant (every step is in another part)."
                 return 0 ;;
             *) _sf_err "show_archive: unknown option '$1' (show_archive -h)"; return 2 ;;
         esac
@@ -273,9 +280,9 @@ show_archive() {
     [ -n "$problem" ] || problem=$(_sf_config "$case_dir" problem)
     [ -n "$problem" ] || problem=riser
 
-    local type dir rows compiled
+    local type dir rows compiled cleaned
     for type in $types; do
-        dir="$case_dir/${type}_files"
+        dir=$(_sf_parts_dir "$case_dir" "$type")
         echo "== $dir"
         if [ ! -d "$dir" ]; then echo "  (no such directory)"; continue; fi
         echo "  scanning..."
@@ -291,7 +298,9 @@ show_archive() {
                       if (r) printf ", %d redundant (clean_archive --type %s --n ...)", r, t
                       print "" }'
         fi
-        compiled="$dir/compiled/$problem.$type"
+        cleaned=$(_sf_parts "$case_dir/${type}_files/cleaned" "$problem" "$type" | wc -w)
+        [ "$cleaned" -gt 0 ] && echo "  cleaned: $cleaned run(s) in $case_dir/${type}_files/cleaned"
+        compiled="$case_dir/${type}_files/$problem.$type"
         [ -f "$compiled" ] && echo "  compiled: $compiled  ($(_sf_size "$(stat -c %s "$compiled")"))"
     done
     return 0
@@ -316,7 +325,8 @@ clean_archive() {
             --dry-run) dry=1 ;;
             -h|--help)
                 echo "Usage: clean_archive --n N1:N2 [--type othd|oisd] [--case DIR] [--problem NAME] [--dry-run]"
-                echo "  Deletes parts N1..N2 of othd_files/ and/or oisd_files/ (both without --type),"
+                echo "  Deletes parts N1..N2 of othd_files/archive/ and/or oisd_files/archive/ (both"
+                echo "  without --type; directly in othd_files/ for a case from before archive/),"
                 echo "  after showing them and asking. --n takes N, N1:N2, N1: (to the last) or :N2."
                 echo "  Warns about any part that is not redundant (it holds steps no other part has)."
                 return 0 ;;
@@ -342,7 +352,7 @@ clean_archive() {
 
     local type dir rows picked files="" count=0 bytes=0 risky=0
     for type in $types; do
-        dir="$case_dir/${type}_files"
+        dir=$(_sf_parts_dir "$case_dir" "$type")
         [ -d "$dir" ] || continue
         echo "== $dir  (scanning...)"
         rows=$(_sf_archive_rows "$dir" "$problem" "$type")

@@ -2,8 +2,8 @@
 
 ## Overview
 
-`case organise` manages FlexFlow case directories through three subcommands:
-`archive`, `output` and `plt`. Running without a subcommand shows help.
+`case organise` manages FlexFlow case directories through four subcommands:
+`history`, `output`, `plt` and `vtu`. Running without a subcommand shows help.
 
 ```bash
 case organise <subcommand> [case_directory] [options]
@@ -11,125 +11,104 @@ case organise <subcommand> [case_directory] [options]
 
 ## Subcommands
 
-### `archive`
+### `history`
 
-Manages the OTHD/OISD archive (`othd_files/`, `oisd_files/`, `rcv_files/`).
-Pass at least one of `--update`, `--verify`, `--clean`, `--compile`,
+Keeps the OTHD/OISD history of the case in three stages, the same under
+`othd_files/` and `oisd_files/`:
+
+```
+othd_files/archive/{problem}N.othd   as job N wrote it          (--update, mainFlex.sh)
+othd_files/cleaned/{problem}N.othd   run N without the steps a   (--clean)
+                                     later run redid
+othd_files/{problem}.othd            cleaned/ joined: one file   (--compile)
+```
+
+N numbers the jobs in the order they ran, and one N is the same run in
+`archive/`, `cleaned/` and `rcv_files/`. "The later run wins" is the later N:
+the same rule the readers apply when they take several files in name order.
+
+Pass at least one of `--update`, `--clean`, `--compile`, `--verify`,
 `--prune`; they combine and always run in the order
-**update → verify → clean → compile → prune**. `archive` with no flag prints
+**update → clean → compile → verify → prune**. `history` with no flag prints
 a "nothing to do" message.
 
-#### `archive --update`
+Parts still in the layout from before `archive/` (`othd_files/{problem}N.othd`)
+are moved into `archive/` first, by every `history` call — a job script from
+before keeps writing them there. A number already taken moves to the next
+free one, OTHD and OISD of one run together. An old `compiled/` directory is
+left alone and no longer read.
 
-Moves output data files from the run directory (specified in `simflow.config`
-`dir` field) into the archive directories under the next free number:
+#### `history --update`
 
-- `.othd` files → `othd_files/` (e.g. `riser.othd` → `riser6.othd`)
-- `.oisd` files → `oisd_files/`
-- `.rcv` files → `rcv_files/` (only if present)
+Moves `.othd`/`.oisd` from the run directory (`dir` in `simflow.config`) into
+`archive/` as the next run — one past every number in `archive/`, `cleaned/`
+and `rcv_files/` — and `.rcv` into `rcv_files/` under the same number
+(`riser.othd` → `othd_files/archive/riser6.othd`). `mainFlex.sh` does the same
+at the start of every job.
 
 With `--t1`/`--t2`, only run-dir files whose timestep range overlaps that
 window are moved (RCV files have no reader to determine their range, so they
 are always moved in full). With `--dry-run`, the moves are only listed.
 
-**No confirmation required** — it only moves files, never deletes.
+#### `history --clean`
 
-#### `archive --verify`
+Writes `cleaned/{problem}N` for every run. The runs are read in run order
+(from `archive/`, or from `cleaned/` once pruned); a tsId at or below one
+already taken is a restart, and everything from that tsId on is dropped in
+favour of the later run. This also covers a restart appended inside one file.
 
-Reads every part in `othd_files/` and `oisd_files/`, and the compiled files
-if present, to the end. Every timestep block in an OTHD/OISD file has the
-same layout (the same keyword lines with the same number of values), so the
-check reports, per file:
+- A last step cut off by a killed job is left out (and reported)
+- A run with nothing left — every step redone later — has no cleaned file
+- Runs whose headers differ (`mask`/`nOths`, `nOsfs`: different probe or
+  surface sets) cannot be joined: nothing is written
+- Any other problem in a file (a step with a different layout in the middle,
+  non-numeric values) stops the clean: fix or remove the file first
+- Records where each run took over in `.restarts` (lines only ever added, so
+  the record outlives `--prune`)
+- Files already holding exactly what would be written are left as they are;
+  the rest are written through a temporary file
+- Once `archive/` is pruned, a cleaned file is its run's only copy: cutting
+  one shorter (a new run restarted inside it) asks first, unless
+  `--no-confirm`
 
-- a last step that is cut off — typically a job killed mid-write
-- steps whose layout differs from the rest of the file
-- values that are not numbers, or a missing newline at the end
+#### `history --compile`
 
-Restarts inside a file (tsId going back) are listed but are not a problem.
-If any file has a problem, the later steps (`--clean`, `--compile`,
-`--prune`) do not run.
+Joins `cleaned/` in run order into `othd_files/{problem}.othd` and
+`oisd_files/{problem}.oisd`. Only from a `cleaned/` that is up to date with
+`archive/` (run `--clean` first, or together). A compiled file already
+holding exactly that is left, with its time brought up to now.
 
-#### `archive --clean`
+The readers (`plot`, `case show/check/report`, the web app, …) take the
+compiled file while it is newer than `archive/`, `cleaned/` and every file in
+them; otherwise they read every run (`archive/`, or `cleaned/` once pruned) in
+run order, after any parts still in the old flat layout.
 
-Deduplicates `othd_files/` and `oisd_files/` under manual supervision. It
-works on the archive only; it never touches the run directory.
+#### `history --verify`
 
-1. Reads **every** `.othd` / `.oisd` file in those directories and extracts
-   their time step ranges
-2. Proposes redundant files:
-   - **Duplicates**: Same time step range → keeps larger/newer file
-   - **Subsets**: Time range fully covered by another file
-   - **Overlaps**: Partial overlaps → **both kept**
-3. Shows a table per type: every file, its tsId range, size and proposed
-   action with the reason
-4. Asks about each proposed deletion in turn:
-   `y` delete, `n` keep, `a` delete this and all remaining, `q` abort the
-   whole clean (nothing deleted or renamed)
-5. Shows the renumbering of the surviving files (including any the user
-   kept), sorted by starting time step — `{problem}1.othd`,
-   `{problem}2.othd`, … — and asks once before renaming
-6. Deletes the confirmed files and applies the renames
+Reads every file to the end. Every timestep block has the same layout (the
+same keyword lines with the same number of values), so it reports, per file,
+a cut-off last step, steps with a different layout, non-numeric values and a
+missing final newline. Also:
 
-`--no-confirm` accepts the whole plan without asking; `--dry-run` shows the
-tables and stops.
+- `archive/`: a cut-off last step is only noted — `--clean` leaves it out
+- `cleaned/`: a file must follow on from the runs before it and be what
+  `--clean` would write now (else "out of date — run --clean")
+- the compiled file must be `cleaned/` joined (else "run --compile")
+- tsIds in no run at all — a run restarted from later than the one before
+  reached — are reported as lost, but do not fail the check
 
-`--clean` always inspects the **complete** archived set — `--t1`/`--t2` do
-**not** scope it. Excluding a file by timestep would risk hiding the very
-superset file that makes another file redundant, silently leaving it
-uncleaned. (This was a real bug: with a `t1`/`t2` context left over from
-something unrelated, e.g. `use t1:50 t2:2800`, `archive --clean` used to skip
-analyzing any file outside that window — so a subset file whose superset
-happened to fall outside the window was never detected as redundant, and
-nothing got deleted. Fixed by always dedup-ing the full set regardless of
-`--t1`/`--t2`; only the `--update` move step respects the timestep window.)
+Restarts inside an archived file are listed but are not a problem. If
+anything else is wrong, `--prune` does not run.
 
-#### `archive --compile`
+#### `history --prune`
 
-Combines the archived parts into one file per type:
+Deletes `archive/` for each type whose `cleaned/` reads through and is up to
+date with it — every step that counts is then in `cleaned/`. It checks this
+itself, with or without `--verify`. Lists the files and asks once, unless
+`--no-confirm`; `--dry-run` only lists them. `rcv_files/` is not touched.
 
-- `othd_files/*.othd` → `othd_files/compiled/{problem}.othd`
-- `oisd_files/*.oisd` → `oisd_files/compiled/{problem}.oisd`
-
-The parts are kept, and only the parts are read — after a `--prune` the
-compiled data is itself the part `{problem}1.othd`, so the parts always hold
-the whole history. Parts are taken in order of their first tsId; a tsId at
-or below one already taken is a restart, and everything from that tsId on is
-replaced by the restarted run's data (the same "later run wins" rule the
-readers use when given several files). This also covers a restart appended
-inside a single file. Gaps in the combined tsIds are reported. Parts whose
-headers differ (`mask`/`nOths`, `nOsfs` — different probe or surface sets)
-are not combined. The compiled file is rewritten on every run, through a
-temporary file, so an interrupted run never leaves a half-written result.
-`--t1`/`--t2` are ignored, for the same reason as `--clean`; `--dry-run`
-reports what would be written.
-
-#### `archive --prune`
-
-Replaces the parts with the compiled file: the parts in `othd_files/` and
-`oisd_files/` are deleted, and `compiled/{problem}.othd` becomes
-`othd_files/{problem}1.othd` (likewise for OISD). The archive is then an
-ordinary one-part archive, which every command that reads
-`othd_files/*.othd` understands; `compiled/` only ever exists between a
-`--compile` and a `--prune`.
-
-It only does this when compiling again would write exactly the same bytes —
-i.e. every timestep the parts hold is already in the compiled file. If the
-compiled file is missing or out of date, nothing is pruned for that type
-(run with `--compile` first, or together: `--compile --prune`). The steps
-keep the full data on disk throughout: the compiled file is moved into
-`othd_files/` under a temporary name (`{problem}.othd.__prune__`, which no
-`*.othd` glob matches), the parts are deleted, and then it is renamed to
-`{problem}1.othd`. If a part could not be deleted and still holds that name,
-the compiled data is left under the temporary name and reported.
-
-A compiled file with no parts left beside it is simply moved into place —
-this finishes a prune made before `--prune` worked this way.
-
-Lists the parts and asks once before deleting, unless `--no-confirm`;
-`--dry-run` only lists them. RCV files are not touched.
-
-After a prune, the next `--update` adds `{problem}2.othd`, and the next
-`--compile` merges `{problem}1.othd` with it like any other parts.
+Later jobs add to `archive/` again; the next `--clean` folds them into
+`cleaned/`, reading the pruned runs from `cleaned/` itself.
 
 ### `output`
 
@@ -197,21 +176,20 @@ runs as its own step with its own entry in the confirmation summary.
 
 ## Execution Flow
 
-### Running `archive`
+### Running `history`
 
+0. Move parts in the old flat layout into `archive/`
 1. If `--update`: resolve the run directory from `simflow.config['dir']`,
    find `.othd`, `.oisd`, `.rcv` files there, drop OTHD/OISD files outside
    `--t1`/`--t2` if given (RCV files are never filtered), and move the rest
-   into the archive directories under the next free number
-2. If `--verify`: check every part and compiled file; stop here if any has
-   a problem
-3. If `--clean`: read **all** files in `othd_files/`/`oisd_files/` (not
-   filtered by `--t1`/`--t2`), propose duplicates/subsets, show the plan,
-   confirm each deletion, confirm the renumbering, then delete and rename
-4. If `--compile`: combine each type's parts into `compiled/{problem}.ext`,
-   resolving restarts in favour of the later run
-5. If `--prune`: for each type whose compiled file is current, confirm,
-   delete the parts and move the compiled file to `{problem}1.ext`
+   to the next run number
+2. If `--clean`: plan every run's surviving steps (not filtered by
+   `--t1`/`--t2`), record the restarts, write or remove the cleaned files
+3. If `--compile`: join `cleaned/` into `{problem}.ext`
+4. If `--verify`: check `archive/`, `cleaned/` and the compiled file; stop
+   here if anything is wrong
+5. If `--prune`: for each type whose `cleaned/` is current and reads
+   through, confirm and delete `archive/`
 
 ### Running `output`
 
@@ -244,9 +222,11 @@ runs as its own step with its own entry in the confirmation summary.
 ```
 
 Either alone is a one-sided bound; both together is an inclusive range.
-Available on `archive --update`, `output` and `plt`. **Not** applied to
-the other `archive` flags, which always use the complete
-archive (see above).
+Available on `history --update`, `output`, `plt` and `vtu`. **Not** applied
+to the other `history` flags, which always use the whole history: which
+steps a run keeps depends on every later run, and a `t1`/`t2` context left
+over from something else would silently cut the cleaned and compiled files
+short.
 
 Both flags can also come from context instead of being typed explicitly:
 
@@ -262,18 +242,17 @@ window `--t1 N --t2 N`, the same way it works for `case upload/download binary`.
 ## Options
 
 ```bash
-case organise archive CS4SG1U1 --update                         # Move data files to archive dirs
-case organise archive CS4SG1U1 --clean                          # Deduplicate, asking per file
-case organise archive CS4SG1U1 --compile                        # One combined file per type
-case organise archive CS4SG1U1 --update --clean --compile       # Several steps, in that order
-case organise archive CS4SG1U1 --verify                         # Check every archived file
-case organise archive CS4SG1U1 --verify --compile --prune       # Keep only the compiled files
+case organise history CS4SG1U1 --update                         # Move the run's data into archive/
+case organise history CS4SG1U1 --clean                          # Each run without what later runs redid
+case organise history CS4SG1U1 --clean --compile                # ... and one joined file per type
+case organise history CS4SG1U1 --verify                         # Check archive/, cleaned/, compiled
+case organise history CS4SG1U1 --clean --compile --verify --prune   # ... then delete archive/
 case organise output CS4SG1U1                                   # Clean intermediate output files
-case organise archive CS4SG1U1 --update --t1 0 --t2 1000        # Only archive files in [0, 1000]
+case organise history CS4SG1U1 --update --t1 0 --t2 1000        # Only archive files in [0, 1000]
 case organise output CS4SG1U1 --keep-freq 5000                # Custom retention
 case organise output CS4SG1U1 --t2 5000                         # Only clean up to timestep 5000
-case organise archive CS4SG1U1 --clean --no-confirm             # Skip confirmation
-case organise archive CS4SG1U1 --clean --log                    # Log deletions to file
+case organise history CS4SG1U1 --prune --no-confirm             # Skip confirmation
+case organise history CS4SG1U1 --prune --log                    # Log deletions to file
 case organise plt CS4SG1U1 --delete-ascii                       # Delete run-dir PLT with newer binary/ copy
 case organise plt CS4SG1U1 --delete-binary --t1 0 --t2 1000     # Delete binary/ PLT for a timestep range
 case organise plt CS4SG1U1 --delete-ascii --delete-binary       # Both directions in one call
@@ -281,27 +260,27 @@ case organise plt CS4SG1U1 --delete-ascii --delete-binary       # Both direction
 
 ## Default Behavior
 
-Running without a subcommand, `archive` without a flag, or `plt` without
+Running without a subcommand, `history` without a flag, or `plt` without
 either delete flag, shows help or a "nothing to do" message:
 
 ```bash
 case organise                    # → shows help
-case organise archive CS4SG1U1   # → "Nothing to do — pass --update, --verify, --clean, --compile and/or --prune"
+case organise history CS4SG1U1   # → "Nothing to do — pass --update, --clean, --compile, --verify and/or --prune"
 case organise plt CS4SG1U1       # → "Nothing to do — pass --delete-ascii and/or --delete-binary"
 ```
 
 ## Safety
 
-- `archive --update`, `--verify` and `--compile` are non-destructive (they
-  move, read or write, never delete) and honor `--dry-run`
-- `archive --prune` only deletes parts whose data is already in a current
-  compiled file, keeps that data on disk throughout, and asks first
-- `archive --clean` asks about each deletion and about the renumbering;
-  `output` and `plt` show a summary before acting and ask for confirmation —
+- `history --update`, `--clean`, `--compile` and `--verify` never delete a
+  job's data (`--clean` asks before cutting a run's only copy) and honor
+  `--dry-run`
+- `history --prune` only deletes `archive/` when `cleaned/` holds every step
+  that counts, and asks first
+- `output` and `plt` show a summary before acting and ask for confirmation —
   all unless `--no-confirm` is given
 - `--delete-binary` is unconditional: it does not check the run directory
   first, and can remove the last surviving copy of a timestep's PLT data
 - A `t1`/`t2` context left over from something else never silently narrows
-  `archive --clean` — it always cleans the complete archived set
-- If any OTHD/OISD file cannot be read, `archive --clean` aborts (prevents
-  data loss)
+  `history --clean` — it always cleans the whole history
+- If an OTHD/OISD file has a problem other than a cut-off last step,
+  `history --clean` stops (prevents data loss)
