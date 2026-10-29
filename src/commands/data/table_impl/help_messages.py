@@ -21,6 +21,8 @@ and variables across the columns.
                            `data show` lists every name this case has.{Colors.RESET}
     {Colors.YELLOW}--t1 TSID{Colors.RESET}              First tsId (alone: from there to the end)
     {Colors.YELLOW}--t2 TSID{Colors.RESET}              Last tsId
+    {Colors.YELLOW}--last N{Colors.RESET}               Only the last N steps (of the --t1/--t2 window).
+                           From context: use last:N
     {Colors.YELLOW}--node N{Colors.RESET}               Node to read       (default: 0)
     {Colors.YELLOW}--othid ID{Colors.RESET}             othId -- which probe set to read from the othd
                            files (default: the first). From context: use othid:N
@@ -31,7 +33,8 @@ and variables across the columns.
                            Only matters when a file holds more than one group.
     {Colors.YELLOW}--group ID{Colors.RESET}             The id in whichever files are read (older spelling;
                            never filled from context)
-    {Colors.YELLOW}--output FILE{Colors.RESET}          Write {Colors.BOLD}every{Colors.RESET} row to a .csv instead of printing
+    {Colors.YELLOW}--output [FILE]{Colors.RESET}        Write {Colors.BOLD}every{Colors.RESET} row to a .csv instead of printing.
+                           Without FILE: <case>/data_tables/<var>.csv
     {Colors.YELLOW}--head N{Colors.RESET}               Print the first N rows
     {Colors.YELLOW}--tail N{Colors.RESET}               Print the last N rows
     {Colors.YELLOW}--othd{Colors.RESET} / {Colors.YELLOW}--oisd{Colors.RESET}        Which files to take variables from
@@ -51,11 +54,24 @@ and variables across the columns.
     reading `field extract` and `field render` give them, and the units the
     t1/t2 context is set in. Physical time is a column, not a filter.
 
+    {Colors.YELLOW}--last N{Colors.RESET} keeps the N highest tsIds of what the window selects --
+    of the whole history without --t1/--t2. Unlike {Colors.YELLOW}--tail{Colors.RESET}, which only
+    decides what is printed, it decides what is read, so it applies to
+    --output too.
+
+{Colors.BOLD}OUTPUT:{Colors.RESET}
+    {Colors.YELLOW}--output{Colors.RESET} with no file writes {Colors.CYAN}<case>/data_tables/<var>.csv{Colors.RESET}, named
+    after the variables as given (dy.csv; dx_dy.csv for two), and replaces
+    the file there. With {Colors.YELLOW}*{Colors.RESET} every case writes into its own data_tables/.
+    For scripts: {Colors.DIM}use case:CS4SG1U1 var:dy last:1000{Colors.RESET}, then {Colors.DIM}data table --output{Colors.RESET}.
+
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
     flexflow data table CS4SG1U1 --var aleDisp_y --node 24
     flexflow data table CS4SG1U1 --var aleDisp --node 24 --tail 20
     flexflow data table CS4SG1U1 --var vel_y,pres --node 24 --t1 4000 --t2 5000
     flexflow data table CS4SG1U1 --var totTrac_y --output trac.csv
+    flexflow data table CS4SG1U1 --var dy --last 1000 --output
+    flexflow data table * --var dy --last 1000 --output
 """)
 
 
@@ -74,4 +90,7 @@ def print_table_examples():
 
   {Colors.BOLD}Everything, to a file for plotting:{Colors.RESET}
     flexflow data table CS4SG1U1 --var aleDisp_y --node 24 --output disp.csv
+
+  {Colors.BOLD}The last 1000 steps, to CS4SG1U1/data_tables/dy.csv:{Colors.RESET}
+    flexflow data table CS4SG1U1 --var dy --last 1000 --output
 """)

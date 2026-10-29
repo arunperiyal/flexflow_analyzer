@@ -19,6 +19,8 @@ One row per variable instead of one row per timestep.
     {Colors.YELLOW}--func FUNC{Colors.RESET}            What to work out. Repeat it, or comma-separate.
     {Colors.YELLOW}--t1 TSID{Colors.RESET}              First tsId (alone: from there to the end)
     {Colors.YELLOW}--t2 TSID{Colors.RESET}              Last tsId
+    {Colors.YELLOW}--last N{Colors.RESET}               Only the last N steps (of the --t1/--t2 window).
+                           From context: use last:N
     {Colors.YELLOW}--node N{Colors.RESET}               Node to read       (default: 0)
     {Colors.YELLOW}--othid ID{Colors.RESET}             othId -- which probe set to read from the othd
                            files (default: the first). From context: use othid:N
@@ -96,6 +98,7 @@ One row per variable instead of one row per timestep.
     flexflow data stats CS4SG1U1 --var aleDisp_y --node 24 --func maxloc,minloc
     flexflow data stats CS4SG1U1 --var aleDisp_y --node 24 --func zeroloc
     flexflow data stats CS4SG1U1 --var totTrac --func rms,std --t1 3000 --t2 5000
+    flexflow data stats CS4SG1U1 --var dy --func rms,std --last 1000
     flexflow data stats CS4SG1U1 --var aleDisp --node 24 --func range --output swing.csv
 """)
 

@@ -8,7 +8,6 @@ vel_y` mean the same selection rather than two similar ones.
 """
 
 import copy
-import glob
 import os
 import re
 import sys
@@ -18,7 +17,6 @@ import numpy as np
 
 from ...core.readers import series
 from ...utils.colors import Colors
-from ...utils.file_utils import natural_sort_key
 
 KINDS = ("othd", "oisd")
 
@@ -148,7 +146,8 @@ def for_each_case(args, logger, run_one):
             skipped.append((name, "no such directory"))
             continue
         case_args = copy.copy(args)
-        if output:
+        # A bare --output already lands in each case's own data_tables/.
+        if isinstance(output, str):
             stem, ext = os.path.splitext(output)
             case_args.output = f"{stem}_{name}{ext}"
         try:
@@ -168,11 +167,11 @@ def for_each_case(args, logger, run_one):
 
 
 def find_files(case_dir, kind):
-    """The othd or oisd files of a case, in run order (riser2 before riser10)."""
-    directory = Path(case_dir) / f"{kind}_files"
-    if not directory.is_dir():
-        return []
-    return sorted(glob.glob(str(directory / f"*.{kind}")), key=natural_sort_key)
+    """The othd or oisd files of a case's history, in run order (riser2 before
+    riser10): the compiled file while it is up to date, else every run in
+    archive/ and cleaned/ (core/history.py, as the other readers take them)."""
+    from ...core import history
+    return [str(p) for p in history.read_files(case_dir, kind)]
 
 
 def out_freq(case_dir):
@@ -293,8 +292,9 @@ def known_name(meta, name, group=None):
     return False
 
 
-def step_mask(meta, t1, t2, logger):
+def step_mask(meta, t1, t2, logger, last=None):
     """Rows inside the --t1/--t2 tsId window. Both None means every row.
+    With `last` (--last N), only the N highest tsIds of those.
 
     tsId rather than physical time, so that t1/t2 pick out the same steps here
     as they do in `field extract` and `field render`, and so the answer to
@@ -311,13 +311,30 @@ def step_mask(meta, t1, t2, logger):
     if lo > hi:
         lo, hi = hi, lo
     if t1 is None and t2 is None:
-        return np.ones(len(meta.tsids), dtype=bool)
-    mask = (meta.tsids >= lo) & (meta.tsids <= hi)
+        mask = np.ones(len(meta.tsids), dtype=bool)
+    else:
+        mask = (meta.tsids >= lo) & (meta.tsids <= hi)
     if not mask.any():
         logger.error(f"No timesteps in tsId range {lo}..{hi}. "
                      f"The {meta.kind} files hold {meta.tsids.min()}..{meta.tsids.max()}.")
         sys.exit(1)
-    return mask
+    return last_steps(meta.tsids, mask, last, logger)
+
+
+def last_steps(tsids, mask, last, logger):
+    """The mask cut to its `last` highest tsIds; unchanged without `last`."""
+    if last is None:
+        return mask
+    if last < 1:
+        logger.error(f"--last must be 1 or more, got {last}")
+        sys.exit(1)
+    rows = np.flatnonzero(mask)
+    if last >= len(rows):
+        return mask
+    keep = rows[np.argsort(tsids[rows], kind="stable")[-last:]]
+    cut = np.zeros(len(tsids), dtype=bool)
+    cut[keep] = True
+    return cut
 
 
 GROUP_FLAG = {'othd': 'othid', 'oisd': 'osgid'}

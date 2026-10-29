@@ -33,7 +33,7 @@ def execute_table(args):
         return
     logger = Logger(verbose=getattr(args, "verbose", False))
     if not getattr(args, "case", None):
-        shared.no_case(args, logger, print_table_help, ('var', 't1', 't2', 'node', 'othid', 'osgid', 'output', 'head', 'tail', 'group'))
+        shared.no_case(args, logger, print_table_help, ('var', 't1', 't2', 'node', 'othid', 'osgid', 'output', 'head', 'tail', 'group', 'last'))
         return
 
     requested = shared.split_vars(getattr(args, "var", None))
@@ -87,13 +87,15 @@ def _run_table(case_dir, args, logger, requested):
     columns = shared.resolve_columns(meta, requested, logger, group)
     node = shared.resolve_node(meta, getattr(args, "node", None), logger, group)
     mask = shared.step_mask(meta, getattr(args, "t1", None),
-                            getattr(args, "t2", None), logger)
+                            getattr(args, "t2", None), logger, getattr(args, "last", None))
 
     logger.info(f"reading {len(columns)} column(s) from {len(meta.files)} "
                 f"{kind} file(s)")
     times, tsids, values = shared.gather(meta, columns, node, mask, group)
 
     output = getattr(args, "output", None)
+    if output is True:
+        output = default_output(case_dir, requested)
     if output:
         shared.write_csv(output, times, tsids, values, logger)
         return
@@ -128,6 +130,12 @@ def _run_table(case_dir, args, logger, requested):
                       f"--head N / --tail N to change, --output FILE.csv for all"
                       f"[/dim]")
     console.print()
+
+
+def default_output(case_dir, requested):
+    """Where a bare --output writes: <case>/data_tables/<var>.csv, the
+    variables as they were asked for, joined with _ (dy, dx_dy)."""
+    return case_dir / "data_tables" / f"{'_'.join(requested)}.csv"
 
 
 def _known(meta, name, group=None):

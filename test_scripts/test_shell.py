@@ -442,3 +442,13 @@ def test_case_check_all_freq_is_not_the_out_frequency(rt, work):
     _out_case(work, (1000, 3000))
     out = rt.run_captured('case check all CaseA --freq 1000')
     assert 'Out/Rst file check' in out and 'missing at --freq' not in out
+
+
+def test_last_context_and_bare_output(rt):
+    use(rt, 'case:CaseA var:dy last:1000')
+    got = parsed(rt, 'data table --output')
+    assert (got.last, got.output, got.var) == (1000, True, ['dy'])
+    assert parsed(rt, 'data stats').last == 1000
+    assert parsed(rt, 'data table --output t.csv --last 5').output == 't.csv'
+    assert parsed(rt, 'data table --last 5').last == 5
+    assert rt.execute_line('use last:0') == 1

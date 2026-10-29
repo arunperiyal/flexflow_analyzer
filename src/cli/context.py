@@ -108,6 +108,8 @@ CONTEXTS = [
                description='Start of a timestep range (clears time)'),
     ContextKey('t2', parse=float, clears=('time',),
                description='End of a timestep range (clears time)'),
+    ContextKey('last', parse=_positive_int, style='#88ccff',
+               description='The last N steps of the history (data table/stats)'),
     ContextKey('remote', parse=_parse_remote, complete=_complete_remotes, label='rem',
                style='#ffaaee', description="Remote machine for 'case upload/download' and 'run post'"),
     ContextKey('var', style='#00ddaa',
@@ -154,6 +156,13 @@ def osgid_arg(parser, **kwargs):
 def freq_arg(parser, **kwargs):
     kwargs.setdefault('type', int)
     return context_flag(parser, 'freq', '--freq', **kwargs)
+
+
+def last_arg(parser, **kwargs):
+    """--last N: the last N steps of the history, filled from `use last:N`."""
+    kwargs.setdefault('type', int)
+    kwargs.setdefault('metavar', 'N')
+    return context_flag(parser, 'last', '--last', **kwargs)
 
 
 def time_window(parser, t1_flag='--t1', t2_flag='--t2', when=None,
