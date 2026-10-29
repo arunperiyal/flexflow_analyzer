@@ -86,6 +86,15 @@ def select_steps(names: List[str], window: Optional[tuple],
     return sorted(kept), sorted(no_step)
 
 
+def select_missing(names: List[str], here: Dict[str, int], there: Dict[str, int]) -> tuple:
+    """(missing, resized): the names in `here` ({name: size} on the sending
+    side) that `there` lacks, and those it holds at another size -- a copy cut
+    short by an interrupted transfer is no more there than a lost one."""
+    missing = [n for n in names if n not in there]
+    resized = [n for n in names if n in there and there[n] != here[n]]
+    return missing, resized
+
+
 def select_restart(names: List[str], problem: str, window: Optional[tuple],
                    nsg: Optional[int]) -> tuple:
     """The .rst files of the steps in `window`: (complete, incomplete).
@@ -171,6 +180,7 @@ the remote gets the restarts it lacks.
                            globs (default: simflow.config,*.def,*.geo,*.map)
     {Colors.YELLOW}--t1 STEP{Colors.RESET}              binary/rst: first timestep (alone: only that step)
     {Colors.YELLOW}--t2 STEP{Colors.RESET}              binary/rst: last timestep
+    {Colors.YELLOW}--missing{Colors.RESET}              binary: only the files the remote lacks
     {Colors.YELLOW}--archive{Colors.RESET}              history: only archive/ (combinable; none: all three)
     {Colors.YELLOW}--cleaned{Colors.RESET}              history: only cleaned/
     {Colors.YELLOW}--compiled{Colors.RESET}             history: only the compiled file
@@ -215,6 +225,11 @@ the remote gets the restarts it lacks.
     since nothing else in a case is written per step. The t1/t2 context
     supplies them: {Colors.DIM}use t1:1000 t2:5000{Colors.RESET}, then {Colors.DIM}case upload binary CS4SG1U1{Colors.RESET}.
 
+    {Colors.YELLOW}--missing{Colors.RESET} carries only the selected files the remote binary/ lacks,
+    or holds at another size (a copy an interrupted transfer cut short), and
+    says how many were already there. It compares names and sizes, not
+    contents, and goes with --t1/--t2.
+
 {Colors.BOLD}RESTART FILES:{Colors.RESET}
     To restart a run from step T the remote run directory needs one
     <problem>.T_<k>.rst per subgrid. {Colors.YELLOW}case upload rst --t1 T{Colors.RESET} sends them from
@@ -253,6 +268,7 @@ the remote gets the restarts it lacks.
     case upload history CS4SG1U1 --to server --cleaned --compiled
     case upload binary CS4SG1U1 --to server --t1 1000 --t2 5000
     case upload binary CS4SG1U1 --to server --t1 5000
+    case upload binary CS4SG1U1 --to server --missing
     case upload input CS4SG1U1 --to server
     case upload rst CS4SG1U1 --to server --t1 4000
     case upload rst CS4SG1U1 --to server --t1 3000 --t2 4000 --force
@@ -309,6 +325,7 @@ the restarts found only on the remote are added here.
                            (default: simflow.config,*.def,*.geo,*.map)
     {Colors.YELLOW}--t1 STEP{Colors.RESET}              binary/rst: first timestep (alone: only that step)
     {Colors.YELLOW}--t2 STEP{Colors.RESET}              binary/rst: last timestep
+    {Colors.YELLOW}--missing{Colors.RESET}              binary: only the files missing here
     {Colors.YELLOW}--archive{Colors.RESET}              history: only archive/ (combinable; none: all three)
     {Colors.YELLOW}--cleaned{Colors.RESET}              history: only cleaned/
     {Colors.YELLOW}--compiled{Colors.RESET}             history: only the compiled file
@@ -355,6 +372,11 @@ the restarts found only on the remote are added here.
     as it does for `field` sweeps -- with or without a range. It also comes
     from the freq context, but only with binary.
 
+    {Colors.YELLOW}--missing{Colors.RESET} carries only the selected files the local binary/ lacks,
+    or holds at another size (a copy an interrupted transfer cut short), and
+    says how many were already there. It compares names and sizes, not
+    contents, and goes with --t1/--t2/--freq.
+
 {Colors.BOLD}RESTART FILES:{Colors.RESET}
     {Colors.YELLOW}case download rst --t1 T{Colors.RESET} fetches the nsg files <problem>.T_<k>.rst
     from the remote run directory into the same directory here (created if
@@ -395,6 +417,8 @@ the restarts found only on the remote are added here.
     case download binary CS4SG1U1 --from server --t1 1000 --t2 5000 --freq 500
     case download binary CS4SG1U1 --from server --freq 1000
     case download binary CS4SG1U1 --from server --t1 5000
+    case download binary CS4SG1U1 --from server --missing
+    case download binary CS4SG1U1 --from server --t1 3000 --t2 5000 --missing
     case download input CS4SG1U1 --from server
     case download rst CS4SG1U1 --from server --t1 4000
     case download rst CS4SG1U1 --from server
@@ -488,6 +512,7 @@ class CaseUploadCommand(HistoryTransferMixin):
         step_window: Optional[tuple] = None,
         step_freq: Optional[int] = None,
         mode: Optional[str] = None,
+        missing: bool = False,
     ) -> dict:
         """Construct a new resumable transfer state document."""
         return {
@@ -503,6 +528,7 @@ class CaseUploadCommand(HistoryTransferMixin):
             'force': force,
             'step_window': list(step_window) if step_window else None,
             'step_freq': step_freq,
+            'missing': missing,
             'cases': case_entries,
             'completed_targets': [],
         }
@@ -620,6 +646,7 @@ class CaseUploadCommand(HistoryTransferMixin):
             saved_window = state.get('step_window')
             step_window = tuple(saved_window) if saved_window else None
             step_freq = state.get('step_freq')
+            missing = bool(state.get('missing', False))
             mode = state.get('mode') or ('binary' if step_window or step_freq else None)
         else:
             mode, problem = self._transfer_mode(args, direction)
@@ -645,6 +672,13 @@ class CaseUploadCommand(HistoryTransferMixin):
             step_window = resolve_step_window(self._get_arg(args, 't1'),
                                               self._get_arg(args, 't2'))
             step_freq = self._get_arg(args, 'freq')
+            missing = bool(self._get_arg(args, 'missing', False))
+            if missing and mode != 'binary':
+                self.console.print(
+                    f"[red]Error:[/red] --missing compares binary/ on both sides; "
+                    f"use `case {direction} binary --missing`."
+                )
+                return 1
             if step_window and not mode:
                 self.console.print(
                     f"[red]Error:[/red] --t1/--t2 select timesteps, so they need "
@@ -754,6 +788,7 @@ class CaseUploadCommand(HistoryTransferMixin):
                 step_window,
                 step_freq,
                 mode,
+                missing,
             )
             self._save_transfer_state(state)
 
@@ -792,6 +827,8 @@ class CaseUploadCommand(HistoryTransferMixin):
                           f"{lo:g}" if lo == hi else f"{lo:g} .. {hi:g}")
         if step_freq:
             table.add_row('Every', f"{step_freq} steps")
+        if missing:
+            table.add_row('Only', 'files missing on the other side')
         table.add_row('Force Create Missing Dir', 'Yes' if force_enabled else 'No')
         if resume_requested:
             table.add_row('Completed Targets', str(len(completed_targets)))
@@ -890,7 +927,7 @@ class CaseUploadCommand(HistoryTransferMixin):
                             step_window,
                             kind=kind,
                         )
-                elif (step_window or step_freq) and target['directory'] == 'binary':
+                elif (step_window or step_freq or missing) and target['directory'] == 'binary':
                     if is_upload:
                         ok = self.upload_binary_range(
                             ssh,
@@ -898,6 +935,7 @@ class CaseUploadCommand(HistoryTransferMixin):
                             target['case_path'],
                             step_window,
                             force=force_enabled,
+                            missing=missing,
                         )
                     else:
                         ok = self.download_binary_range(
@@ -906,6 +944,7 @@ class CaseUploadCommand(HistoryTransferMixin):
                             target['case_path'],
                             step_window,
                             freq=step_freq,
+                            missing=missing,
                         )
                 elif is_upload:
                     ok = self.upload_directory(
@@ -1443,8 +1482,10 @@ class CaseUploadCommand(HistoryTransferMixin):
         local_case_path: str,
         window: Optional[tuple],
         force: bool = False,
+        missing: bool = False,
     ) -> bool:
-        """Upload binary/, restricted to the timesteps inside `window`.
+        """Upload binary/, restricted to the timesteps inside `window` -- and
+        with `missing`, to the files the remote binary/ lacks.
 
         File by file rather than whole-directory, because that is what a window
         means: a case's binary/ is the bulk of it, and the point of naming a
@@ -1464,8 +1505,28 @@ class CaseUploadCommand(HistoryTransferMixin):
         kept, no_step = select_steps(names, window)
         if not self._report_selection(kept, no_step, window, local_dir):
             return True
+        if missing:
+            here = {n: os.path.getsize(os.path.join(local_dir, n)) for n in kept}
+            try:
+                there = (ssh.remote_file_sizes(remote_dir)
+                         if ssh.remote_path_exists(remote_dir) else {})
+            except Exception as exc:
+                self.console.print(f"[red]Error:[/red] Could not list {remote_dir}: {exc}")
+                return False
+            kept = self._report_missing(kept, here, there, remote_dir)
+            if not kept:
+                return True
 
         return self._upload_names(ssh, local_dir, remote_dir, kept, force, 'binary')
+
+    def _report_missing(self, kept, here, there, where) -> List[str]:
+        """Say how many of `kept` `where` lacks, and return those."""
+        absent, resized = select_missing(kept, here, there)
+        have = len(kept) - len(absent) - len(resized)
+        note = f", {len(resized)} at another size" if resized else ""
+        self.console.print(f"[cyan]Missing:[/cyan] {len(absent) + len(resized)} of "
+                           f"{len(kept)} file(s) in {where}{note}; {have} already there")
+        return sorted(absent + resized)
 
     def _upload_names(self, ssh, local_dir: str, remote_dir: str, names: List[str],
                       force: bool, label: str) -> bool:
@@ -1740,9 +1801,11 @@ class CaseUploadCommand(HistoryTransferMixin):
         local_case_path: str,
         window: Optional[tuple],
         freq: Optional[int] = None,
+        missing: bool = False,
     ) -> bool:
         """Download binary/, restricted to the timesteps inside `window` that
-        are multiples of `freq`."""
+        are multiples of `freq` -- and with `missing`, to the files the local
+        binary/ lacks."""
         remote_dir = f"{remote_case_path}/binary"
         local_dir = os.path.join(local_case_path, "binary")
 
@@ -1758,7 +1821,10 @@ class CaseUploadCommand(HistoryTransferMixin):
             return False
 
         try:
-            entries = ssh.list_remote_dir(remote_dir)
+            # With --missing the listing brings the sizes, and so which entries
+            # are files: without a window every name is kept, directories too.
+            sizes = ssh.remote_file_sizes(remote_dir) if missing else None
+            entries = list(sizes) if missing else ssh.list_remote_dir(remote_dir)
         except Exception as exc:
             self.console.print(f"[red]Error:[/red] Could not list {remote_dir}: {exc}")
             return False
@@ -1769,6 +1835,13 @@ class CaseUploadCommand(HistoryTransferMixin):
         kept, no_step = select_steps(entries, window, freq)
         if not self._report_selection(kept, no_step, window, remote_dir, freq):
             return True
+        if missing:
+            names = os.listdir(local_dir) if os.path.isdir(local_dir) else []
+            there = {n: os.path.getsize(os.path.join(local_dir, n)) for n in names
+                     if os.path.isfile(os.path.join(local_dir, n))}
+            kept = self._report_missing(kept, sizes, there, local_dir)
+            if not kept:
+                return True
 
         return self._download_names(ssh, remote_dir, local_dir, kept, 'binary')
 

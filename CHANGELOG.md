@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### 🧩 `case upload/download binary --missing`
+
+- Carries only the binary/ files the other side lacks, or holds at another
+  size (a copy an interrupted transfer cut short), and says how many were
+  already there. Names and sizes are compared, not contents. It goes with
+  `--t1/--t2` (and `--freq` on download), and `--resume` keeps it.
+
 ### ⏱️ `data table/stats --last N`, `use last:N`, `data table --output` alone
 
 - `--last N` keeps the last N steps (highest tsIds) of what `--t1/--t2`

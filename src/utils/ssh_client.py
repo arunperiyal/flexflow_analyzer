@@ -196,6 +196,17 @@ class SSHClientWrapper:
             return None
         return st.st_size, st.st_mtime
 
+    def remote_file_sizes(self, remote_path: str) -> dict:
+        """{name: size} of the regular files in a remote directory, in one listing."""
+        if not self.connected or not self.sftp_client:
+            raise IOError("Not connected to SSH server")
+        try:
+            # A server that leaves st_mode out lists files only as far as it can tell.
+            return {a.filename: a.st_size for a in self.sftp_client.listdir_attr(remote_path)
+                    if a.st_mode is None or stat.S_ISREG(a.st_mode)}
+        except Exception as e:
+            raise IOError(f"Failed to list directory {remote_path}: {e}")
+
     def set_remote_mtime(self, remote_path: str, mtime: float) -> None:
         """Set a remote file's access and modification time."""
         if not self.connected or not self.sftp_client:
