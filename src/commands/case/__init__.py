@@ -59,6 +59,8 @@ def _transfer_positionals(parser, direction):
                         ('compiled', 'the compiled file')):
         parser.add_argument(f'--{name}', action='store_true',
                             help=f'history: only {where} (combinable; none carries all three)')
+    parser.add_argument('--missing', action='store_true',
+                        help='binary: only the files the other side lacks (or holds at another size)')
     # The old spelling, kept only to point at the new one.
     parser.add_argument('--binary', action='store_true', help=argparse.SUPPRESS)
 
