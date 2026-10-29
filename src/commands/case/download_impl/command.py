@@ -13,6 +13,8 @@ from rich.console import Console
 from rich.progress import Progress, BarColumn, TextColumn, DownloadColumn, TransferSpeedColumn, TimeRemainingColumn
 from rich.table import Table
 from rich import box
+from .history import (HistoryTransferMixin, HISTORY_SETS, history_label, history_sets,
+                      history_target)
 
 # Loose files worth carrying with a case: what defines the run, and the othd maps
 # that keep its history readable once the mesh file is gone. Globs, so they hold
@@ -148,6 +150,7 @@ the remote gets the restarts it lacks.
     flexflow case upload binary [{Colors.YELLOW}case{Colors.RESET}] [--t1 STEP] [--t2 STEP] [options]
     flexflow case upload rst [{Colors.YELLOW}case{Colors.RESET}] [--t1 STEP] [--t2 STEP] [options]
     flexflow case upload input [{Colors.YELLOW}case{Colors.RESET}] [options]
+    flexflow case upload history [{Colors.YELLOW}case{Colors.RESET}] [--archive] [--cleaned] [--compiled] [options]
 
 {Colors.BOLD}ARGUMENTS:{Colors.RESET}
     {Colors.YELLOW}binary{Colors.RESET}                 binary/ only -- with --t1/--t2, only the timesteps
@@ -156,6 +159,8 @@ the remote gets the restarts it lacks.
                            --t1..--t2) in the run directory
     {Colors.YELLOW}input{Colors.RESET}                  <problem>.def and every file it names with File(...):
                            the mesh, .nbc, .srf ... (what a restart needs unchanged)
+    {Colors.YELLOW}history{Colors.RESET}                The OTHD/OISD history (`case organise history`):
+                           archive/, cleaned/ and the compiled file
     {Colors.YELLOW}case{Colors.RESET}                   Local case directory path (use * for all cases in .cases)
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
@@ -166,6 +171,9 @@ the remote gets the restarts it lacks.
                            globs (default: simflow.config,*.def,*.geo,*.map)
     {Colors.YELLOW}--t1 STEP{Colors.RESET}              binary/rst: first timestep (alone: only that step)
     {Colors.YELLOW}--t2 STEP{Colors.RESET}              binary/rst: last timestep
+    {Colors.YELLOW}--archive{Colors.RESET}              history: only archive/ (combinable; none: all three)
+    {Colors.YELLOW}--cleaned{Colors.RESET}              history: only cleaned/
+    {Colors.YELLOW}--compiled{Colors.RESET}             history: only the compiled file
     {Colors.YELLOW}--remote-path PATH{Colors.RESET}     Override remote base path (default: remote config path)
     {Colors.YELLOW}--force{Colors.RESET}                Create remote directories if they do not exist
     {Colors.YELLOW}--resume{Colors.RESET}               Resume the last interrupted upload
@@ -222,7 +230,27 @@ the remote gets the restarts it lacks.
     missing nothing is sent. simflow.config is not among them, so the remote's
     restart settings stay as they are (--files carries it).
 
+{Colors.BOLD}HISTORY:{Colors.RESET}
+    {Colors.YELLOW}case upload history{Colors.RESET} carries what `case organise history` keeps, in
+    othd_files/ and oisd_files/ alike: archive/{{problem}}N, cleaned/{{problem}}N
+    and the compiled {{problem}}.othd|oisd. {Colors.YELLOW}--archive{Colors.RESET}, {Colors.YELLOW}--cleaned{Colors.RESET} and
+    {Colors.YELLOW}--compiled{Colors.RESET} pick sets (combinable); without one all three go.
+    Parts still in the old flat layout (othd_files/{{problem}}N) go with
+    --archive, to the same place. problem comes from the local simflow.config.
+
+    A file replaces the one of its name on the other side, except an archived
+    run that is already there at the same size: those never change. Nothing
+    is deleted, so a prune on one side is not repeated on the other.
+
+    The compiled file goes after the runs. The readers (plot, case show, the
+    web app) take it only while it is newer than archive/, cleaned/ and every
+    run; so when it was not up to date where it came from, or the other side
+    has runs it does not, it is made older than them there, and the readers
+    take the runs until the next `case organise history --compile`.
+
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
+    case upload history CS4SG1U1 --to server
+    case upload history CS4SG1U1 --to server --cleaned --compiled
     case upload binary CS4SG1U1 --to server --t1 1000 --t2 5000
     case upload binary CS4SG1U1 --to server --t1 5000
     case upload input CS4SG1U1 --to server
@@ -259,6 +287,7 @@ the restarts found only on the remote are added here.
     flexflow case download binary [{Colors.YELLOW}case{Colors.RESET}] [--t1 STEP] [--t2 STEP] [--freq N] [options]
     flexflow case download rst [{Colors.YELLOW}case{Colors.RESET}] [--t1 STEP] [--t2 STEP] [options]
     flexflow case download input [{Colors.YELLOW}case{Colors.RESET}] [options]
+    flexflow case download history [{Colors.YELLOW}case{Colors.RESET}] [--archive] [--cleaned] [--compiled] [options]
 
 {Colors.BOLD}ARGUMENTS:{Colors.RESET}
     {Colors.YELLOW}binary{Colors.RESET}                 binary/ only -- with --t1/--t2, only the timesteps
@@ -267,6 +296,8 @@ the restarts found only on the remote are added here.
                            --t1..--t2) in the remote run directory
     {Colors.YELLOW}input{Colors.RESET}                  The remote <problem>.def and every file it names with
                            File(...): the mesh, .nbc, .srf ...
+    {Colors.YELLOW}history{Colors.RESET}                The remote OTHD/OISD history (`case organise history`):
+                           archive/, cleaned/ and the compiled file
     {Colors.YELLOW}case{Colors.RESET}                   Local case directory path (destination; use * for all cases in .cases)
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
@@ -278,6 +309,9 @@ the restarts found only on the remote are added here.
                            (default: simflow.config,*.def,*.geo,*.map)
     {Colors.YELLOW}--t1 STEP{Colors.RESET}              binary/rst: first timestep (alone: only that step)
     {Colors.YELLOW}--t2 STEP{Colors.RESET}              binary/rst: last timestep
+    {Colors.YELLOW}--archive{Colors.RESET}              history: only archive/ (combinable; none: all three)
+    {Colors.YELLOW}--cleaned{Colors.RESET}              history: only cleaned/
+    {Colors.YELLOW}--compiled{Colors.RESET}             history: only the compiled file
     {Colors.YELLOW}--freq N{Colors.RESET}               binary: only steps that are multiples of N
     {Colors.YELLOW}--remote-path PATH{Colors.RESET}     Override remote base path (default: remote config path)
     {Colors.YELLOW}--force{Colors.RESET}                Create the local case directory if it does not exist
@@ -334,7 +368,29 @@ the restarts found only on the remote are added here.
     unchanged -- at the same paths here. If one is missing on the remote,
     nothing is fetched.
 
+{Colors.BOLD}HISTORY:{Colors.RESET}
+    {Colors.YELLOW}case download history{Colors.RESET} carries what `case organise history` keeps, in
+    othd_files/ and oisd_files/ alike: archive/{{problem}}N, cleaned/{{problem}}N
+    and the compiled {{problem}}.othd|oisd. {Colors.YELLOW}--archive{Colors.RESET}, {Colors.YELLOW}--cleaned{Colors.RESET} and
+    {Colors.YELLOW}--compiled{Colors.RESET} pick sets (combinable); without one all three go.
+    Parts still in the old flat layout (othd_files/{{problem}}N) go with
+    --archive, to the same place. problem comes from the remote
+    (else the local) simflow.config.
+
+    A file replaces the one of its name on the other side, except an archived
+    run that is already there at the same size: those never change. Nothing
+    is deleted, so a prune on one side is not repeated on the other.
+
+    The compiled file goes after the runs. The readers (plot, case show, the
+    web app) take it only while it is newer than archive/, cleaned/ and every
+    run; so when it was not up to date where it came from, or the other side
+    has runs it does not, it is made older than them there, and the readers
+    take the runs until the next `case organise history --compile`.
+
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
+    case download history CS4SG1U1 --from server
+    case download history CS4SG1U1 --from server --compiled
+    case download history * --from server --cleaned --compiled
     case download binary CS4SG1U1 --from server --t1 1000 --t2 5000
     case download binary CS4SG1U1 --from server --t1 1000 --t2 5000 --freq 500
     case download binary CS4SG1U1 --from server --freq 1000
@@ -352,7 +408,7 @@ the restarts found only on the remote are added here.
 """)
 
 
-class CaseUploadCommand:
+class CaseUploadCommand(HistoryTransferMixin):
     """Upload case directories from local machine to remote server."""
 
     def __init__(self):
@@ -504,7 +560,7 @@ class CaseUploadCommand:
         return None
 
     def _transfer_mode(self, args, direction: str):
-        """(mode, problem): binary/rst/input/None from the first word, or what is wrong.
+        """(mode, problem): binary/rst/input/history/None from the first word, or what is wrong.
 
         `case upload CS4` puts the case in the first positional; it is moved to
         `case` (the parser does not fill the case context in that situation).
@@ -513,12 +569,12 @@ class CaseUploadCommand:
             return None, (f"--binary is now a word: `case {direction} binary` "
                           f"(with --t1/--t2 as before).")
         what = self._get_arg(args, 'what')
-        if what in ('binary', 'rst', 'input'):
+        if what in ('binary', 'rst', 'input', 'history'):
             return what, None
         if what is not None:
             case = self._get_arg(args, 'case')
             if case is not None:
-                return None, (f"'{what}' is not binary, rst or input (did you mean "
+                return None, (f"'{what}' is not binary, rst, input or history (did you mean "
                               f"`case {direction} binary {case}`?)")
             args.case = what
         return None, None
@@ -614,8 +670,22 @@ class CaseUploadCommand:
                     "drop --t1/--t2/--freq."
                 )
                 return 1
-            if mode in ('rst', 'input') and (dir_arg or file_patterns):
-                what = 'the .rst files' if mode == 'rst' else 'the .def and its File(...)'
+            sets = [s for s in HISTORY_SETS if self._get_arg(args, s, False)]
+            if sets and mode != 'history':
+                self.console.print(
+                    f"[red]Error:[/red] --{'/--'.join(sets)} pick the history sets; "
+                    f"use `case {direction} history`."
+                )
+                return 1
+            if mode == 'history' and (step_window or step_freq is not None):
+                self.console.print(
+                    "[red]Error:[/red] the history files hold every step; "
+                    "drop --t1/--t2/--freq."
+                )
+                return 1
+            if mode in ('rst', 'input', 'history') and (dir_arg or file_patterns):
+                what = {'rst': 'the .rst files', 'input': 'the .def and its File(...)',
+                        'history': 'the OTHD/OISD history'}[mode]
                 self.console.print(
                     f"[red]Error:[/red] `case {direction} {mode}` carries {what} "
                     f"only; {direction} --dir/--files separately."
@@ -630,6 +700,8 @@ class CaseUploadCommand:
                 directories = [RESTART_TARGETS[mode]]
             elif mode == 'input':
                 directories = [INPUT_TARGET]
+            elif mode == 'history':
+                directories = [history_target(sets or HISTORY_SETS)]
             elif mode == 'binary' and not dir_arg:
                 # binary on its own means binary/ alone, the way --files on its
                 # own means the files alone.
@@ -711,7 +783,7 @@ class CaseUploadCommand:
         table.add_row('Remote Host', f"{remote['user']}@{remote['ip']}:{remote['port']}")
         table.add_row('Remote Base Path', remote_base)
         table.add_row('Directories', ', '.join(
-            TARGET_LABEL.get(d, d) for d in directories) or '(none)')
+            TARGET_LABEL.get(d) or history_label(d) or d for d in directories) or '(none)')
         if file_patterns:
             table.add_row('Files', ', '.join(file_patterns))
         if step_window:
@@ -784,6 +856,14 @@ class CaseUploadCommand:
                         file_patterns,
                         force=force_enabled,
                     )
+                elif history_sets(target['directory']) is not None:
+                    sets = history_sets(target['directory'])
+                    if is_upload:
+                        ok = self.upload_history(ssh, target['remote_case_path'],
+                                                 target['case_path'], sets, force=force_enabled)
+                    else:
+                        ok = self.download_history(ssh, target['remote_case_path'],
+                                                   target['case_path'], sets)
                 elif target['directory'] == INPUT_TARGET:
                     if is_upload:
                         ok = self.upload_input(ssh, target['remote_case_path'],

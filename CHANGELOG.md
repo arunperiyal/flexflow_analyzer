@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### 📦 `case upload/download history`
+
+- Carries the OTHD/OISD history of `case organise history`, in othd_files/
+  and oisd_files/ alike: `archive/`, `cleaned/` and the compiled file.
+  `--archive`, `--cleaned` and `--compiled` pick sets and combine; without
+  one all three go. Parts still in the old flat layout go with `--archive`.
+- An archived run already on the other side at the same size is not sent
+  again (they never change). Nothing is deleted on the other side.
+- The compiled file goes after the runs. When it was not up to date where
+  it came from, or the other side has runs it lacks, it is made older than
+  them there, so the readers take the runs until the next `--compile`.
+
 ### ⚠️ `case organise history --clean` warns about swapped run numbers
 
 A run that starts on the step right after a later-numbered run ends, and is

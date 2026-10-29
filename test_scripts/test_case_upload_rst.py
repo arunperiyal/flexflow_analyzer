@@ -127,9 +127,9 @@ def test_case_upload_rst_without_steps_sends_every_step(cmd, case):
     (dict(what='input', files=True), 'carries the .def and its File(...) only'),
     (dict(t1=4000.0), 'need `case upload binary` or `rst`'),
     (dict(what='input', t1=4000.0), 'not per step'),
-    (dict(what='sgd'), "'sgd' is not binary, rst or input"),
+    (dict(what='sgd'), "'sgd' is not binary, rst, input or history"),
     (dict(binary=True), '--binary is now a word'),
-    (dict(what='CS1', case='CS2'), "'CS1' is not binary, rst or input"),
+    (dict(what='CS1', case='CS2'), "'CS1' is not binary, rst, input or history"),
 ])
 def test_case_upload_errors(cmd, case, capsys, kw, message):
     kw.setdefault('case', str(case))

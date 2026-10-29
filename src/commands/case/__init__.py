@@ -15,17 +15,19 @@ from src.cli.context import case_arg, context_flag, freq_arg, time_window
 TRANSFER_MODES = {
     'upload': [('binary', 'binary/: every timestep, or just --t1..--t2'),
                ('rst', 'Restart .rst files of every step (or --t1..--t2) in the run directory'),
-               ('input', 'The <problem>.def and every File(...) it names (mesh, .nbc, .srf ...)')],
+               ('input', 'The <problem>.def and every File(...) it names (mesh, .nbc, .srf ...)'),
+               ('history', 'OTHD/OISD history: archive/, cleaned/, the compiled file (or --archive/--cleaned/--compiled)')],
     'download': [('binary', 'binary/: every timestep, or just --t1..--t2 (--freq)'),
                  ('rst', 'Restart .rst files of every step (or --t1..--t2) from the remote run directory'),
-                 ('input', 'The remote <problem>.def and every File(...) it names')],
+                 ('input', 'The remote <problem>.def and every File(...) it names'),
+                 ('history', 'The remote OTHD/OISD history (or --archive/--cleaned/--compiled)')],
 }
 
 
 def _mode(args):
-    """binary/rst/input, or None when the first word is a case (or absent)."""
+    """binary/rst/input/history, or None when the first word is a case (or absent)."""
     what = getattr(args, 'what', None)
-    return what if what in ('binary', 'rst', 'input') else None
+    return what if what in ('binary', 'rst', 'input', 'history') else None
 
 
 def _stepped(args):
@@ -53,6 +55,10 @@ def _transfer_positionals(parser, direction):
     case_arg(parser, resolve=_transfer_case,
              help=('Local case directory path' if direction == 'upload'
                    else 'Local case directory path (destination)'))
+    for name, where in (('archive', 'archive/'), ('cleaned', 'cleaned/'),
+                        ('compiled', 'the compiled file')):
+        parser.add_argument(f'--{name}', action='store_true',
+                            help=f'history: only {where} (combinable; none carries all three)')
     # The old spelling, kept only to point at the new one.
     parser.add_argument('--binary', action='store_true', help=argparse.SUPPRESS)
 
