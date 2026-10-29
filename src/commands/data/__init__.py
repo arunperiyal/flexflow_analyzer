@@ -4,7 +4,8 @@ Subcommands: show, stats
 """
 
 from ..base import BaseCommand
-from src.cli.context import case_arg, context_flag, freq_arg, node_arg, osgid_arg, othid_arg, time_window
+from src.cli.context import (case_arg, context_flag, freq_arg, last_arg, node_arg, osgid_arg,
+                             othid_arg, time_window)
 
 
 class DataCommand(BaseCommand):
@@ -52,9 +53,11 @@ class DataCommand(BaseCommand):
         time_window(table_parser, 
                     t1_kwargs=dict(metavar='TSID', help='First tsId (alone: from there to the end)'),
                     t2_kwargs=dict(metavar='TSID', help='Last tsId'))
+        last_arg(table_parser, help='Only the last N steps (of the --t1/--t2 window)')
         node_arg(table_parser, help='Node to read (default: 0)')
-        table_parser.add_argument('--output', type=str, metavar='FILE',
-                                 help='Write every row to a .csv instead of printing')
+        table_parser.add_argument('--output', nargs='?', const=True, type=str, metavar='FILE',
+                                 help='Write every row to a .csv instead of printing '
+                                      '(no FILE: <case>/data_tables/<var>.csv)')
         table_parser.add_argument('--head', type=int, metavar='N',
                                  help='Print the first N rows (default: 10)')
         table_parser.add_argument('--tail', type=int, metavar='N',
@@ -91,6 +94,7 @@ class DataCommand(BaseCommand):
         time_window(stats_parser, 
                     t1_kwargs=dict(metavar='TSID', help='First tsId (alone: from there to the end)'),
                     t2_kwargs=dict(metavar='TSID', help='Last tsId'))
+        last_arg(stats_parser, help='Only the last N steps (of the --t1/--t2 window)')
         node_arg(stats_parser, help='Node to read (default: 0)')
         stats_parser.add_argument('--output', type=str, metavar='FILE',
                                  help='Also write the summary to a .csv')

@@ -205,7 +205,7 @@ def execute_statistics(args):
         return
     logger = Logger(verbose=getattr(args, "verbose", False))
     if not getattr(args, "case", None):
-        shared.no_case(args, logger, print_statistics_help, ('var', 'func', 't1', 't2', 'node', 'othid', 'osgid', 'output', 'group'))
+        shared.no_case(args, logger, print_statistics_help, ('var', 'func', 't1', 't2', 'node', 'othid', 'osgid', 'output', 'group', 'last'))
         return
 
     funcs = shared.split_vars(getattr(args, "func", None))
@@ -262,7 +262,7 @@ def _run_statistics(case_dir, args, logger, funcs, requested):
     columns = shared.resolve_columns(meta, requested, logger, group)
     node = shared.resolve_node(meta, getattr(args, "node", None), logger, group)
     mask = shared.step_mask(meta, getattr(args, "t1", None),
-                            getattr(args, "t2", None), logger)
+                            getattr(args, "t2", None), logger, getattr(args, "last", None))
     freq = getattr(args, "freq", None) or shared.out_freq(case_dir)
 
     times, tsids, values = shared.gather(meta, columns, node, mask, group)

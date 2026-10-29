@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### ⏱️ `data table/stats --last N`, `use last:N`, `data table --output` alone
+
+- `--last N` keeps the last N steps (highest tsIds) of what `--t1/--t2`
+  select, or of the whole history. Unlike `--tail` it decides what is read,
+  so it applies to `--output` and to the stats. `use last:N` sets it for
+  both commands (`use last` alone still restores the last session).
+- `data table --output` with no file writes `<case>/data_tables/<var>.csv`,
+  named after the variables as given (`dy.csv`, `dx_dy.csv`); with `*`, each
+  case writes into its own. So `use case:CS4SG3U1P0 var:dy last:1000`, then
+  `data table --output`, gives `CS4SG3U1P0/data_tables/dy.csv`.
+- `data show/table/stats` read the history the way the other readers do
+  (`archive/`, `cleaned/`, the compiled file while it is up to date). They
+  globbed `othd_files/*.othd`, which in the `history` layout is only the
+  compiled file, stale or not.
+
 ### 📦 `case upload/download history`
 
 - Carries the OTHD/OISD history of `case organise history`, in othd_files/
