@@ -48,12 +48,17 @@ def problem_of(case_dir) -> Optional[str]:
     return SimflowConfig(config).problem if config.exists() else None
 
 
+def run_pattern(ext: str, problem: Optional[str]):
+    """{problem}N.{ext}, with N as group 1 (any stem without a problem)."""
+    stem = re.escape(problem) if problem else r'.*?'
+    return re.compile(rf'^{stem}(\d+)\.{ext}$')
+
+
 def numbered(directory: Path, ext: str, problem: Optional[str]) -> Dict[int, Path]:
     """{N: path} of the {problem}N.{ext} files in `directory` (any stem without a problem)."""
     if not directory.is_dir():
         return {}
-    stem = re.escape(problem) if problem else r'.*?'
-    pattern = re.compile(rf'^{stem}(\d+)\.{ext}$')
+    pattern = run_pattern(ext, problem)
     found = {}
     for path in directory.iterdir():
         match = pattern.match(path.name)

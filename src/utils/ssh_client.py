@@ -186,6 +186,22 @@ class SSHClientWrapper:
         except Exception as e:
             raise IOError(f"Failed to list directory {remote_path}: {e}")
 
+    def remote_stat(self, remote_path: str):
+        """(size, mtime) of a remote path, or None when it is not there."""
+        if not self.connected or not self.sftp_client:
+            return None
+        try:
+            st = self.sftp_client.stat(remote_path)
+        except FileNotFoundError:
+            return None
+        return st.st_size, st.st_mtime
+
+    def set_remote_mtime(self, remote_path: str, mtime: float) -> None:
+        """Set a remote file's access and modification time."""
+        if not self.connected or not self.sftp_client:
+            raise IOError("Not connected to SSH server")
+        self.sftp_client.utime(remote_path, (mtime, mtime))
+
     def download_directory(
         self,
         remote_dir: str,

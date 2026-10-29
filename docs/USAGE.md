@@ -268,6 +268,11 @@ ff case upload ./mycase --to myserver --remote-path /scratch/simulations
 # Create missing remote directories before upload
 ff case upload ./mycase --to myserver --dir othd_files --force
 
+# Only the OTHD/OISD history (`case organise history`): archive/, cleaned/,
+# the compiled file -- or the sets named with --archive/--cleaned/--compiled
+ff case upload history ./mycase --to myserver
+ff case download history ./mycase --from myserver --cleaned --compiled
+
 # Specify relative path
 ff case upload mycase --to myserver
 ```
