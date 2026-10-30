@@ -1,6 +1,6 @@
 """
 Data command group - Work with time-series data
-Subcommands: show, stats
+Subcommands: show, table, stats, check
 """
 
 from ..base import BaseCommand
@@ -119,6 +119,47 @@ class DataCommand(BaseCommand):
         stats_parser.add_argument('--examples', action='store_true',
                                  help='Show usage examples')
 
+        # data check steady -- verdicts on the history
+        check_parser = data_subparsers.add_parser('check', add_help=False,
+                                                  help='Verdicts on the time history (steady)')
+        check_subparsers = check_parser.add_subparsers(dest='data_check_subcommand',
+                                                       help='Data check subcommands')
+        steady_parser = check_subparsers.add_parser('steady', add_help=False,
+                                                    help='Whether a variable has settled, and from which tsId')
+        case_arg(steady_parser, help='Case directory path')
+        context_flag(steady_parser, 'var', '--var', '--variable', dest='var', type=str,
+                     action='append', metavar='NAME',
+                     help='Variable or component to check (repeat, or comma-separate)')
+        time_window(steady_parser,
+                    t1_kwargs=dict(metavar='TSID', help='First tsId (alone: from there to the end)'),
+                    t2_kwargs=dict(metavar='TSID', help='Last tsId'))
+        last_arg(steady_parser, help='Only the last N steps (of the --t1/--t2 window)')
+        node_arg(steady_parser, help='Node to read (default: 0)')
+        othid_arg(steady_parser,
+                  help='othId (probe set) to read from the othd files (default: the first)')
+        osgid_arg(steady_parser,
+                  help='osgId (surface group) to read from the oisd files (default: the first)')
+        steady_parser.add_argument('--group', type=int, metavar='ID',
+                                   help='The id in whichever files are read (prefer --othid/--osgid)')
+        steady_parser.add_argument('--blocks', type=int, default=4, metavar='K',
+                                   help='Blocks of whole cycles compared (default: 4)')
+        steady_parser.add_argument('--min-cycles', type=int, default=10, metavar='M',
+                                   help='Whole cycles needed in the window (default: 10)')
+        steady_parser.add_argument('--tol', type=float, default=0.05, metavar='F',
+                                   help='Largest amplitude and period spread (default: 0.05)')
+        steady_parser.add_argument('--mean-tol', type=float, default=0.1, metavar='F',
+                                   help='Largest mean shift, in std (default: 0.1)')
+        steady_parser.add_argument('--othd', action='store_true',
+                                   help='Take variables from the othd files')
+        steady_parser.add_argument('--oisd', action='store_true',
+                                   help='Take variables from the oisd files')
+        steady_parser.add_argument('-v', '--verbose', action='store_true',
+                                   help="Also print each variable's blocks")
+        steady_parser.add_argument('-h', '--help', action='store_true',
+                                   help='Show help for steady command')
+        steady_parser.add_argument('--examples', action='store_true',
+                                   help='Show usage examples')
+
         # Main data help flags
         parser.add_argument('-h', '--help', action='store_true',
                            help='Show help for data command')
@@ -134,6 +175,9 @@ class DataCommand(BaseCommand):
         elif hasattr(args, 'data_subcommand') and args.data_subcommand == 'table':
             from .table_impl import command as table_cmd
             table_cmd.execute_table(args)
+        elif hasattr(args, 'data_subcommand') and args.data_subcommand == 'check':
+            from .check_impl import command as check_cmd
+            check_cmd.execute_check(args)
         elif hasattr(args, 'data_subcommand') and args.data_subcommand == 'stats':
             # Delegate to stats subcommand
             from .stats_impl import command as stats_cmd
@@ -166,6 +210,7 @@ class DataCommand(BaseCommand):
         table.add_row("show", "What the data holds: files, nodes, span, variables")
         table.add_row("table", "The numbers themselves, time down the rows")
         table.add_row("stats", "min/max/mean/rms/std/range/maxloc over a window")
+        table.add_row("check steady", "Whether a variable has settled, and from which tsId")
 
         console.print("[bold]SUBCOMMANDS:[/bold]")
         console.print(table)

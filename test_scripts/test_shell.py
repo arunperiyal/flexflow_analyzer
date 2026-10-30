@@ -452,3 +452,10 @@ def test_last_context_and_bare_output(rt):
     assert parsed(rt, 'data table --output t.csv --last 5').output == 't.csv'
     assert parsed(rt, 'data table --last 5').last == 5
     assert rt.execute_line('use last:0') == 1
+
+
+def test_data_check_steady_takes_the_contexts(rt):
+    use(rt, 'case:CaseA var:dy last:4000 node:24')
+    got = parsed(rt, 'data check steady')
+    assert (got.last, got.var, got.node, got.blocks, got.tol) == (4000, ['dy'], 24, 4, 0.05)
+    assert texts(rt, 'data check ') == ['steady']
