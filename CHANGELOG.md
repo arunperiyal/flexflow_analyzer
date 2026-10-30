@@ -2,11 +2,13 @@
 
 ## Unreleased
 
-### 🔁 `use reset` restores the last session's context
+### 🔁 `use restore` and `use reset`
 
-- `use last` is now `use reset` (shellkit v0.1.4), so it is not confused
-  with the `last` context (`use last:N`). `use last` alone says so and
-  does nothing.
+- `use last` is now `use restore` (shellkit v0.1.4): the context the last
+  session ended with. Renamed so it is not confused with the `last` context
+  (`use last:N`); `use last` alone says so and does nothing.
+- `use reset` undoes this session's last change to the context (`use`,
+  `unuse`, `use restore`); repeat it to go further back, up to 50 changes.
 
 ### 📈 `data check steady`
 
