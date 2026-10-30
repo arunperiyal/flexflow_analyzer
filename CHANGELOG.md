@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### 🔁 `use reset` restores the last session's context
+
+- `use last` is now `use reset` (shellkit v0.1.4), so it is not confused
+  with the `last` context (`use last:N`). `use last` alone says so and
+  does nothing.
+
 ### 📈 `data check steady`
 
 - Whether a variable's history has settled, per component, and from which
@@ -29,7 +35,7 @@
 - `--last N` keeps the last N steps (highest tsIds) of what `--t1/--t2`
   select, or of the whole history. Unlike `--tail` it decides what is read,
   so it applies to `--output` and to the stats. `use last:N` sets it for
-  both commands (`use last` alone still restores the last session).
+  both commands.
 - `data table --output` with no file writes `<case>/data_tables/<var>.csv`,
   named after the variables as given (`dy.csv`, `dx_dy.csv`); with `*`, each
   case writes into its own. So `use case:CS4SG3U1P0 var:dy last:1000`, then

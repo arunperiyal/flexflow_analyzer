@@ -1,6 +1,6 @@
 """FlexFlow on shellkit: contexts, how commands take them, completion, builtins.
 
-The generic shell (history, aliases, pipes, `use list`/`use last`, settings)
+The generic shell (history, aliases, pipes, `use list`/`use reset`, settings)
 is tested in shellkit itself; these cover what FlexFlow declares on top.
 """
 
@@ -459,3 +459,11 @@ def test_data_check_steady_takes_the_contexts(rt):
     got = parsed(rt, 'data check steady')
     assert (got.last, got.var, got.node, got.blocks, got.tol) == (4000, ['dy'], 24, 4, 0.05)
     assert texts(rt, 'data check ') == ['steady']
+
+
+def test_use_reset_and_the_last_key(rt):
+    use(rt, 'last:500')
+    assert rt.execute_line('use last') == 1
+    assert 'use reset' in err(rt)
+    assert rt.get('last') == 500
+    assert 'reset' in texts(rt, 'use ') and 'last' not in texts(rt, 'use ')
