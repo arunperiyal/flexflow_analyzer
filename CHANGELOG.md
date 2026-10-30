@@ -6,7 +6,7 @@
 
 - `use last` is now `use restore` (shellkit v0.1.4): the context the last
   session ended with. Renamed so it is not confused with the `last` context
-  (`use last:N`); `use last` alone says so and does nothing.
+  (`use last:N`).
 - `use reset` undoes this session's last change to the context (`use`,
   `unuse`, `use restore`); repeat it to go further back, up to 50 changes.
 

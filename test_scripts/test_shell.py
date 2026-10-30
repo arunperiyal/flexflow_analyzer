@@ -463,8 +463,7 @@ def test_data_check_steady_takes_the_contexts(rt):
 
 def test_use_restore_reset_and_the_last_key(rt):
     use(rt, 'last:500')
-    assert rt.execute_line('use last') == 1
-    assert 'use restore' in err(rt)
+    assert rt.execute_line('use last') == 1           # no longer a word of its own
     assert rt.get('last') == 500
     got = texts(rt, 'use ')
     assert {'reset', 'restore'} <= set(got) and 'last' not in got
