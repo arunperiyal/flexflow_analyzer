@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### 📈 `data check steady`
+
+- Whether a variable's history has settled, per component, and from which
+  tsId. The window (`--t1/--t2`, `--last N`, `use last:N`) is cut at its
+  upward zero crossings about the mean (0.1 std hysteresis) into whole
+  cycles, the cycles into `--blocks` (4) of equal count, leftovers dropped
+  from the start. Steady with `--min-cycles` (10) and the block means within
+  `--mean-tol` (0.1) std, the block amplitudes and periods within `--tol`
+  (0.05) of their mean. A failure says which way it went (amplitude growing,
+  mean drifting down, ...); `-v` prints the blocks.
+- A signal with under 2 cycles and a std under `--tol` of its mean is flat:
+  equal blocks, steady when their means stay within `--tol` of the mean.
+- `from`: the tsId from which the rest of the window is steady -- the cycle
+  starts are tried earliest first, each rest judged afresh.
+
 ### 🧩 `case upload/download binary --missing`
 
 - Carries only the binary/ files the other side lacks, or holds at another
