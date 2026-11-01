@@ -71,6 +71,23 @@ plot --title "Analysis; Results"; data stats
 - Errors don't stop subsequent commands
 - Empty commands (;;) are skipped automatically
 
+### Version and Comments
+
+```bash
+version                      # version, commit, local changes, available updates
+version --offline            # the same without fetching (as of the last fetch)
+version comment "data table should sort by time"   # note a bug or a wanted feature
+version comment              # list the notes
+version comment --remove 3   # drop note 3 once dealt with
+```
+
+`version` fetches GitHub and lists the commits (and newer release tags) this
+checkout does not have yet; on a branch with no upstream it compares with
+`origin/main`. It installs nothing: update with `git pull` and
+`pip install -r requirements.txt`. A comment is saved in
+`~/.flexflow/comments.json` with the version, commit, time, directory,
+context and the command run before it.
+
 ## Command Structure
 
 FlexFlow uses a domain-driven command structure:
