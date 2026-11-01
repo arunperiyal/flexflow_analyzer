@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### 🏷️ `version`
+
+- `version` (shellkit v0.1.5) shows the FlexFlow, shellkit and Python
+  versions, the checkout's branch, commit and local changes, and whether
+  updates are available: it fetches GitHub and lists the new commits and
+  release tags. `--offline` skips the fetch. Nothing is installed.
+- `version comment <text>` notes a bug or a feature wanted, stamped with the
+  version, commit, time, directory, context and the last command;
+  `version comment` lists them, `--remove N` drops one.
+
 ### 🔁 `use restore` and `use reset`
 
 - `use last` is now `use restore` (shellkit v0.1.4): the context the last

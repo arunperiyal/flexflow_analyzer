@@ -470,3 +470,11 @@ def test_use_restore_reset_and_the_last_key(rt):
     use(rt, 'last:1000 node:3')
     use(rt, 'reset')
     assert (rt.get('last'), rt.get('node')) == (500, None)
+
+
+def test_version_reports_this_checkout():
+    from pathlib import Path
+    from src.cli.app import create_app
+    app = create_app()
+    assert app.source_dir == Path(__file__).resolve().parents[1]
+    assert 'version' in app.builtin_table()

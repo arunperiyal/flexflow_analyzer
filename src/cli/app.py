@@ -6,6 +6,8 @@ banner. The shell itself (prompt, history, completion, `use`, pipes, ...)
 is shellkit's.
 """
 
+from pathlib import Path
+
 from rich import box
 from rich.panel import Panel
 
@@ -89,6 +91,7 @@ def create_app() -> App:
         help_header=HELP_HEADER,
         session_timeout=15,
         file_style=ff_builtins.file_style,
+        source_dir=Path(__file__).resolve().parents[2],
     )
     for builtin in ff_builtins.builtins():
         app.add_builtin(builtin)
