@@ -1,7 +1,7 @@
 """
 Def command group - inspect and edit .def configuration files.
 
-Handles .def operations: var (more subcommands to follow).
+Handles .def operations: var, time, freq.
 """
 
 from .base import BaseCommand
@@ -9,10 +9,10 @@ from src.cli.completers import described
 
 
 class DefCommand(BaseCommand):
-    """Inspect and edit a case's .def file (var)"""
+    """Inspect and edit a case's .def file (var, time, freq)"""
 
     name = "def"
-    description = "Inspect and edit .def file parameters (var)"
+    description = "Inspect and edit .def file parameters (var, time, freq)"
     category = "Core"
 
     def setup_parser(self, subparsers):
@@ -56,6 +56,22 @@ class DefCommand(BaseCommand):
         time_parser.add_argument('-h', '--help', action='store_true',
                                  help='Show help for time command')
 
+        # def freq [out|rst] [value]
+        freq_parser = def_subparsers.add_parser('freq', add_help=False,
+                                                help='Show or edit the output and restart '
+                                                     'frequencies (outFreq)')
+        freq_parser.add_argument('kind', nargs='?',
+                                 help="'out' (outputSimulation) or 'rst' (outputRestart); "
+                                      "omit to show both"
+                                 ).completer = described(('out', 'outputSimulation outFreq'),
+                                                         ('rst', 'outputRestart outFreq'))
+        freq_parser.add_argument('value', nargs='?',
+                                 help='New frequency in steps (provide to edit it)')
+        freq_parser.add_argument('-c', '--case', type=str,
+                                 help='Case directory path (default: current directory)')
+        freq_parser.add_argument('-h', '--help', action='store_true',
+                                 help='Show help for freq command')
+
         # Main def help flag
         parser.add_argument('-h', '--help', action='store_true',
                             help='Show help for def command')
@@ -83,6 +99,10 @@ class DefCommand(BaseCommand):
         if subcommand == 'time':
             from .def_impl.command import execute_time
             return execute_time(args)
+
+        if subcommand == 'freq':
+            from .def_impl.command import execute_freq
+            return execute_freq(args)
 
         print_def_help()
         return 1

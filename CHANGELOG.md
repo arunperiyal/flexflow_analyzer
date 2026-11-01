@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### ⏱️ `def freq out` / `def freq rst`
+
+- `def freq` shows the outFreq of outputSimulation{} (`out`) and
+  outputRestart{} (`rst`), and how many files each gives over maxTimeSteps.
+  `def freq out 50` / `def freq rst 500` set one, leaving the rest of the
+  .def as it was; a frequency is a positive whole number of steps, and one
+  that does not divide maxTimeSteps is noted. An outFreq written as an
+  expression (`2*F`) is shown as written.
+
 ### 🏷️ `version`
 
 - `version` (shellkit v0.1.5) shows the FlexFlow, shellkit and Python

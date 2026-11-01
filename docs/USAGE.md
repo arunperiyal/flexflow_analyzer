@@ -71,6 +71,16 @@ plot --title "Analysis; Results"; data stats
 - Errors don't stop subsequent commands
 - Empty commands (;;) are skipped automatically
 
+### Def File Parameters
+
+```bash
+def var                  # define{} variables;  def var Ur 2.0 sets one
+def time                 # timeSteppingControl{};  def time maxTime 7000
+def freq                 # outFreq of outputSimulation{} (out) and outputRestart{} (rst)
+def freq out 50          # write output every 50 steps
+def freq rst 500         # write a restart every 500 steps
+```
+
 ### Version and Comments
 
 ```bash

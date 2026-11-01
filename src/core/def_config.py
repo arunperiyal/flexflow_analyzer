@@ -17,6 +17,8 @@ Usage
     cfg.initial_time_increment  # float | None
     cfg.order                   # str  | None
     cfg.high_frequency_damping  # float | None
+    cfg.output_frequency        # outFreq of outputSimulation{}: int, or the expression
+    cfg.restart_frequency       # outFreq of outputRestart{}, the same
 
     # define{} block variables
     cfg.variables               # dict[str, str]  e.g. {'DIA': '1.0', 'SPAN': '12*DIA'}
@@ -33,6 +35,11 @@ import operator
 import re
 from pathlib import Path
 from typing import Optional, Union
+
+
+# The blocks whose outFreq says how often files are written: output
+# (.out/binary) and restart (.rst).
+OUTPUT_BLOCKS = ('outputSimulation', 'outputRestart')
 
 
 class _NotANumber(Exception):
@@ -67,6 +74,7 @@ class DefConfig:
         self._tsc: dict = {}        # timeSteppingControl values
         self._variables: dict = {}  # define{} block variables
         self._file_refs: list = []  # filenames referenced via File( "..." )
+        self._out_freq: dict = {}   # block name -> outFreq as written
         if self._path.exists():
             self._parse()
 
@@ -83,6 +91,18 @@ class DefConfig:
         self._parse_time_stepping_control(content)
         self._parse_define_blocks(content)
         self._parse_file_references(content)
+        self._parse_output_frequencies(content)
+
+    def _parse_output_frequencies(self, content: str) -> None:
+        """outFreq of outputSimulation{} and outputRestart{}, as written."""
+        self._out_freq = {}
+        for block in OUTPUT_BLOCKS:
+            match = re.search(rf'^\s*{block}\s*\{{([^}}]*)\}}', content, re.DOTALL | re.MULTILINE)
+            if not match:
+                continue
+            m = re.search(r'^\s*outFreq\s*=\s*(\S+)', match.group(1), re.MULTILINE)
+            if m:
+                self._out_freq[block] = m.group(1)
 
     def _parse_time_stepping_control(self, content: str) -> None:
         match = re.search(r'timeSteppingControl\s*\{([^}]*)\}', content, re.DOTALL)
@@ -183,6 +203,21 @@ class DefConfig:
     def high_frequency_damping(self) -> Optional[float]:
         """highFrequencyDampingFactor from timeSteppingControl{}."""
         return self._tsc.get('highFrequencyDampingFactor')
+
+    def _frequency(self, block: str) -> Union[int, str, None]:
+        raw = self._out_freq.get(block)
+        return int(raw) if raw is not None and raw.isdigit() else raw
+
+    @property
+    def output_frequency(self) -> Union[int, str, None]:
+        """outFreq of outputSimulation{}: steps between output files; an int,
+        or the expression as written when it is not a plain number."""
+        return self._frequency('outputSimulation')
+
+    @property
+    def restart_frequency(self) -> Union[int, str, None]:
+        """outFreq of outputRestart{}: steps between restart files."""
+        return self._frequency('outputRestart')
 
     @property
     def variables(self) -> dict:
@@ -427,26 +462,44 @@ class DefConfig:
         bool
             True if the key was found and updated, False otherwise.
         """
+        if not self._set_in_block('timeSteppingControl', key, value):
+            return False
+        # Refresh the cached timeSteppingControl values from what was written,
+        # rather than guessing the right cast for `value`.
+        self._tsc = {}
+        self._parse_time_stepping_control(self._path.read_text())
+        return True
+
+    def set_output_frequency(self, block: str, value: Union[str, int]) -> bool:
+        """Set outFreq of one block -- 'outputSimulation' or 'outputRestart'.
+
+        Returns False when the block or its outFreq line is missing."""
+        if block not in OUTPUT_BLOCKS:
+            raise ValueError(f"not an output block: {block}")
+        if not self._set_in_block(block, 'outFreq', value):
+            return False
+        self._parse_output_frequencies(self._path.read_text())
+        return True
+
+    def _set_in_block(self, block: str, key: str, value) -> bool:
+        """Rewrite `key = ...` inside `block{ }` in place, keeping the
+        indentation and the alignment before the value."""
         if not self._path.exists():
             raise FileNotFoundError(f".def file not found: {self._path}")
 
         lines = self._path.read_text().splitlines(keepends=True)
-
-        in_block = False
-        found = False
+        start = re.compile(rf'{re.escape(block)}\s*\{{')
         pattern = re.compile(rf'^(\s*{re.escape(key)}\s*=\s*)\S+')
+        in_block = found = False
 
         for i, line in enumerate(lines):
             stripped = line.strip()
-
-            if re.match(r'timeSteppingControl\s*\{', stripped):
+            if start.match(stripped):
                 in_block = True
                 continue
-
             if in_block and stripped == '}':
                 in_block = False
                 continue
-
             if in_block:
                 m = pattern.match(line)
                 if m:
@@ -454,16 +507,9 @@ class DefConfig:
                     lines[i] = f"{m.group(1)}{value}{newline}"
                     found = True
 
-        if not found:
-            return False
-
-        new_content = ''.join(lines)
-        self._path.write_text(new_content)
-        # Refresh the cached timeSteppingControl values from what was written,
-        # rather than guessing the right cast for `value`.
-        self._tsc = {}
-        self._parse_time_stepping_control(new_content)
-        return True
+        if found:
+            self._path.write_text(''.join(lines))
+        return found
 
     def update_output_frequency(self, frequency: int) -> None:
         """
