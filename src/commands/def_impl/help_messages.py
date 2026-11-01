@@ -22,6 +22,7 @@ def print_def_help():
     table.add_column("Description", style="white")
     table.add_row("var", "Show or edit define{} block variables")
     table.add_row("time", "Show or edit timeSteppingControl{} values (maxTime, inc)")
+    table.add_row("freq", "Show or edit outFreq of outputSimulation{} (out) and outputRestart{} (rst)")
 
     console.print("[bold]SUBCOMMANDS:[/bold]")
     console.print(table)
@@ -37,4 +38,9 @@ def print_def_help():
     console.print("    flexflow def time maxTime 7000        # Set maxTimeSteps = 7000")
     console.print("    flexflow def time inc                 # Show initialTimeIncrement")
     console.print("    flexflow def time inc 0.05            # Set initialTimeIncrement = 0.05")
+    console.print()
+    console.print("    flexflow def freq                     # Output and restart frequencies, files over maxTimeSteps")
+    console.print("    flexflow def freq out                 # Show outFreq of outputSimulation{}")
+    console.print("    flexflow def freq out 50              # Write output every 50 steps")
+    console.print("    flexflow def freq rst 500             # Write a restart every 500 steps")
     console.print()

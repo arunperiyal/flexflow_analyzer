@@ -1,7 +1,8 @@
 """
-Implementation of the `def var` subcommand.
+Implementation of the `def var`, `def time` and `def freq` subcommands.
 
-Reads and edits define{} block variables in a case's .def file.
+Reads and edits define{} variables, timeSteppingControl{} values and the
+outFreq of outputSimulation{} / outputRestart{} in a case's .def file.
 """
 
 import os
@@ -235,5 +236,117 @@ def execute_time(args):
 
     console.print()
     console.print(table)
+    console.print()
+    return 0
+
+
+# `def freq` names: the block whose outFreq it is, and what that block writes.
+_FREQ_FIELDS = {
+    'out': ('outputSimulation', 'output'),
+    'rst': ('outputRestart', 'restart'),
+}
+
+
+def _per_run(cfg, freq):
+    """maxTimeSteps // freq: the files written over maxTimeSteps, or None."""
+    steps = cfg.max_time_steps
+    value = freq if isinstance(freq, int) else cfg.evaluate(freq) if freq else None
+    if not steps or not value or value <= 0:
+        return None
+    return int(steps // value)
+
+
+def execute_freq(args):
+    """
+    Execute `def freq [out|rst] [value]`.
+
+    - No kind        -> both frequencies, with the files over maxTimeSteps.
+    - kind only      -> that frequency.
+    - kind + value   -> set it (a positive whole number of steps).
+    """
+    console = Console()
+
+    case_path = Path(_resolve_case_path(args)).resolve()
+    if not case_path.exists():
+        console.print(f"[red]Error:[/red] Case directory not found: {case_path}")
+        return 1
+
+    cfg = _resolve_def_config(case_path, console)
+    if cfg is None:
+        return 1
+
+    kind = getattr(args, 'kind', None)
+    value = getattr(args, 'value', None)
+
+    if kind is not None and kind not in _FREQ_FIELDS:
+        console.print(
+            f"[red]Error:[/red] Unknown frequency [cyan]{kind}[/cyan]. "
+            f"Expected 'out' or 'rst'."
+        )
+        return 1
+
+    current = {'out': cfg.output_frequency, 'rst': cfg.restart_frequency}
+
+    # ── Edit: def freq <kind> <value> ───────────────────────────────────────
+    if kind and value is not None:
+        block, _ = _FREQ_FIELDS[kind]
+        if not value.isdigit() or int(value) < 1:
+            console.print(f"[red]Error:[/red] A frequency is a positive whole number "
+                          f"of steps, not [cyan]{value}[/cyan]")
+            return 1
+        old = current[kind]
+        if old is None or not cfg.set_output_frequency(block, int(value)):
+            console.print(f"[red]Error:[/red] [cyan]outFreq[/cyan] not found in "
+                          f"{block}{{}} in {cfg.path.name}")
+            return 1
+        console.print(
+            f"[green]✓[/green] [cyan]{block}.outFreq[/cyan]: "
+            f"[yellow]{old}[/yellow] → [bold green]{int(value)}[/bold green]  "
+            f"[dim]({cfg.path.name})[/dim]"
+        )
+        steps = cfg.max_time_steps
+        if steps and steps % int(value):
+            console.print(f"[dim]  maxTimeSteps {steps} is not a multiple of {int(value)}: "
+                          f"the last {steps % int(value)} step(s) are not covered by "
+                          f"an {_FREQ_FIELDS[kind][1]} file.[/dim]")
+        return 0
+
+    # ── Show one: def freq <kind> ───────────────────────────────────────────
+    if kind:
+        block, _ = _FREQ_FIELDS[kind]
+        if current[kind] is None:
+            console.print(f"[red]Error:[/red] [cyan]outFreq[/cyan] not set in "
+                          f"{block}{{}} in {cfg.path.name}")
+            return 1
+        console.print(f"[cyan]{block}.outFreq[/cyan] = [bold]{current[kind]}[/bold]")
+        return 0
+
+    # ── Show both: def freq ─────────────────────────────────────────────────
+    if all(v is None for v in current.values()):
+        console.print(f"[yellow]No outFreq in outputSimulation{{}} or outputRestart{{}} "
+                      f"in {cfg.path.name}[/yellow]")
+        return 0
+
+    table = Table(
+        title=f"Output frequencies — {cfg.path.name}",
+        box=box.SIMPLE,
+        show_header=True,
+        header_style="bold yellow",
+        title_style="bold cyan",
+    )
+    table.add_column("Kind", style="cyan")
+    table.add_column("Block", style="white")
+    table.add_column("outFreq", style="white", justify="right")
+    table.add_column("Files", style="white", justify="right")
+    for name, (block, _) in _FREQ_FIELDS.items():
+        freq = current[name]
+        count = _per_run(cfg, freq) if freq is not None else None
+        table.add_row(name, f"{block}{{}}", '(not set)' if freq is None else str(freq),
+                      '' if count is None else str(count))
+
+    console.print()
+    console.print(table)
+    if cfg.max_time_steps:
+        console.print(f"[dim]  Files: maxTimeSteps {cfg.max_time_steps} / outFreq[/dim]")
     console.print()
     return 0
