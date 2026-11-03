@@ -197,7 +197,7 @@ flexflow .../CS4SG1U1 → use CS4SG1U1
 # Analyze (no need to specify case)
 flexflow .../CS4SG1U1 [CS4SG1U1] → case show
 flexflow .../CS4SG1U1 [CS4SG1U1] → data show --node 24
-flexflow .../CS4SG1U1 [CS4SG1U1] → plot --node 10 --component y
+flexflow .../CS4SG1U1 [CS4SG1U1] → plot --node 10 --var dy
 
 # Exit
 flexflow .../CS4SG1U1 [CS4SG1U1] → exit

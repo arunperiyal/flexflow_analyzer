@@ -381,28 +381,22 @@ _flexflow_completions() {
             fi
             ;;
         plot)
-            local flags="--node --data-type --component --plot-type --traj-x --traj-y --traj-z \\
-                        --start-time --end-time --start-step --end-step --plot-style \\
+            local flags="--var --node --othid --osgid --group --othd --oisd --plot-type \\
+                        --t1 --t2 --last --start-time --end-time --plot-style \\
                         --title --xlabel --ylabel --legend --legend-style --fontsize --fontname \\
-                        --output --no-display --input-file -v --verbose -h --help --examples"
+                        --output --restart --gnu --no-display --input-file -v --verbose -h --help --examples"
             if [[ "$cur" == -* ]]; then
                 COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
             else
                 case "$prev" in
-                    --data-type)
-                        COMPREPLY=( $(compgen -W "displacement force pendulum" -- "$cur") )
-                        ;;
-                    --component|--traj-x|--traj-y|--traj-z)
-                        COMPREPLY=( $(compgen -W "x y z magnitude tx ty tz all displacement velocity acceleration" -- "$cur") )
-                        ;;
                     --plot-type)
                         COMPREPLY=( $(compgen -W "time fft traj2d traj3d" -- "$cur") )
                         ;;
                     --input-file|--output)
                         _filedir
                         ;;
-                    --node|--start-time|--end-time|--start-step|--end-step|--fontsize| \\
-                    --plot-style|--title|--xlabel|--ylabel|--legend|--legend-style|--fontname)
+                    --var|--node|--othid|--osgid|--group|--t1|--t2|--last|--start-time|--end-time| \\
+                    --fontsize|--plot-style|--title|--xlabel|--ylabel|--legend|--legend-style|--fontname)
                         # No completion for these
                         ;;
                     *)
@@ -629,17 +623,16 @@ _flexflow() {
                 plot)
                     _arguments \\
                         '1:case:_flexflow_cases' \\
-                        '--node[Node ID to plot]:node:' \\
-                        '--data-type[Data type]:type:(displacement force pendulum)' \\
-                        '--component[Component to plot]:component:(x y z magnitude tx ty tz all displacement velocity acceleration)' \\
+                        '*--var[Variable or component, as in data table]:var:' \\
+                        '--node[Node to read]:node:' \\
+                        '--othid[othId in the othd files]:id:' \\
+                        '--osgid[osgId in the oisd files]:id:' \\
+                        '--last[Only the last N steps]:N:' \\
                         '--plot-type[Plot type]:type:(time fft traj2d traj3d)' \\
-                        '--traj-x[X component for trajectory]:component:(x y z magnitude)' \\
-                        '--traj-y[Y component for trajectory]:component:(x y z magnitude)' \\
-                        '--traj-z[Z component for trajectory]:component:(x y z magnitude)' \\
                         '--start-time[Start time]:time:' \\
                         '--end-time[End time]:time:' \\
-                        '--start-step[Start timestep]:step:' \\
-                        '--end-step[End timestep]:step:' \\
+                        '--t1[First tsId]:tsid:' \\
+                        '--t2[Last tsId]:tsid:' \\
                         '--plot-style[Plot style]:style:' \\
                         '--title[Plot title]:title:' \\
                         '--xlabel[X-axis label]:label:' \\
@@ -811,17 +804,16 @@ complete -c flexflow -n "__fish_seen_subcommand_from statistics" -s h -l help -d
 complete -c flexflow -n "__fish_seen_subcommand_from statistics" -l examples -d "Show examples"
 
 # Plot command
+complete -c flexflow -n "__fish_seen_subcommand_from plot" -l var -d "Variable or component (as in data table)"
 complete -c flexflow -n "__fish_seen_subcommand_from plot" -l node -d "Node ID to plot"
-complete -c flexflow -n "__fish_seen_subcommand_from plot" -l data-type -d "Data type" -xa "displacement force pendulum"
-complete -c flexflow -n "__fish_seen_subcommand_from plot" -l component -d "Component" -xa "x y z magnitude tx ty tz all displacement velocity acceleration"
+complete -c flexflow -n "__fish_seen_subcommand_from plot" -l othid -d "othId in the othd files"
+complete -c flexflow -n "__fish_seen_subcommand_from plot" -l osgid -d "osgId in the oisd files"
+complete -c flexflow -n "__fish_seen_subcommand_from plot" -l last -d "Only the last N steps"
 complete -c flexflow -n "__fish_seen_subcommand_from plot" -l plot-type -d "Plot type" -xa "time fft traj2d traj3d"
-complete -c flexflow -n "__fish_seen_subcommand_from plot" -l traj-x -d "X component" -xa "x y z magnitude"
-complete -c flexflow -n "__fish_seen_subcommand_from plot" -l traj-y -d "Y component" -xa "x y z magnitude"
-complete -c flexflow -n "__fish_seen_subcommand_from plot" -l traj-z -d "Z component" -xa "x y z magnitude"
 complete -c flexflow -n "__fish_seen_subcommand_from plot" -l start-time -d "Start time"
 complete -c flexflow -n "__fish_seen_subcommand_from plot" -l end-time -d "End time"
-complete -c flexflow -n "__fish_seen_subcommand_from plot" -l start-step -d "Start timestep"
-complete -c flexflow -n "__fish_seen_subcommand_from plot" -l end-step -d "End timestep"
+complete -c flexflow -n "__fish_seen_subcommand_from plot" -l t1 -d "First tsId"
+complete -c flexflow -n "__fish_seen_subcommand_from plot" -l t2 -d "Last tsId"
 complete -c flexflow -n "__fish_seen_subcommand_from plot" -l plot-style -d "Plot style"
 complete -c flexflow -n "__fish_seen_subcommand_from plot" -l title -d "Plot title"
 complete -c flexflow -n "__fish_seen_subcommand_from plot" -l xlabel -d "X-axis label"

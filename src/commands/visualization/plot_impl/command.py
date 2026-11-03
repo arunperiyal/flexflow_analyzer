@@ -448,161 +448,194 @@ def mark_restarts(axes, case_dir, dt, logger):
     return len(marked)
 
 
-def apply_step_window(args, case, logger):
-    """--start-step/--end-step (or the t1/t2 context) as --start-time/--end-time:
-    step n is at time n*dt. A time typed on the command line wins."""
-    steps = {'start_time': getattr(args, 'start_step', None),
-             'end_time': getattr(args, 'end_step', None)}
-    if all(v is None or getattr(args, k, None) is not None for k, v in steps.items()):
-        return
-    try:
-        dt = case.get_time_increment()
-    except Exception:
-        dt = None
-    if not dt:
-        logger.warning("No initialTimeIncrement in the .def: --start-step/--end-step ignored")
-        return
-    for key, step in steps.items():
-        if step is not None and getattr(args, key, None) is None:
-            setattr(args, key, step * dt)
-    show = lambda v: '…' if v is None else f"{v:g}"
-    logger.info(f"Steps {show(steps['start_time'])}–{show(steps['end_time'])}"
-                f" → time {show(args.start_time)}–{show(args.end_time)}")
+# Pendulum histories are othd lines of their own (pendDisp/pendVel/pendAccel)
+# that the series reader behind `data table` does not take, so they are read
+# with the OTHD reader: name (lower case) -> its key in get_pendulum_data().
+PENDULUM = {
+    'penddisp': 'displacement', 'pd': 'displacement',
+    'pendvel': 'velocity', 'pv': 'velocity',
+    'pendaccel': 'acceleration', 'pa': 'acceleration',
+}
+PENDULUM_LABEL = {'displacement': 'pendDisp', 'velocity': 'pendVel',
+                  'acceleration': 'pendAccel'}
+
+
+def requested_vars(args):
+    """--var as given (repeats and commas), or None."""
+    from ...data import shared
+    return shared.split_vars(getattr(args, 'var', None))
+
+
+def select_pendulum(case_dir, args, logger, requested):
+    """A Selection of pendulum columns, windowed like any other."""
+    import numpy as np
+    from ...data import shared
+    from ....core.readers.othd_reader import OTHDReader
+    files = shared.find_files(case_dir, 'othd')
+    if not files:
+        raise ValueError(f"No othd files under {case_dir}")
+    reader = OTHDReader(files, group=getattr(args, 'othid', None))
+    data = reader.get_pendulum_data()
+    if data is None:
+        raise ValueError("No pendulum data (pendDisp/pendVel/pendAccel) in the othd files")
+    tsids = np.asarray(reader.tsIds)
+    times = np.asarray(data['times'])
+    t1, t2 = getattr(args, 't1', None), getattr(args, 't2', None)
+    mask = np.ones(len(tsids), dtype=bool)
+    if t1 is not None:
+        mask &= tsids >= t1
+    if t2 is not None:
+        mask &= tsids <= t2
+    if not mask.any():
+        raise ValueError(f"No pendulum steps in tsId range {t1}..{t2}")
+    mask = shared.last_steps(tsids, mask, getattr(args, 'last', None), logger)
+    keys = list(dict.fromkeys(PENDULUM[r.lower()] for r in requested))
+    values = {PENDULUM_LABEL[k]: np.asarray(data[k])[mask] for k in keys}
+    return shared.Selection('othd', None, getattr(args, 'othid', None), None,
+                            list(values), times[mask], tsids[mask], values)
+
+
+def time_cut(sel, start_time, end_time):
+    """--start-time/--end-time on top of the tsId window."""
+    import numpy as np
+    if start_time is None and end_time is None:
+        return sel
+    keep = np.ones(len(sel.times), dtype=bool)
+    if start_time is not None:
+        keep &= sel.times >= start_time
+    if end_time is not None:
+        keep &= sel.times <= end_time
+    if not keep.any():
+        raise ValueError(f"No steps between time {start_time} and {end_time}: the window "
+                         f"holds {sel.times.min():.6g}..{sel.times.max():.6g}")
+    sel.times, sel.tsids = sel.times[keep], sel.tsids[keep]
+    sel.values = {k: v[keep] for k, v in sel.values.items()}
+    return sel
+
+
+def describe(case_dir, sel, requested):
+    """The default title: case, variables, and where they came from."""
+    where = [sel.kind]
+    if sel.meta is not None:
+        where.append(f"{sel.meta.group_label} {sel.group}")
+        if sel.meta.nodes_of(sel.group) > 1:
+            where.append(f"node {sel.node}")
+    return f"{case_dir.name}: {', '.join(requested)}  ({', '.join(where)})"
+
+
+def build_figure(plot_type, sel, plot_style, legend_style, title, logger):
+    """The figure for one selection; raises ValueError on a mismatch."""
+    from . import series_plot
+    labels = list(sel.values)
+    if plot_type == 'time':
+        return series_plot.time_plot(sel.times, sel.values, plot_style, title)
+    if plot_type == 'fft':
+        if len(sel.times) < 4:
+            raise ValueError(f"{len(sel.times)} step(s) are too few for a spectrum")
+        if series_plot.uneven_sampling(sel.times):
+            logger.warning("the steps are not evenly spaced; the spectrum takes "
+                           "the median step as the sampling interval")
+        fig, axes, peaks = series_plot.fft_plot(sel.times, sel.values, plot_style, title)
+        for label, peak in peaks.items():
+            logger.info(f"{label}: " + ("flat" if peak != peak else f"peak at {peak:.6g} Hz"))
+        return fig, axes
+    dims = {'traj2d': 2, 'traj3d': 3}.get(plot_type)
+    if dims is None:
+        raise ValueError(f"Invalid plot type: {plot_type}")
+    if len(labels) < dims:
+        raise ValueError(f"--plot-type {plot_type} needs {dims} columns, and "
+                         f"{', '.join(labels)} is {len(labels)}: give a vector "
+                         f"variable (--var d) or {dims} components (--var "
+                         + ','.join(['dx', 'dy', 'dz'][:dims]) + ")")
+    if len(labels) > dims:
+        logger.info(f"{plot_type}: plotting {', '.join(labels[:dims])} "
+                    f"(of {', '.join(labels)})")
+    return series_plot.trajectory_plot(sel.values, dims, plot_style, title, legend_style)
 
 
 def execute_plot(args):
     """
-    Execute the plot command
-    
-    Parameters:
-    -----------
-    args : argparse.Namespace
-        Parsed command arguments
+    Execute the plot command: the --var columns (from `use var:` when not
+    typed) of one case, read as `data table` reads them.
     """
+    from pathlib import Path
     from .help_messages import print_plot_help
-    
-    # Set PDF font embedding to Type 42 (TrueType) for better quality
-    # This embeds actual TrueType fonts instead of bitmaps
-    if hasattr(args, 'output') and args.output and args.output.lower().endswith('.pdf'):
-        plt.rcParams['pdf.fonttype'] = 42  # TrueType
-        plt.rcParams['ps.fonttype'] = 42   # For EPS as well
-    
-    # Show help if no arguments provided
+    from ...data import shared
+
+    if getattr(args, 'output', None) and args.output.lower().endswith(('.pdf', '.eps')):
+        plt.rcParams['pdf.fonttype'] = 42  # embed TrueType, not bitmaps
+        plt.rcParams['ps.fonttype'] = 42
+
     if not args.input_file and not args.case:
         print_plot_help()
         return
-    
-    logger = Logger(verbose=args.verbose)
 
-    # Use non-interactive backend if no display or output-only mode or terminal mode
-    if args.no_display or args.output or (hasattr(args, 'gnu') and args.gnu):
+    logger = Logger(verbose=args.verbose)
+    if args.no_display or args.output or getattr(args, 'gnu', False):
         matplotlib.use('Agg')
-    
+
     try:
-        # Check if using input file
         if args.input_file:
             logger.info(f"Loading configuration from: {args.input_file}")
             with open(args.input_file, 'r') as f:
                 config = yaml.safe_load(f)
-            
-            # Execute plot from YAML config
             execute_plot_from_yaml(config, args)
             return
-        
-        # Validate required arguments for direct command
-        if not args.case:
-            print(f"{Colors.red('Error:')} case_directory is required when not using --input-file", 
-                  file=sys.stderr)
-            sys.exit(1)
-        
-        if not args.data_type:
-            print(f"{Colors.red('Error:')} --data-type is required", file=sys.stderr)
-            sys.exit(1)
-        
-        if not args.component:
-            print(f"{Colors.red('Error:')} --component is required", file=sys.stderr)
-            sys.exit(1)
-        
-        if args.data_type == 'displacement' and args.node is None:
-            print(f"{Colors.red('Error:')} --node is required for displacement data", file=sys.stderr)
-            sys.exit(1)
-        
-        if args.data_type == 'pendulum' and args.component is None:
-            # Default to displacement for pendulum
-            args.component = 'displacement'
-        
-        # Ensure MS fonts are loaded (if installed)
-        ensure_ms_fonts_loaded()
-        
-        # Set font before creating plots
-        if hasattr(args, 'fontname') and args.fontname:
-            matplotlib.rc('font', family=args.fontname)
-            
-            # Configure mathtext to use serif fonts matching Times New Roman
-            # When using $math$ mode, matplotlib uses mathtext which has its own font config
-            if 'Times' in args.fontname or args.fontname == 'serif':
-                matplotlib.rc('mathtext', fontset='stix')  # STIX fonts are Times-compatible
-                # Alternative: 'cm' (Computer Modern), 'stix', 'stixsans', 'dejavusans', 'dejavuserif'
-            
-            logger.info(f"Using font: {args.fontname}")
-        
-        # Load case
-        logger.info(f"Loading case from: {args.case}")
-        case = FlexFlowCase(args.case, verbose=args.verbose)
-        if getattr(args, 'othid', None) is not None:
-            case.load_othd_data(group=args.othid)
-        
-        apply_step_window(args, case, logger)
 
-        # Parse plot style
-        plot_style = parse_plot_style(args.plot_style)
-        
-        # Parse legend style
-        legend_style = {}
-        if hasattr(args, 'legend_style') and args.legend_style:
-            legend_style = parse_legend_style(args.legend_style)
-        
-        # Determine plot type
-        plot_type = args.plot_type if args.plot_type else 'time'
-        
-        # Generate plot based on data type and plot type
-        if args.data_type == 'displacement':
-            fig, axes = generate_displacement_plot(case, args, plot_type, plot_style, logger, legend_style)
-        elif args.data_type == 'pendulum':
-            fig, axes = generate_pendulum_plot(case, args, plot_type, plot_style, logger, legend_style)
-        elif args.data_type == 'force':
-            fig, axes = generate_force_plot(case, args, plot_type, plot_style, logger)
-        elif args.data_type == 'moment':
-            fig, axes = generate_moment_plot(case, args, plot_style, logger)
-        elif args.data_type == 'pressure':
-            fig, axes = generate_pressure_plot(case, args, plot_style, logger)
-        else:
-            print(f"{Colors.red('Error:')} Invalid data type: {args.data_type}", file=sys.stderr)
+        requested = requested_vars(args)
+        if not requested:
+            print(f"{Colors.red('Error:')} --var says what to plot (or `use var:dy`); "
+                  f"`data show` lists the variables of a case.", file=sys.stderr)
             sys.exit(1)
-        
-        # Apply plot properties
+
+        case_dir = Path(args.case)
+        if not case_dir.is_dir():
+            raise ValueError(f"Case directory not found: {case_dir}")
+
+        ensure_ms_fonts_loaded()
+        if getattr(args, 'fontname', None):
+            matplotlib.rc('font', family=args.fontname)
+            if 'Times' in args.fontname or args.fontname == 'serif':
+                matplotlib.rc('mathtext', fontset='stix')  # Times-compatible maths
+            logger.info(f"Using font: {args.fontname}")
+
+        pendulum = [r for r in requested if r.lower() in PENDULUM]
+        if pendulum and len(pendulum) < len(requested):
+            raise ValueError("pendulum variables (pendDisp, pendVel, pendAccel) are "
+                             "read on their own: plot them apart from "
+                             + ', '.join(r for r in requested if r not in pendulum))
+        if pendulum:
+            sel = select_pendulum(case_dir, args, logger, requested)
+        else:
+            sel = shared.select(case_dir, args, logger, requested)
+        sel = time_cut(sel, getattr(args, 'start_time', None), getattr(args, 'end_time', None))
+        logger.info(f"{len(sel.times)} step(s): tsId {sel.tsids.min()}..{sel.tsids.max()}, "
+                    f"time {sel.times.min():.6g}..{sel.times.max():.6g}")
+
+        plot_style = parse_plot_style(args.plot_style)
+        legend_style = parse_legend_style(args.legend_style) if getattr(args, 'legend_style', None) else {}
+        plot_type = args.plot_type or 'time'
+        title = None if args.title else describe(case_dir, sel, requested)
+        fig, axes = build_figure(plot_type, sel, plot_style, legend_style, title, logger)
+
         apply_plot_properties(fig, axes, args)
 
-        if (plot_type == 'time' or args.data_type in ('moment', 'pressure')) \
-                and getattr(args, 'restart', False):
-            mark_restarts(axes, args.case, case.get_time_increment(), logger)
+        if plot_type == 'time' and getattr(args, 'restart', False):
+            mark_restarts(axes, str(case_dir), _time_increment(case_dir), logger)
 
-        # Terminal output (--gnu flag)
-        if hasattr(args, 'gnu') and args.gnu:
+        if getattr(args, 'gnu', False):
             plot_in_terminal(fig, axes, logger)
 
-        # Save to file
         if args.output:
             logger.info(f"Saving plot to: {args.output}")
             fig.savefig(args.output, dpi=300, bbox_inches='tight')
             logger.success(f"Plot saved to {args.output}")
 
-        # Only show matplotlib plot if not in output-only mode and display is not disabled
-        if not args.output and not args.no_display and not (hasattr(args, 'gnu') and args.gnu):
+        if not args.output and not args.no_display and not getattr(args, 'gnu', False):
             plt.show()
 
         logger.success("Plot command completed")
-        
+
     except Exception as e:
         logger.error(str(e))
         if args.verbose:
@@ -611,242 +644,16 @@ def execute_plot(args):
         sys.exit(1)
 
 
-def generate_displacement_plot(case, args, plot_type, plot_style, logger, legend_style=None):
-    """Generate displacement plot"""
-    if not case.othd_reader:
-        raise ValueError("No OTHD data available")
-    
-    # Handle component as list (new format) or single value (old format)
-    component = args.component
-    if isinstance(component, list):
-        component_single = component[0] if component else None
-    else:
-        component_single = component
-    
-    logger.info(f"Generating {plot_type} plot for node {args.node}, component: {component}")
-    
-    if plot_type == 'time':
-        fig, axes = plot_utils.plot_node_displacements(
-            case.othd_reader, 
-            args.node, 
-            component=component_single,
-            use_index=False,
-            plot_style=plot_style,
-            start_time=args.start_time,
-            end_time=args.end_time
-        )
-    elif plot_type == 'fft':
-        fig, axes = plot_utils.plot_fft(
-            case.othd_reader,
-            node_id=args.node,
-            component=component_single,
-            plot_style=plot_style,
-            start_time=args.start_time,
-            end_time=args.end_time
-        )
-    elif plot_type == 'traj2d':
-        # Handle --component x y OR --traj-x/--traj-y
-        if args.component and len(args.component) >= 2:
-            comp_x = args.component[0]
-            comp_y = args.component[1]
-        else:
-            comp_x = args.traj_x if args.traj_x else 'x'
-            comp_y = args.traj_y if args.traj_y else 'y'
-        
-        fig, axes = plot_utils.plot_trajectory_2d(
-            case.othd_reader,
-            node_id=args.node,
-            comp_x=comp_x,
-            comp_y=comp_y,
-            plot_style=plot_style,
-            start_time=args.start_time,
-            end_time=args.end_time,
-            legend_style=legend_style
-        )
-    elif plot_type == 'traj3d':
-        # Handle --component x y z OR --traj-x/--traj-y/--traj-z
-        if args.component and len(args.component) >= 3:
-            comp_x = args.component[0]
-            comp_y = args.component[1]
-            comp_z = args.component[2]
-        else:
-            comp_x = args.traj_x if args.traj_x else 'x'
-            comp_y = args.traj_y if args.traj_y else 'y'
-            comp_z = args.traj_z if args.traj_z else 'z'
-        
-        fig, axes = plot_utils.plot_trajectory_3d(
-            case.othd_reader,
-            node_id=args.node,
-            comp_x=comp_x,
-            comp_y=comp_y,
-            comp_z=comp_z,
-            plot_style=plot_style,
-            start_time=args.start_time,
-            end_time=args.end_time,
-            legend_style=legend_style
-        )
-    else:
-        raise ValueError(f"Invalid plot type: {plot_type}")
-    
-    return fig, axes
-
-
-def generate_pendulum_plot(case, args, plot_type, plot_style, logger, legend_style=None):
-    """Generate pendulum plot"""
-    if not case.othd_reader:
-        raise ValueError("No OTHD data available")
-    
-    # Get pendulum data
-    pend_data = case.othd_reader.get_pendulum_data()
-    if pend_data is None:
-        raise ValueError("No pendulum data available in OTHD files")
-    
-    # Handle component as list or single value
-    component = args.component
-    if isinstance(component, list):
-        component_single = component[0] if component else 'displacement'
-    else:
-        component_single = component if component else 'displacement'
-    
-    # Map component names
-    component_map = {
-        'displacement': 'displacement',
-        'disp': 'displacement',
-        'd': 'displacement',
-        'velocity': 'velocity',
-        'vel': 'velocity',
-        'v': 'velocity',
-        'acceleration': 'acceleration',
-        'accel': 'acceleration',
-        'a': 'acceleration',
-        'all': 'all'
-    }
-    
-    comp_key = component_map.get(component_single.lower(), 'displacement')
-    
-    logger.info(f"Generating {plot_type} plot for pendulum, component: {comp_key}")
-    
-    # Filter by time range if specified
-    times = pend_data['times']
-    if args.start_time is not None or args.end_time is not None:
-        import numpy as np
-        start_t = args.start_time if args.start_time is not None else times[0]
-        end_t = args.end_time if args.end_time is not None else times[-1]
-        mask = (times >= start_t) & (times <= end_t)
-        times = times[mask]
-        displacement = pend_data['displacement'][mask]
-        velocity = pend_data['velocity'][mask]
-        acceleration = pend_data['acceleration'][mask]
-    else:
-        displacement = pend_data['displacement']
-        velocity = pend_data['velocity']
-        acceleration = pend_data['acceleration']
-    
-    # Create figure
-    fig, ax = plt.subplots(figsize=(10, 6))
-    
-    if plot_type == 'time':
-        if comp_key == 'all':
-            # Plot all three on same graph
-            ax.plot(times, displacement, label='Displacement', **plot_style)
-            ax.plot(times, velocity, label='Velocity', **plot_style)
-            ax.plot(times, acceleration, label='Acceleration', **plot_style)
-            ax.set_ylabel('Pendulum Data')
-            ax.legend()
-        else:
-            # Plot single component
-            data = pend_data[comp_key]
-            if args.start_time is not None or args.end_time is not None:
-                data = data[mask]
-            ax.plot(times, data, **plot_style)
-            ax.set_ylabel(f'Pendulum {comp_key.capitalize()}')
-        
-        ax.set_xlabel('Time (s)')
-        ax.grid(True, alpha=0.3)
-        
-    elif plot_type == 'fft':
-        # FFT plot for pendulum data
-        import numpy as np
-        from scipy import signal
-        
-        data = pend_data[comp_key]
-        if args.start_time is not None or args.end_time is not None:
-            data = data[mask]
-        
-        # Calculate sampling frequency
-        dt = times[1] - times[0]
-        fs = 1.0 / dt
-        
-        # Compute FFT
-        fft_vals = np.fft.fft(data)
-        fft_freq = np.fft.fftfreq(len(data), dt)
-        
-        # Take only positive frequencies
-        pos_mask = fft_freq > 0
-        fft_freq = fft_freq[pos_mask]
-        fft_magnitude = np.abs(fft_vals[pos_mask])
-        
-        ax.plot(fft_freq, fft_magnitude, **plot_style)
-        ax.set_xlabel('Frequency (Hz)')
-        ax.set_ylabel(f'FFT Magnitude - Pendulum {comp_key.capitalize()}')
-        ax.grid(True, alpha=0.3)
-    else:
-        raise ValueError(f"Plot type '{plot_type}' not supported for pendulum data. Use 'time' or 'fft'.")
-    
-    return fig, ax
-
-
-def generate_force_plot(case, args, plot_type, plot_style, logger):
-    """Generate force plot"""
-    if not case.oisd_reader:
-        raise ValueError("No OISD data available")
-    
-    logger.info(f"Generating force plot, component: {args.component}")
-    
-    if plot_type == 'time':
-        fig, axes = plot_utils.plot_force_data(
-            case.oisd_reader,
-            component=args.component,
-            use_index=False,
-            plot_style=plot_style,
-            start_time=args.start_time,
-            end_time=args.end_time
-        )
-    else:
-        raise ValueError(f"Plot type '{plot_type}' not supported for force data")
-    
-    return fig, axes
-
-
-def generate_moment_plot(case, args, plot_style, logger):
-    """Generate moment plot"""
-    if not case.oisd_reader:
-        raise ValueError("No OISD data available")
-    
-    logger.info(f"Generating moment plot, component: {args.component}")
-    
-    fig, axes = plot_utils.plot_moment_data(
-        case.oisd_reader,
-        component=args.component,
-        use_index=False
-    )
-    
-    return fig, axes
-
-
-def generate_pressure_plot(case, args, plot_style, logger):
-    """Generate pressure plot"""
-    if not case.oisd_reader:
-        raise ValueError("No OISD data available")
-    
-    logger.info("Generating pressure plot")
-    
-    fig, axes = plot_utils.plot_pressure_data(
-        case.oisd_reader,
-        use_index=False
-    )
-    
-    return fig, axes
+def _time_increment(case_dir):
+    """initialTimeIncrement of the case's .def, or None."""
+    try:
+        from ....core.def_config import DefConfig
+        from ....core.simflow_config import SimflowConfig
+        simflow = SimflowConfig(case_dir / 'simflow.config')
+        return DefConfig.find(case_dir, simflow.problem if simflow.exists else None) \
+            .initial_time_increment
+    except Exception:
+        return None
 
 
 def execute_plot_from_yaml(config, args):

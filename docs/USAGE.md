@@ -47,7 +47,7 @@ Tab completion works for commands, subcommands, and options:
 ```bash
 ff <TAB>                     # Shows all commands
 ff case <TAB>                # Shows: show, create, run
-ff plot --data-type <TAB>    # Shows: displacement, force, pendulum
+ff plot --plot-type <TAB>    # Shows: time, fft, traj2d, traj3d
 ```
 
 ### Command Chaining
@@ -59,7 +59,7 @@ Chain multiple commands with semicolon (`;`) for efficient workflows:
 use case:Case005; data show --pendulum
 
 # Multiple operations
-use case:Case005 node:24; data show; plot --data-type displacement --component y
+use case:Case005 node:24 var:dy; data show; plot
 
 # Works with quotes
 plot --title "Analysis; Results"; data stats
@@ -432,47 +432,39 @@ ff field extract CS4SG1U1 \
 
 ### Plot Data
 
-Create time-series plots:
+`plot` draws the columns `data table` reads for the same `--var`, node and
+window. The variable comes from `--var` or the `var` context:
 
 ```bash
-ff plot CS4SG1U1 --node 10 --component y
+ff plot CS4SG1U1 --var dy --node 10
+use case:CS4SG1U1 node:10 var:dy; plot          # the same from the context
 ```
 
-**Common options:**
+**What to plot:**
 ```bash
-# Basic plot
-ff plot CS4SG1U1 --node 10
+ff plot CS4SG1U1 --var dy            # one component (aleDisp_y)
+ff plot CS4SG1U1 --var d             # every component, one panel each
+ff plot CS4SG1U1 --var dx,dy         # some of them
+ff plot CS4SG1U1 --var tty           # surface output (totTrac_y, oisd)
+ff plot CS4SG1U1 --var pd            # pendulum pendDisp (pv, pa: velocity, acceleration)
+```
+`data show` lists every variable and its short name. Variables from the othd
+and oisd files cannot share a plot; `--othid`/`--osgid` pick the group.
 
-# Specific component
-ff plot CS4SG1U1 --node 10 --component y
-
-# Multiple components
-ff plot CS4SG1U1 --node 10 --component xyz
-
-# Data type
-ff plot CS4SG1U1 --node 10 --data-type displacement
-ff plot CS4SG1U1 --node 10 --data-type force
-
-# Save to file
-ff plot CS4SG1U1 --node 10 --output displacement.png
-
-# Show interactively
-ff plot CS4SG1U1 --node 10 --show
+**Window and plot type:**
+```bash
+ff plot CS4SG1U1 --var dy --t1 2000 --t2 4000     # tsIds, as in data table
+ff plot CS4SG1U1 --var dy --last 1000             # or use last:1000
+ff plot CS4SG1U1 --var dy --plot-type fft --last 2000   # spectrum, peak in the legend
+ff plot CS4SG1U1 --var d --plot-type traj2d       # dx against dy (traj3d: all three)
 ```
 
-**Advanced options:**
+**Styling and output:**
 ```bash
-# Time range
-ff plot CS4SG1U1 --node 10 --time-start 0 --time-end 100
-
-# Custom styling
-ff plot CS4SG1U1 --node 10 \
-  --title "Node 10 Displacement" \
-  --xlabel "Time (s)" \
-  --ylabel "Displacement (m)"
-
-# Multiple nodes
-ff plot CS4SG1U1 --nodes 10 20 30 --component y
+ff plot CS4SG1U1 --var dy \
+  --title "Node 10 Displacement" --xlabel "Time (s)" --ylabel "Displacement (m)"
+ff plot CS4SG1U1 --var dy --output displacement.png   # .png, .pdf, .svg, .eps
+ff plot CS4SG1U1 --var dy --gnu                       # in the terminal
 ```
 
 ### Compare Cases
@@ -562,13 +554,13 @@ Chain multiple commands for efficient workflows:
 use case:Case005; data show; data stats
 
 # Set context and plot
-use case:Case005 node:24 t1:50.0 t2:100.0; plot --data-type displacement --component y
+use case:Case005 node:24 var:dy t1:1000 t2:2000; plot
 
 # Pendulum analysis
-use case:Case005; data show --pendulum; plot --data-type pendulum --component velocity
+use case:Case005 var:pv; data show --pendulum; plot
 
 # Multiple operations
-cd ~/simulations; use case:Case005; data show; plot --data-type pendulum --output result.png
+cd ~/simulations; use case:Case005 var:pd; data show; plot --output result.png
 ```
 
 **Benefits:**

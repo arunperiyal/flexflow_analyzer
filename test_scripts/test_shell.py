@@ -103,8 +103,8 @@ def test_othid_osgid_fill_data_table_stats_and_plot(rt):
     for line in ('data table', 'data stats'):
         a = parsed(rt, line)
         assert (a.othid, a.osgid, a.group) == (1, 3, None)
-    assert parsed(rt, 'plot').othid == 1
-    assert not hasattr(parsed(rt, 'plot'), 'osgid')
+    a = parsed(rt, 'plot')
+    assert (a.othid, a.osgid) == (1, 3)
     assert parsed(rt, 'data table --othid 0').othid == 0
 
 
@@ -227,7 +227,7 @@ def test_single_time_is_a_window(rt):
         'data table': ('t1', 't2'),
         'case organise history': ('t1', 't2'),
         'case check plt': ('t1', 't2'),
-        'plot': ('start_step', 'end_step'),
+        'plot': ('t1', 't2'),
     }.items():
         a = parsed(rt, line)
         assert (getattr(a, d1), getattr(a, d2)) == (7.0, 7.0), line
@@ -245,14 +245,21 @@ def test_range_ends_fill_independently(rt):
     assert (a.t1, a.t2) == (3.0, 9.0)
 
 
-def test_plot_t1_is_a_step(rt):
-    # t1/t2 are steps: in plot they fill --start-step/--end-step, not the times
+def test_plot_t1_is_a_tsid(rt):
+    # t1/t2 are tsIds, as in data table; --start-step/--end-step still spell them
     use(rt, 't1:3000')
     a = parsed(rt, 'plot')
-    assert (a.start_step, a.start_time, a.end_time) == (3000, None, None)
-    assert parsed(rt, 'plot --start-step 0').start_step == 0
+    assert (a.t1, a.start_time, a.end_time) == (3000, None, None)
+    assert parsed(rt, 'plot --start-step 0').t1 == 0
     a = parsed(rt, 'plot --t1 0 --t2 250')
-    assert (a.start_step, a.end_step) == (0, 250)
+    assert (a.t1, a.t2) == (0, 250)
+
+
+def test_plot_var_and_last_from_context(rt):
+    use(rt, 'var:dy last:500')
+    a = parsed(rt, 'plot')
+    assert (a.var, a.last) == (['dy'], 500)
+    assert parsed(rt, 'plot --var tty').var == ['tty']
 
 
 def test_case_check_freq(rt):

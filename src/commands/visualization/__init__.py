@@ -4,7 +4,8 @@ Commands: plot, compare
 """
 
 from ..base import BaseCommand
-from src.cli.context import case_arg, node_arg, othid_arg, time_window
+from src.cli.context import (case_arg, context_flag, last_arg, node_arg, osgid_arg,
+                              othid_arg, time_window)
 
 
 def _step(text):
@@ -16,10 +17,10 @@ def _step(text):
 
 
 class PlotCommand(BaseCommand):
-    """Plot displacement or force data"""
+    """Plot the history of a variable (--var, or use var:)"""
 
     name = "plot"
-    description = "Plot displacement or force data"
+    description = "Plot the history of a variable (--var, or use var:)"
     category = "Visualization"
 
     def setup_parser(self, subparsers):
@@ -32,23 +33,29 @@ class PlotCommand(BaseCommand):
         # Required arguments
         case_arg(parser, help='Case directory path')
         parser.add_argument('--input-file', type=str, help='YAML input file')
-        node_arg(parser, help='Node number to plot')
-        othid_arg(parser, help='othId (probe set) to plot displacements from (default: the first)')
-        parser.add_argument('--data-type', type=str, choices=['displacement', 'force', 'pendulum'],
-                          help='Data type to plot')
+        context_flag(parser, 'var', '--var', '--variable', dest='var', type=str,
+                     action='append', metavar='NAME',
+                     help='Variable or component to plot, as in data table '
+                          '(repeat, or comma-separate; default: use var:)')
+        node_arg(parser, help='Node to read (default: 0)')
+        othid_arg(parser, help='othId (probe set) in the othd files (default: the first)')
+        osgid_arg(parser, help='osgId (surface group) in the oisd files (default: the first)')
+        parser.add_argument('--group', type=int, metavar='ID',
+                            help='The group id, whichever kind the variables are in')
+        parser.add_argument('--othd', action='store_true', help='Look only in the othd files')
+        parser.add_argument('--oisd', action='store_true', help='Look only in the oisd files')
 
         # Plot options
         parser.add_argument('--plot-type', type=str, default='time',
                           choices=['time', 'fft', 'traj2d', 'traj3d'],
                           help='Plot type')
-        parser.add_argument('--component', type=str, nargs='+',
-                          help='Components to plot (x, y, z)')
-        parser.add_argument('--start-time', type=float, help='Start time')
+        # t1/t2 are tsIds, as in data table
+        time_window(parser, ('--t1', '--start-step'), ('--t2', '--end-step'),
+                    t1_kwargs=dict(type=_step, metavar='TSID', help='First tsId'),
+                    t2_kwargs=dict(type=_step, metavar='TSID', help='Last tsId'))
+        last_arg(parser, help='Only the last N steps (of the --t1/--t2 window)')
+        parser.add_argument('--start-time', type=float, help='Start time (on top of the tsIds)')
         parser.add_argument('--end-time', type=float, help='End time')
-        # t1/t2 are steps, as everywhere else: they fill --start-step/--end-step
-        time_window(parser, ('--start-step', '--t1'), ('--end-step', '--t2'),
-                    t1_kwargs=dict(type=_step, help='Start timestep'),
-                    t2_kwargs=dict(type=_step, help='End timestep'))
 
         # Styling options
         parser.add_argument('--plot-style', type=str, help='Plot style string')

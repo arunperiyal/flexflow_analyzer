@@ -51,47 +51,9 @@ def execute_table(args):
 
 def _run_table(case_dir, args, logger, requested):
     """`data table` for one case: everything that needs that case's own data."""
-    kinds = shared.which_kinds(args)
-    metas = shared.scan_kinds(case_dir, kinds, logger)
-    if not metas:
-        logger.error(f"No othd/oisd data found under {case_dir}")
-        sys.exit(1)
-
-    # A name belongs to whichever kind declares it, so the kind need not be
-    # given: `--var vel` is othd, `--var totTrac` is oisd, and asking for both
-    # at once is refused rather than silently answered from one of them.
-    owners = {kind: [r for r in requested
-                     if shared.known_name(metas[kind], r)] for kind in metas}
-    matched = {k: v for k, v in owners.items() if v}
-    if not matched:
-        available = ", ".join(sorted(
-            name for meta in metas.values() for name in meta.variables))
-        logger.error(f"None of {', '.join(requested)} is in this case's data.\n"
-                     f"        Available: {available}")
-        sys.exit(1)
-    if len(matched) > 1:
-        logger.error("those variables live in different files "
-                     + "; ".join(f"{k}: {', '.join(v)}" for k, v in matched.items())
-                     + ".\n        They are sampled differently, so tabulate one "
-                       "kind at a time.")
-        sys.exit(1)
-
-    kind = next(iter(matched))
-    meta = metas[kind]
-    missing = [r for r in requested if r not in matched[kind]]
-    if missing:
-        logger.error(f"not in the {kind} files: {', '.join(missing)}")
-        sys.exit(1)
-
-    group = shared.resolve_group(meta, args, logger)
-    columns = shared.resolve_columns(meta, requested, logger, group)
-    node = shared.resolve_node(meta, getattr(args, "node", None), logger, group)
-    mask = shared.step_mask(meta, getattr(args, "t1", None),
-                            getattr(args, "t2", None), logger, getattr(args, "last", None))
-
-    logger.info(f"reading {len(columns)} column(s) from {len(meta.files)} "
-                f"{kind} file(s)")
-    times, tsids, values = shared.gather(meta, columns, node, mask, group)
+    sel = shared.select(case_dir, args, logger, requested)
+    kind, meta, group, node = sel.kind, sel.meta, sel.group, sel.node
+    times, tsids, values = sel.times, sel.tsids, sel.values
 
     output = getattr(args, "output", None)
     if output is True:
