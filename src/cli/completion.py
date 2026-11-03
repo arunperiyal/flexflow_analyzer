@@ -382,7 +382,7 @@ _flexflow_completions() {
             ;;
         plot)
             local flags="--var --node --othid --osgid --group --othd --oisd --plot-type \\
-                        --t1 --t2 --last --start-time --end-time --plot-style \\
+                        --t1 --t2 --last --plot-style \\
                         --title --xlabel --ylabel --legend --legend-style --fontsize --fontname \\
                         --output --restart --gnu --no-display --input-file -v --verbose -h --help --examples"
             if [[ "$cur" == -* ]]; then
@@ -395,7 +395,7 @@ _flexflow_completions() {
                     --input-file|--output)
                         _filedir
                         ;;
-                    --var|--node|--othid|--osgid|--group|--t1|--t2|--last|--start-time|--end-time| \\
+                    --var|--node|--othid|--osgid|--group|--t1|--t2|--last| \\
                     --fontsize|--plot-style|--title|--xlabel|--ylabel|--legend|--legend-style|--fontname)
                         # No completion for these
                         ;;
@@ -629,8 +629,6 @@ _flexflow() {
                         '--osgid[osgId in the oisd files]:id:' \\
                         '--last[Only the last N steps]:N:' \\
                         '--plot-type[Plot type]:type:(time fft traj2d traj3d)' \\
-                        '--start-time[Start time]:time:' \\
-                        '--end-time[End time]:time:' \\
                         '--t1[First tsId]:tsid:' \\
                         '--t2[Last tsId]:tsid:' \\
                         '--plot-style[Plot style]:style:' \\
@@ -810,8 +808,6 @@ complete -c flexflow -n "__fish_seen_subcommand_from plot" -l othid -d "othId in
 complete -c flexflow -n "__fish_seen_subcommand_from plot" -l osgid -d "osgId in the oisd files"
 complete -c flexflow -n "__fish_seen_subcommand_from plot" -l last -d "Only the last N steps"
 complete -c flexflow -n "__fish_seen_subcommand_from plot" -l plot-type -d "Plot type" -xa "time fft traj2d traj3d"
-complete -c flexflow -n "__fish_seen_subcommand_from plot" -l start-time -d "Start time"
-complete -c flexflow -n "__fish_seen_subcommand_from plot" -l end-time -d "End time"
 complete -c flexflow -n "__fish_seen_subcommand_from plot" -l t1 -d "First tsId"
 complete -c flexflow -n "__fish_seen_subcommand_from plot" -l t2 -d "Last tsId"
 complete -c flexflow -n "__fish_seen_subcommand_from plot" -l plot-style -d "Plot style"

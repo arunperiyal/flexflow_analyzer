@@ -32,11 +32,9 @@ same --var, node and window.
                             {Colors.DIM}fft:{Colors.RESET} amplitude spectrum per column, peak in the legend
                             {Colors.DIM}traj2d/traj3d:{Colors.RESET} the first 2/3 columns against each other
                             (--var d, or --var dx,dy)
-    {Colors.YELLOW}--t1{Colors.RESET} TSID            First tsId, also --start-step (use t1:)
-    {Colors.YELLOW}--t2{Colors.RESET} TSID            Last tsId, also --end-step (use t2:)
+    {Colors.YELLOW}--t1{Colors.RESET} TSID            First tsId (use t1:)
+    {Colors.YELLOW}--t2{Colors.RESET} TSID            Last tsId (use t2:)
     {Colors.YELLOW}--last{Colors.RESET} N             Only the last N steps of that window (use last:N)
-    {Colors.YELLOW}--start-time{Colors.RESET} T       Start time, on top of the tsIds
-    {Colors.YELLOW}--end-time{Colors.RESET} T         End time
     {Colors.YELLOW}--restart{Colors.RESET}             Mark each restart recorded in .restarts (by case
                             organise history) with a grey dashed line (time plots)
 
@@ -90,7 +88,6 @@ def print_plot_examples():
 {Colors.BOLD}A Window:{Colors.RESET}
     plot CS4SG1U1 --var dy --t1 2000 --t2 4000
     plot CS4SG1U1 --var dy --last 1000
-    plot CS4SG1U1 --var dy --start-time 10.0 --end-time 50.0
 
 {Colors.BOLD}FFT and Trajectories:{Colors.RESET}
     plot CS4SG1U1 --var dy --plot-type fft --last 2000

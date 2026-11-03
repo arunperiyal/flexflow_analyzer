@@ -174,8 +174,7 @@ def time_window(parser, t1_flag='--t1', t2_flag='--t2', when=None,
 
     Parameters:
         t1_flag, t2_flag: The flags as this command spells them, or a tuple
-                          of spellings, the first naming the dest (plot takes
-                          --t1/--start-step and --t2/--end-step)
+                          of spellings, the first naming the dest
         when: namespace -> bool; the contexts apply only when it is true
               (case upload/download: only with binary or rst)
     """
