@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### 🛡️ Transfers held under a CPU limit on login nodes
+
+- A long `case upload` from a Param Shakti login node was killed by the
+  node's watchdog (>90% of a core for >30 min), with a warning that repeats
+  lock the account: paramiko's SFTP holds a core near 100% while it runs.
+- On a login node (a host named `login*`, outside a Slurm job;
+  `FLEXFLOW_LOGIN_NODE=1/0` overrides), every SFTP put and get now pauses as
+  needed to stay under `set login_cpu_limit` percent of a core (default 70,
+  0: off), measured over the whole process, paramiko's transport thread
+  included. A capped download bounds paramiko's prefetch (64 requests) so
+  the transport stops with the caller. Workstations and Slurm jobs run at
+  full speed. paramiko >= 3.3.
+
 ### ⏱️ Binary transfers planned against the session timeout
 
 - `set transfer_speed N` (Mbps, default 10) is the link speed transfers are

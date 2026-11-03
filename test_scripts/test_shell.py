@@ -519,3 +519,12 @@ def test_fit_flags_parse_and_need_binary(rt, capsys):
     use(rt, 'case:. remote:cluster')
     assert rt.execute_line('case upload rst --fit') == 1
     assert '--fit/--no-time-check plan binary/' in ' '.join(capsys.readouterr().out.split())
+
+
+def test_login_cpu_limit_setting(rt):
+    assert rt.settings.get('login_cpu_limit') == 70
+    assert rt.execute_line('set login_cpu_limit 50') == 0
+    assert rt.settings.get('login_cpu_limit') == 50
+    assert rt.execute_line('set login_cpu_limit 0') == 0
+    assert rt.execute_line('set login_cpu_limit 120') != 0
+    assert rt.settings.get('login_cpu_limit') == 0

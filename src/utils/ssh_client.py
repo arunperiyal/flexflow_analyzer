@@ -8,6 +8,10 @@ from typing import Optional, List, Callable
 import tempfile
 from pathlib import Path
 
+# Requests in flight for a download held under the login-node CPU cap: 64 x
+# 32 KB, enough to keep a link busy, little enough to stop with the caller.
+PREFETCH_UNDER_CAP = 64
+
 
 class SSHClientWrapper:
     """Manages SSH connections and SFTP file transfers."""
@@ -29,6 +33,24 @@ class SSHClientWrapper:
         self.ssh_client: Optional[SSHClient] = None
         self.sftp_client: Optional[SFTPClient] = None
         self.connected = False
+        self._cpu_cap = None
+        self._cpu_cap_made = False
+
+    def _capped(self, callback: Optional[Callable]) -> Optional[Callable]:
+        """The progress callback, ticking the login-node CPU cap first
+        (utils/cpu_cap.py): every put and get goes through here."""
+        if not self._cpu_cap_made:
+            from src.utils.cpu_cap import for_transfers
+            self._cpu_cap, self._cpu_cap_made = for_transfers(), True
+        cap = self._cpu_cap
+        if cap is None:
+            return callback
+
+        def tick(done, total):
+            cap.tick()
+            if callback is not None:
+                callback(done, total)
+        return tick
 
     def connect(self) -> bool:
         """
@@ -136,7 +158,7 @@ class SSHClientWrapper:
             raise FileNotFoundError(f"Local file not found: {local_path}")
 
         try:
-            self.sftp_client.put(local_path, remote_path, callback=callback)
+            self.sftp_client.put(local_path, remote_path, callback=self._capped(callback))
         except Exception as e:
             raise IOError(f"Failed to upload {local_path} to {remote_path}: {e}")
 
@@ -161,7 +183,13 @@ class SSHClientWrapper:
 
         try:
             os.makedirs(os.path.dirname(local_path), exist_ok=True)
-            self.sftp_client.get(remote_path, local_path, callback=callback)
+            capped = self._capped(callback)
+            # Under the cap, bound the prefetch too: by default paramiko asks
+            # for the whole file at once, and its transport thread would go on
+            # receiving and decrypting while the caller is paused.
+            extra = ({'max_concurrent_prefetch_requests': PREFETCH_UNDER_CAP}
+                     if self._cpu_cap is not None else {})
+            self.sftp_client.get(remote_path, local_path, callback=capped, **extra)
         except Exception as e:
             raise IOError(f"Failed to download {remote_path} to {local_path}: {e}")
 

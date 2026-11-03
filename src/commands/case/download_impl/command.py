@@ -257,6 +257,14 @@ the remote gets the restarts it lacks.
     The rest goes later with the next --t1, or --missing. {Colors.YELLOW}--fit{Colors.RESET} takes
     the cut without asking. A finished transfer prints the rate it reached.
 
+{Colors.BOLD}LOGIN NODES:{Colors.RESET}
+    SFTP holds a core near 100% for as long as a transfer runs, and a login
+    node's watchdog kills that (and may lock the account). On a host named
+    login* outside a Slurm job, every transfer is held under
+    {Colors.YELLOW}set login_cpu_limit{Colors.RESET} % of a core (default 70; 0: no limit); it
+    says so once when it starts pausing. FLEXFLOW_LOGIN_NODE=1/0 overrides
+    the detection.
+
 {Colors.BOLD}HISTORY:{Colors.RESET}
     {Colors.YELLOW}case upload history{Colors.RESET} carries what `case organise history` keeps, in
     othd_files/ and oisd_files/ alike: archive/{{problem}}N, cleaned/{{problem}}N
@@ -410,6 +418,14 @@ the restarts found only on the remote are added here.
     steps that fit are offered as --t2: send all anyway, only those, or stop.
     The rest goes later with the next --t1, or --missing. {Colors.YELLOW}--fit{Colors.RESET} takes
     the cut without asking. A finished transfer prints the rate it reached.
+
+{Colors.BOLD}LOGIN NODES:{Colors.RESET}
+    SFTP holds a core near 100% for as long as a transfer runs, and a login
+    node's watchdog kills that (and may lock the account). On a host named
+    login* outside a Slurm job, every transfer is held under
+    {Colors.YELLOW}set login_cpu_limit{Colors.RESET} % of a core (default 70; 0: no limit); it
+    says so once when it starts pausing. FLEXFLOW_LOGIN_NODE=1/0 overrides
+    the detection.
 
 {Colors.BOLD}HISTORY:{Colors.RESET}
     {Colors.YELLOW}case download history{Colors.RESET} carries what `case organise history` keeps, in
