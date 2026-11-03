@@ -90,6 +90,10 @@ Organize and clean up case directories. Pick one subcommand.
             Delete every .out in range, even at steps with no .plt.
             Those steps can then never be converted.
 
+        {Colors.CYAN}--keep-out{Colors.RESET}
+            Delete no .out at all, converted or not: only the .rst are
+            thinned. Not with --all-out.
+
     {Colors.CYAN}plt{Colors.RESET}
         Pass at least one of --delete-ascii / --delete-binary.
 
@@ -225,6 +229,9 @@ def print_organise_examples():
 
     # Delete all .out, converted or not (asks first)
     flexflow case organise output CS4SG1U1 --all-out
+
+    # Thin the .rst only, every .out stays
+    flexflow case organise output CS4SG1U1 --keep-out
 
     # Keep only the .rst of the steps divisible by 5000
     flexflow case organise output CS4SG1U1 --keep-freq 5000

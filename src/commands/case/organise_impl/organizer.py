@@ -415,7 +415,10 @@ class CaseOrganizer(HistoryMixin):
                 return
             keep_interval = freq * 10
             self.logger.info(f"Using freq={freq}, keep_interval={keep_interval}")
-        if getattr(self.args, 'all_out', False):
+        if getattr(self.args, 'keep_out', False):
+            self.console.print(f"  Keeping .rst at steps divisible by {keep_interval}; "
+                               f"[bold]every .out stays[/bold] (--keep-out)")
+        elif getattr(self.args, 'all_out', False):
             self.console.print(f"  Keeping .rst at steps divisible by {keep_interval}; "
                                f"[bold]every .out goes[/bold] (--all-out)")
         else:
@@ -460,7 +463,9 @@ class CaseOrganizer(HistoryMixin):
         out_pattern = f'{problem}.*_*.out'
         rst_pattern = f'{problem}.*_*.rst'
 
-        out_files = list(output_dir.glob(out_pattern))
+        # --keep-out: the .out are not even looked at
+        keep_out = getattr(self.args, 'keep_out', False)
+        out_files = [] if keep_out else list(output_dir.glob(out_pattern))
         rst_files = list(output_dir.glob(rst_pattern))
 
         self.logger.info(f"Found {len(out_files)} .out files, {len(rst_files)} .rst files "

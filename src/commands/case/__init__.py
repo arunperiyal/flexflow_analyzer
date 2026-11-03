@@ -211,6 +211,8 @@ class CaseCommand(BaseCommand):
         output_parser.add_argument('--all-out', action='store_true',
                                     help='Delete every .out in range, even steps with no .plt '
                                          '(their field data is then gone for good)')
+        output_parser.add_argument('--keep-out', action='store_true',
+                                    help='Delete no .out at all; only thin the .rst')
         time_window(output_parser, 
                     t1_kwargs=dict(metavar='STEP', help='Only target timesteps >= STEP'),
                     t2_kwargs=dict(metavar='STEP', help='Only target timesteps <= STEP'))

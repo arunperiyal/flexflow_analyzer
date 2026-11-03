@@ -26,7 +26,7 @@ class _Logger:
 
 def organise(case_dir, subcommand, config=None, **flags):
     args = Namespace(delete_ascii=False, delete_binary=False, freq=None, keep_freq=None,
-                     all_out=False,
+                     all_out=False, keep_out=False,
                      dry_run=False, no_confirm=True, log=False,
                      verbose=False, t1=None, t2=None)
     for key, value in flags.items():
@@ -117,6 +117,12 @@ def test_output_all_out_deletes_unconverted_out_too(tmp_path, converted):
     assert steps(converted, '.rst') == [500, 1000, 1500] + list(range(1550, 2001, 50))
 
 
+def test_output_keep_out_deletes_no_out_and_still_thins_rst(tmp_path, converted):
+    organise(tmp_path, 'output', keep_freq=500, keep_out=True)
+    assert len(steps(converted, '.out')) == 40                     # converted ones too
+    assert steps(converted, '.rst') == [500, 1000, 1500, 2000]
+
+
 def test_output_out_respects_the_time_window(tmp_path, converted):
     organise(tmp_path, 'output', keep_freq=500, t1=300, t2=700)
     assert steps(converted, '.out') == [50, 100, 150, 200, 250] + list(range(750, 2001, 50))
@@ -141,3 +147,7 @@ def test_parse_and_check(parse):
         parse('output', 'C1', '--keep-every', '2')
     assert parse('output', 'C1', '--keep-freq', '500').keep_freq == 500
     assert parse('output', 'C1', '--all-out').all_out is True
+    assert parse('output', 'C1', '--keep-out').keep_out is True
+    assert _check_keep_flags(parse('output', 'C1', '--keep-out'), 'output') is None
+    assert 'give one' in _check_keep_flags(parse('output', 'C1', '--keep-out', '--all-out'),
+                                           'output')
