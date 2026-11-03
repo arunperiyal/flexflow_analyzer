@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### 🪟 A typed `--t1`/`--t2` wins over `use last:N`
+
+- The `last` context no longer applies when `--t1` or `--t2` is typed
+  (`plot`, `data table`, `data stats`, `data check steady`): with
+  `use last:1000`, `plot --t1 2000` plots from tsId 2000 on, not the last
+  1000 steps. A typed `--last N` still cuts the typed window to its last N
+  steps, and `use t1:... last:...` together still combine.
+
 ### 📉 `plot --var` (and `use var:`)
 
 - `plot` takes the variable the way `data table` does: `--var dy`, or the

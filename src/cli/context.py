@@ -159,10 +159,21 @@ def freq_arg(parser, **kwargs):
 
 
 def last_arg(parser, **kwargs):
-    """--last N: the last N steps of the history, filled from `use last:N`."""
+    """
+    --last N: the last N steps of the history, filled from `use last:N`.
+
+    A typed --last cuts the --t1/--t2 window to its last N steps. The `last`
+    context does not: a typed --t1 or --t2 says which steps are wanted, and
+    `use last:1000` left over from earlier would quietly overrule it.
+    """
     kwargs.setdefault('type', int)
     kwargs.setdefault('metavar', 'N')
-    return context_flag(parser, 'last', '--last', **kwargs)
+
+    def resolve(store, ns):
+        if explicit(ns, 't1') or explicit(ns, 't2'):
+            return None
+        return store.get('last') if store.is_set('last') else None
+    return context_flag(parser, 'last', '--last', resolve=resolve, **kwargs)
 
 
 def time_window(parser, t1_flag='--t1', t2_flag='--t2', when=None,
