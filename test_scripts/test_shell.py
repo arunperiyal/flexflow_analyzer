@@ -485,3 +485,20 @@ def test_version_reports_this_checkout():
     app = create_app()
     assert app.source_dir == Path(__file__).resolve().parents[1]
     assert 'version' in app.builtin_table()
+
+
+def test_a_typed_window_beats_the_last_context(rt):
+    use(rt, 'last:1000')
+    for line in ('plot', 'data table', 'data stats', 'data check steady'):
+        assert parsed(rt, line).last == 1000, line
+        a = parsed(rt, f'{line} --t1 2000')
+        assert (a.t1, a.last) == (2000, None), line
+        assert parsed(rt, f'{line} --t2 3000').last is None, line
+        a = parsed(rt, f'{line} --t1 2000 --last 50')       # a typed --last still cuts
+        assert (a.t1, a.last) == (2000, 50), line
+
+
+def test_the_t1_context_keeps_the_last_context(rt):
+    use(rt, 't1:2000 last:1000')
+    a = parsed(rt, 'plot')
+    assert (a.t1, a.last) == (2000.0, 1000)
