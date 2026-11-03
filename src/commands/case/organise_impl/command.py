@@ -90,11 +90,13 @@ def execute_organise(args):
 
 
 def _check_keep_flags(args, subcommand):
-    """What is wrong with --freq/--keep-freq, or None."""
+    """What is wrong with --freq/--keep-freq/--keep-out/--all-out, or None."""
     for flag in ('freq', 'keep_freq'):
         value = getattr(args, flag, None)
         if value is not None and value < 1:
             return f"--{flag.replace('_', '-')} must be 1 or more"
+    if getattr(args, 'keep_out', False) and getattr(args, 'all_out', False):
+        return "--keep-out keeps every .out and --all-out deletes them all; give one"
     if subcommand == 'plt' and not getattr(args, 'delete_binary', False):
         for flag in ('freq', 'keep_freq'):
             if getattr(args, flag, None) is not None:

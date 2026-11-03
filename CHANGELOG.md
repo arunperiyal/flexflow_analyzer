@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### 🧹 `case organise output --keep-out`
+
+- Deletes no `.out` at all, converted to `.plt` or not: only the `.rst` are
+  thinned to the steps divisible by `--keep-freq` (default 10 * freq).
+  Refused together with `--all-out`.
+
 ### 🛡️ Transfers held under a CPU limit on login nodes
 
 - A long `case upload` from a Param Shakti login node was killed by the
