@@ -41,7 +41,7 @@ def _banner(rt):
 HELP_HEADER = (
     "[yellow]Context:[/yellow]   [cyan]use case:Case015 node:24 t1:50.0 t2:100.0[/cyan]  "
     "[dim](`use list` shows them all)[/dim]\n"
-    "[yellow]Chaining:[/yellow]  [cyan]use case:Case005; data show; plot --data-type pendulum[/cyan]\n"
+    "[yellow]Chaining:[/yellow]  [cyan]use case:Case005 var:dy; data show; plot[/cyan]\n"
     "[yellow]Piping:[/yellow]    [cyan]case show | head -10[/cyan]   "
     "[cyan]data show | grep -i status[/cyan]"
 )

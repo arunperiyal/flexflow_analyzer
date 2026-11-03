@@ -203,7 +203,7 @@ Enable shell completion during installation:
 **Features:**
 - Command completion: `ff <TAB>`
 - Subcommand completion: `ff case <TAB>`
-- Option completion: `ff plot --data-type <TAB>`
+- Option completion: `ff plot --plot-type <TAB>`
 - Path completion for file arguments
 
 **Manual setup:**

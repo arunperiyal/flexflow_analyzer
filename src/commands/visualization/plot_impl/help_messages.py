@@ -7,28 +7,36 @@ def print_plot_help():
     print(f"""
 {Colors.BOLD}{Colors.CYAN}FlexFlow Plot Command{Colors.RESET}
 
-Plot displacement or force data for a specific node.
+Plot the history of a variable -- the columns `data table` shows for the
+same --var, node and window.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    plot {Colors.YELLOW}<case_directory>{Colors.RESET} [options]
+    plot {Colors.YELLOW}<case_directory>{Colors.RESET} --var NAME [options]
+    use case:CS4SG1U1 var:dy; plot          {Colors.DIM}# case and var from the context{Colors.RESET}
     plot {Colors.YELLOW}--input-file{Colors.RESET} <yaml_file>
 
-{Colors.BOLD}REQUIRED OPTIONS:{Colors.RESET}
-    {Colors.YELLOW}--node{Colors.RESET} N              Node number to plot (for displacement/force)
-    {Colors.YELLOW}--othid{Colors.RESET} ID            othId (probe set) to plot displacements from
-                           (default: the first; from context: use othid:N)
-    {Colors.YELLOW}--data-type{Colors.RESET} TYPE     Data type: displacement, force, or pendulum
+{Colors.BOLD}WHAT TO PLOT:{Colors.RESET}
+    {Colors.YELLOW}--var{Colors.RESET} NAME           Variable or component, as in data table (default: use var:)
+                            {Colors.DIM}dy, aleDisp_y      one component{Colors.RESET}
+                            {Colors.DIM}d, aleDisp         every component, one panel each{Colors.RESET}
+                            {Colors.DIM}tty, totTrac_y     surface (oisd) output{Colors.RESET}
+                            {Colors.DIM}pd, pv, pa         pendulum pendDisp, pendVel, pendAccel{Colors.RESET}
+                            Repeat or comma-separate: --var dx,dy. `data show` lists the names.
+    {Colors.YELLOW}--node{Colors.RESET} N              Node to read (default: 0; use node:N)
+    {Colors.YELLOW}--othid{Colors.RESET} ID            othId in the othd files (default: the first; use othid:N)
+    {Colors.YELLOW}--osgid{Colors.RESET} ID            osgId in the oisd files (default: the first; use osgid:N)
+    {Colors.YELLOW}--othd{Colors.RESET} / {Colors.YELLOW}--oisd{Colors.RESET}       Look in one kind of file only
 
 {Colors.BOLD}PLOT OPTIONS:{Colors.RESET}
-    {Colors.YELLOW}--plot-type{Colors.RESET} TYPE     Plot type: time, fft, traj2d, traj3d (default: time)
-    {Colors.YELLOW}--component{Colors.RESET} X [Y Z]  Components to plot
-                            {Colors.DIM}Displacement/Force:{Colors.RESET} x, y, z
-                            {Colors.DIM}Pendulum:{Colors.RESET} displacement, velocity, acceleration, all
-    {Colors.YELLOW}--start-time{Colors.RESET} T       Start time for plot
-    {Colors.YELLOW}--end-time{Colors.RESET} T         End time for plot
-    {Colors.YELLOW}--start-step{Colors.RESET} N       Start timestep, also --t1 (time N*dt; default: the t1 context)
-    {Colors.YELLOW}--end-step{Colors.RESET} N         End timestep, also --t2 (default: the t2 context)
-                            {Colors.DIM}A --start-time/--end-time typed wins over the step.{Colors.RESET}
+    {Colors.YELLOW}--plot-type{Colors.RESET} TYPE     time (default), fft, traj2d, traj3d
+                            {Colors.DIM}fft:{Colors.RESET} amplitude spectrum per column, peak in the legend
+                            {Colors.DIM}traj2d/traj3d:{Colors.RESET} the first 2/3 columns against each other
+                            (--var d, or --var dx,dy)
+    {Colors.YELLOW}--t1{Colors.RESET} TSID            First tsId, also --start-step (use t1:)
+    {Colors.YELLOW}--t2{Colors.RESET} TSID            Last tsId, also --end-step (use t2:)
+    {Colors.YELLOW}--last{Colors.RESET} N             Only the last N steps of that window (use last:N)
+    {Colors.YELLOW}--start-time{Colors.RESET} T       Start time, on top of the tsIds
+    {Colors.YELLOW}--end-time{Colors.RESET} T         End time
     {Colors.YELLOW}--restart{Colors.RESET}             Mark each restart recorded in .restarts (by case
                             organise history) with a grey dashed line (time plots)
 
@@ -74,121 +82,46 @@ def print_plot_examples():
 {Colors.BOLD}{Colors.CYAN}Plot Command Examples{Colors.RESET}
 
 {Colors.BOLD}Basic Time Series:{Colors.RESET}
-    plot CS4SG1U1 --node 100 --data-type displacement
-    plot CS4SG1U1 --node 100 --data-type force --component y
+    plot CS4SG1U1 --var dy --node 100
+    plot CS4SG1U1 --var d --node 100           # dx, dy, dz in three panels
+    plot CS4SG1U1 --var tty                    # totTrac_y from the oisd
+    use case:CS4SG1U1 node:100 var:dy; plot    # the same from the context
 
-{Colors.BOLD}With Time Range:{Colors.RESET}
-    plot CS4SG1U1 --node 100 --data-type displacement \\
-        --start-time 10.0 --end-time 50.0
+{Colors.BOLD}A Window:{Colors.RESET}
+    plot CS4SG1U1 --var dy --t1 2000 --t2 4000
+    plot CS4SG1U1 --var dy --last 1000
+    plot CS4SG1U1 --var dy --start-time 10.0 --end-time 50.0
+
+{Colors.BOLD}FFT and Trajectories:{Colors.RESET}
+    plot CS4SG1U1 --var dy --plot-type fft --last 2000
+    plot CS4SG1U1 --var d --plot-type traj2d    # dx against dy
+    plot CS4SG1U1 --var d --plot-type traj3d
+
+{Colors.BOLD}Pendulum:{Colors.RESET}
+    plot CS4SG1U1 --var pd                      # pendDisp
+    plot CS4SG1U1 --var pd,pv,pa                # all three, one panel each
+    plot CS4SG1U1 --var pd --plot-type fft
 
 {Colors.BOLD}Styled Plots:{Colors.RESET}
     # Red solid line with circles, width 2
-    plot CS4SG1U1 --node 100 --data-type displacement \\
-        --plot-style "red,2,-,o" --title "Node 100|16"
-
-    # Blue dashed line, no markers
-    plot CS4SG1U1 --node 100 --data-type displacement \\
-        --plot-style "blue,1.5,--,None"
-
-    # Green dash-dot line with squares
-    plot CS4SG1U1 --node 100 --data-type displacement \\
-        --plot-style "green,2,-.,s"
-
+    plot CS4SG1U1 --var dy --plot-style "red,2,-,o" --title "Node 100|16"
     # Custom hex color with stars
-    plot CS4SG1U1 --node 100 --data-type displacement \\
-        --plot-style "#FF5733,1.5,-,*"
+    plot CS4SG1U1 --var dy --plot-style "#FF5733,1.5,-,*"
 
-{Colors.BOLD}Enhanced Labels with LaTeX:{Colors.RESET}
-    # Simple labels with custom font size
-    plot CS4SG1U1 --node 100 --data-type displacement \\
-        --title "Displacement Analysis|18" \\
-        --xlabel "Time (s)|14" --ylabel "Displacement (m)|14"
-
-    # LaTeX rendering for mathematical expressions
-    plot CS4SG1U1 --node 100 --data-type displacement \\
-        --title "Node Displacement $\\Delta x$|16|True" \\
+{Colors.BOLD}Labels with LaTeX:{Colors.RESET}
+    plot CS4SG1U1 --var dy \\
+        --title "Node Displacement $\\Delta y$|16|True" \\
         --xlabel 'Time $t$ (s)|14|True' \\
         --ylabel 'Displacement $\\delta$ (m)|14|True'
 
-    # Mixed: LaTeX for ylabel, simple for others
-    plot CS4SG1U1 --node 100 --data-type displacement \\
-        --title "Analysis Results|16" \\
-        --ylabel 'Force $F_x$ (N)|14|True'
+{Colors.BOLD}Fonts:{Colors.RESET}
+    plot CS4SG1U1 --var dy --fontname serif --title "Case Study|16"
+    plot CS4SG1U1 --var dy --fontname "Liberation Serif"
 
-{Colors.BOLD}Custom Fonts (Academic Style):{Colors.RESET}
-    # Times-like serif font (professional publications)
-    plot CS4SG1U1 --node 100 --data-type displacement \\
-        --component y --fontname serif \\
-        --title "Case Study|16" --ylabel "Displacement (m)|14"
-
-    # DejaVu Serif (Times New Roman alternative)
-    plot CS4SG1U1 --node 100 --data-type displacement \\
-        --component y --fontname "DejaVu Serif" \\
-        --title "Analysis|16"
-
-    # Liberation Serif (metrically compatible with Times New Roman)
-    plot CS4SG1U1 --node 100 --data-type displacement \\
-        --component y --fontname "Liberation Serif"
-
-{Colors.BOLD}FFT Analysis:{Colors.RESET}
-    plot CS4SG1U1 --node 100 --data-type displacement \\
-        --plot-type fft --component y
-
-{Colors.BOLD}2D Trajectory:{Colors.RESET}
-    plot CS4SG1U1 --node 100 --data-type displacement \\
-        --plot-type traj2d --component x y
-
-{Colors.BOLD}3D Trajectory:{Colors.RESET}
-    plot CS4SG1U1 --node 100 --data-type displacement \\
-        --plot-type traj3d --component x y z
-
-{Colors.BOLD}Save to File (Multiple Formats):{Colors.RESET}
-    # PNG (default, good for presentations)
-    plot CS4SG1U1 --node 100 --data-type displacement \\
-        --output plot.png
-
-    # PDF (vector format, best for publications)
-    plot CS4SG1U1 --node 100 --data-type displacement \\
-        --output plot.pdf
-
-    # SVG (scalable vector graphics)
-    plot CS4SG1U1 --node 100 --data-type displacement \\
-        --output plot.svg
-
-{Colors.BOLD}Terminal Plot (HPC/SSH Usage):{Colors.RESET}
-    # Display plot directly in terminal (requires plotext)
-    plot CS4SG1U1 --node 100 --data-type displacement \\
-        --component y --gnu
-
-    # Terminal plot + save to file
-    plot CS4SG1U1 --node 100 --data-type displacement \\
-        --component y --gnu --output plot.pdf
-
-{Colors.BOLD}Pendulum Data Plots:{Colors.RESET}
-    # Time series of pendulum displacement
-    plot CS4SG1U1 --data-type pendulum --component displacement
-
-    # Pendulum velocity
-    plot CS4SG1U1 --data-type pendulum --component velocity
-
-    # Pendulum acceleration
-    plot CS4SG1U1 --data-type pendulum --component acceleration
-
-    # All pendulum components on one plot
-    plot CS4SG1U1 --data-type pendulum --component all
-
-    # FFT of pendulum displacement
-    plot CS4SG1U1 --data-type pendulum --component displacement \\
-        --plot-type fft
-
-{Colors.BOLD}Remote/SSH Usage (No Display):{Colors.RESET}
-    # Automatically headless when using --output
-    plot CS4SG1U1 --node 100 --data-type displacement \\
-        --component y --output result.png
-
-    # Or explicitly use --no-display
-    plot CS4SG1U1 --node 100 --data-type displacement \\
-        --component y --no-display
+{Colors.BOLD}Output:{Colors.RESET}
+    plot CS4SG1U1 --var dy --output plot.pdf    # .png, .pdf, .svg, .eps
+    plot CS4SG1U1 --var dy --gnu                # in the terminal (plotext)
+    plot CS4SG1U1 --var dy --no-display
 
 {Colors.BOLD}Using YAML Configuration:{Colors.RESET}
     plot --input-file plot_config.yaml

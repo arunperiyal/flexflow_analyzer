@@ -109,11 +109,11 @@ CONTEXTS = [
     ContextKey('t2', parse=float, clears=('time',),
                description='End of a timestep range (clears time)'),
     ContextKey('last', parse=_positive_int, style='#88ccff',
-               description='The last N steps of the history (data table/stats)'),
+               description='The last N steps of the history (data table/stats, plot)'),
     ContextKey('remote', parse=_parse_remote, complete=_complete_remotes, label='rem',
                style='#ffaaee', description="Remote machine for 'case upload/download' and 'run post'"),
     ContextKey('var', style='#00ddaa',
-               description='Variable(s) for field extract, data table/stats'),
+               description='Variable(s) for field extract, data table/stats, plot'),
     ContextKey('zone', style='#dd88ff',
                description='Zone for field extract/compute/convert/render'),
     ContextKey('freq', parse=_positive_int, style='#ffcc00',
@@ -175,7 +175,7 @@ def time_window(parser, t1_flag='--t1', t2_flag='--t2', when=None,
     Parameters:
         t1_flag, t2_flag: The flags as this command spells them, or a tuple
                           of spellings, the first naming the dest (plot takes
-                          --start-step/--t1 and --end-step/--t2)
+                          --t1/--start-step and --t2/--end-step)
         when: namespace -> bool; the contexts apply only when it is true
               (case upload/download: only with binary or rst)
     """

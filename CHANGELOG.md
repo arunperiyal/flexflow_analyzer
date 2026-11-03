@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### 📉 `plot --var` (and `use var:`)
+
+- `plot` takes the variable the way `data table` does: `--var dy`, or the
+  `var` context (`use case:CS1 node:10 var:dy; plot`). `--data-type` and
+  `--component` are gone. A vector (`--var d`) is plotted one panel per
+  component; oisd output (`--var tty`) and the pendulum (`pd`, `pv`, `pa`)
+  work the same way.
+- The window is the one `data table` takes: `--t1/--t2` are tsIds (still
+  also spelled `--start-step/--end-step`), `--last N` / `use last:N` the last
+  N steps, `--othid/--osgid` the group; `--start-time/--end-time` still cut
+  by time on top.
+- `--plot-type fft` gives the amplitude spectrum of each column, with its
+  peak frequency in the legend ("flat" for a constant one); `traj2d`/`traj3d`
+  plot the first 2/3 columns against each other (`--var d`, or `--var dx,dy`).
+- The YAML input of `plot --input-file` is unchanged.
+
 ### ⏱️ `def freq out` / `def freq rst`
 
 - `def freq` shows the outFreq of outputSimulation{} (`out`) and

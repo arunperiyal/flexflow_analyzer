@@ -484,7 +484,7 @@ def install():
     
     print(f"\n{Colors.CYAN}[INFO]{Colors.RESET} Quick start:")
     print(f"  {Colors.CYAN}flexflow info <case_directory>{Colors.RESET}")
-    print(f"  {Colors.CYAN}flexflow plot <case_directory> --data-type displacement --node 10 --component y{Colors.RESET}")
+    print(f"  {Colors.CYAN}flexflow plot <case_directory> --var dy --node 10{Colors.RESET}")
     
     print(f"\n{Colors.CYAN}[INFO]{Colors.RESET} For more information:")
     print(f"  {Colors.CYAN}flexflow --help{Colors.RESET}")

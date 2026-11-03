@@ -413,6 +413,64 @@ def gather(meta, columns, node, mask, group=None):
     return times, tsids, out
 
 
+class Selection:
+    """What a --var selection read: the file kind, its scan, the group and
+    node, and the rows (times, tsids) with {column label: values}."""
+
+    def __init__(self, kind, meta, group, node, columns, times, tsids, values):
+        self.kind, self.meta, self.group, self.node = kind, meta, group, node
+        self.columns, self.times, self.tsids, self.values = columns, times, tsids, values
+
+
+def select(case_dir, args, logger, requested):
+    """The --var selection of one case, as `data table` and `plot` read it:
+    the kind is whichever declares the names (--othd/--oisd narrow the
+    search), then the group (--othid/--osgid/--group), the node, and the
+    --t1/--t2/--last window. Exits with a sentence on anything wrong."""
+    kinds = which_kinds(args)
+    metas = scan_kinds(case_dir, kinds, logger)
+    if not metas:
+        logger.error(f"No othd/oisd data found under {case_dir}")
+        sys.exit(1)
+
+    # A name belongs to whichever kind declares it, so the kind need not be
+    # given: `--var vel` is othd, `--var totTrac` is oisd, and asking for both
+    # at once is refused rather than silently answered from one of them.
+    owners = {kind: [r for r in requested
+                     if known_name(metas[kind], r)] for kind in metas}
+    matched = {k: v for k, v in owners.items() if v}
+    if not matched:
+        available = ", ".join(sorted(
+            name for meta in metas.values() for name in meta.variables))
+        logger.error(f"None of {', '.join(requested)} is in this case's data.\n"
+                     f"        Available: {available}")
+        sys.exit(1)
+    if len(matched) > 1:
+        logger.error("those variables live in different files "
+                     + "; ".join(f"{k}: {', '.join(v)}" for k, v in matched.items())
+                     + ".\n        They are sampled differently, so take one "
+                       "kind at a time.")
+        sys.exit(1)
+
+    kind = next(iter(matched))
+    meta = metas[kind]
+    missing = [r for r in requested if r not in matched[kind]]
+    if missing:
+        logger.error(f"not in the {kind} files: {', '.join(missing)}")
+        sys.exit(1)
+
+    group = resolve_group(meta, args, logger)
+    columns = resolve_columns(meta, requested, logger, group)
+    node = resolve_node(meta, getattr(args, "node", None), logger, group)
+    mask = step_mask(meta, getattr(args, "t1", None),
+                     getattr(args, "t2", None), logger, getattr(args, "last", None))
+
+    logger.info(f"reading {len(columns)} column(s) from {len(meta.files)} "
+                f"{kind} file(s)")
+    times, tsids, values = gather(meta, columns, node, mask, group)
+    return Selection(kind, meta, group, node, columns, times, tsids, values)
+
+
 def write_csv(path, times, tsids, values, logger):
     """Write the table to a .csv, creating the directory if it is missing."""
     directory = os.path.dirname(str(path))
