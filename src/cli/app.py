@@ -82,6 +82,13 @@ def _positive_float(raw) -> float:
     return value
 
 
+def _percent(raw) -> int:
+    value = int(raw)
+    if not 0 <= value <= 100:
+        raise ValueError(f"expected 0..100, got '{raw}'")
+    return value
+
+
 def create_app() -> App:
     """The FlexFlow shellkit App, with every command registered."""
     from __version__ import __version__
@@ -99,7 +106,10 @@ def create_app() -> App:
         session_timeout=15,
         settings=[Setting('transfer_speed', 10.0, _positive_float,
                           'Link speed in Mbps that case upload/download binary plans '
-                          'against the session timeout', choices=('10', '100', '1000'))],
+                          'against the session timeout', choices=('10', '100', '1000')),
+                  Setting('login_cpu_limit', 70, _percent,
+                          'On a login node, keep transfers under this % of a core '
+                          '(0: no limit)', choices=('50', '70', '0'))],
         file_style=ff_builtins.file_style,
         source_dir=Path(__file__).resolve().parents[2],
     )

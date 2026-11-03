@@ -311,6 +311,17 @@ ff case upload mycase --to myserver
 - Shows transfer progress with file counts
 - Preserves local directory structure on remote
 
+**Transfers on a cluster login node:**
+
+paramiko's SFTP holds a CPU core near 100% for as long as a transfer runs,
+and login nodes kill a process that does so for long (Param Shakti: >90% for
+>30 min, with the account locked on repeats). On a host named `login*`
+outside a Slurm job, every upload and download is paused as needed to stay
+under `set login_cpu_limit` percent of a core (default 70; 0 turns it off).
+The transfer is slower on a fast link and the same on a slow one.
+`FLEXFLOW_LOGIN_NODE=1` (or `0`) overrides the detection on a cluster whose
+login nodes are named otherwise.
+
 **Binary transfers and the session timeout:**
 
 In the shell, `case upload|download binary` is set against the time the
