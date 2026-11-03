@@ -83,14 +83,6 @@ def test_uneven_sampling():
     assert series_plot.uneven_sampling(np.array([0, 0.1, 0.2, 0.4, 0.5]))
 
 
-def test_time_cut():
-    sel = plot.time_cut(selection(n=100), 1.0, 2.0)
-    assert sel.times.min() >= 1.0 and sel.times.max() <= 2.0
-    assert len(sel.values['aleDisp_y']) == len(sel.times) == len(sel.tsids)
-    with pytest.raises(ValueError, match='No steps between'):
-        plot.time_cut(selection(n=100), 50.0, 60.0)
-
-
 def test_pendulum_selection(monkeypatch, tmp_path):
     class Reader:
         def __init__(self, files, group=None):
@@ -113,7 +105,7 @@ def test_pendulum_selection(monkeypatch, tmp_path):
 def args(**kw):
     base = dict(input_file=None, case=str(EXAMPLE), var=None, node=None, othid=None,
                 osgid=None, group=None, othd=False, oisd=False, t1=None, t2=None,
-                last=None, start_time=None, end_time=None, plot_type='time',
+                last=None, plot_type='time',
                 plot_style=None, title=None, xlabel=None, ylabel=None, legend=None,
                 legend_style=None, fontsize=None, fontname=None, output=None,
                 restart=False, gnu=False, no_display=True, verbose=False)

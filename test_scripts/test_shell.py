@@ -246,11 +246,11 @@ def test_range_ends_fill_independently(rt):
 
 
 def test_plot_t1_is_a_tsid(rt):
-    # t1/t2 are tsIds, as in data table; --start-step/--end-step still spell them
+    # t1/t2 are tsIds, as in data table
     use(rt, 't1:3000')
     a = parsed(rt, 'plot')
-    assert (a.t1, a.start_time, a.end_time) == (3000, None, None)
-    assert parsed(rt, 'plot --start-step 0').t1 == 0
+    assert a.t1 == 3000 and not hasattr(a, 'start_time')
+    assert parsed(rt, 'plot --t1 0').t1 == 0
     a = parsed(rt, 'plot --t1 0 --t2 250')
     assert (a.t1, a.t2) == (0, 250)
 

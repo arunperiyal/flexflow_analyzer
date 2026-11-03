@@ -9,7 +9,7 @@ from src.cli.context import (case_arg, context_flag, last_arg, node_arg, osgid_a
 
 
 def _step(text):
-    """A step: '3000' or the context's '3000.0'."""
+    """A tsId: '3000' or the context's '3000.0'."""
     value = float(text)
     if not value.is_integer():
         raise ValueError(f"not a whole step: {text}")
@@ -50,12 +50,10 @@ class PlotCommand(BaseCommand):
                           choices=['time', 'fft', 'traj2d', 'traj3d'],
                           help='Plot type')
         # t1/t2 are tsIds, as in data table
-        time_window(parser, ('--t1', '--start-step'), ('--t2', '--end-step'),
+        time_window(parser,
                     t1_kwargs=dict(type=_step, metavar='TSID', help='First tsId'),
                     t2_kwargs=dict(type=_step, metavar='TSID', help='Last tsId'))
         last_arg(parser, help='Only the last N steps (of the --t1/--t2 window)')
-        parser.add_argument('--start-time', type=float, help='Start time (on top of the tsIds)')
-        parser.add_argument('--end-time', type=float, help='End time')
 
         # Styling options
         parser.add_argument('--plot-style', type=str, help='Plot style string')

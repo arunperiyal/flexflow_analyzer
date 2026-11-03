@@ -495,24 +495,6 @@ def select_pendulum(case_dir, args, logger, requested):
                             list(values), times[mask], tsids[mask], values)
 
 
-def time_cut(sel, start_time, end_time):
-    """--start-time/--end-time on top of the tsId window."""
-    import numpy as np
-    if start_time is None and end_time is None:
-        return sel
-    keep = np.ones(len(sel.times), dtype=bool)
-    if start_time is not None:
-        keep &= sel.times >= start_time
-    if end_time is not None:
-        keep &= sel.times <= end_time
-    if not keep.any():
-        raise ValueError(f"No steps between time {start_time} and {end_time}: the window "
-                         f"holds {sel.times.min():.6g}..{sel.times.max():.6g}")
-    sel.times, sel.tsids = sel.times[keep], sel.tsids[keep]
-    sel.values = {k: v[keep] for k, v in sel.values.items()}
-    return sel
-
-
 def describe(case_dir, sel, requested):
     """The default title: case, variables, and where they came from."""
     where = [sel.kind]
@@ -608,7 +590,6 @@ def execute_plot(args):
             sel = select_pendulum(case_dir, args, logger, requested)
         else:
             sel = shared.select(case_dir, args, logger, requested)
-        sel = time_cut(sel, getattr(args, 'start_time', None), getattr(args, 'end_time', None))
         logger.info(f"{len(sel.times)} step(s): tsId {sel.tsids.min()}..{sel.tsids.max()}, "
                     f"time {sel.times.min():.6g}..{sel.times.max():.6g}")
 

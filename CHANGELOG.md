@@ -9,10 +9,9 @@
   `--component` are gone. A vector (`--var d`) is plotted one panel per
   component; oisd output (`--var tty`) and the pendulum (`pd`, `pv`, `pa`)
   work the same way.
-- The window is the one `data table` takes: `--t1/--t2` are tsIds (still
-  also spelled `--start-step/--end-step`), `--last N` / `use last:N` the last
-  N steps, `--othid/--osgid` the group; `--start-time/--end-time` still cut
-  by time on top.
+- The window is the one `data table` takes: `--t1/--t2` are tsIds, `--last
+  N` / `use last:N` the last N steps, `--othid/--osgid` the group.
+  `--start-time/--end-time` and `--start-step/--end-step` are gone.
 - `--plot-type fft` gives the amplitude spectrum of each column, with its
   peak frequency in the legend ("flat" for a constant one); `traj2d`/`traj3d`
   plot the first 2/3 columns against each other (`--var d`, or `--var dx,dy`).
