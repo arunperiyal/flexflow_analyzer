@@ -310,6 +310,31 @@ ff case upload mycase --to myserver
 - `--force` creates missing remote directories before uploading
 - Shows transfer progress with file counts
 - Preserves local directory structure on remote
+
+**Binary transfers and the session timeout:**
+
+In the shell, `case upload|download binary` is set against the time the
+session has left (the `ttl` in the prompt), at `set transfer_speed` Mbps
+(default 10). When it will not finish, it says so and offers the steps that
+fit:
+
+```
+Session timeout: 412 file(s), 6.8 GB: about 1 h 37 min at 10 Mbps, and 5 min is left in this session.
+    Up to --t2 2350 fits: steps 2000..2350, 38 file(s), 410 MB, about 5 min.
+    --t1 2000 --t2 2350 now; the rest later with --t1 2351, or --missing.
+    Send all anyway [y], only up to --t2 2350 [t], or stop [N]?
+```
+
+```bash
+set transfer_speed 8                              # plan with the speed the link really gets
+ff case upload binary mycase --to myserver --fit  # take the cut without asking
+ff case upload binary mycase --to myserver --no-time-check
+```
+
+A finished transfer of 50 MB or more prints the rate it reached, and the
+`set transfer_speed` to use when it is far from the planned one. A one-shot
+command (`flexflow case upload ...` from bash) has no timeout and is not
+checked.
 - Supports tilde expansion (`~/cases/mycase`)
 
 **Example workflow:**

@@ -61,6 +61,11 @@ def _transfer_positionals(parser, direction):
                             help=f'history: only {where} (combinable; none carries all three)')
     parser.add_argument('--missing', action='store_true',
                         help='binary: only the files the other side lacks (or holds at another size)')
+    parser.add_argument('--fit', action='store_true',
+                        help='binary: send only the steps that fit in the time the session '
+                             'has left (at set transfer_speed)')
+    parser.add_argument('--no-time-check', action='store_true',
+                        help='binary: do not set the transfer against the session timeout')
     # The old spelling, kept only to point at the new one.
     parser.add_argument('--binary', action='store_true', help=argparse.SUPPRESS)
 

@@ -502,3 +502,20 @@ def test_the_t1_context_keeps_the_last_context(rt):
     use(rt, 't1:2000 last:1000')
     a = parsed(rt, 'plot')
     assert (a.t1, a.last) == (2000.0, 1000)
+
+
+def test_transfer_speed_setting(rt):
+    assert rt.settings.get('transfer_speed') == 10.0
+    assert rt.execute_line('set transfer_speed 8.5') == 0
+    assert rt.settings.get('transfer_speed') == 8.5
+    assert rt.execute_line('set transfer_speed 0') != 0
+    assert rt.settings.get('transfer_speed') == 8.5
+
+
+def test_fit_flags_parse_and_need_binary(rt, capsys):
+    a = parsed(rt, 'case upload binary --fit')
+    assert (a.fit, a.no_time_check) == (True, False)
+    assert parsed(rt, 'case download binary --no-time-check').no_time_check
+    use(rt, 'case:. remote:cluster')
+    assert rt.execute_line('case upload rst --fit') == 1
+    assert '--fit/--no-time-check plan binary/' in ' '.join(capsys.readouterr().out.split())

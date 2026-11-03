@@ -3,6 +3,8 @@
 import json
 import os
 import re
+import sys
+import time
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from src.utils.ssh_client import SSHClientWrapper
@@ -13,6 +15,7 @@ from rich.console import Console
 from rich.progress import Progress, BarColumn, TextColumn, DownloadColumn, TransferSpeedColumn, TimeRemainingColumn
 from rich.table import Table
 from rich import box
+from . import budget
 from .history import (HistoryTransferMixin, HISTORY_SETS, history_label, history_sets,
                       history_target)
 
@@ -181,6 +184,8 @@ the remote gets the restarts it lacks.
     {Colors.YELLOW}--t1 STEP{Colors.RESET}              binary/rst: first timestep (alone: only that step)
     {Colors.YELLOW}--t2 STEP{Colors.RESET}              binary/rst: last timestep
     {Colors.YELLOW}--missing{Colors.RESET}              binary: only the files the remote lacks
+    {Colors.YELLOW}--fit{Colors.RESET}                  binary: only the steps that fit in the session's time left
+    {Colors.YELLOW}--no-time-check{Colors.RESET}        binary: do not check against the session timeout
     {Colors.YELLOW}--archive{Colors.RESET}              history: only archive/ (combinable; none: all three)
     {Colors.YELLOW}--cleaned{Colors.RESET}              history: only cleaned/
     {Colors.YELLOW}--compiled{Colors.RESET}             history: only the compiled file
@@ -244,6 +249,13 @@ the remote gets the restarts it lacks.
     every File(...) in it, at the same paths under the remote case. If one is
     missing nothing is sent. simflow.config is not among them, so the remote's
     restart settings stay as they are (--files carries it).
+
+{Colors.BOLD}SESSION TIMEOUT:{Colors.RESET}
+    In the shell, binary is set against the time the session has left, at
+    {Colors.YELLOW}set transfer_speed{Colors.RESET} Mbps (default 10). When it will not finish, the
+    steps that fit are offered as --t2: send all anyway, only those, or stop.
+    The rest goes later with the next --t1, or --missing. {Colors.YELLOW}--fit{Colors.RESET} takes
+    the cut without asking. A finished transfer prints the rate it reached.
 
 {Colors.BOLD}HISTORY:{Colors.RESET}
     {Colors.YELLOW}case upload history{Colors.RESET} carries what `case organise history` keeps, in
@@ -326,6 +338,8 @@ the restarts found only on the remote are added here.
     {Colors.YELLOW}--t1 STEP{Colors.RESET}              binary/rst: first timestep (alone: only that step)
     {Colors.YELLOW}--t2 STEP{Colors.RESET}              binary/rst: last timestep
     {Colors.YELLOW}--missing{Colors.RESET}              binary: only the files missing here
+    {Colors.YELLOW}--fit{Colors.RESET}                  binary: only the steps that fit in the session's time left
+    {Colors.YELLOW}--no-time-check{Colors.RESET}        binary: do not check against the session timeout
     {Colors.YELLOW}--archive{Colors.RESET}              history: only archive/ (combinable; none: all three)
     {Colors.YELLOW}--cleaned{Colors.RESET}              history: only cleaned/
     {Colors.YELLOW}--compiled{Colors.RESET}             history: only the compiled file
@@ -389,6 +403,13 @@ the restarts found only on the remote are added here.
     names with File(...) -- the mesh and boundary files a restart needs
     unchanged -- at the same paths here. If one is missing on the remote,
     nothing is fetched.
+
+{Colors.BOLD}SESSION TIMEOUT:{Colors.RESET}
+    In the shell, binary is set against the time the session has left, at
+    {Colors.YELLOW}set transfer_speed{Colors.RESET} Mbps (default 10). When it will not finish, the
+    steps that fit are offered as --t2: send all anyway, only those, or stop.
+    The rest goes later with the next --t1, or --missing. {Colors.YELLOW}--fit{Colors.RESET} takes
+    the cut without asking. A finished transfer prints the rate it reached.
 
 {Colors.BOLD}HISTORY:{Colors.RESET}
     {Colors.YELLOW}case download history{Colors.RESET} carries what `case organise history` keeps, in
@@ -529,6 +550,7 @@ class CaseUploadCommand(HistoryTransferMixin):
             'step_window': list(step_window) if step_window else None,
             'step_freq': step_freq,
             'missing': missing,
+            'time_policy': getattr(self, '_time_policy', 'ask'),
             'cases': case_entries,
             'completed_targets': [],
         }
@@ -647,6 +669,7 @@ class CaseUploadCommand(HistoryTransferMixin):
             step_window = tuple(saved_window) if saved_window else None
             step_freq = state.get('step_freq')
             missing = bool(state.get('missing', False))
+            self._time_policy = state.get('time_policy', 'ask')
             mode = state.get('mode') or ('binary' if step_window or step_freq else None)
         else:
             mode, problem = self._transfer_mode(args, direction)
@@ -673,6 +696,15 @@ class CaseUploadCommand(HistoryTransferMixin):
                                               self._get_arg(args, 't2'))
             step_freq = self._get_arg(args, 'freq')
             missing = bool(self._get_arg(args, 'missing', False))
+            self._time_policy = ('fit' if self._get_arg(args, 'fit', False) else
+                                 'ignore' if self._get_arg(args, 'no_time_check', False)
+                                 else 'ask')
+            if self._time_policy != 'ask' and mode != 'binary':
+                self.console.print(
+                    f"[red]Error:[/red] --fit/--no-time-check plan binary/ against the "
+                    f"session timeout; use `case {direction} binary`."
+                )
+                return 1
             if missing and mode != 'binary':
                 self.console.print(
                     f"[red]Error:[/red] --missing compares binary/ on both sides; "
@@ -946,6 +978,10 @@ class CaseUploadCommand(HistoryTransferMixin):
                             freq=step_freq,
                             missing=missing,
                         )
+                elif mode == 'binary' and target['directory'] == 'binary' \
+                        and (cut := self._whole_binary_check(ssh, target, is_upload)) != 'go':
+                    ok = False if cut is None else self._send_cut(ssh, target, is_upload,
+                                                                   cut, force_enabled)
                 elif is_upload:
                     ok = self.upload_directory(
                         ssh,
@@ -1517,6 +1553,10 @@ class CaseUploadCommand(HistoryTransferMixin):
             if not kept:
                 return True
 
+        sizes = {n: os.path.getsize(os.path.join(local_dir, n)) for n in kept}
+        kept = self._apply_time_check(sizes, 'upload')
+        if kept is None:
+            return False
         return self._upload_names(ssh, local_dir, remote_dir, kept, force, 'binary')
 
     def _report_missing(self, kept, here, there, where) -> List[str]:
@@ -1556,6 +1596,7 @@ class CaseUploadCommand(HistoryTransferMixin):
             ) as progress:
                 task = progress.add_task(f"Transferring {label}...", total=total_bytes or None)
                 done = 0
+                started = time.monotonic()
                 for name in names:
                     local_file = os.path.join(local_dir, name)
                     ssh.upload_file(local_file, f"{remote_dir}/{name}")
@@ -1564,6 +1605,7 @@ class CaseUploadCommand(HistoryTransferMixin):
             self.console.print(
                 f"[green]\u2713[/green] Uploaded {len(names)} file(s) to {remote_dir}"
             )
+            self._report_rate(done, time.monotonic() - started)
             return True
         except Exception as e:
             self.console.print(f"[red]Error:[/red] Failed to upload {label}: {e}")
@@ -1823,7 +1865,7 @@ class CaseUploadCommand(HistoryTransferMixin):
         try:
             # With --missing the listing brings the sizes, and so which entries
             # are files: without a window every name is kept, directories too.
-            sizes = ssh.remote_file_sizes(remote_dir) if missing else None
+            sizes = ssh.remote_file_sizes(remote_dir)
             entries = list(sizes) if missing else ssh.list_remote_dir(remote_dir)
         except Exception as exc:
             self.console.print(f"[red]Error:[/red] Could not list {remote_dir}: {exc}")
@@ -1843,6 +1885,9 @@ class CaseUploadCommand(HistoryTransferMixin):
             if not kept:
                 return True
 
+        kept = self._apply_time_check({n: sizes.get(n, 0) for n in kept}, 'download')
+        if kept is None:
+            return False
         return self._download_names(ssh, remote_dir, local_dir, kept, 'binary')
 
     def _download_names(self, ssh, remote_dir: str, local_dir: str, names: List[str],
@@ -1866,6 +1911,7 @@ class CaseUploadCommand(HistoryTransferMixin):
                     state["last"] = transferred
                     progress.update(task, completed=state["done"] + transferred)
 
+                started = time.monotonic()
                 for name in names:
                     ssh.download_file(f"{remote_dir}/{name}",
                                       os.path.join(local_dir, name),
@@ -1873,10 +1919,134 @@ class CaseUploadCommand(HistoryTransferMixin):
             self.console.print(
                 f"[green]\u2713[/green] Downloaded {len(names)} file(s) to {local_dir}"
             )
+            self._report_rate(state["done"] + state["last"], time.monotonic() - started)
             return True
         except Exception as e:
             self.console.print(f"[red]Error:[/red] Failed to download {label}: {e}")
             return False
+
+    # -- the session timeout ------------------------------------------------------
+
+    def _check_time(self, sizes: Dict[str, int], direction: str):
+        """
+        Set the selection against the time the session has left (budget.py).
+
+        Returns 'go' to send it all, (first, last) to send only those steps,
+        or None to send nothing. --fit takes the cut without asking,
+        --no-time-check skips the check; without a terminal to ask at, the
+        warning is printed and everything is sent as asked.
+        """
+        from shellkit import current_runtime
+        policy = getattr(self, '_time_policy', 'ask')
+        rt = current_runtime()
+        if policy == 'ignore' or rt is None or not sizes:
+            return 'go'
+        speed = rt.settings.get('transfer_speed') if 'transfer_speed' in rt.settings.specs \
+            else budget.DEFAULT_MBPS
+        p = budget.plan(sizes, rt.time_left(), speed, step_of)
+        if p is None or p.fits:
+            return 'go'
+
+        say = self.console.print
+        say(f"[yellow]Session timeout:[/yellow] {p.files} file(s), {budget.size(p.nbytes)}: "
+            f"about {budget.duration(p.seconds)} at {p.mbps:g} Mbps, and "
+            f"{budget.duration(p.left)} is left in this session.")
+        if p.cut is None:
+            say("    Not even the first step fits. `set timeout 60` gives a longer "
+                "session; `set transfer_speed N` if the link is faster.")
+            if policy == 'fit':
+                say("[dim]    --fit: nothing sent.[/dim]")
+                return None
+            return 'go' if self._ask("Send it all anyway?", ('y',)) == 'y' else None
+
+        c = p.cut
+        say(f"    Up to [cyan]--t2 {c.last}[/cyan] fits: steps {c.first}..{c.last}, "
+            f"{c.files} file(s), {budget.size(c.nbytes)}, about "
+            f"{budget.duration(budget.seconds_for(c.nbytes, p.mbps))}.")
+        say(f"[dim]    --t1 {c.first} --t2 {c.last} now; the rest later with "
+            f"--t1 {c.last + 1}, or --missing.[/dim]")
+        if policy == 'fit':
+            say(f"[dim]    --fit: sending steps {c.first}..{c.last}.[/dim]")
+            return (c.first, c.last)
+        answer = self._ask(f"Send all anyway [y], only up to --t2 {c.last} [t], "
+                           f"or stop [N]?", ('y', 't'))
+        if answer == 't':
+            return (c.first, c.last)
+        return 'go' if answer == 'y' else None
+
+    def _ask(self, question: str, accepted) -> Optional[str]:
+        """One of `accepted`, or None for no. With no terminal to ask at, 'y':
+        the transfer goes ahead as it was asked for, the warning said."""
+        if not sys.stdin.isatty():
+            self.console.print("[dim]    (no terminal to ask at: sending it all)[/dim]")
+            return 'y'
+        try:
+            answer = self.console.input(f"    {question} ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            return None
+        return answer[:1] if answer[:1] in accepted else None
+
+    def _apply_time_check(self, sizes: Dict[str, int], direction: str) -> Optional[List[str]]:
+        """The names of `sizes` to send after _check_time, or None for none."""
+        verdict = self._check_time(sizes, direction)
+        if verdict is None:
+            self.console.print("[dim]Nothing sent.[/dim]")
+            return None
+        names = sorted(sizes)
+        if verdict == 'go':
+            return names
+        lo, hi = verdict
+        return [n for n in names if step_of(n) is not None and lo <= step_of(n) <= hi]
+
+    def _whole_binary_check(self, ssh, target, is_upload):
+        """_check_time for a whole binary/ (no window, no --missing)."""
+        try:
+            if is_upload:
+                local_dir = os.path.join(target['case_path'], 'binary')
+                sizes = {}
+                for root, _dirs, files in os.walk(local_dir):
+                    for name in files:
+                        path = os.path.join(root, name)
+                        sizes[os.path.relpath(path, local_dir)] = os.path.getsize(path)
+            else:
+                remote_dir = f"{target['remote_case_path']}/binary"
+                sizes = (ssh.remote_file_sizes(remote_dir)
+                         if ssh.remote_path_exists(remote_dir) else {})
+        except Exception:
+            return 'go'          # the transfer itself will say what is wrong
+        verdict = self._check_time(sizes, 'upload' if is_upload else 'download')
+        if verdict is None:
+            self.console.print("[dim]Nothing sent.[/dim]")
+        return verdict
+
+    def _send_cut(self, ssh, target, is_upload, window, force) -> bool:
+        """binary/ cut to the steps that fit, without asking again."""
+        policy, self._time_policy = getattr(self, '_time_policy', 'ask'), 'ignore'
+        try:
+            if is_upload:
+                return self.upload_binary_range(ssh, target['remote_case_path'],
+                                                target['case_path'], window, force=force)
+            return self.download_binary_range(ssh, target['remote_case_path'],
+                                              target['case_path'], window)
+        finally:
+            self._time_policy = policy
+
+    def _report_rate(self, nbytes: int, seconds: float) -> None:
+        """The rate a transfer reached, against `transfer_speed` when it is
+        far off -- the number to set for the next plan."""
+        from shellkit import current_runtime
+        if nbytes < budget.RATE_MIN_BYTES:
+            return
+        rate = budget.mbps_of(nbytes, seconds)
+        if rate is None:
+            return
+        rt = current_runtime()
+        planned = (rt.settings.get('transfer_speed')
+                   if rt is not None and 'transfer_speed' in rt.settings.specs else None)
+        note = ""
+        if planned and abs(rate - planned) > 0.25 * planned:
+            note = f"; planned with {planned:g}: `set transfer_speed {rate:.3g}` to plan with this"
+        self.console.print(f"[dim]    {rate:.3g} Mbps{note}[/dim]")
 
     def _report_selection(self, kept, no_step, window, where, freq=None) -> bool:
         """Say what the window picked out. False when there is nothing to move."""

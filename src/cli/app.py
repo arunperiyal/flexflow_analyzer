@@ -11,7 +11,7 @@ from pathlib import Path
 from rich import box
 from rich.panel import Panel
 
-from shellkit import App
+from shellkit import App, Setting
 
 from src.cli import builtins as ff_builtins
 from src.cli.context import CONTEXTS
@@ -75,6 +75,13 @@ def _register_commands(app):
     )
 
 
+def _positive_float(raw) -> float:
+    value = float(raw)
+    if not value > 0:
+        raise ValueError(f"expected a positive number, got '{raw}'")
+    return value
+
+
 def create_app() -> App:
     """The FlexFlow shellkit App, with every command registered."""
     from __version__ import __version__
@@ -90,6 +97,9 @@ def create_app() -> App:
         goodbye="\n[cyan]Thanks for using FlexFlow! Goodbye![/cyan]\n",
         help_header=HELP_HEADER,
         session_timeout=15,
+        settings=[Setting('transfer_speed', 10.0, _positive_float,
+                          'Link speed in Mbps that case upload/download binary plans '
+                          'against the session timeout', choices=('10', '100', '1000'))],
         file_style=ff_builtins.file_style,
         source_dir=Path(__file__).resolve().parents[2],
     )

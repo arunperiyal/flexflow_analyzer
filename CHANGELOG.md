@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### ⏱️ Binary transfers planned against the session timeout
+
+- `set transfer_speed N` (Mbps, default 10) is the link speed transfers are
+  planned with. In the shell, `case upload|download binary` sets the
+  selection (after `--t1/--t2`, `--freq`, `--missing`) against the time the
+  session has left (shellkit v0.1.6 `rt.time_left()`), keeping 10% in hand.
+- When it will not finish, it says how long it would take and which `--t2`
+  fits -- whole steps, added up in step order from the first -- and asks:
+  send all anyway, only up to that `--t2`, or stop. The rest goes later with
+  the next `--t1`, or `--missing`. `--fit` takes the cut without asking,
+  `--no-time-check` skips the check; without a terminal it warns and sends
+  everything. A whole `binary/` (no window) is cut the same way.
+- A finished transfer of 50 MB or more prints the rate it reached, and the
+  `set transfer_speed` to use when it is more than 25% off the planned one.
+
 ### 🪟 A typed `--t1`/`--t2` wins over `use last:N`
 
 - The `last` context no longer applies when `--t1` or `--t2` is typed
