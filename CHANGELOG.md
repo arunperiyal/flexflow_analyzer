@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### 🎯 `missing` takes `use t1:`, `t2:`, `freq:`
+
+- `--t1`, `--t2` and `--freq` fall back to their contexts, each on its own,
+  before the files found: `use t1:3000 t2:5000 freq:50; missing post`. A
+  typed flag wins. With or without `--dir`, and for `use case:*`.
+
 ### 🧹 `case organise output --keep-out`
 
 - Deletes no `.out` at all, converted to `.plt` or not: only the `.rst` are

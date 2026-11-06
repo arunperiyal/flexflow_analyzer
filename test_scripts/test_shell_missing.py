@@ -216,3 +216,40 @@ def test_dir_over_every_registered_case(rt, registry):
 def test_dir_star_without_a_registry(rt, case):
     assert rt.execute_line("missing '*' --dir slice_xVor") == 2
     assert 'no .cases' in rt.err_console.file.getvalue()
+
+
+def test_t1_t2_freq_come_from_their_contexts(rt):
+    assert rt.execute_line("use t1:3000 t2:3400 freq:50") == 0
+    assert rt.execute_line("missing 'post/slice_xVor_{}.png'") == 1
+    text = shown(rt)
+    assert '1 of 9 missing · 3000..3400 every 50' in text
+    assert 'inferred' not in text
+    for line in ('Using t1: 3000', 'Using t2: 3400', 'Using freq: 50'):
+        assert line in text
+
+
+def test_a_typed_flag_wins_and_keeps_the_other_contexts(rt):
+    rt.execute_line("use t1:3000 t2:3400 freq:50")
+    rt.console.file.truncate(0)
+    assert rt.execute_line("missing 'post/slice_xVor_{}.png' --t1 3100 --freq 100") == 0
+    assert 'all 4 present · 3100..3400 every 100' in shown(rt)
+    assert 'Using t2: 3400' in shown(rt) and 'Using t1' not in shown(rt)
+
+
+def test_contexts_stay_out_of_a_pipe(rt):
+    rt.execute_line("use t1:3000 t2:3400 freq:50")
+    assert rt.run_captured("missing 'post/slice_xVor_{}.png'").split() == [
+        'post/slice_xVor_3350.png']
+
+
+def test_context_t1_after_a_typed_t2_is_an_error(rt):
+    rt.execute_line("use t1:5000")
+    assert rt.execute_line("missing 'post/slice_xVor_{}.png' --t2 3000") == 2
+    assert '--t1 5000 is after --t2 3000' in rt.err_console.file.getvalue()
+
+
+def test_quiet_prints_only_the_summary(rt):
+    rt.execute_line("use t1:3000 t2:3400 freq:50")
+    rt.console.file.truncate(0)
+    rt.execute_line("missing 'post/slice_xVor_{}.png' -q")
+    assert 'Using' not in shown(rt)

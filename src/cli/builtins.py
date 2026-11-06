@@ -71,9 +71,9 @@ def builtins():
                 details="  [cyan]dir[/cyan]       Where the files are (default: here)\n"
                         "  [cyan]pattern[/cyan]   File name with {} for the number; leave it out to\n"
                         "            check every numbered series in dir\n"
-                        "  [cyan]--t1 N[/cyan]    First number (default: the lowest found)\n"
-                        "  [cyan]--t2 N[/cyan]    Last number (default: the highest found)\n"
-                        "  [cyan]--freq N[/cyan]  Step between numbers (default: inferred from the files)\n"
+                        "  [cyan]--t1 N[/cyan]    First number (default: `use t1:`, else the lowest found)\n"
+                        "  [cyan]--t2 N[/cyan]    Last number (default: `use t2:`, else the highest found)\n"
+                        "  [cyan]--freq N[/cyan]  Step between numbers (default: `use freq:`, else inferred)\n"
                         "  [cyan]--empty[/cyan]   Also report 0-byte files\n"
                         "  [cyan]--extra[/cyan]   Also report files between the expected steps\n"
                         "  [cyan]-q[/cyan]        Only the summary line\n"
@@ -92,6 +92,7 @@ def builtins():
                         "  missing binary riser.{}.plt --empty\n"
                         "  missing post --t1 3000 --t2 5000 --freq 50\n"
                         "  missing post | wc -l\n"
+                        "  use t1:3000 t2:5000 freq:50; missing post\n"
                         "  use case:CS4SG3U6P0\n"
                         "  missing --dir slice_xVor,slice_zVor_yplane   # each view of both\n"
                         "  missing CS4SG3U1P0 --dir slice_xVor --freq 50\n"
@@ -310,9 +311,19 @@ def _missing_args(argv):
         return _MISSING_USAGE
     if numbers.get('freq', 1) < 1:
         return "--freq must be 1 or more"
-    if 't1' in numbers and 't2' in numbers and numbers['t1'] > numbers['t2']:
-        return f"--t1 {numbers['t1']} is after --t2 {numbers['t2']}"
     return rest, numbers, flags, dirs
+
+
+def _missing_contexts(rt, numbers, flags):
+    """Fill the t1, t2 and freq left untyped from their contexts, each on its
+    own: a typed --t1 still takes `use t2:`."""
+    for key in ('t1', 't2', 'freq'):
+        value = rt.get(key)
+        if key in numbers or value is None:
+            continue
+        numbers[key] = int(value)
+        if rt.settings.get('echo_context') and not rt.capturing and 'q' not in flags:
+            rt.console.print(f"[dim]Using {key}: {numbers[key]}[/dim]")
 
 
 def _missing_series(folder):
@@ -353,6 +364,10 @@ def _missing(rt, argv):
         rt.error(f"missing: {parsed}" if not parsed.startswith('usage') else parsed)
         return 2
     rest, numbers, flags, dirs = parsed
+    _missing_contexts(rt, numbers, flags)
+    if 't1' in numbers and 't2' in numbers and numbers['t1'] > numbers['t2']:
+        rt.error(f"missing: --t1 {numbers['t1']} is after --t2 {numbers['t2']}")
+        return 2
     if dirs is not None:
         return _missing_in_case(rt, rest, numbers, flags, dirs)
     # A directory may come before the pattern: `missing post slice_{}.png` is
