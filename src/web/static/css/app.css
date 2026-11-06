@@ -647,37 +647,48 @@ body {
   white-space: nowrap;
 }
 
-/* Help -> Flowchart: a straight-line sequence of clickable steps (left,
-   scrollable) connected by plain arrows, with the selected step's detail
-   shown on the right -- deliberately not a real diagram with branches/
-   connectors, since the whole point was to keep this simple. */
-.flowchart-editor { display: flex; gap: 16px; align-items: flex-start; }
-.flowchart-steps {
-  flex: none;
-  width: 260px;
-  max-height: 480px;
-  overflow-y: auto;
+/* Help -> Flowchart: the workflow as a branching diagram (left, scrollable)
+   with the selected step's detail on the right. */
+#dialog:has(.flowchart-editor) { width: 1140px; max-width: 95vw; }
+.flowchart-legend {
   display: flex;
-  flex-direction: column;
-}
-#dialog .flowchart-step {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 8px 10px;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  background: #f8fafc;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-bottom: 8px;
   font-size: 12px;
-  color: #334155;
-  cursor: pointer;
+  color: #475569;
 }
-#dialog .flowchart-step:hover { border-color: #7c3aed; background: #f3e8ff; }
-#dialog .flowchart-step.active { border-color: #7c3aed; background: #7c3aed; color: #fff; font-weight: 700; }
-#dialog .flowchart-step.optional { border-style: dashed; }
-.flowchart-step-num { font-weight: 700; margin-right: 4px; }
-.flowchart-arrow { text-align: center; color: #94a3b8; font-size: 14px; line-height: 1; margin: 2px 0; }
-.flowchart-detail { flex: 1; min-width: 0; max-height: 480px; overflow-y: auto; padding: 4px; }
+.flowchart-legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.flowchart-editor { display: flex; gap: 16px; align-items: flex-start; }
+.flowchart-graph {
+  flex: 0 1 716px;
+  min-width: 0;
+  max-height: 60vh;
+  overflow: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+}
+.flowchart-graph svg { display: block; }
+.flowchart-edge { fill: none; stroke: #64748b; stroke-width: 1.5; }
+.flowchart-edge.back { stroke-dasharray: 5 4; }
+.flowchart-edge-label { font-size: 11px; font-weight: 700; fill: #475569; }
+.flowchart-key { fill: #f8fafc; stroke: #64748b; stroke-width: 1.5; }
+.flowchart-node { cursor: pointer; outline: none; }
+.flowchart-node rect, .flowchart-node polygon { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 1.5; }
+.flowchart-node.decision polygon { fill: #fef9c3; stroke: #ca8a04; }
+.flowchart-node.terminal rect { fill: #e0e7ff; stroke: #6366f1; }
+.flowchart-node text {
+  font-size: 12px;
+  fill: #334155;
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+.flowchart-node:hover rect, .flowchart-node:hover polygon,
+.flowchart-node:focus-visible rect, .flowchart-node:focus-visible polygon { stroke: #7c3aed; fill: #f3e8ff; }
+.flowchart-node.active rect, .flowchart-node.active polygon { fill: #7c3aed; stroke: #7c3aed; }
+.flowchart-node.active text { fill: #fff; font-weight: 700; }
+.flowchart-detail { flex: 1; min-width: 240px; max-height: 60vh; overflow-y: auto; padding: 4px; }
 .flowchart-detail h3 { margin: 0 0 8px; font-size: 14px; color: #0f172a; }
 .flowchart-optional-tag {
   display: inline-block;
@@ -700,5 +711,14 @@ body {
   white-space: pre-wrap;
   word-break: break-word;
   margin: 0 0 10px;
+}
+.flowchart-command-wrap { position: relative; }
+.flowchart-command-wrap .flowchart-command { padding-right: 64px; }
+#dialog .flowchart-copy {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 2px 8px;
+  font-size: 11px;
 }
 .flowchart-detail p { font-size: 13px; line-height: 1.5; color: #334155; margin: 0 0 8px; }

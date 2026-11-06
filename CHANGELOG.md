@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### 🗺️ Help -> Flowchart branches
+
+- The linear list of steps is now a top-down diagram with connectors: four
+  decisions (one case or a sweep, new run or restart, did the job finish, is
+  the output complete), dashed loops back after a failed job or gaps in the
+  output, and a legend. Clicking a step shows its detail, and a Copy button
+  copies its command.
+- It now covers restarts, `missing`, output thinning, transfers and case
+  tracking, and uses contexts (`use case:myCase` once, no case name after).
+- Stale commands corrected: `case check all`, `plot` with `use var:`, and
+  `compare --config`.
+
 ### 🎯 `missing` takes `use t1:`, `t2:`, `freq:`
 
 - `--t1`, `--t2` and `--freq` fall back to their contexts, each on its own,
