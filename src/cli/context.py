@@ -117,7 +117,7 @@ CONTEXTS = [
     ContextKey('zone', style='#dd88ff',
                description='Zone for field extract/compute/convert/render'),
     ContextKey('freq', parse=_positive_int, style='#ffcc00',
-               description='PLT output frequency: field sweeps, run post, data stats, case check'),
+               description='PLT output frequency: field sweeps, run post, data stats, case check, missing'),
 ]
 
 
