@@ -550,7 +550,7 @@ case as far as its checks allow and records the stage in
 | **V1 verify PLT** | md5 on cloud = local md5 | U1 done | new |
 | **C2 delete binary** | local binary PLTs | **V1 verified** for that file (ledger) | upgraded `case organise plt --delete-binary --verified` |
 | **C3 delete .out** | `.out` of steps ≤ t2 | that step's PLT is **V1 verified on cloud** (or valid in binary/); not the step being written; not past a pending restart | upgraded `case organise output --keep-freq K` |
-| **C4 thin .rst** | `.rst` not on the keep grid | never: the newest complete set, the set at `restartTsId` of a pending/running main, or any set past it | same |
+| **C4 thin .rst** | `.rst` not on the `keep_rst` grid (`.auto.conf`, your value; unset: no thinning) | never: the newest complete set, the set at `restartTsId` of a pending/running main, or any set past it | same |
 | **U2 upload .rst** | kept `.rst` sets | complete (all `nsg`), settled | upgraded `case upload rst` |
 | **U3 inputs/files** | `.def` + `File(...)`, config, job scripts, `.map`, `domain.yml`, `.restarts`, `.casestatus.md` | changed since the ledger | upgraded `case upload` |
 
@@ -622,7 +622,7 @@ check that cleared it) and asks once before doing them, unless `--yes`.
 ```
 remote     = cloud
 path       = /shares/arunperiyal/phd/research/grooved_beam_structures/cylinder_12/cases/one_directional_cf/bare
-keep_rst   = 500          # .rst grid kept by C4
+keep_rst   = 500          # .rst grid kept by C4: your value, any N; unset = .rst not thinned
 disk_alert = 200G         # flag running cases above this
 # qos / account / partition: only if set; otherwise the post script's header
 ```
@@ -703,8 +703,13 @@ P2 post done → U1 upload binary → V1 md5 on cloud
 ### 13.8 The post rule, per run (2026-11-09, replaces point 4 of 13.7)
 
 The unit is a **run**, not a step:
-- *not running*: the newest part in `othd_files/archive/` (after H1);
-- *running or queued*: the live `.othd` in the run directory.
+- the `.othd` in the run directory, when there is one (running, queued,
+  or ended and not yet moved by H1);
+- else the newest part in `othd_files/archive/`, **never `cleaned/`**: a
+  cleaned part is rewritten by `--clean` (steps a later run computed again
+  are cut), so its first/last tsId are not the run's (13.10);
+- neither: no post decision; *needs you* ("no archive/ part to take the
+  window from").
 
 Its first and last tsId, rounded to outFreq, give the range `[t1, t2]`,
 trimmed to the last settled step (§4.1) and to the `restartTsId` of a
@@ -746,3 +751,18 @@ That is not how cases are run.
 The `.out` "settled" rule in the post decision (§4.1) stays: a running
 case's newest step may be half-written, so it counts only once the solver
 has moved past it.
+
+### 13.10 Post window from archive/, never cleaned/; keep_rst is yours (2026-11-09)
+
+- **Window source.** The run whose PLTs are checked and posted is the run
+  directory's `.othd`, else the newest part in `othd_files/archive/`. Never
+  a `cleaned/` part: `--clean` rewrites it, cutting the steps a later run
+  computed again, so its range is not the run's. With neither, the case is
+  listed under *needs you*. The probe found four `bare` cases with no
+  `archive/` (pruned after `--clean`: U2P0, U3P0, U5P0, U6P0); a finished
+  one of those (U3P0, U5P0) gets no automatic post.
+- **`.rst` grid.** Thinning keeps the steps divisible by `keep_rst` from
+  `.auto.conf`, which you set (500 is only an example). Without it, `auto`
+  thins nothing and says so. The restart point of a queued job, the newest
+  complete set and a set still being written are kept whatever the grid
+  (as `case organise output` now does).
