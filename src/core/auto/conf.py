@@ -20,6 +20,31 @@ from typing import Optional
 
 FILENAME = '.auto.conf'
 KEYS = ('remote', 'path', 'keep_rst', 'disk_alert', 'qos', 'account', 'partition')
+PLACEHOLDER = 'EDIT_ME'
+
+TEMPLATE = """\
+# Settings `auto` uses for the cases of this folder (.cases is next to this file).
+# Edit what says {placeholder}, then run: auto show
+#
+# remote: a remote from `remote list`{known}, or `local` for a folder on this machine
+remote     = {remote}
+#
+# path: the folder on the remote that holds these cases; case X goes to <path>/X
+path       = {placeholder}
+#
+# keep_rst: when .rst files are thinned, keep the steps divisible by this.
+# The restart point of a queued job and the newest complete set are always kept.
+# Left commented out: .rst files are not thinned.
+# keep_rst   = 500
+#
+# disk_alert: flag running cases whose run directory is bigger than this
+# disk_alert = 200G
+#
+# Only when set, passed to the post jobs auto submits (else the script's own header):
+# qos       =
+# account   =
+# partition =
+"""
 _UNITS = {'': 1, 'K': 1024, 'M': 1024 ** 2, 'G': 1024 ** 3, 'T': 1024 ** 4}
 
 
@@ -72,6 +97,9 @@ def read(folder) -> AutoConf:
     for key in ('remote', 'path'):
         if not values.get(key):
             raise AutoConfError(f"{FILENAME}: `{key}` is not set")
+        if values[key] == PLACEHOLDER:
+            raise AutoConfError(f"{FILENAME}: set `{key}` (it still says {PLACEHOLDER}); "
+                                f"edit {source}")
     keep = values.get('keep_rst')
     if keep is not None:
         if not keep.isdigit() or int(keep) <= 0:
@@ -82,3 +110,19 @@ def read(folder) -> AutoConf:
                     keep_rst=keep, disk_alert=parse_size(alert) if alert else None,
                     qos=values.get('qos') or None, account=values.get('account') or None,
                     partition=values.get('partition') or None)
+
+
+def template(remote: str = None, known=()) -> str:
+    """The text `auto init` writes: remote filled in when known, path left
+    for the user."""
+    names = f" ({', '.join(known)})" if known else ''
+    return TEMPLATE.format(placeholder=PLACEHOLDER, known=names, remote=remote or PLACEHOLDER)
+
+
+def write_template(folder, remote: str = None, known=(), force: bool = False) -> Path:
+    """Write .auto.conf in folder; AutoConfError when one is there (unless force)."""
+    path = Path(folder) / FILENAME
+    if path.exists() and not force:
+        raise AutoConfError(f"{path} exists; edit it, or `auto init --force` to start over")
+    path.write_text(template(remote, known))
+    return path

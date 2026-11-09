@@ -8,6 +8,7 @@ def print_auto_help():
 {b}{c}auto — check every case in this folder and do its next safe step{r}
 
 {b}USAGE:{r}
+    auto init [--force]    write .auto.conf here, for you to edit (path, remote, ...)
     auto show [case]       what auto would do, case by case; changes nothing
     auto apply [case]      carry it out {Colors.GRAY}(not built yet){r}
     auto log [case]        what earlier runs did {Colors.GRAY}(not built yet){r}
@@ -29,7 +30,7 @@ def print_auto_help():
     {y}needs you{r} anything auto will not guess: a failed job, holes on the
               remote, a pruned archive/, a run stopped with nothing queued
 
-{b}SETTINGS{r}: {c}.auto.conf{r} next to .cases
+{b}SETTINGS{r}: {c}.auto.conf{r} next to .cases ({c}auto init{r} writes one to edit)
     remote     = cloud        a remote from `remote list` (or `local`: a folder)
     path       = /shares/...  the folder there; a case goes to <path>/<case>
     keep_rst   = 500          .rst grid kept when thinning (unset: no thinning)
