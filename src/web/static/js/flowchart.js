@@ -1,6 +1,7 @@
 // Help -> Flowchart: the end-to-end workflow as a branching diagram, from a
 // blank template to a plot in hand, with the selected step's detail on the
-// right. NODES holds the steps (placed by hand on a col/row grid, so a new
+// right. After the jobs are queued it splits: by hand down the middle, or
+// the planned `auto` command on the right (docs/AUTO_PLAN.md). NODES holds the steps (placed by hand on a col/row grid, so a new
 // step means choosing where it goes) and EDGES the connectors between them.
 // Commands lean on the shell's contexts: `use case:myCase` is set once and
 // the steps after it name no case.
@@ -111,81 +112,165 @@ const FlowChart = (() => {
         by name or work directory.`,
     },
     {
-      id: 'finished', kind: 'decision', col: 1, row: 11, label: ['Did the job', 'finish?'],
-      title: 'Did the job finish?',
+      id: 'mode', kind: 'decision', col: 1, row: 11, label: ['By hand', 'or with auto?'],
+      title: 'By hand or with auto?',
       command: null,
-      detail: `Finished runs go on to post-processing. A failed or stopped
-        one needs its cause found first.`,
+      detail: `From here on there are two ways. Down the middle, by hand: the
+        steps you run yourself, case by case. On the right, the auto command
+        runs the same steps for every case in the folder, each only when its
+        check passes.
+
+        Both use the same commands and the same files, so they mix: auto
+        skips what you have already done by hand.`,
     },
     {
-      id: 'fix', kind: 'step', col: 0, row: 11, label: ['Find the cause', 'and fix it'],
+      id: 'running', kind: 'decision', col: 1, row: 12, label: ['Main job still', 'running or queued?'],
+      title: 'Is the main job still running or queued?',
+      command: 'run sq find <case>\ncase status',
+      detail: `A case's jobs are the ones submitted from its directory,
+        whatever they are called. "case status" points out a job named for
+        another case, which happens when a job script is copied without
+        renaming it.
+
+        A running or queued case can still be post-processed (right). Its
+        history stays where it is until the run has ended.`,
+    },
+    {
+      id: 'liveWindow', kind: 'step', col: 2, row: 12, label: ['Window from the', 'live .othd'],
+      title: 'Window from the live .othd',
+      command: 'case report --run --size\nuse t1:<first tsId> t2:<last settled step>',
+      detail: `Start with the cases that take the most disk: at outFreq 5 a
+        run writes many .out and .rst files.
+
+        t1 is the first tsId of the .othd in the run directory. t2 is the
+        last step whose .out files are all there and that the solver has
+        moved past, never the last tsId, which is the step being computed.
+        Stop before a queued restart's restartTsId: the steps after it will
+        be computed again.
+
+        Do not run "case organise history --update" on a running case: it
+        would move the file the solver is writing.`,
+    },
+    {
+      id: 'ended', kind: 'decision', col: 1, row: 13, label: ['How did', 'the run end?'],
+      title: 'How did the run end?',
+      command: 'run list log\nsacct -X -S now-3days --format=JobID,JobName%30,State,End',
+      detail: `Most runs stop at the walltime (TIMEOUT) and go on with a
+        restart. Their output is handled the same way as a finished run's.
+        A run that failed needs its cause found first.
+
+        A job leaves "run sq" five minutes after it ends; sacct still shows
+        how it ended.`,
+    },
+    {
+      id: 'fix', kind: 'step', col: 0, row: 13, label: ['Find the cause', 'and fix it'],
       title: 'Find the cause and fix it',
       command: 'run list log\ncase check run\ncase status update -m "<what happened>" --state failed',
       detail: `Read the job's slurm-* log and check the run directory, then
         fix the case and go back to choose a new run or a restart.`,
     },
     {
-      id: 'post', kind: 'step', col: 1, row: 12, label: ['Submit post-processing'],
-      title: 'Submit post-processing',
-      command: 'run post full --dependency <mainJobID>',
-      detail: `Submits postFlex.sh, which turns the solver's ASCII output
-        into binary PLT files. "run post convert" does only the conversion,
-        when the .plt files already exist.`,
-    },
-    {
-      id: 'history', kind: 'step', col: 1, row: 13, label: ['Organise the history'],
+      id: 'history', kind: 'step', col: 1, row: 14, label: ['Organise the history'],
       title: 'Organise the history',
-      command: 'case organise history --update --clean --compile',
-      detail: `Moves .othd and .oisd into archive/, writes each run without
-        the steps a later run redid into cleaned/, and joins them into one
-        file.`,
+      command: 'case check run\ncase organise history --update --clean --compile',
+      detail: `"case check run" shows whether the run directory still holds
+        .othd and .oisd files. --update moves them into othd_files/archive/
+        and oisd_files/archive/, --clean writes each run without the steps a
+        later run computed again into cleaned/, and --compile joins them into
+        one file.
+
+        Only when no main job of the case is running or queued: a queued
+        job's mainFlex.sh archives the same files when it starts.`,
     },
     {
-      id: 'outputCheck', kind: 'step', col: 1, row: 14, label: ['Check the output'],
-      title: 'Check the output',
-      command: "case check all\nmissing binary 'riser.{}.plt' --empty",
-      detail: `"case check all" covers the OTHD/OISD ranges, simflow.config,
-        PLT completeness and .def references. "missing" lists the gaps in a
-        numbered series, and takes its range from the t1, t2 and freq
-        contexts.`,
+      id: 'uploadHistory', kind: 'step', col: 1, row: 15, label: ['Upload the history'],
+      title: 'Upload the history',
+      command: 'use remote:cloud\ncase upload history',
+      detail: `Sends archive/, cleaned/ and the compiled file to the case's
+        folder on the remote. "use remote:cloud" is set once; remotes are set
+        up with "remote add".`,
     },
     {
-      id: 'complete', kind: 'decision', col: 1, row: 15, label: ['Is the output', 'complete?'],
-      title: 'Is the output complete?',
+      id: 'post', kind: 'step', col: 1, row: 16, label: ['Submit post-processing'],
+      title: 'Submit post-processing',
+      command: 'case check out --t1 <first> --t2 <last>\nuse t1:<first> t2:<last>\nrun post full',
+      detail: `t1 and t2 are the first and last tsId of the newest part in
+        othd_files/archive/, or the window picked on the right for a running
+        case.
+
+        Before submitting, check two things. Every step needs its .out files
+        ("case check out"): a post job fails without them. And the PLTs of
+        those steps should not be on the remote already.
+
+        "run post convert" only converts, for steps whose ASCII .plt files
+        already exist.`,
+    },
+    {
+      id: 'outputCheck', kind: 'step', col: 1, row: 17, label: ['Check the PLTs'],
+      title: 'Check the PLTs',
+      command: "case check plt\nmissing binary 'riser.{}.plt' --empty",
+      detail: `Once the post job has ended. Every step of the window should
+        have a non-empty binary PLT. "missing" lists the gaps and takes its
+        range from the t1, t2 and freq contexts.`,
+    },
+    {
+      id: 'complete', kind: 'decision', col: 1, row: 18, label: ['Are the PLTs', 'complete?'],
+      title: 'Are the PLTs complete?',
       command: null,
       detail: `Gaps or empty files go back through post-processing for those
         steps.`,
     },
     {
-      id: 'gaps', kind: 'step', col: 0, row: 15, label: ['Pick the steps to redo'],
+      id: 'gaps', kind: 'step', col: 0, row: 18, label: ['Pick the steps to redo'],
       title: 'Pick the steps to redo',
       command: 'use t1:<first> t2:<last>',
       detail: `Sets the window "run post full" works on, so only the missing
         steps are processed again. Clear it with "unuse" afterwards.`,
     },
     {
-      id: 'thin', kind: 'step', col: 1, row: 16, label: ['Thin the output'],
-      title: 'Thin the output',
-      command: 'case organise output --keep-out\ncase organise plt',
-      optional: true,
-      detail: `Prunes what is no longer needed. --keep-out deletes no .out
-        and only thins the .rst to the steps divisible by --keep-freq.
-        "case organise plt" prunes intermediate PLT files.`,
-    },
-    {
-      id: 'transfer', kind: 'step', col: 1, row: 17, label: ['Transfer the results'],
-      title: 'Transfer the results',
-      command: 'use remote:nas\ncase upload binary --t1 2000 --t2 3000\ncase download binary --missing',
-      optional: true,
-      detail: `Sends results to a machine set up with "remote add". --missing
-        sends only the files the other side does not have.
+      id: 'uploadPlt', kind: 'step', col: 1, row: 19, label: ['Upload the binary PLTs'],
+      title: 'Upload the binary PLTs',
+      command: 'case upload binary\ncase upload binary --missing',
+      detail: `Sends the window's binary PLTs (t1 and t2 from the contexts).
+        Run it again with --missing: it sends only what the remote lacks or
+        holds at another size, so when it finds nothing to send, every file
+        is there.
 
-        In the shell, binary transfers are planned against the session
-        timeout at "set transfer_speed". If one will not fit, it offers the
-        --t2 that does; --fit takes that cut without asking.`,
+        Transfers are planned against the session timeout at "set
+        transfer_speed". Stay logged in until they finish.`,
     },
     {
-      id: 'track', kind: 'step', col: 1, row: 18, label: ['Record where the case stands'],
+      id: 'cleanup', kind: 'step', col: 1, row: 20, label: ['Delete what is', 'safely copied'],
+      title: 'Delete what is safely copied',
+      command: 'case organise output --keep-freq 500\ncase organise plt --delete-ascii\ncase organise plt --delete-binary',
+      detail: `Only after the upload check above: --delete-binary does not
+        look at the remote.
+
+        In this order. "organise output" deletes each step's .out once its
+        .plt exists, so it has to run while the PLTs are still here; it keeps
+        the .rst of the steps divisible by 500, plus the restart point in
+        simflow.config, the newest complete set and a set still being
+        written. --delete-ascii deletes the ASCII PLTs that have a newer
+        binary copy, so it goes before --delete-binary.`,
+    },
+    {
+      id: 'uploadRst', kind: 'step', col: 1, row: 21, label: ['Upload the newest', 'restart set'],
+      title: 'Upload the newest restart set',
+      command: 'case upload rst --t1 <newest complete step>',
+      detail: `Only the newest complete set (all nsg parts), and only if the
+        remote does not have it: the older ones may be there already. It is
+        what a later restart, here or elsewhere, needs.`,
+    },
+    {
+      id: 'goOn', kind: 'decision', col: 1, row: 22, label: ['Does the run', 'go on?'],
+      title: 'Does the run go on?',
+      command: null,
+      detail: `Not yet at maxTimeSteps: queue a restart from the newest
+        restart set ("run main restart <tsId>"), often before the current job
+        has ended. A finished case goes on to its record and the analysis.`,
+    },
+    {
+      id: 'track', kind: 'step', col: 1, row: 23, label: ['Record where the case stands'],
       title: 'Record where the case stands',
       command: 'case status update -m "<note>" --state done\ncase report --run --size',
       optional: true,
@@ -194,7 +279,7 @@ const FlowChart = (() => {
         step in each place.`,
     },
     {
-      id: 'prepare', kind: 'step', col: 1, row: 19, label: ['Prepare the web UI data'],
+      id: 'prepare', kind: 'step', col: 1, row: 24, label: ['Prepare the web UI data'],
       title: 'Prepare the web UI data',
       command: 'case domain --init\ncase out --map',
       optional: true,
@@ -204,7 +289,7 @@ const FlowChart = (() => {
         pickable points.`,
     },
     {
-      id: 'analyse', kind: 'terminal', col: 1, row: 20, label: ['Analyse and plot'],
+      id: 'analyse', kind: 'terminal', col: 1, row: 25, label: ['Analyse and plot'],
       title: 'Analyse and plot',
       command: 'use var:dy node:24 t1:1000 t2:2000\ndata table\ndata stats\nplot --output dy.png',
       detail: `In the shell, the var and window contexts drive "data table",
@@ -214,10 +299,55 @@ const FlowChart = (() => {
         For the web UI, start "ff --ui", then Case -> Add, Plot -> New, and
         Layout -> Export for a PNG or PDF.`,
     },
+    {
+      id: 'autoShow', kind: 'step', col: 3, row: 11, label: ['See the plan'], planned: true,
+      title: 'See the plan (auto)',
+      command: 'auto show',
+      detail: `For every case in this folder's .cases: where it stands, the
+        next step and the check it waits for, what will be uploaded and how
+        long that takes. It changes nothing.
+
+        Settings live in .auto.conf next to .cases: the remote and the
+        folder there, and the .rst grid to keep (500).`,
+    },
+    {
+      id: 'autoApply', kind: 'step', col: 3, row: 12, label: ['Carry it out'], planned: true,
+      title: 'Carry it out (auto)',
+      command: 'auto apply',
+      detail: `Runs the steps in the middle for each case, each only when
+        its check passes. History is organised when no main job is running
+        or queued. A post job is submitted when the run's PLTs are not on the
+        remote and its .out files are all there. Uploads are checked by md5,
+        and a local file is deleted only when its copy on the remote
+        matches.
+
+        It asks once, at the start, before deleting anything. Post jobs still
+        go through Slurm, so run it again at the next login to carry on from
+        where each case stopped.`,
+    },
+    {
+      id: 'autoNeeds', kind: 'step', col: 3, row: 13, label: ['Handle what', 'it left to you'],
+      planned: true, optional: true,
+      title: 'Handle what it left to you (auto)',
+      command: 'auto show',
+      detail: `Cases listed under "needs you": a post job that failed, PLTs
+        missing on the remote with no .out left to remake them, a run that
+        stopped short with nothing queued. Each one names the step in the
+        middle that deals with it.`,
+    },
+    {
+      id: 'autoLog', kind: 'step', col: 3, row: 14, label: ['Check what it did'], planned: true,
+      title: 'Check what it did (auto)',
+      command: 'auto log\nauto status',
+      detail: `"auto log" lists what earlier runs did and why; "auto status"
+        shows the stage each case has reached. Restarts are not queued by
+        auto: that stays with you.`,
+    },
   ];
 
   // from/to are [node id, side]; side is t, r, b or l. A `back` edge is a
-  // loop to an earlier step and is drawn dashed.
+  // loop to an earlier step and is drawn dashed. An edge with `lane` runs
+  // down that x position, clear of the boxes, between its two ends.
   const EDGES = [
     { from: ['template', 'b'], to: ['scripts', 't'] },
     { from: ['scripts', 'b'], to: ['sweep', 't'] },
@@ -233,26 +363,39 @@ const FlowChart = (() => {
     { from: ['pre', 'b'], to: ['main', 't'] },
     { from: ['main', 'b'], to: ['watch', 't'] },
     { from: ['restartRun', 'b'], to: ['watch', 'r'] },
-    { from: ['watch', 'b'], to: ['finished', 't'] },
-    { from: ['finished', 'b'], to: ['post', 't'], label: 'Yes' },
-    { from: ['finished', 'l'], to: ['fix', 'r'], label: 'No' },
+    { from: ['watch', 'b'], to: ['mode', 't'] },
+    { from: ['mode', 'b'], to: ['running', 't'], label: 'By hand' },
+    { from: ['mode', 'r'], to: ['autoShow', 'l'], label: 'auto' },
+    { from: ['running', 'r'], to: ['liveWindow', 'l'], label: 'Yes' },
+    { from: ['running', 'b'], to: ['ended', 't'], label: 'No' },
+    { from: ['liveWindow', 'b'], to: ['post', 'r'] },
+    { from: ['ended', 'l'], to: ['fix', 'r'], label: 'Failed' },
+    { from: ['ended', 'b'], to: ['history', 't'], label: 'Out of time, or done' },
     { from: ['fix', 't'], to: ['restart', 'l'], back: true },
-    { from: ['post', 'b'], to: ['history', 't'] },
-    { from: ['history', 'b'], to: ['outputCheck', 't'] },
+    { from: ['history', 'b'], to: ['uploadHistory', 't'] },
+    { from: ['uploadHistory', 'b'], to: ['post', 't'] },
+    { from: ['post', 'b'], to: ['outputCheck', 't'] },
     { from: ['outputCheck', 'b'], to: ['complete', 't'] },
-    { from: ['complete', 'b'], to: ['thin', 't'], label: 'Yes' },
+    { from: ['complete', 'b'], to: ['uploadPlt', 't'], label: 'Yes' },
     { from: ['complete', 'l'], to: ['gaps', 'r'], label: 'No' },
     { from: ['gaps', 't'], to: ['post', 'l'], back: true },
-    { from: ['thin', 'b'], to: ['transfer', 't'] },
-    { from: ['transfer', 'b'], to: ['track', 't'] },
+    { from: ['uploadPlt', 'b'], to: ['cleanup', 't'] },
+    { from: ['cleanup', 'b'], to: ['uploadRst', 't'] },
+    { from: ['uploadRst', 'b'], to: ['goOn', 't'] },
+    { from: ['goOn', 'l'], to: ['restart', 'l'], label: 'Yes', back: true, lane: 14 },
+    { from: ['goOn', 'b'], to: ['track', 't'], label: 'No' },
     { from: ['track', 'b'], to: ['prepare', 't'] },
     { from: ['prepare', 'b'], to: ['analyse', 't'] },
+    { from: ['autoShow', 'b'], to: ['autoApply', 't'] },
+    { from: ['autoApply', 'b'], to: ['autoNeeds', 't'] },
+    { from: ['autoNeeds', 'b'], to: ['autoLog', 't'] },
+    { from: ['autoLog', 'b'], to: ['goOn', 'r'] },
   ];
 
-  const COL_X = [110, 350, 590];
+  const COL_X = [130, 370, 610, 850];
   const ROW_Y = 84;
   const TOP = 40;
-  const WIDTH = 700;
+  const WIDTH = 950;
   const SIZE = { step: [190, 46], terminal: [190, 46], decision: [190, 66] };
 
   const byId = Object.fromEntries(NODES.map(n => [n.id, n]));
@@ -280,6 +423,7 @@ const FlowChart = (() => {
   function edgePoints(edge) {
     const [x1, y1] = port(edge.from);
     const [x2, y2] = port(edge.to);
+    if (edge.lane !== undefined) return [[x1, y1], [edge.lane, y1], [edge.lane, y2], [x2, y2]];
     if (x1 === x2 || y1 === y2) return [[x1, y1], [x2, y2]];
     const leavesSideways = edge.from[1] === 'l' || edge.from[1] === 'r';
     return [[x1, y1], leavesSideways ? [x2, y1] : [x1, y2], [x2, y2]];
@@ -319,7 +463,7 @@ const FlowChart = (() => {
     const first = y - (node.label.length - 1) * lineHeight / 2;
     const text = node.label.map((line, i) =>
       `<text x="${x}" y="${first + i * lineHeight}">${escapeHtml(line)}</text>`).join('');
-    return `<g class="flowchart-node ${node.kind}" data-id="${node.id}" role="button"
+    return `<g class="flowchart-node ${node.kind}${node.planned ? ' planned' : ''}" data-id="${node.id}" role="button"
       tabindex="0" aria-label="${escapeHtml(node.title)}">${shapeSvg(node.kind, x, y)}${text}</g>`;
   }
 
@@ -332,6 +476,7 @@ const FlowChart = (() => {
       [swatch('<polygon class="flowchart-key" points="17,1 33,10 17,19 1,10"/>'), 'Decision'],
       [swatch('<line class="flowchart-edge" x1="2" y1="10" x2="26" y2="10" marker-end="url(#flowchart-arrow)"/>'), 'Next step'],
       [swatch('<line class="flowchart-edge back" x1="2" y1="10" x2="26" y2="10" marker-end="url(#flowchart-arrow)"/>'), 'Loop back'],
+      [swatch('<rect class="flowchart-key planned" x="2" y="3" width="30" height="14" rx="2"/>'), 'auto: planned, not built yet'],
     ];
     return items.map(([icon, text]) => `<span class="flowchart-legend-item">${icon}${text}</span>`).join('');
   }
@@ -353,7 +498,7 @@ const FlowChart = (() => {
   }
 
   function renderGraph() {
-    const height = center(NODES[NODES.length - 1])[1] + 40;
+    const height = TOP + Math.max(...NODES.map(n => n.row)) * ROW_Y + 40;
     const box = document.getElementById('flowchart-graph');
     box.innerHTML = `
       <svg width="${WIDTH}" height="${height}" viewBox="0 0 ${WIDTH} ${height}"
@@ -398,6 +543,7 @@ const FlowChart = (() => {
       .map(p => `<p>${escapeHtml(p.trim())}</p>`).join('');
     box.innerHTML = `
       <h3>${escapeHtml(step.title)}</h3>
+      ${step.planned ? '<div class="flowchart-optional-tag planned">Planned: not built yet</div>' : ''}
       ${step.optional ? '<div class="flowchart-optional-tag">Optional</div>' : ''}
       ${step.command ? `<div class="flowchart-command-wrap">
         <pre class="flowchart-command">${escapeHtml(step.command)}</pre>

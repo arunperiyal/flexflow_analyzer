@@ -649,7 +649,7 @@ body {
 
 /* Help -> Flowchart: the workflow as a branching diagram (left, scrollable)
    with the selected step's detail on the right. */
-#dialog:has(.flowchart-editor) { width: 1140px; max-width: 95vw; }
+#dialog:has(.flowchart-editor) { width: 1380px; max-width: 95vw; }
 .flowchart-legend {
   display: flex;
   flex-wrap: wrap;
@@ -661,7 +661,7 @@ body {
 .flowchart-legend-item { display: inline-flex; align-items: center; gap: 6px; }
 .flowchart-editor { display: flex; gap: 16px; align-items: flex-start; }
 .flowchart-graph {
-  flex: 0 1 716px;
+  flex: 0 1 966px;
   min-width: 0;
   max-height: 60vh;
   overflow: auto;
@@ -673,10 +673,12 @@ body {
 .flowchart-edge.back { stroke-dasharray: 5 4; }
 .flowchart-edge-label { font-size: 11px; font-weight: 700; fill: #475569; }
 .flowchart-key { fill: #f8fafc; stroke: #64748b; stroke-width: 1.5; }
+.flowchart-key.planned { fill: #ecfeff; stroke: #0e7490; stroke-dasharray: 4 3; }
 .flowchart-node { cursor: pointer; outline: none; }
 .flowchart-node rect, .flowchart-node polygon { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 1.5; }
 .flowchart-node.decision polygon { fill: #fef9c3; stroke: #ca8a04; }
 .flowchart-node.terminal rect { fill: #e0e7ff; stroke: #6366f1; }
+.flowchart-node.planned rect { fill: #ecfeff; stroke: #0e7490; stroke-dasharray: 4 3; }
 .flowchart-node text {
   font-size: 12px;
   fill: #334155;
@@ -701,6 +703,7 @@ body {
   padding: 2px 6px;
   margin-bottom: 8px;
 }
+.flowchart-optional-tag.planned { color: #0e7490; background: #ecfeff; margin-right: 6px; }
 .flowchart-command {
   font-family: 'DejaVu Sans Mono', Menlo, Consolas, monospace;
   font-size: 12px;
