@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### 🗺️ Help -> Flowchart: by hand or with auto
+
+- After "Watch the queue" the chart now splits. Down the middle, by hand,
+  following how a case is actually handled. A running or queued case can be
+  post-processed from its live `.othd`, up to the last settled step. An ended
+  run is asked how it ended, since a walltime stop is not a failure. Then the
+  history is organised and uploaded before the post job, whose window comes
+  from the newest archived `.othd` and needs its `.out` (`case check out`).
+  The PLTs are checked and uploaded before anything is deleted, the newest
+  restart set is uploaded, and "Does the run go on?" loops back to a restart.
+- Deleting is now its own step, after the upload check, in the order that
+  works: `organise output --keep-freq 500` while the PLTs are still there,
+  then `plt --delete-ascii`, then `plt --delete-binary`. The old "Thin the
+  output" step came before the transfer, and its `case organise plt` with no
+  flag did nothing.
+- On the right, the planned `auto` command (`auto show`, `auto apply`,
+  `auto log`), drawn dashed and tagged "Planned: not built yet".
+
 ### 🗺️ Help -> Flowchart branches
 
 - The linear list of steps is now a top-down diagram with connectors: four
