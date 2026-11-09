@@ -91,7 +91,7 @@ ul.check { margin: 0; padding-left: 20px; display: flex; flex-direction: column;
   <header>
     <div class="kicker">flexflow · design review · 2026-11-09</div>
     <h1>auto command flow</h1>
-    <p>What one <code>auto apply</code> does in a case folder, drawn from your manual workflow. Every action waits for a check; the colours say what happens when a check fails. Below the charts, the same rules are applied to your seven <code>bare</code> cases as the probe saw them.</p>
+    <p>What one <code>auto apply</code> does in a case folder, drawn from your manual workflow. <code>auto init</code> and <code>auto show</code> (the plan, changing nothing) are built; <code>auto apply</code> and <code>auto log</code> are not yet. Every action waits for a check; the colours say what happens when a check fails. Below the charts, the same rules are applied to your seven <code>bare</code> cases as the probe saw them.</p>
     <div class="legend">
       <span><span class="chip ok">action</span> runs</span>
       <span><span class="chip wait">wait</span> nothing now, next run</span>
@@ -114,8 +114,8 @@ ul.check { margin: 0; padding-left: 20px; display: flex; flex-direction: column;
     <div class="diagram">
 <pre class="mermaid">
 flowchart TD
-  A(["auto apply"]) --> B{".auto.conf in this folder?"}
-  B -->|no| X1["Stop: say which settings are missing"]
+  A(["auto show / auto apply"]) --> B{".auto.conf here, with remote and path set?"}
+  B -->|no| X1["Stop: run auto init, then edit .auto.conf&lt;br/&gt;remote and path left as EDIT_ME are refused"]
   B -->|yes| C{"squeue and sacct answer cleanly?"}
   C -->|"no: error, or anything on stderr"| X2["Stop: no action on any case"]
   C -->|yes| D{"cloud login: key through the alias, else password from remotes.json"}
@@ -303,12 +303,10 @@ flowchart TD
       <li>Is there any step of your manual routine missing from the charts?</li>
     </ul>
     <p class="note">The commands the charts belong to:</p>
-<pre class="cmds">auto show [case]        <span># the plan, changes nothing</span>
-auto apply [case]       <span># do it once; asks once before deleting (--yes skips)</span>
-auto log [case]         <span># what earlier runs did</span>
-auto status [case]      <span># each case's stage</span>
-auto verified [case]    <span># files whose cloud copy matches md5</span>
-auto config             <span># .auto.conf: cloud path, keep_rst, disk_alert</span></pre>
+<pre class="cmds">auto init [--force]     <span># write .auto.conf to edit: remote, path, keep_rst, disk_alert   (built)</span>
+auto show [case]        <span># the plan, case by case, and a summary; changes nothing         (built)</span>
+auto apply [case]       <span># do it once; asks once before deleting (--yes skips)            (planned)</span>
+auto log [case]         <span># what earlier runs did                                          (planned)</span></pre>
   </section>
 </main>
 

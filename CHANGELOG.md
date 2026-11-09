@@ -13,7 +13,13 @@
   main job, a post job that ended badly or left steps unconverted, holes on
   the remote, a pruned `archive/`, a run stopped with nothing queued.
 - Settings in `.auto.conf` next to `.cases` (remote, its folder,
-  `keep_rst`, `disk_alert`); `auto --help`.
+  `keep_rst`, `disk_alert`); `auto --help`. `auto init` writes one with
+  every setting explained, the remote taken from `use remote:` when set and
+  the remote folder left as `EDIT_ME`: `auto show` will not run until it is
+  set. It does not overwrite an existing one without `--force`.
+- Help -> Flowchart and docs/auto_flow.html: the auto lane starts with
+  "Write .auto.conf" (`auto init`); `auto init` and `auto show` are drawn as
+  built, `auto apply` and `auto log` still dashed as planned.
 - The queue is read once; if it cannot be read, no case is looked at. Jobs
   belong to cases by working directory; how a case's last jobs ended comes
   from sacct. The remote is listed over SFTP with the password from

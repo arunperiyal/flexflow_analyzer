@@ -1,7 +1,8 @@
 // Help -> Flowchart: the end-to-end workflow as a branching diagram, from a
 // blank template to a plot in hand, with the selected step's detail on the
 // right. After the jobs are queued it splits: by hand down the middle, or
-// the planned `auto` command on the right (docs/AUTO_PLAN.md). NODES holds the steps (placed by hand on a col/row grid, so a new
+// the `auto` command on the right (docs/AUTO_PLAN.md); steps not built yet
+// are drawn dashed. NODES holds the steps (placed by hand on a col/row grid, so a new
 // step means choosing where it goes) and EDGES the connectors between them.
 // Commands lean on the shell's contexts: `use case:myCase` is set once and
 // the steps after it name no case.
@@ -303,48 +304,65 @@ const FlowChart = (() => {
         Layout -> Export for a PNG or PDF.`,
     },
     {
-      id: 'autoShow', kind: 'step', col: 3, row: 11, label: ['See the plan'], planned: true,
-      title: 'See the plan (auto)',
-      command: 'auto show',
-      detail: `For every case in this folder's .cases: where it stands, the
-        next step and the check it waits for, what will be uploaded and how
-        long that takes. It changes nothing.
+      id: 'autoInit', kind: 'step', col: 3, row: 11, label: ['Write .auto.conf'],
+      title: 'Write .auto.conf (auto)',
+      command: 'use remote:cloud\nauto init\n# then edit .auto.conf: set path',
+      detail: `Once per folder of cases, next to .cases. "auto init" writes
+        .auto.conf with every setting explained: the remote (from "use
+        remote:" when set), the folder there that holds these cases, the .rst
+        grid to keep (keep_rst, optional) and the size above which a running
+        case is flagged (disk_alert, optional).
 
-        Settings live in .auto.conf next to .cases: the remote and the
-        folder there, and the .rst grid to keep (keep_rst, your value).`,
+        The folder on the remote is left as EDIT_ME for you to set: "auto
+        show" will not run until it is. An existing .auto.conf is kept unless
+        --force.`,
     },
     {
-      id: 'autoApply', kind: 'step', col: 3, row: 12, label: ['Carry it out'], planned: true,
+      id: 'autoShow', kind: 'step', col: 3, row: 12, label: ['See the plan'],
+      title: 'See the plan (auto)',
+      command: 'auto show\nauto show <case>',
+      detail: `For every case in this folder's .cases: its state, then what
+        "auto apply" would do and why: organise the history, a post job and
+        its steps, uploads, and what is deleted once its copy on the remote is
+        checked. A summary table ends it. It changes nothing.
+
+        If the queue cannot be read, no case is looked at: one that looks
+        idle may be running.`,
+    },
+    {
+      id: 'autoApply', kind: 'step', col: 3, row: 13, label: ['Carry it out'], planned: true,
       title: 'Carry it out (auto)',
       command: 'auto apply',
       detail: `Runs the steps in the middle for each case, each only when
-        its check passes. History is organised when no main job is running
-        or queued. A post job is submitted when the run's PLTs are not on the
-        remote and its .out files are all there. Uploads are checked by md5,
-        and a local file is deleted only when its copy on the remote
-        matches.
+        its check passes. History is organised when no main job is running,
+        queued or completing. A post job is submitted when the run's PLTs are
+        not on the remote and its .out files are all there. Uploads are
+        checked by md5, and a local file is deleted only when its copy on the
+        remote matches.
 
         It asks once, at the start, before deleting anything. Post jobs still
         go through Slurm, so run it again at the next login to carry on from
         where each case stopped.`,
     },
     {
-      id: 'autoNeeds', kind: 'step', col: 3, row: 13, label: ['Handle what', 'it left to you'],
-      planned: true, optional: true,
+      id: 'autoNeeds', kind: 'step', col: 3, row: 14, label: ['Handle what', 'it left to you'],
+      optional: true,
       title: 'Handle what it left to you (auto)',
       command: 'auto show',
-      detail: `Cases listed under "needs you": a post job that failed, PLTs
-        missing on the remote with no .out left to remake them, a run that
-        stopped short with nothing queued. Each one names the step in the
-        middle that deals with it.`,
+      detail: `The cases "auto show" lists under "needs you", which auto
+        does not guess at: a main job that failed; a post job that ended
+        badly, or completed without making the PLTs of its steps; holes on
+        the remote; PLTs missing with no .out left to remake them; archive/
+        pruned (every case keeps archive/ and cleaned/); a run stopped short
+        with nothing queued. Each is handled by the step in the middle that
+        fits.`,
     },
     {
-      id: 'autoLog', kind: 'step', col: 3, row: 14, label: ['Check what it did'], planned: true,
+      id: 'autoLog', kind: 'step', col: 3, row: 15, label: ['Check what it did'], planned: true,
       title: 'Check what it did (auto)',
-      command: 'auto log\nauto status',
-      detail: `"auto log" lists what earlier runs did and why; "auto status"
-        shows the stage each case has reached. Restarts are not queued by
-        auto: that stays with you.`,
+      command: 'auto log',
+      detail: `Lists what earlier runs of "auto apply" did and why. Restarts
+        are not queued by auto: that stays with you.`,
     },
   ];
 
@@ -368,7 +386,7 @@ const FlowChart = (() => {
     { from: ['restartRun', 'b'], to: ['watch', 'r'] },
     { from: ['watch', 'b'], to: ['mode', 't'] },
     { from: ['mode', 'b'], to: ['running', 't'], label: 'By hand' },
-    { from: ['mode', 'r'], to: ['autoShow', 'l'], label: 'auto' },
+    { from: ['mode', 'r'], to: ['autoInit', 'l'], label: 'auto' },
     { from: ['running', 'r'], to: ['liveWindow', 'l'], label: 'Yes' },
     { from: ['running', 'b'], to: ['ended', 't'], label: 'No' },
     { from: ['liveWindow', 'b'], to: ['post', 'r'] },
@@ -389,6 +407,7 @@ const FlowChart = (() => {
     { from: ['goOn', 'b'], to: ['track', 't'], label: 'No' },
     { from: ['track', 'b'], to: ['prepare', 't'] },
     { from: ['prepare', 'b'], to: ['analyse', 't'] },
+    { from: ['autoInit', 'b'], to: ['autoShow', 't'] },
     { from: ['autoShow', 'b'], to: ['autoApply', 't'] },
     { from: ['autoApply', 'b'], to: ['autoNeeds', 't'] },
     { from: ['autoNeeds', 'b'], to: ['autoLog', 't'] },
@@ -479,7 +498,7 @@ const FlowChart = (() => {
       [swatch('<polygon class="flowchart-key" points="17,1 33,10 17,19 1,10"/>'), 'Decision'],
       [swatch('<line class="flowchart-edge" x1="2" y1="10" x2="26" y2="10" marker-end="url(#flowchart-arrow)"/>'), 'Next step'],
       [swatch('<line class="flowchart-edge back" x1="2" y1="10" x2="26" y2="10" marker-end="url(#flowchart-arrow)"/>'), 'Loop back'],
-      [swatch('<rect class="flowchart-key planned" x="2" y="3" width="30" height="14" rx="2"/>'), 'auto: planned, not built yet'],
+      [swatch('<rect class="flowchart-key planned" x="2" y="3" width="30" height="14" rx="2"/>'), 'Planned, not built yet'],
     ];
     return items.map(([icon, text]) => `<span class="flowchart-legend-item">${icon}${text}</span>`).join('');
   }
