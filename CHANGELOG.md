@@ -4,15 +4,18 @@
 
 ### 🤖 `auto show`: what each case of a folder needs next
 
-- New top-level `auto`. `auto show [case]` looks at every case in this
-  folder's `.cases` and prints, case by case, what `auto apply` will do
+- New top-level `auto`. `auto show [case]` works like `case check`: the
+  case is the argument or `use case:`, and `use case:*` (or `'*'`) is every
+  case in this folder's `.cases`; with neither it is an error. It prints,
+  case by case (a summary table for several), what `auto apply` will do
   (not built yet), and changes nothing: organise the history, submit a
   post job for the newest run's steps whose PLT is neither on the remote nor
   whole here, upload what the remote lacks, and delete what is safely
   copied. Anything it will not guess is listed as **needs you**: a failed
   main job, a post job that ended badly or left steps unconverted, holes on
   the remote, a pruned `archive/`, a run stopped with nothing queued.
-- Settings in `.auto.conf` next to `.cases` (remote, its folder,
+- Settings in `.auto.conf` next to `.cases`, read from each case's parent
+  folder, so cases from several folders can be shown together (remote, its folder,
   `keep_rst`, `disk_alert`); `auto --help`. `auto init` writes one with
   every setting explained: `--remote` (or `use remote:`), `--path` (default:
   the remote's `remote set-path`, with a warning when its last folder is not

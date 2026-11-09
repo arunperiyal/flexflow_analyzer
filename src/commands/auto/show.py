@@ -1,4 +1,5 @@
-"""auto show: what auto would do for each case of this folder. Reads only."""
+"""auto show [case]: what auto would do for a case, or for every case with
+`use case:*`. Reads only."""
 
 from pathlib import Path
 
@@ -34,58 +35,86 @@ def _duration(seconds: float) -> str:
     return f"{hours} h {minutes} min" if hours else f"{minutes} min"
 
 
-def gather(folder: Path, only=None, console=None):
-    """(conf, [(snapshot, plan)], problems) for the folder; problems are the
-    folder-wide reasons nothing could be decided (queue unreadable, ...)."""
+def resolve_cases(case, base_dir: Path):
+    """The case folders `auto show` looks at: `case` is the argument or the
+    `use case:` context. '*' is every case in base_dir's .cases, as for
+    case check. Raises AutoConfError when nothing names a case."""
+    from src.core.auto.conf import AutoConfError
+    from src.commands.case_iteration import is_wildcard_case, load_cases_from_directory
+    if not case:
+        raise AutoConfError("no case given: auto show <case>, or `use case:<dir>` "
+                            "(`use case:*` for every case in .cases)")
+    if is_wildcard_case(case):
+        entries = load_cases_from_directory(base_dir)
+        if not entries:
+            raise AutoConfError(f"no cases in {base_dir / '.cases'} (run `case add` first)")
+        return [Path(e['path']) for e in entries]
+    path = Path(case).expanduser()
+    path = path if path.is_absolute() else base_dir / path
+    if not path.is_dir():
+        raise AutoConfError(f"case folder not found: {path}")
+    return [path.resolve()]
+
+
+def gather(case_dirs):
+    """([(snapshot, plan)], {folder: conf}, problems) for these case folders.
+
+    Each case uses the .auto.conf of its parent folder (next to .cases); a
+    folder without a usable one raises AutoConfError. The queue and sacct are
+    read once; each remote is opened once. When the queue cannot be read no
+    case is looked at (problems says why).
+    """
     from src.core import slurm
     from src.core.auto import conf as auto_conf
     from src.core.auto.cloud import CloudError, open_cloud
     from src.core.auto.decide import decide
     from src.core.auto.observe import observe_case
-    from src.commands.case_iteration import load_cases_from_directory
 
-    conf = auto_conf.read(folder)
-    entries = load_cases_from_directory(folder)
-    if not entries:
-        raise auto_conf.AutoConfError(f"no cases in {folder / '.cases'} (run `case add` first)")
-    if only:
-        entries = [e for e in entries if e['name'] == only or Path(e['path']).name == only]
-        if not entries:
-            raise auto_conf.AutoConfError(f"no case named {only!r} in .cases")
+    confs = {}
+    for case_dir in case_dirs:
+        folder = Path(case_dir).parent
+        if folder not in confs:
+            confs[folder] = auto_conf.read(folder)
 
     try:
         queue = slurm.read_queue()
     except slurm.QueueError as e:
-        return conf, [], [f"the queue could not be read ({e}), so no case is looked at: "
-                          f"one that looks idle may be running"]
+        return [], confs, [f"the queue could not be read ({e}), so no case is looked at: "
+                           f"one that looks idle may be running"]
     problems, sacct_ok = [], True
     try:
         ended = slurm.read_ended()
     except slurm.QueueError as e:
         ended, sacct_ok = [], False
         problems.append(f"sacct could not be read ({e}): no post decisions")
-    cloud, cloud_ok = None, True
-    try:
-        cloud = open_cloud(conf)
-    except CloudError as e:
-        cloud_ok = False
-        problems.append(f"cloud not reachable ({e}): no post decisions or uploads")
 
+    clouds = {}                                  # (remote, path) -> cloud, or None
     results = []
     try:
-        for entry in entries:
-            listing = None
+        for case_dir in case_dirs:
+            conf = confs[Path(case_dir).parent]
+            key = (conf.remote, conf.path)
+            if key not in clouds:
+                try:
+                    clouds[key] = open_cloud(conf)
+                except CloudError as e:
+                    clouds[key] = None
+                    problems.append(f"{conf.remote}:{conf.path} not reachable ({e}): "
+                                    f"no post decisions or uploads")
+            cloud, listing = clouds[key], None
             if cloud is not None:
                 try:
-                    listing = cloud.listing(Path(entry['path']).name)
+                    listing = cloud.listing(Path(case_dir).name)
                 except CloudError as e:
-                    problems.append(f"{entry['name']}: {e}")
-            snap = observe_case(entry['path'], queue, ended, listing)
-            results.append((snap, decide(snap, conf, cloud_ok=listing is not None, sacct_ok=sacct_ok)))
+                    problems.append(f"{Path(case_dir).name}: {e}")
+            snap = observe_case(case_dir, queue, ended, listing)
+            results.append((snap, decide(snap, conf, cloud_ok=listing is not None,
+                                         sacct_ok=sacct_ok)))
     finally:
-        if cloud is not None:
-            cloud.close()
-    return conf, results, problems
+        for cloud in clouds.values():
+            if cloud is not None:
+                cloud.close()
+    return results, confs, problems
 
 
 def execute_show(args) -> int:
@@ -93,9 +122,10 @@ def execute_show(args) -> int:
     from src.core.auto.conf import AutoConfError
 
     console = Console()
-    folder = Path(current_dir())
+    base = Path(current_dir())
     try:
-        conf, results, problems = gather(folder, getattr(args, 'case', None))
+        case_dirs = resolve_cases(getattr(args, 'case', None), base)
+        results, confs, problems = gather(case_dirs)
     except AutoConfError as e:
         console.print(f"[red]Error:[/red] {escape(str(e))}")
         return 2
@@ -105,9 +135,11 @@ def execute_show(args) -> int:
     from src.core.auto.decide import _size_text
 
     console.print()
-    console.rule(f"[bold]auto show[/bold]  [dim]{escape(folder.name)}[/dim]", style='cyan')
-    console.print(f"[dim]cases   {escape(str(folder))}\n"
-                  f"remote  {escape(conf.remote)}:{escape(conf.path)}[/dim]")
+    title = case_dirs[0].name if len(case_dirs) == 1 else f"{len(case_dirs)} cases"
+    console.rule(f"[bold]auto show[/bold]  [dim]{escape(title)}[/dim]", style='cyan')
+    for folder, conf in confs.items():
+        console.print(f"[dim]cases   {escape(str(folder))}\n"
+                      f"remote  {escape(conf.remote)}:{escape(conf.path)}[/dim]")
     for problem in problems:
         console.print(f"[bold red]![/bold red] {escape(problem)}")
     if not results:
@@ -136,9 +168,9 @@ def execute_show(args) -> int:
         console.print(lines)
         summary.append((plan, sum(plan.uploads.values())))
 
-    # summary
+    # summary: the table for several cases, the totals always
     console.print()
-    console.rule("[bold]summary[/bold]", style='cyan')
+    console.rule("[bold]summary[/bold]" if len(summary) > 1 else '', style='cyan')
     table = Table(box=box.SIMPLE_HEAD, header_style='bold', pad_edge=False, expand=False)
     table.add_column('case', style='cyan', no_wrap=True)
     table.add_column('state', no_wrap=True)
@@ -157,7 +189,8 @@ def execute_show(args) -> int:
         table.add_row(escape(plan.name), f"[{STATE_STYLE.get(plan.state, 'white')}]{plan.state}[/]",
                       post, _size_text(size) if size else '[dim]-[/dim]',
                       f"[red]{escape(first)}{more}[/red]" if needs else '')
-    console.print(table)
+    if len(summary) > 1:
+        console.print(table)
 
     total = sum(size for _, size in summary)
     posts = sum(plan.post is not None for plan, _ in summary)
