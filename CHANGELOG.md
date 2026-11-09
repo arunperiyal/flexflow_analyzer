@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### 🛡️ A PLT must stand in for the `.out` before they go
+
+- `case organise output` deletes a step's `.out` only once
+  `binary/<problem>.<step>.plt` is whole and was written after every `.out`
+  part of the step. Before, any file of that name was enough: an empty or
+  cut-short PLT (a post job killed at the walltime), or one made before a
+  restart computed the step again, let it delete the only data that could
+  remake it. An ASCII `.plt` alone no longer counts either: convert it
+  first. Each step kept is listed with the reason.
+- "Whole" is read from the header: a binary PLT states every zone's size,
+  so a complete file ends at a known byte (true to the byte on every real
+  file checked). Only the header and the zone preambles are read, not the
+  data.
+- `case check plt` reports such files as **broken** ("cut short: 300 of
+  424 bytes", "not a binary PLT"), next to missing and empty.
+- New `src/core/settled.py`: which steps' `.out` a post job may read (all
+  `nsg` parts, none empty, and on a running case past the solver's step
+  and unchanged for 10 minutes). Used by `auto` next.
+
 ### 🗺️ Help -> Flowchart: by hand or with auto
 
 - After "Watch the queue" the chart now splits. Down the middle, by hand,

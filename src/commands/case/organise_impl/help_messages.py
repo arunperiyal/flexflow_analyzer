@@ -82,9 +82,12 @@ Organize and clean up case directories. Pick one subcommand.
             restartTsId in simflow.config (where a restart resumes), the
             newest complete set (all nsg parts), and a newest set that
             is still incomplete
-          • .out: deletes every step whose <problem>.<step>.plt exists
-            (binary/ or run dir), keep-freq steps too -- a restart does
-            not read .out. Steps with no .plt yet keep their .out.
+          • .out: deletes a step's .out once binary/<problem>.<step>.plt
+            can stand in for them: whole (as long as its header says)
+            and written after every .out part. keep-freq steps too -- a
+            restart does not read .out. A step with no PLT, only an
+            ASCII one, or one cut short or older than its .out (made
+            before a restart) keeps its .out, and is listed.
 
         {Colors.CYAN}--keep-freq N{Colors.RESET}
             Keep the .rst of the steps divisible by N
