@@ -2,10 +2,9 @@
 Utilities for handling case iteration when case name is '*'.
 
 When a command receives case name '*', it should iterate over all cases
-from the .cases file and execute its logic for each case.
+from the .cases.yml file and execute its logic for each case.
 """
 
-import json
 from pathlib import Path
 from typing import List, Optional
 
@@ -25,33 +24,21 @@ def is_wildcard_case(case_name: Optional[str]) -> bool:
 
 def load_cases_from_directory(base_dir: Path) -> List[dict]:
     """
-    Load cases from the .cases file in the given directory.
+    Load cases from the .cases.yml file in the given directory.
     
-    The .cases file is a JSON file with format:
-    [
-      {'name': 'Case001', 'path': '/full/path/to/Case001'},
-      {'name': 'Case002', 'path': '/full/path/to/Case002'},
-      ...
-    ]
+    The `cases` section of .cases.yml (src/core/cases_file.py):
+      cases:
+        - name: Case001
+          path: /full/path/to/Case001
     
     Args:
-        base_dir: Directory containing the .cases file
+        base_dir: Directory containing the .cases.yml file
         
     Returns:
         List of case dicts with 'name' and 'path' keys, or empty list if error
     """
-    cases_file = Path(base_dir) / '.cases'
-    
-    if not cases_file.exists():
-        return []
-    
+    from src.core import cases_file
     try:
-        with open(cases_file) as f:
-            data = json.load(f)
-        
-        if isinstance(data, list):
-            return data
-        else:
-            return []
-    except Exception:
+        return cases_file.read(base_dir).cases
+    except cases_file.CasesFileError:
         return []

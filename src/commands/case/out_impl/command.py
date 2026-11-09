@@ -19,7 +19,7 @@ to make the data readable (it already carries no ids to resolve), but to record
 which surface it is: the .srf/.nbc it is built from, and the osgId predicted for
 it, none of which the oisd file states either.
 
-Accepts the `*` wildcard case, in which case every case in the `.cases` registry
+Accepts the `*` wildcard case, in which case every case in the `.cases.yml` registry
 is done in turn -- and a case that cannot be done is reported and stepped over
 rather than ending the batch.
 """
@@ -846,7 +846,7 @@ def _print_surface_survey(case_dir, rows):
 
 
 def _list_all_cases(logger):
-    """Survey every case in the .cases registry as one table.
+    """Survey every case in the .cases.yml registry as one table.
 
     One table rather than one per case: the question `*` asks is which cases
     have maps yet, and that is answered by scanning a column, not by comparing
@@ -859,7 +859,7 @@ def _list_all_cases(logger):
     console = Console()
     cases = load_cases_from_directory(Path.cwd())
     if not cases:
-        logger.error(f"No cases found. Is there a .cases file in {Path.cwd()}? "
+        logger.error(f"No cases found. Is there a .cases.yml file in {Path.cwd()}? "
                      "Build one with `case add`.")
         sys.exit(1)
 
@@ -879,8 +879,8 @@ def _list_all_cases(logger):
         name = entry.get("name", "?")
         path = entry.get("path")
         if not path:
-            failed.append((name, "no path in .cases"))
-            surf_failed.append((name, "no path in .cases"))
+            failed.append((name, "no path in .cases.yml"))
+            surf_failed.append((name, "no path in .cases.yml"))
             continue
 
         try:
@@ -954,13 +954,13 @@ def _list_all_cases(logger):
 
 
 def _write_all_cases(args, wanted, logger, probe=None, closed=None):
-    """Run over every case in the .cases registry, stepping over the ones that fail."""
+    """Run over every case in the .cases.yml registry, stepping over the ones that fail."""
     from rich.console import Console
 
     console = Console()
     cases = load_cases_from_directory(Path.cwd())
     if not cases:
-        logger.error(f"No cases found. Is there a .cases file in {Path.cwd()}? "
+        logger.error(f"No cases found. Is there a .cases.yml file in {Path.cwd()}? "
                      "Build one with `case add`.")
         sys.exit(1)
 
@@ -970,7 +970,7 @@ def _write_all_cases(args, wanted, logger, probe=None, closed=None):
         name = entry.get("name", "?")
         path = entry.get("path")
         if not path:
-            failed.append((name, "no path in .cases"))
+            failed.append((name, "no path in .cases.yml"))
             continue
         try:
             result = write_case_maps(path, wanted, logger,

@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### 🗂️ `.cases.yml` replaces `.cases` (and `.auto.conf`)
+
+- **Run `case add` once in each folder of cases**: commands now read only
+  `.cases.yml`, and an old `.cases` (JSON) is not read any more.
+- One YAML file per folder: `cases` (what `case add` finds), `remotes` (the
+  folder these cases have on each remote; logins stay in `remotes.json`) and
+  `auto` (`keep_rst`, `disk_alert`, ...). `case add` rewrites only `cases`,
+  keeping the rest. Every command that went over `.cases` (`*` / `use case:*`,
+  `case report`, the web UI) reads it.
+- `case upload`/`download` and `run post --remote` put a case at
+  `<folder>/<case>`, the folder being `--remote-path`, else the remote's entry
+  in that case folder's `.cases.yml`, else `remote set-path`. Cases from
+  several folders each go to their own place, with no switching set-path.
+
 ### 🤖 `auto show`: what each case of a folder needs next
 
 - New top-level `auto`. `auto show [case]` works like `case check`: the

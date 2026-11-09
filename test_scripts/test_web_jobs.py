@@ -16,6 +16,7 @@ import pytest
 
 from src.web.server import create_app
 from src.web.services.jobs import JobRegistry
+from registry_files import write_registry
 
 EXAMPLE = Path(__file__).resolve().parent.parent / 'examples' / 'BR0SG0U1P0'
 _NEEDED_FILES = ('simflow.config', 'riser.def', 'riser.cyl_nodes.nbc', 'probe_dat.txt', 'riser.crd')
@@ -87,7 +88,7 @@ def workspace(tmp_path_factory):
     case_dir.mkdir()
     for name in _NEEDED_FILES:
         shutil.copy(EXAMPLE / name, case_dir / name)
-    (root / '.cases').write_text(json.dumps([{'name': 'BR0SG0U1P0', 'path': str(case_dir)}]))
+    write_registry(root, [{'name': 'BR0SG0U1P0', 'path': str(case_dir)}])
     return root, case_dir
 
 

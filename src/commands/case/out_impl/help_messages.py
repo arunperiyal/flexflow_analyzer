@@ -12,7 +12,7 @@ Build small derived files from a case's own inputs.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
     flexflow case out <case_dir> --map [NAME]
-    flexflow case out * --map            {Colors.DIM}# every case in .cases{Colors.RESET}
+    flexflow case out * --map            {Colors.DIM}# every case in .cases.yml{Colors.RESET}
     flexflow case out * --list           {Colors.DIM}# survey them all in one table{Colors.RESET}
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
@@ -23,7 +23,7 @@ Build small derived files from a case's own inputs.
                        for it -- name, .srf, predicted osgId, elementGroup,
                        shape, map file -- printed only when the case has one,
                        since most don't yet. With the {Colors.YELLOW}*{Colors.RESET} case both surveys
-                       run across the whole .cases registry, each as one table
+                       run across the whole .cases.yml registry, each as one table
                        with a Case column -- which is how you see which cases
                        still need mapping.
     {Colors.YELLOW}--map [NAME]{Colors.RESET}  Write a map for every outputTimeHistory block in the
@@ -174,7 +174,7 @@ Build small derived files from a case's own inputs.
   - Blocks with type other than nodal (e.g. type = coordinates) are reported
     and skipped: their records are not indexed by a node file.
   - Every map in a case is built from a single pass over the coordinates file.
-  - With the {Colors.YELLOW}*{Colors.RESET} wildcard, cases are read from the .cases registry in the
+  - With the {Colors.YELLOW}*{Colors.RESET} wildcard, cases are read from the .cases.yml registry in the
     current directory. A case with nothing to map is skipped and one that fails
     is reported, and neither ends the batch.
 

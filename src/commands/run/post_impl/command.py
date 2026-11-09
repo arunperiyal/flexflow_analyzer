@@ -589,7 +589,7 @@ def _remote_exports(args, case_dir, script_path, console, check):
         return None
 
     upload = CaseUploadCommand()
-    base = upload.get_remote_base_path(remote, None)
+    base = upload.get_remote_base_path(remote, None, Path(case_dir).resolve().parent)
     remote_dir = upload.construct_remote_case_path(base, str(case_dir)) + '/binary'
 
     alias = _ssh_alias(name)

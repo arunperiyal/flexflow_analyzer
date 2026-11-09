@@ -403,7 +403,7 @@ class CaseCommand(BaseCommand):
 
         # case add
         add_parser = case_subparsers.add_parser('add', add_help=False,
-                                                help='Scan a directory and build the .cases registry')
+                                                help='Scan a directory and build the .cases.yml registry')
         add_parser.add_argument('--dir', type=str, metavar='PATH',
                                help='Directory to scan (default: current directory)')
         add_parser.add_argument('-h', '--help', action='store_true',
@@ -500,7 +500,7 @@ class CaseCommand(BaseCommand):
         report_parser = case_subparsers.add_parser('report', add_help=False,
                                                    help='Print a compact status table for all registered cases')
         report_parser.add_argument('--dir', type=str, metavar='PATH',
-                                  help='Directory containing .cases file (default: current directory)')
+                                  help='Directory containing .cases.yml file (default: current directory)')
         report_parser.add_argument('--run', action='store_true',
                                   help='Add column with last timestep from run directory')
         report_parser.add_argument('--size', action='store_true',
@@ -525,7 +525,8 @@ class CaseCommand(BaseCommand):
         context_flag(upload_parser, 'remote', '--to', type=str, metavar='REMOTE',
                      help='Remote machine name (or use context with "use remote:name")')
         upload_parser.add_argument('--remote-path', type=str, metavar='PATH',
-                                  help='Override remote base path (default: use remote config)')
+                                  help="The folder holding the cases on the remote (default: the remote's folder in "
+                                       "the case folder's .cases.yml, else `remote set-path`)")
         time_window(upload_parser, when=_stepped,
                     t1_kwargs=dict(metavar='STEP', help='binary/rst: first timestep to upload (alone: only that step)'),
                     t2_kwargs=dict(metavar='STEP', help='binary/rst: last timestep to upload'))
@@ -554,7 +555,8 @@ class CaseCommand(BaseCommand):
                      metavar='REMOTE',
                      help='Remote machine name (or use context with "use remote:name")')
         download_parser.add_argument('--remote-path', type=str, metavar='PATH',
-                                    help='Override remote base path (default: use remote config)')
+                                    help="The folder holding the cases on the remote (default: the remote's folder in "
+                                       "the case folder's .cases.yml, else `remote set-path`)")
         time_window(download_parser, when=_stepped,
                     t1_kwargs=dict(metavar='STEP', help='binary/rst: first timestep to download (alone: only that step)'),
                     t2_kwargs=dict(metavar='STEP', help='binary/rst: last timestep to download'))
@@ -656,7 +658,7 @@ class CaseCommand(BaseCommand):
         table.add_row("status", "The case's notes (.casestatus.md) and where it is")
         table.add_row("out", "Inspect a case's declared outputs and write othd node maps")
         table.add_row("domain", "Declare the field and bodies the domain is made of")
-        table.add_row("add", "Scan a directory and build the .cases registry")
+        table.add_row("add", "Scan a directory and build the .cases.yml registry")
         table.add_row("report", "Print a compact status table for all registered cases")
         table.add_row("upload", "Upload case directories from local to remote server")
         table.add_row("download", "Download case directories from remote server to local")

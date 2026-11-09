@@ -38,6 +38,7 @@ import argparse
 import json
 
 import pytest
+from registry_files import write_registry
 
 
 @pytest.fixture
@@ -52,7 +53,7 @@ def project(tmp_path, monkeypatch):
         othd(case / 'othd_files' / 'riser1.othd', range(1, 101))
         (case / 'binary' / 'riser.100.plt').write_text('x')
         cases.append({'name': name, 'path': str(case)})
-    (tmp_path / '.cases').write_text(json.dumps(cases))
+    write_registry(tmp_path, cases)
     return tmp_path
 
 

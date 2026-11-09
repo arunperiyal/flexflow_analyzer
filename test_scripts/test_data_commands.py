@@ -16,6 +16,7 @@ from src.commands.data import shared
 from src.commands.data.show_impl.command import execute_preview
 from src.commands.data.table_impl.command import execute_table
 from src.commands.data.stats_impl.command import execute_statistics
+from registry_files import write_registry
 
 
 def _othd_text(n_steps=20):
@@ -85,7 +86,7 @@ def registry(tmp_path, monkeypatch):
     entries = [{"name": "Good1", "path": str(tmp_path / "Good1")},
               {"name": "Good2", "path": str(tmp_path / "Good2")},
               {"name": "Gone", "path": str(tmp_path / "not_here")}]
-    (tmp_path / ".cases").write_text(json.dumps(entries))
+    write_registry(tmp_path, entries)
     monkeypatch.chdir(tmp_path)          # .cases is read from the cwd
     return tmp_path
 
@@ -136,8 +137,8 @@ class TestForEachCase:
         assert "read 1/3 case" in out
 
     def test_exits_nonzero_when_nothing_succeeded(self, tmp_path, monkeypatch):
-        (tmp_path / ".cases").write_text(json.dumps(
-            [{"name": "Gone", "path": str(tmp_path / "not_here")}]))
+        write_registry(tmp_path, 
+            [{"name": "Gone", "path": str(tmp_path / "not_here")}])
         monkeypatch.chdir(tmp_path)
         with pytest.raises(SystemExit) as exc:
             shared.for_each_case(args(case="*"), _Logger(), lambda d, a: None)

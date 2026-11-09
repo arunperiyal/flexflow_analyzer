@@ -108,7 +108,7 @@ def resolve_case(case_arg, logger):
 
 def for_each_case(args, logger, run_one):
     """Run `run_one(case_dir, args)` for args.case, or once per case in the
-    .cases registry when args.case is '*' -- as `field render *` and
+    .cases.yml registry when args.case is '*' -- as `field render *` and
     `case out *` do.
 
     `run_one` does the actual work for one case and reports its own failure by
@@ -129,7 +129,7 @@ def for_each_case(args, logger, run_one):
 
     cases = load_cases_from_directory(Path.cwd())
     if not cases:
-        logger.error(f"`*` reads every case in the .cases registry, and there "
+        logger.error(f"`*` reads every case in the .cases.yml registry, and there "
                      f"is none in {Path.cwd()}.\n"
                      f"        Build one with `case add`, or name a case "
                      f"directly.")

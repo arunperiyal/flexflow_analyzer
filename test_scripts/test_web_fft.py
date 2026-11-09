@@ -18,6 +18,7 @@ import pytest
 from src.web.server import create_app
 from src.web.services.fft import compute_fft
 from src.web.services.loader import loader
+from registry_files import write_registry
 
 EXAMPLE = Path(__file__).resolve().parent.parent / 'examples' / 'BR0SG0U1P0'
 _NEEDED_FILES = ('simflow.config', 'riser.def', 'riser.cyl_nodes.nbc', 'probe_dat.txt',
@@ -34,7 +35,7 @@ def workspace(tmp_path_factory):
         shutil.copy(EXAMPLE / name, case_dir / name)
     shutil.copytree(EXAMPLE / 'othd_files', case_dir / 'othd_files')
     shutil.copytree(EXAMPLE / 'oisd_files', case_dir / 'oisd_files')
-    (root / '.cases').write_text(json.dumps([{'name': 'BR0SG0U1P0', 'path': str(case_dir)}]))
+    write_registry(root, [{'name': 'BR0SG0U1P0', 'path': str(case_dir)}])
     return root, case_dir
 
 

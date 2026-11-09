@@ -220,7 +220,7 @@ def _list_cases(console) -> int:
     from ...case_iteration import load_cases_from_directory
     cases = load_cases_from_directory(current_dir())
     if not cases:
-        console.print("[red]Error:[/red] No cases found in .cases file (run `case add` first)")
+        console.print("[red]Error:[/red] No cases found in .cases.yml file (run `case add` first)")
         return 1
     tbl = Table(box=box.SIMPLE, header_style='bold yellow', pad_edge=False)
     tbl.add_column('case', style='cyan', no_wrap=True)

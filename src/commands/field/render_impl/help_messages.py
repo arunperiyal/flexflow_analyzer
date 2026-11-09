@@ -13,7 +13,7 @@ _COMMON_INPUT = f"""\
                            alone (it fixes the colour scale), the rest in
                            parallel. Each holds one .vtu in memory (0.8 GB
                            for a 170 MB PLT), so N is bounded by memory too
-    {Colors.YELLOW}*{Colors.RESET}                      {Colors.BOLD}Every case{Colors.RESET} in the .cases registry of the working
+    {Colors.YELLOW}*{Colors.RESET}                      {Colors.BOLD}Every case{Colors.RESET} in the .cases.yml registry of the working
                            directory, as `case out` and `run` take it. Each
                            writes into its own <case>/NAME/, and one failing
                            case does not stop the others. Without a colour

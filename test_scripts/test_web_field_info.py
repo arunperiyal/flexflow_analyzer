@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 
 from src.web.server import create_app
+from registry_files import write_registry
 
 EXAMPLE = Path(__file__).resolve().parent.parent / 'examples' / 'BR0SG0U1P0'
 _NEEDED_FILES = ('simflow.config', 'riser.def')
@@ -29,7 +30,7 @@ def client(tmp_path_factory):
         shutil.copy(EXAMPLE / name, case_dir / name)
     (case_dir / 'binary').mkdir()
     shutil.copy(EXAMPLE / 'binary' / 'riser.100.plt', case_dir / 'binary' / 'riser.100.plt')
-    (root / '.cases').write_text(json.dumps([{'name': 'BR0SG0U1P0', 'path': str(case_dir)}]))
+    write_registry(root, [{'name': 'BR0SG0U1P0', 'path': str(case_dir)}])
     return create_app(root).test_client()
 
 
@@ -109,7 +110,7 @@ def test_info_404_for_a_case_with_no_binary_directory(client, tmp_path_factory):
     root = tmp_path_factory.mktemp('web_field_info_no_binary')
     case_dir = root / 'BareCase'
     case_dir.mkdir()
-    (root / '.cases').write_text(json.dumps([{'name': 'BareCase', 'path': str(case_dir)}]))
+    write_registry(root, [{'name': 'BareCase', 'path': str(case_dir)}])
     bare_client = create_app(root).test_client()
     res = bare_client.get('/api/cases/BareCase/field/info')
     assert res.status_code == 404

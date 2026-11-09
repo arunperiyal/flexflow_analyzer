@@ -173,7 +173,7 @@ the remote gets the restarts it lacks.
                            the mesh, .nbc, .srf ... (what a restart needs unchanged)
     {Colors.YELLOW}history{Colors.RESET}                The OTHD/OISD history (`case organise history`):
                            archive/, cleaned/ and the compiled file
-    {Colors.YELLOW}case{Colors.RESET}                   Local case directory path (use * for all cases in .cases)
+    {Colors.YELLOW}case{Colors.RESET}                   Local case directory path (use * for all cases in .cases.yml)
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
     {Colors.YELLOW}--to REMOTE{Colors.RESET}            Remote machine name (required)
@@ -189,7 +189,9 @@ the remote gets the restarts it lacks.
     {Colors.YELLOW}--archive{Colors.RESET}              history: only archive/ (combinable; none: all three)
     {Colors.YELLOW}--cleaned{Colors.RESET}              history: only cleaned/
     {Colors.YELLOW}--compiled{Colors.RESET}             history: only the compiled file
-    {Colors.YELLOW}--remote-path PATH{Colors.RESET}     Override remote base path (default: remote config path)
+    {Colors.YELLOW}--remote-path PATH{Colors.RESET}     The folder holding the cases on the remote; the case goes to
+                         PATH/<case>. Default: the remote's folder in the case folder's
+                         .cases.yml (remotes: {NAME: DIR}), else `remote set-path`
     {Colors.YELLOW}--force{Colors.RESET}                Create remote directories if they do not exist
     {Colors.YELLOW}--resume{Colors.RESET}               Resume the last interrupted upload
     {Colors.YELLOW}--examples{Colors.RESET}             Show usage examples
@@ -202,7 +204,7 @@ the remote gets the restarts it lacks.
     Use 'use remote:<name>' in the interactive shell to set a default remote
     so --to can be omitted.
 
-    Wildcard mode ('case upload *') uploads all cases listed in the .cases
+    Wildcard mode ('case upload *') uploads all cases listed in the .cases.yml
     file in the current directory.
 
 {Colors.BOLD}FILES:{Colors.RESET}
@@ -334,7 +336,7 @@ the restarts found only on the remote are added here.
                            File(...): the mesh, .nbc, .srf ...
     {Colors.YELLOW}history{Colors.RESET}                The remote OTHD/OISD history (`case organise history`):
                            archive/, cleaned/ and the compiled file
-    {Colors.YELLOW}case{Colors.RESET}                   Local case directory path (destination; use * for all cases in .cases)
+    {Colors.YELLOW}case{Colors.RESET}                   Local case directory path (destination; use * for all cases in .cases.yml)
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
     {Colors.YELLOW}--from REMOTE{Colors.RESET}          Remote machine name (required)
@@ -352,7 +354,9 @@ the restarts found only on the remote are added here.
     {Colors.YELLOW}--cleaned{Colors.RESET}              history: only cleaned/
     {Colors.YELLOW}--compiled{Colors.RESET}             history: only the compiled file
     {Colors.YELLOW}--freq N{Colors.RESET}               binary: only steps that are multiples of N
-    {Colors.YELLOW}--remote-path PATH{Colors.RESET}     Override remote base path (default: remote config path)
+    {Colors.YELLOW}--remote-path PATH{Colors.RESET}     The folder holding the cases on the remote; the case goes to
+                         PATH/<case>. Default: the remote's folder in the case folder's
+                         .cases.yml (remotes: {NAME: DIR}), else `remote set-path`
     {Colors.YELLOW}--force{Colors.RESET}                Create the local case directory if it does not exist
     {Colors.YELLOW}--resume{Colors.RESET}               Resume the last interrupted download
     {Colors.YELLOW}--examples{Colors.RESET}             Show usage examples
@@ -366,7 +370,7 @@ the restarts found only on the remote are added here.
     Use 'use remote:<name>' in the interactive shell to set a default remote
     so --from can be omitted.
 
-    Wildcard mode ('case download *') downloads all cases listed in the .cases
+    Wildcard mode ('case download *') downloads all cases listed in the .cases.yml
     file in the current directory.
 
 {Colors.BOLD}FILES:{Colors.RESET}
@@ -794,15 +798,18 @@ class CaseUploadCommand(HistoryTransferMixin):
             remote = self.validate_remote(remote_name)
             if not remote:
                 return 1
-            remote_base = self.get_remote_base_path(remote, self._get_arg(args, 'remote_path'))
             wildcard = is_wildcard_case(case_selection)
+            remote_base = self.get_remote_base_path(
+                remote, self._get_arg(args, 'remote_path'),
+                self._get_cases_base_dir() if wildcard
+                else Path(os.path.abspath(str(case_selection).rstrip('/'))).parent)
 
             if wildcard:
                 base_dir = self._get_cases_base_dir()
                 cases = load_cases_from_directory(base_dir)
                 if not cases:
                     self.console.print(
-                        f"[red]Error:[/red] No cases found in .cases at {base_dir}"
+                        f"[red]Error:[/red] No cases found in .cases.yml at {base_dir}"
                     )
                     return 1
                 case_entries = self._normalize_case_entries(cases)
@@ -903,7 +910,8 @@ class CaseUploadCommand(HistoryTransferMixin):
                 entry_path = entry.get('path')
                 if not entry_path:
                     continue
-                remote_case_path = self.construct_remote_case_path(remote_base, entry_path)
+                remote_case_path = self.construct_remote_case_path(
+                    remote_base, entry_path, remote, self._get_arg(args, 'remote_path'))
                 for directory in directories:
                     all_targets.append({
                         'case_name': entry.get('name') or Path(entry_path).name,
@@ -1174,7 +1182,7 @@ class CaseUploadCommand(HistoryTransferMixin):
         return self.remote_config.get_remote(remote_name)
 
     def _get_cases_base_dir(self) -> Path:
-        """Return directory used to resolve .cases for wildcard mode."""
+        """Return directory used to resolve .cases.yml for wildcard mode."""
         from src.cli.context import current_dir
         return current_dir()
 
@@ -1240,19 +1248,23 @@ class CaseUploadCommand(HistoryTransferMixin):
         dirs = [d.strip() for d in dirs_arg.split(",") if d.strip()]
         return dirs if dirs else ["othd_files", "oisd_files", "binary"]
 
-    def get_remote_base_path(self, remote: dict, override_path: Optional[str]) -> str:
+    def get_remote_base_path(self, remote: dict, override_path: Optional[str],
+                             folder=None) -> str:
         """
-        Determine remote base path.
-
-        Args:
-            remote: Remote configuration dict
-            override_path: Optional override path
-
-        Returns:
-            Remote base path
+        The folder on the remote that holds these cases: --remote-path; else
+        the remote's folder in `folder`'s .cases.yml (`remotes: {name: DIR}`);
+        else the remote's `remote set-path`; else the remote home (~).
         """
         if override_path:
             return os.path.expanduser(override_path)
+        if folder is not None:
+            from src.core import cases_file
+            try:
+                listed = cases_file.read(folder).remotes.get(remote.get("name"))
+            except cases_file.CasesFileError:
+                listed = None
+            if listed and listed != 'EDIT_ME':
+                return listed
 
         # Use remote's configured path
         remote_path = remote.get("path")
@@ -1265,18 +1277,20 @@ class CaseUploadCommand(HistoryTransferMixin):
     def construct_remote_case_path(
         self,
         remote_base: str,
-        case_path: str
+        case_path: str,
+        remote: Optional[dict] = None,
+        override_path: Optional[str] = None,
     ) -> str:
         """
-        Construct remote case path.
-
-        Args:
-            remote_base: Remote base path
-            case_path: Local case path (to extract case name)
-
-        Returns:
-            Remote case path
+        <base>/<case name> on the remote. Given `remote` (and no override),
+        the base is looked up again from the case's own folder's .cases.yml,
+        so cases from several folders each go to their own folder there;
+        otherwise `remote_base` is used as it is.
         """
+        case_path = str(case_path)
+        if remote is not None and not override_path:
+            folder = Path(os.path.abspath(case_path.rstrip("/"))).parent
+            remote_base = self.get_remote_base_path(remote, None, folder)
         case_name = os.path.basename(case_path.rstrip("/"))
         return f"{remote_base}/{case_name}"
 
@@ -2201,15 +2215,18 @@ class CaseUploadCommand(HistoryTransferMixin):
         directories = self.parse_directories(args.dir)
 
         # Get remote base path
-        remote_base = self.get_remote_base_path(remote, args.remote_path)
+        remote_base = self.get_remote_base_path(
+            remote, args.remote_path,
+            self._get_cases_base_dir() if is_wildcard_case(case_path)
+            else Path(os.path.abspath(str(case_path).rstrip('/'))).parent)
 
-        # Wildcard mode: iterate all cases from .cases
+        # Wildcard mode: iterate all cases from .cases.yml
         if is_wildcard_case(case_path):
             base_dir = self._get_cases_base_dir()
             cases = load_cases_from_directory(base_dir)
             if not cases:
                 self.console.print(
-                    f"[red]Error:[/red] No cases found in .cases at {base_dir}"
+                    f"[red]Error:[/red] No cases found in .cases.yml at {base_dir}"
                 )
                 return 1
 
@@ -2222,7 +2239,7 @@ class CaseUploadCommand(HistoryTransferMixin):
             table = Table(box=box.SIMPLE, show_header=True, header_style="bold yellow")
             table.add_column("Parameter", style="cyan")
             table.add_column("Value", style="white")
-            table.add_row("Case Selection", "* (all cases from .cases)")
+            table.add_row("Case Selection", "* (all cases from .cases.yml)")
             table.add_row("Cases Base Dir", str(base_dir))
             table.add_row("Remote Machine", args.to)
             table.add_row("Remote Host", f"{remote['user']}@{remote['ip']}:{remote['port']}")
@@ -2257,7 +2274,7 @@ class CaseUploadCommand(HistoryTransferMixin):
                     )
 
                     if not entry_path:
-                        self.console.print("[yellow]Warning:[/yellow] Missing case path in .cases entry")
+                        self.console.print("[yellow]Warning:[/yellow] Missing case path in .cases.yml entry")
                         self.console.print()
                         continue
 
@@ -2268,7 +2285,8 @@ class CaseUploadCommand(HistoryTransferMixin):
                         self.console.print()
                         continue
 
-                    remote_case_path = self.construct_remote_case_path(remote_base, entry_path)
+                    remote_case_path = self.construct_remote_case_path(
+                        remote_base, entry_path, remote, args.remote_path)
                     self.console.print(f"[dim]Remote case path: {remote_case_path}[/dim]")
 
                     for directory in directories:
@@ -2300,7 +2318,8 @@ class CaseUploadCommand(HistoryTransferMixin):
             return 1
 
         # Construct remote case path
-        remote_case_path = self.construct_remote_case_path(remote_base, case_path)
+        remote_case_path = self.construct_remote_case_path(
+            remote_base, case_path, remote, args.remote_path)
 
         # Show summary
         self.console.print()
@@ -2397,15 +2416,18 @@ class CaseUploadCommand(HistoryTransferMixin):
         directories = self.parse_directories(args.dir)
 
         # Get remote base path
-        remote_base = self.get_remote_base_path(remote, args.remote_path)
+        remote_base = self.get_remote_base_path(
+            remote, args.remote_path,
+            self._get_cases_base_dir() if is_wildcard_case(case_path)
+            else Path(os.path.abspath(str(case_path).rstrip('/'))).parent)
 
-        # Wildcard mode: iterate all cases from .cases
+        # Wildcard mode: iterate all cases from .cases.yml
         if is_wildcard_case(case_path):
             base_dir = self._get_cases_base_dir()
             cases = load_cases_from_directory(base_dir)
             if not cases:
                 self.console.print(
-                    f"[red]Error:[/red] No cases found in .cases at {base_dir}"
+                    f"[red]Error:[/red] No cases found in .cases.yml at {base_dir}"
                 )
                 return 1
 
@@ -2418,7 +2440,7 @@ class CaseUploadCommand(HistoryTransferMixin):
             table = Table(box=box.SIMPLE, show_header=True, header_style="bold yellow")
             table.add_column("Parameter", style="cyan")
             table.add_column("Value", style="white")
-            table.add_row("Case Selection", "* (all cases from .cases)")
+            table.add_row("Case Selection", "* (all cases from .cases.yml)")
             table.add_row("Cases Base Dir", str(base_dir))
             table.add_row("Remote Machine", remote_name)
             table.add_row("Remote Host", f"{remote['user']}@{remote['ip']}:{remote['port']}")
@@ -2453,7 +2475,7 @@ class CaseUploadCommand(HistoryTransferMixin):
                     )
 
                     if not entry_path:
-                        self.console.print("[yellow]Warning:[/yellow] Missing case path in .cases entry")
+                        self.console.print("[yellow]Warning:[/yellow] Missing case path in .cases.yml entry")
                         self.console.print()
                         continue
 
@@ -2461,7 +2483,8 @@ class CaseUploadCommand(HistoryTransferMixin):
                         self.console.print()
                         continue
 
-                    remote_case_path = self.construct_remote_case_path(remote_base, entry_path)
+                    remote_case_path = self.construct_remote_case_path(
+                        remote_base, entry_path, remote, args.remote_path)
                     self.console.print(f"[dim]Remote case path: {remote_case_path}[/dim]")
 
                     for directory in directories:
@@ -2489,7 +2512,8 @@ class CaseUploadCommand(HistoryTransferMixin):
             return 1
 
         # Construct remote case path
-        remote_case_path = self.construct_remote_case_path(remote_base, case_path)
+        remote_case_path = self.construct_remote_case_path(
+            remote_base, case_path, remote, args.remote_path)
 
         # Show summary
         self.console.print()

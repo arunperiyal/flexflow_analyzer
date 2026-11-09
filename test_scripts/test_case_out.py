@@ -19,6 +19,7 @@ from src.commands.case.out_impl.command import (execute_out, WriteError,
                                                 survey_time_history,
                                                 survey_output_surfaces)
 from src.utils.logger import Logger
+from registry_files import write_registry
 
 DEF_TEMPLATE = """
 nodeCoordinates {{
@@ -375,7 +376,7 @@ def registry(tmp_path, monkeypatch):
     entries = [{"name": n, "path": str(tmp_path / n)}
                for n in ("Good1", "Good2", "Unmappable", "NoCrd")]
     entries.append({"name": "Gone", "path": str(tmp_path / "not_here")})
-    (tmp_path / ".cases").write_text(json.dumps(entries))
+    write_registry(tmp_path, entries)
     monkeypatch.chdir(tmp_path)                  # .cases is read from the cwd
     return tmp_path
 
@@ -875,8 +876,8 @@ class TestWildcardList:
         assert "output block(s)" in out
 
     def test_exits_non_zero_when_nothing_could_be_listed(self, tmp_path, monkeypatch):
-        (tmp_path / ".cases").write_text(json.dumps(
-            [{"name": "Gone", "path": str(tmp_path / "not_here")}]))
+        write_registry(tmp_path, 
+            [{"name": "Gone", "path": str(tmp_path / "not_here")}])
         monkeypatch.chdir(tmp_path)
         with pytest.raises(SystemExit) as exc:
             execute_out(make_args("*", map=False, list=True))
@@ -923,8 +924,8 @@ class TestWildcard:
         assert not (registry / "Good1" / "othd.riser_probe.map").exists()
 
     def test_exits_non_zero_when_no_case_could_be_mapped(self, tmp_path, monkeypatch):
-        (tmp_path / ".cases").write_text(json.dumps(
-            [{"name": "Gone", "path": str(tmp_path / "not_here")}]))
+        write_registry(tmp_path, 
+            [{"name": "Gone", "path": str(tmp_path / "not_here")}])
         monkeypatch.chdir(tmp_path)
         with pytest.raises(SystemExit):
             execute_out(make_args("*"))

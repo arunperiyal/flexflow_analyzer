@@ -46,7 +46,7 @@ saved, so they cannot go stale).
     Keep ## Log a top-level section; lines go at its end.
 
 {Colors.BOLD}'*':{Colors.RESET}
-    One line per case in .cases: its state and last log line.
+    One line per case in .cases.yml: its state and last log line.
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
     case status CS4SG3U6P0

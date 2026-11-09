@@ -181,7 +181,7 @@ class FieldCommand(BaseCommand):
             ('iso', 'Isosurface of a scalar'), ('slice', 'A cut plane, or a series of them'),
             ('colorbar', 'The colour scale on its own'))
         case_arg(render_parser, help='Case directory path, or * for every '
-                                     'case in the .cases registry')
+                                     'case in the .cases.yml registry')
         render_parser.add_argument('-v', '--verbose', action='store_true',
                                    help='Enable verbose output')
         render_parser.add_argument('-h', '--help', action='store_true',

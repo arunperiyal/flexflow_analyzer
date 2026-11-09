@@ -8,6 +8,7 @@ import pytest
 from rich.console import Console
 
 from shellkit import Runtime
+from registry_files import write_registry
 
 
 @pytest.fixture
@@ -193,8 +194,8 @@ def registry(case, tmp_path):
     c2.mkdir(parents=True)
     for t in range(50, 301, 50):
         (c2 / f'slice_xVor_{t}.png').write_text('x')
-    (tmp_path / 'work' / '.cases').write_text(json.dumps(
-        [{'name': n, 'path': str(tmp_path / 'work' / n)} for n in ('C1', 'C2', 'C3')]))
+    write_registry(tmp_path / 'work', 
+        [{'name': n, 'path': str(tmp_path / 'work' / n)} for n in ('C1', 'C2', 'C3')])
     return tmp_path / 'work'
 
 

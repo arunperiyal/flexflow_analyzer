@@ -11,6 +11,7 @@ import pytest
 from src.commands.data import shared
 from src.commands.data.stats_impl.command import execute_statistics
 from src.commands.data.table_impl.command import execute_table
+from registry_files import write_registry
 
 
 def _othd(n_steps):
@@ -88,8 +89,8 @@ def test_bare_output_names_every_variable(case):
 def test_bare_output_with_star_writes_into_each_case(tmp_path, monkeypatch):
     for name in ("A", "B"):
         _case(tmp_path, name)
-    (tmp_path / ".cases").write_text(json.dumps(
-        [{"name": n, "path": str(tmp_path / n)} for n in ("A", "B")]))
+    write_registry(tmp_path, 
+        [{"name": n, "path": str(tmp_path / n)} for n in ("A", "B")])
     monkeypatch.chdir(tmp_path)
     execute_table(args(case="*", var=["dy"], output=True))
     assert (tmp_path / "A/data_tables/dy.csv").exists()

@@ -105,7 +105,7 @@ def _get_case_name(args) -> Optional[str]:
 
 def _execute_check_on_all_cases(args, do_run, do_history, do_config, do_plt, do_def, do_out,
                                 freq=None, t1=None, t2=None, history_parts=None):
-    """Execute check on all cases from .cases file."""
+    """Execute check on all cases from .cases.yml file."""
     from src.cli.context import current_dir
 
     base_dir = current_dir()
@@ -113,7 +113,7 @@ def _execute_check_on_all_cases(args, do_run, do_history, do_config, do_plt, do_
     # Load cases
     cases = load_cases_from_directory(base_dir)
     if not cases:
-        print(f"Error: No cases found in .cases file or file does not exist")
+        print(f"Error: No cases found in .cases.yml file or file does not exist")
         return
 
     console = Console()
