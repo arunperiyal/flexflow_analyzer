@@ -441,6 +441,45 @@ class CaseOrganizer(HistoryMixin):
         for output_dir in output_dirs:
             self._analyze_single_output_dir(output_dir, problem, freq, keep_interval, t1, t2)
 
+    def _restart_points(self, rst_files: List[Path], problem: str) -> Dict[int, str]:
+        """The .rst steps that stay whatever --keep-freq says, with why.
+
+        - restartTsId in simflow.config: the step the next (or a queued) run
+          resumes from -- `run main restart` writes it before submitting.
+          Deleting its set makes that restart fail, and it is seldom on the
+          keep grid (resume from 8250 with --keep-freq 500).
+        - the newest complete set (all nsg parts): the only way to resume if
+          the current run dies.
+        - the newest step, when it is not complete: the solver may still be
+          writing it.
+        Steps are kept even outside --t1/--t2.
+        """
+        keep: Dict[int, str] = {}
+        cfg = self.case.config
+        try:
+            restart = int(str(cfg.get('restartTsId', '')).strip())
+            keep[restart] = "restartTsId in simflow.config (where a restart resumes)"
+        except ValueError:
+            pass
+        parts: Dict[int, int] = {}
+        for f in rst_files:
+            step = self._extract_step_from_filename(f.name, problem)
+            if step is not None:
+                parts[step] = parts.get(step, 0) + 1
+        if parts:
+            try:
+                nsg = int(str(cfg.get('nsg', '')).strip())
+            except ValueError:
+                nsg = None
+            complete = [t for t, n in parts.items() if nsg is None or n == nsg]
+            if complete:
+                keep.setdefault(max(complete), "newest complete restart set")
+            newest = max(parts)
+            if newest not in complete:
+                keep.setdefault(newest, f"newest step, {parts[newest]} of {nsg} parts "
+                                        f"(may still be being written)")
+        return keep
+
     def _find_output_directories(self) -> List[Path]:
         """Find output directories from simflow.config."""
         run_dir = self._get_run_dir_path()
@@ -474,6 +513,10 @@ class CaseOrganizer(HistoryMixin):
         binary_dir = self.case_dir / 'binary'
         no_plt = set()          # steps whose .out stay: nothing has converted them
         all_out = getattr(self.args, 'all_out', False)
+        protected = self._restart_points(rst_files, problem)
+        for step, why in sorted(protected.items()):
+            if any(self._extract_step_from_filename(f.name, problem) == step for f in rst_files):
+                self.console.print(f"  Keeping .rst of step {step}: {why}")
 
         for file in out_files + rst_files:
             step = self._extract_step_from_filename(file.name, problem)
@@ -491,6 +534,8 @@ class CaseOrganizer(HistoryMixin):
                 if not delete:
                     no_plt.add(step)
                 reason = f"step {step} has {plt}" if converted else "--all-out"
+            elif step in protected:
+                delete = False
             else:
                 delete = step % keep_interval != 0
                 reason = f"step {step} not multiple of {keep_interval}"

@@ -78,7 +78,10 @@ Organize and clean up case directories. Pick one subcommand.
         Remove intermediate .out/.rst files from the run directory:
           • .rst (restart points): keeps the steps divisible by
             --keep-freq (default: 10 * freq, freq from outFreq in
-            simflow.config or auto-detected)
+            simflow.config or auto-detected), and always: the step of
+            restartTsId in simflow.config (where a restart resumes), the
+            newest complete set (all nsg parts), and a newest set that
+            is still incomplete
           • .out: deletes every step whose <problem>.<step>.plt exists
             (binary/ or run dir), keep-freq steps too -- a restart does
             not read .out. Steps with no .plt yet keep their .out.
