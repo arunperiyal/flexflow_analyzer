@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>auto Command Flow</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column; diagrams sit on a fixed light "plot paper" panel so mermaid reads in both themes */
+:root {
+  --bg: #f5f7f7;
+  --surface: #ffffff;
+  --fg: #1b2426;
+  --muted: #5a6a6e;
+  --line: #d5dee0;
+  --accent: #0f6b74;
+  --paper: #fbfcfc;
+  --stop: #a3271f;
+  --wait: #8a5a00;
+  --ok: #1d6b3a;
+  --del: #8c2a5c;
+  --chip-stop: #f8e1de;
+  --chip-wait: #fbefd2;
+  --chip-ok: #ddf1e3;
+  --chip-del: #f4dfea;
+  --display: "IBM Plex Sans Condensed", "Arial Narrow", sans-serif;
+  --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111719; --surface: #182124; --fg: #e3ebec; --muted: #9aaeb2; --line: #2b383c;
+    --accent: #5cc3cc; --paper: #f3f6f6;
+    --stop: #f0948c; --wait: #e8bf6a; --ok: #7fd49c; --del: #e79cc4;
+    --chip-stop: #3a1d1b; --chip-wait: #36290f; --chip-ok: #15301f; --chip-del: #351d2b;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111719; --surface: #182124; --fg: #e3ebec; --muted: #9aaeb2; --line: #2b383c;
+  --accent: #5cc3cc; --paper: #f3f6f6;
+  --stop: #f0948c; --wait: #e8bf6a; --ok: #7fd49c; --del: #e79cc4;
+  --chip-stop: #3a1d1b; --chip-wait: #36290f; --chip-ok: #15301f; --chip-del: #351d2b;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 64px;
+}
+main { max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 40px; }
+header { display: flex; flex-direction: column; gap: 8px; max-width: 70ch; }
+.kicker { font-family: var(--mono); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
+h1, h2, h3 { font-family: var(--display); font-weight: 600; line-height: 1.2; text-wrap: balance; margin: 0; }
+h1 { font-size: 2.1rem; }
+h2 { font-size: 1.45rem; }
+h3 { font-size: 1.1rem; }
+p { margin: 0; max-width: 70ch; }
+code { font-family: var(--mono); font-size: 0.88em; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+section { display: flex; flex-direction: column; gap: 14px; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 13px; color: var(--muted); }
+.chip { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 12px; padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
+.chip.stop { background: var(--chip-stop); color: var(--stop); }
+.chip.wait { background: var(--chip-wait); color: var(--wait); }
+.chip.ok { background: var(--chip-ok); color: var(--ok); }
+.chip.del { background: var(--chip-del); color: var(--del); }
+.toc { display: flex; flex-wrap: wrap; gap: 8px; }
+.toc a { font-family: var(--mono); font-size: 13px; color: var(--accent); text-decoration: none; border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; background: var(--surface); }
+.toc a:hover, .toc a:focus-visible { border-color: var(--accent); outline: none; }
+.diagram { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 16px; overflow-x: auto; }
+.diagram pre.mermaid { margin: 0; background: transparent; color: #1b2426; font-family: var(--body); display: flex; justify-content: center; min-width: 560px; }
+.note { font-size: 14px; color: var(--muted); }
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; min-width: 760px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+th { font-family: var(--display); font-weight: 600; font-size: 13px; letter-spacing: 0.03em; color: var(--muted); background: var(--bg); }
+tr:last-child td { border-bottom: 0; }
+td.case { font-family: var(--mono); font-weight: 500; white-space: nowrap; }
+td .steps { font-family: var(--mono); font-size: 13px; font-variant-numeric: tabular-nums; }
+ul.check { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; max-width: 75ch; }
+.cmds { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.7; margin: 0; }
+.cmds span { color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+
+<main>
+  <header>
+    <div class="kicker">flexflow · design review · 2026-11-09</div>
+    <h1>auto command flow</h1>
+    <p>What one <code>auto apply</code> does in a case folder, drawn from your manual workflow. Every action waits for a check; the colours say what happens when a check fails. Below the charts, the same rules are applied to your seven <code>bare</code> cases as the probe saw them.</p>
+    <div class="legend">
+      <span><span class="chip ok">action</span> runs</span>
+      <span><span class="chip wait">wait</span> nothing now, next run</span>
+      <span><span class="chip stop">needs you</span> listed for you, no guessing</span>
+      <span><span class="chip del">delete</span> only after you agree at the start</span>
+    </div>
+    <nav class="toc" aria-label="Sections">
+      <a href="#run">1 · one run</a>
+      <a href="#history">2 · history</a>
+      <a href="#post">3 · new post job</a>
+      <a href="#after">4 · after a post job</a>
+      <a href="#cases">5 · your cases</a>
+      <a href="#review">6 · what to check</a>
+    </nav>
+  </header>
+
+  <section id="run">
+    <h2>1 · One run of <code>auto apply</code></h2>
+    <p>Checks that cover the whole folder come first. If the queue can't be read, nothing happens to any case, because a case that looks idle might be running.</p>
+    <div class="diagram">
+<pre class="mermaid">
+flowchart TD
+  A(["auto apply"]) --> B{".auto.conf in this folder?"}
+  B -->|no| X1["Stop: say which settings are missing"]
+  B -->|yes| C{"squeue and sacct answer cleanly?"}
+  C -->|"no: error, or anything on stderr"| X2["Stop: no action on any case"]
+  C -->|yes| D{"cloud login: key through the alias, else password from remotes.json"}
+  D -->|fails| OFF["Offline: history archive, clean, compile only&lt;br/&gt;no post decisions, uploads or deletions"]
+  D -->|ok| E["Read each case: config, files, jobs by WorkDir,&lt;br/&gt;cloud listing and the md5 ledger"]
+  OFF --> E
+  E --> F["Show the plan: actions, deletions and the check each waits for,&lt;br/&gt;upload size and time at login-node speed"]
+  F --> G{"Ask once: delete when checks pass?"}
+  G -->|yes| H["For each case, in order:&lt;br/&gt;2 history, 4 finished post, 3 new post, input and program files"]
+  G -->|no| H2["Same, with every deletion skipped"]
+  H --> I(["Summary, journal, exit code 0 or 1"])
+  H2 --> I
+  classDef stop fill:#f8e1de,stroke:#a3271f,color:#5c1510
+  classDef wait fill:#fbefd2,stroke:#8a5a00,color:#4a3000
+  classDef ok fill:#ddf1e3,stroke:#1d6b3a,color:#0f3a1f
+  class X1,X2 stop
+  class OFF wait
+  class E,F,H,H2 ok
+</pre>
+    </div>
+  </section>
+
+  <section id="history">
+    <h2>2 · History (your steps 1–5, 15)</h2>
+    <p>The run-directory history is only moved when no main job of the case is running or queued. A running solver keeps writing into the moved file, and a queued job's <code>mainFlex.sh</code> archives the same file when it starts.</p>
+    <div class="diagram">
+<pre class="mermaid">
+flowchart TD
+  A(["Case"]) --> B{"Main job of this case running or pending?&lt;br/&gt;matched by WorkDir, not job name"}
+  B -->|yes| S["Leave the run-dir history where it is"]
+  S --> U0["Upload a snapshot of the live .othd and .oisd"]
+  B -->|no| C{".othd or .oisd in the run directory?"}
+  C -->|no| D
+  C -->|yes| C2{"Unchanged for 10 minutes?"}
+  C2 -->|no| W["Wait: next run"]
+  C2 -->|yes| H1["organise history --update&lt;br/&gt;run dir to archive/"]
+  H1 --> D{"An archive/ part not yet in cleaned/?"}
+  D -->|yes| H2["organise history --clean --compile"]
+  D -->|no| H3
+  H2 --> H3["Upload archive/, cleaned/, compiled file&lt;br/&gt;only what the md5 ledger lacks"]
+  classDef wait fill:#fbefd2,stroke:#8a5a00,color:#4a3000
+  classDef ok fill:#ddf1e3,stroke:#1d6b3a,color:#0f3a1f
+  class W wait
+  class U0,H1,H2,H3 ok
+</pre>
+    </div>
+  </section>
+
+  <section id="post">
+    <h2>3 · Deciding a new post job (steps 6, 16)</h2>
+    <p>The unit is a run. The cloud decides whether it needs converting; the inputs (<code>.out</code> or ASCII PLT) decide whether it can be. A running or queued case can get a post job too.</p>
+    <div class="diagram">
+<pre class="mermaid">
+flowchart TD
+  A(["Case"]) --> P0{"Post job of this case pending or running?"}
+  P0 -->|yes| W["Wait for it"]
+  P0 -->|no| R["The run: .othd in the run dir,&lt;br/&gt;else the newest archive/ or cleaned/ part"]
+  R --> T["t1..t2 = its first and last tsId on the outFreq grid"]
+  T --> T2["Cut t2 to the last settled step&lt;br/&gt;and to a queued restart's restartTsId"]
+  T2 --> Q{"Binary PLTs of t1..t2 on cloud?"}
+  Q -->|all| DONE["Nothing to post"]
+  Q -->|none| S1["Post from t1"]
+  Q -->|"unbroken t1..k"| S2["Post from k + outFreq"]
+  Q -->|"some, with holes"| NY1["Needs you: the missing steps"]
+  S1 --> I{"Every step to post has all nsg .out parts,&lt;br/&gt;or its ASCII .plt?"}
+  S2 --> I
+  I -->|no| NY2["Needs you: no PLT on cloud and no .out here"]
+  I -->|yes| QU{"Room in the 2 TB quota for the ASCII PLTs?"}
+  QU -->|no| NY3["Needs you: disk quota"]
+  QU -->|yes| SUB["run post full, or convert when every step has its ASCII .plt&lt;br/&gt;record the job id and range"]
+  classDef stop fill:#f8e1de,stroke:#a3271f,color:#5c1510
+  classDef wait fill:#fbefd2,stroke:#8a5a00,color:#4a3000
+  classDef ok fill:#ddf1e3,stroke:#1d6b3a,color:#0f3a1f
+  class NY1,NY2,NY3 stop
+  class W,DONE wait
+  class S1,S2,SUB ok
+</pre>
+    </div>
+    <p class="note">"Settled": all <code>nsg</code> parts of a step are there and non-empty, the solver has started a later step, and nothing has touched them for 10 minutes. The last tsId in a live <code>.othd</code> is the step being computed, so it never counts.</p>
+  </section>
+
+  <section id="after">
+    <h2>4 · After a post job (steps 7–11, 17)</h2>
+    <p>Nothing local is deleted until its copy on cloud has the same md5. ASCII PLTs go last of the PLTs, so a binary file that fails to upload can still be made again.</p>
+    <div class="diagram">
+<pre class="mermaid">
+flowchart TD
+  A(["Case with a recorded post job"]) --> B{"Its state in sacct"}
+  B -->|"pending or running"| W["Wait"]
+  B -->|"failed, timeout, cancelled"| NY1["Needs you: post job ended badly"]
+  B -->|completed| C{"Every step has a valid binary PLT?&lt;br/&gt;header size, same size as the rest, newer than its .out"}
+  C -->|no| NY2["Needs you: the bad steps"]
+  C -->|yes| U1["Upload binary PLTs: write .part, then rename"]
+  U1 --> V{"md5 on cloud = md5 here?"}
+  V -->|no| RE["Send again once; still wrong: needs you"]
+  V -->|yes| DEL{"Deleting agreed at the start?"}
+  DEL -->|no| RST
+  DEL -->|yes| C1["Delete ASCII PLTs of verified steps"]
+  C1 --> C2["Delete binary PLTs verified on cloud"]
+  C2 --> C3["Delete .out of verified steps&lt;br/&gt;never the step being written, never past a queued restart"]
+  C3 --> C4["Thin .rst to every 500&lt;br/&gt;keep the queued restart's set and the newest complete set"]
+  C4 --> RST{"Newest complete .rst set on cloud?"}
+  RST -->|yes| E(["Done"])
+  RST -->|no| U2["Upload it, md5 check"] --> E
+  classDef stop fill:#f8e1de,stroke:#a3271f,color:#5c1510
+  classDef wait fill:#fbefd2,stroke:#8a5a00,color:#4a3000
+  classDef ok fill:#ddf1e3,stroke:#1d6b3a,color:#0f3a1f
+  classDef del fill:#f4dfea,stroke:#8c2a5c,color:#4d1231
+  class NY1,NY2,RE stop
+  class W wait
+  class U1,U2 ok
+  class C1,C2,C3,C4 del
+</pre>
+    </div>
+  </section>
+
+  <section id="cases">
+    <h2>5 · Your <code>bare</code> cases, run through the flow</h2>
+    <p>From the probe on 9 Nov, 17:41. What's on cloud wasn't checked yet, so the post column says what happens for the likely cloud state. Check each row against what you would have done by hand.</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>case</th><th>what the probe saw</th><th>history</th><th>post</th><th>clean-up and flags</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="case">BR0SG0U1P0</td>
+            <td>main 1223469 <span class="chip wait">PENDING</span>, resumes from 5740. outFreq 5. <span class="steps">.out 5705–5755</span>, <span class="steps">binary/riser.5755.plt</span></td>
+            <td>Left in place (job queued); upload parts in <code>archive/</code>, <code>cleaned/</code></td>
+            <td>Run = <code>riser3</code> part, cut at <span class="steps">5740</span>. If cloud holds up to 5700: <span class="chip ok">post 5705–5740</span></td>
+            <td><span class="steps">5745–5755</span> and <span class="steps">riser.5755.plt</span> will be recomputed: kept, not uploaded, not deleted. Keep the <span class="steps">.rst 5740</span> set.</td>
+          </tr>
+          <tr>
+            <td class="case">BR0SG0U2P0</td>
+            <td>main 1220727 <span class="chip ok">RUNNING</span>, live <code>.othd</code> at 4571. outFreq 50. <span class="steps">.out 4050–4550</span>, binary/ empty</td>
+            <td>Left in place; upload a snapshot of the live files</td>
+            <td>Run = live <code>.othd</code>, <span class="steps">4050–4550</span> (4571 is being computed). If none on cloud: <span class="chip ok">post 4050–4550</span>, 11 steps</td>
+            <td><span class="chip stop">flag</span> <code>postFlex.sh</code> is named <code>postBR0SG0U1P0</code></td>
+          </tr>
+          <tr>
+            <td class="case">BR0SG0U3P0</td>
+            <td>No job. Reached 9000 = maxTimeSteps. <span class="steps">.out 8950–9000</span>, binary/ empty</td>
+            <td>Nothing in the run dir; upload <code>cleaned/</code> and compiled file if missing</td>
+            <td>If cloud holds an unbroken run up to 8900: <span class="chip ok">post 8950–9000</span>. If anything earlier is missing: <span class="chip stop">needs you</span> (no <code>.out</code> left for it)</td>
+            <td>After upload: delete <span class="steps">.out 8950–9000</span>; newest <span class="steps">.rst 9000</span> set to cloud</td>
+          </tr>
+          <tr>
+            <td class="case">BR0SG0U4P0</td>
+            <td>main 1225965 <span class="chip wait">PENDING</span>, resumes from 8250. <span class="steps">.out 8050–8300</span>, <span class="steps">binary/riser.8300.plt</span>; post 1225966 completed</td>
+            <td>Left in place (job queued)</td>
+            <td>Cut at <span class="steps">8250</span>. If cloud holds up to 8000: <span class="chip ok">post 8050–8250</span></td>
+            <td><span class="steps">8300</span> will be recomputed: kept. <span class="chip del">.rst</span> thinning to every 500 keeps <span class="steps">8250</span>, which <code>--keep-freq 500</code> alone would delete</td>
+          </tr>
+          <tr>
+            <td class="case">BR0SG0U5P0</td>
+            <td>No job. Last <span class="steps">.out 8150</span>, 32 days old, of 9000. <span class="steps">.out 8050–8150</span></td>
+            <td>Upload <code>cleaned/</code> and compiled file if missing</td>
+            <td>If cloud holds up to 8000: <span class="chip ok">post 8050–8150</span></td>
+            <td><span class="chip stop">needs you</span> stopped short of maxTimeSteps with nothing queued</td>
+          </tr>
+          <tr>
+            <td class="case">BR0SG0U6P0</td>
+            <td>main 1222068 <span class="chip wait">PENDING</span>, resumes from 6500. No <code>.out</code>. <span class="steps">.rst 1000–7000</span></td>
+            <td>Left in place</td>
+            <td>Nothing to convert. If PLTs of its run are missing on cloud: <span class="chip stop">needs you</span> (no PLT on cloud, no <code>.out</code>)</td>
+            <td>Keep the <span class="steps">.rst 6500</span> set for the queued restart</td>
+          </tr>
+          <tr>
+            <td class="case">BR0SG0U7P0</td>
+            <td>main 1220127 <span class="chip stop">FAILED</span> after 16 s. No output</td>
+            <td>Nothing</td>
+            <td>Nothing</td>
+            <td><span class="chip stop">needs you</span> main failed at start; <code>postFlex.sh</code> is named <code>postBR0SG0U6P0</code></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="review">
+    <h2>6 · What to check</h2>
+    <ul class="check">
+      <li>Would you have made the same post range for each case above, especially the ones cut at a queued restart (U1P0, U4P0)?</li>
+      <li>Is "wait for 10 minutes without change" long enough before moving run-dir history, and before treating a step as settled?</li>
+      <li>Should a case with holes on cloud (some PLTs present, some missing) really stop at <em>needs you</em>, or should <code>auto</code> post the missing blocks?</li>
+      <li>Are the <code>.rst</code> sets kept by thinning the right ones: every 500, the queued restart's set, and the newest complete set?</li>
+      <li>Is there any step of your manual routine missing from the charts?</li>
+    </ul>
+    <p class="note">The commands the charts belong to:</p>
+<pre class="cmds">auto show [case]        <span># the plan, changes nothing</span>
+auto apply [case]       <span># do it once; asks once before deleting (--yes skips)</span>
+auto log [case]         <span># what earlier runs did</span>
+auto status [case]      <span># each case's stage</span>
+auto verified [case]    <span># files whose cloud copy matches md5</span>
+auto config             <span># .auto.conf: cloud path, keep_rst 500, disk_alert</span></pre>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({ startOnLoad: true, theme: "default", securityLevel: "loose" });</script>
+</body>
+</html>
