@@ -197,8 +197,9 @@ const FlowChart = (() => {
       title: 'Submit post-processing',
       command: 'case check out --t1 <first> --t2 <last>\nuse t1:<first> t2:<last>\nrun post full',
       detail: `t1 and t2 are the first and last tsId of the newest part in
-        othd_files/archive/, or the window picked on the right for a running
-        case.
+        othd_files/archive/, never cleaned/: --clean rewrites a cleaned part
+        and cuts the steps a later run computed again. For a running case,
+        the window picked on the right.
 
         Before submitting, check two things. Every step needs its .out files
         ("case check out"): a post job fails without them. And the PLTs of
@@ -244,15 +245,15 @@ const FlowChart = (() => {
     {
       id: 'cleanup', kind: 'step', col: 1, row: 20, label: ['Delete what is', 'safely copied'],
       title: 'Delete what is safely copied',
-      command: 'case organise output --keep-freq 500\ncase organise plt --delete-ascii\ncase organise plt --delete-binary',
+      command: 'case organise output --keep-freq <N>\ncase organise plt --delete-ascii\ncase organise plt --delete-binary',
       detail: `Only after the upload check above: --delete-binary does not
         look at the remote.
 
         In this order. "organise output" deletes each step's .out once its
         .plt exists, so it has to run while the PLTs are still here; it keeps
-        the .rst of the steps divisible by 500, plus the restart point in
-        simflow.config, the newest complete set and a set still being
-        written. --delete-ascii deletes the ASCII PLTs that have a newer
+        the .rst of the steps divisible by N (your choice, e.g. 500), plus
+        the restart point in simflow.config, the newest complete set and a
+        set still being written. --delete-ascii deletes the ASCII PLTs that have a newer
         binary copy, so it goes before --delete-binary.`,
     },
     {
@@ -310,7 +311,7 @@ const FlowChart = (() => {
         long that takes. It changes nothing.
 
         Settings live in .auto.conf next to .cases: the remote and the
-        folder there, and the .rst grid to keep (500).`,
+        folder there, and the .rst grid to keep (keep_rst, your value).`,
     },
     {
       id: 'autoApply', kind: 'step', col: 3, row: 12, label: ['Carry it out'], planned: true,

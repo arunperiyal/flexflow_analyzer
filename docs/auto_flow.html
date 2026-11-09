@@ -166,10 +166,12 @@ flowchart TD
     <div class="diagram">
 <pre class="mermaid">
 flowchart TD
-  A(["Case"]) --> P0{"Post job of this case pending or running?"}
+  A(["Case"]) --> P0{"Post job of this case pending, running or completing?"}
   P0 -->|yes| W["Wait for it"]
-  P0 -->|no| R["The run: .othd in the run dir,&lt;br/&gt;else the newest archive/ or cleaned/ part"]
-  R --> T["t1..t2 = its first and last tsId on the outFreq grid"]
+  P0 -->|no| R["Look for the run: .othd in the run dir,&lt;br/&gt;else the newest archive/ part&lt;br/&gt;never cleaned/: --clean rewrites it"]
+  R --> RF{"Found?"}
+  RF -->|no| NY0["Needs you: no archive/ part to take the window from"]
+  RF -->|yes| T["t1..t2 = its first and last tsId on the outFreq grid"]
   T --> T2["Cut t2 to the last settled step&lt;br/&gt;and to a queued restart's restartTsId"]
   T2 --> Q{"Binary PLTs of t1..t2 on cloud?"}
   Q -->|all| DONE["Nothing to post"]
@@ -185,7 +187,7 @@ flowchart TD
   classDef stop fill:#f8e1de,stroke:#a3271f,color:#5c1510
   classDef wait fill:#fbefd2,stroke:#8a5a00,color:#4a3000
   classDef ok fill:#ddf1e3,stroke:#1d6b3a,color:#0f3a1f
-  class NY1,NY2,NY3 stop
+  class NY0,NY1,NY2,NY3 stop
   class W,DONE wait
   class S1,S2,SUB ok
 </pre>
@@ -212,7 +214,7 @@ flowchart TD
   DEL -->|yes| C1["Delete ASCII PLTs of verified steps"]
   C1 --> C2["Delete binary PLTs verified on cloud"]
   C2 --> C3["Delete .out of verified steps&lt;br/&gt;never the step being written, never past a queued restart"]
-  C3 --> C4["Thin .rst to every 500&lt;br/&gt;keep the queued restart's set and the newest complete set"]
+  C3 --> C4["Thin .rst to the keep_rst grid you set in .auto.conf&lt;br/&gt;keep the queued restart's set and the newest complete set"]
   C4 --> RST{"Newest complete .rst set on cloud?"}
   RST -->|yes| E(["Done"])
   RST -->|no| U2["Upload it, md5 check"] --> E
@@ -255,28 +257,28 @@ flowchart TD
             <td class="case">BR0SG0U3P0</td>
             <td>No job. Reached 9000 = maxTimeSteps. <span class="steps">.out 8950–9000</span>, binary/ empty</td>
             <td>Nothing in the run dir; upload <code>cleaned/</code> and compiled file if missing</td>
-            <td>If cloud holds an unbroken run up to 8900: <span class="chip ok">post 8950–9000</span>. If anything earlier is missing: <span class="chip stop">needs you</span> (no <code>.out</code> left for it)</td>
+            <td>No <code>archive/</code> part (pruned) and no run-dir <code>.othd</code>: <span class="chip stop">needs you</span>. By hand: <code>run post full</code> for <span class="steps">8950–9000</span> if cloud lacks them</td>
             <td>After upload: delete <span class="steps">.out 8950–9000</span>; newest <span class="steps">.rst 9000</span> set to cloud</td>
           </tr>
           <tr>
             <td class="case">BR0SG0U4P0</td>
             <td>main 1225965 <span class="chip wait">PENDING</span>, resumes from 8250. <span class="steps">.out 8050–8300</span>, <span class="steps">binary/riser.8300.plt</span>; post 1225966 completed</td>
             <td>Left in place (job queued)</td>
-            <td>Cut at <span class="steps">8250</span>. If cloud holds up to 8000: <span class="chip ok">post 8050–8250</span></td>
-            <td><span class="steps">8300</span> will be recomputed: kept. <span class="chip del">.rst</span> thinning to every 500 keeps <span class="steps">8250</span>, which <code>--keep-freq 500</code> alone would delete</td>
+            <td>Run = <code>archive/riser2</code>, cut at <span class="steps">8250</span>. If cloud holds up to 8000: <span class="chip ok">post 8050–8250</span></td>
+            <td><span class="steps">8300</span> will be recomputed: kept. <span class="chip del">.rst</span> thinning (with <code>keep_rst = 500</code>) still keeps <span class="steps">8250</span>, the queued restart's set</td>
           </tr>
           <tr>
             <td class="case">BR0SG0U5P0</td>
             <td>No job. Last <span class="steps">.out 8150</span>, 32 days old, of 9000. <span class="steps">.out 8050–8150</span></td>
             <td>Upload <code>cleaned/</code> and compiled file if missing</td>
-            <td>If cloud holds up to 8000: <span class="chip ok">post 8050–8150</span></td>
+            <td>No <code>archive/</code> part (pruned) and no run-dir <code>.othd</code>: <span class="chip stop">needs you</span></td>
             <td><span class="chip stop">needs you</span> stopped short of maxTimeSteps with nothing queued</td>
           </tr>
           <tr>
             <td class="case">BR0SG0U6P0</td>
             <td>main 1222068 <span class="chip wait">PENDING</span>, resumes from 6500. No <code>.out</code>. <span class="steps">.rst 1000–7000</span></td>
             <td>Left in place</td>
-            <td>Nothing to convert. If PLTs of its run are missing on cloud: <span class="chip stop">needs you</span> (no PLT on cloud, no <code>.out</code>)</td>
+            <td>Nothing to convert (no <code>.out</code>, no <code>archive/</code> part)</td>
             <td>Keep the <span class="steps">.rst 6500</span> set for the queued restart</td>
           </tr>
           <tr>
@@ -297,7 +299,7 @@ flowchart TD
       <li>Would you have made the same post range for each case above, especially the ones cut at a queued restart (U1P0, U4P0)?</li>
       <li>Is 10 minutes without change long enough before a step's <code>.out</code> counts as settled on a running case?</li>
       <li>Should a case with holes on cloud (some PLTs present, some missing) really stop at <em>needs you</em>, or should <code>auto</code> post the missing blocks?</li>
-      <li>Are the <code>.rst</code> sets kept by thinning the right ones: every 500, the queued restart's set, and the newest complete set?</li>
+      <li>Are the <code>.rst</code> sets kept by thinning the right ones: your <code>keep_rst</code> grid, the queued restart's set, and the newest complete set?</li>
       <li>Is there any step of your manual routine missing from the charts?</li>
     </ul>
     <p class="note">The commands the charts belong to:</p>
@@ -306,7 +308,7 @@ auto apply [case]       <span># do it once; asks once before deleting (--yes ski
 auto log [case]         <span># what earlier runs did</span>
 auto status [case]      <span># each case's stage</span>
 auto verified [case]    <span># files whose cloud copy matches md5</span>
-auto config             <span># .auto.conf: cloud path, keep_rst 500, disk_alert</span></pre>
+auto config             <span># .auto.conf: cloud path, keep_rst, disk_alert</span></pre>
   </section>
 </main>
 
