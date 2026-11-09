@@ -88,10 +88,13 @@ def check_slurm_available():
 # Queue data fetch + parse
 # ---------------------------------------------------------------------------
 
-# squeue format fields (pipe-delimited to allow spaces in Reason)
-_SQUEUE_FMT = '%i|%j|%T|%M|%D|%P|%C|%m|%V|%R|%E'
+# squeue format fields (pipe-delimited to allow spaces in Reason). %Z, the
+# working directory, goes last and saves one scontrol call per job for --by-dir
+# and find; output without it (11 fields) still parses, with workdir unknown.
+_SQUEUE_FMT = '%i|%j|%T|%M|%D|%P|%C|%m|%V|%R|%E|%Z'
 _SQUEUE_COLS = ['jobid', 'name', 'state', 'time', 'nodes',
-                'partition', 'cpus', 'memory', 'submit', 'reason', 'dependency']
+                'partition', 'cpus', 'memory', 'submit', 'reason', 'dependency',
+                'workdir']
 
 _SORT_FIELD_ALIASES = {
     'id': 'jobid',
@@ -112,19 +115,42 @@ _SORT_FIELD_ALIASES = {
 
 
 def get_queue_data(show_all=False):
-    """Run squeue and return raw stdout."""
+    """Run squeue and return raw stdout.
+
+    Raises QueueError when squeue fails -- exit code or anything on stderr,
+    as squeue reports some errors with exit 0 -- so a failure is never shown
+    as an empty queue.
+    """
+    from src.core.slurm import QueueError
     cmd = ['squeue', '--format', _SQUEUE_FMT, '--noheader']
     if not show_all:
         username = os.environ.get('USER', '')
         if username:
             cmd.extend(['-u', username])
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        return result.stdout
-    except subprocess.CalledProcessError as e:
-        return ''
-    except Exception:
-        return ''
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+    except subprocess.TimeoutExpired:
+        raise QueueError("squeue did not answer within 30 s")
+    except OSError as e:
+        raise QueueError(f"could not run squeue: {e}")
+    err = result.stderr.strip()
+    if result.returncode != 0 or err:
+        raise QueueError("squeue failed: " + (err.splitlines()[0] if err else f"exit {result.returncode}"))
+    return result.stdout
+
+
+def _read_jobs(show_all: bool):
+    """Parsed queue, or None after printing why squeue could not be read."""
+    from src.core.slurm import QueueError
+    try:
+        return parse_queue_output(get_queue_data(show_all))
+    except QueueError as e:
+        console = Console()
+        console.print()
+        console.print(f"[red]Error:[/red] {e}")
+        console.print("[dim]The queue could not be read, so it is not shown as empty.[/dim]")
+        console.print()
+        return None
 
 
 def parse_queue_output(output: str) -> list:
@@ -132,6 +158,8 @@ def parse_queue_output(output: str) -> list:
     jobs = []
     for line in output.strip().splitlines():
         parts = line.split('|', len(_SQUEUE_COLS) - 1)
+        if len(parts) == len(_SQUEUE_COLS) - 1:
+            parts.append('')            # no %Z column: workdir looked up later
         if len(parts) == len(_SQUEUE_COLS):
             job = {k: v.strip() for k, v in zip(_SQUEUE_COLS, parts)}
             job['memory_raw'] = job['memory']
@@ -139,7 +167,7 @@ def parse_queue_output(output: str) -> list:
             job['memory'] = _fmt_memory(job['memory'])
             job['submit'] = _fmt_submit_time(job['submit'])
             job['dependency'] = _fmt_dependency(job['dependency'])
-            job['workdir'] = None  # Will be fetched separately if needed
+            job['workdir'] = job['workdir'] or None  # else fetched by scontrol if needed
             jobs.append(job)
     return jobs
 
@@ -443,7 +471,9 @@ def create_queue_table(jobs: list) -> Table:
 # ---------------------------------------------------------------------------
 
 def show_queue(args):
-    jobs = parse_queue_output(get_queue_data(getattr(args, 'all', False)))
+    jobs = _read_jobs(getattr(args, 'all', False))
+    if jobs is None:
+        return
     _print_jobs(args, jobs)
 
 
@@ -467,7 +497,9 @@ def filter_jobs(jobs: list, key: str) -> list:
 
 
 def find_jobs(args, key: str):
-    jobs = parse_queue_output(get_queue_data(getattr(args, 'all', False)))
+    jobs = _read_jobs(getattr(args, 'all', False))
+    if jobs is None:
+        return
     jobs = filter_jobs(jobs, key)
     if not jobs:
         console = Console()
@@ -525,7 +557,13 @@ def watch_queue(args, interval: float = 10.0):
 
     try:
         def get_live_table():
-            jobs = parse_queue_output(get_queue_data(show_all))
+            from src.core.slurm import QueueError
+            try:
+                jobs = parse_queue_output(get_queue_data(show_all))
+            except QueueError as e:
+                return Panel(f"[red]{e}[/red]\n[dim]Trying again in {interval:g}s; "
+                             f"the queue is not shown as empty.[/dim]",
+                             title='[bold red]Queue not readable[/bold red]', box=box.ROUNDED)
             jobs = sort_jobs(jobs, sort_by)
             if not jobs:
                 return create_queue_table(jobs)

@@ -143,23 +143,35 @@ def _facts(case_dir: Path) -> Table:
         plt = _last_binary_plt_timestep(case_dir, problem)
         if plt is not None:
             grid.add_row('PLT', f"binary/ up to {plt}  [dim](case check plt for gaps)[/dim]")
-    jobs = _queued_jobs(case_dir.resolve().name)
+    jobs = _queued_jobs(case_dir)
     if jobs:
         grid.add_row('queue', escape(', '.join(jobs)))
     return grid
 
 
-def _queued_jobs(case_name: str):
-    """This case's jobs in the SLURM queue, as 'name id STATE'; [] without SLURM."""
-    if not shutil.which('squeue'):
+def _queued_jobs(case_dir):
+    """This case's jobs in the SLURM queue, as 'name id STATE'; [] without SLURM.
+
+    A job is the case's when it was submitted from the case directory (its
+    working directory), whatever it is called; a job named after another case
+    (a job script copied without renaming) is pointed out. When squeue fails,
+    that is said instead of showing no jobs.
+    """
+    from ....core import slurm
+    if not slurm.available():
         return []
     try:
-        out = subprocess.run(['squeue', '-h', '-u', os.environ.get('USER', ''),
-                              '-o', '%j %i %T'], capture_output=True, text=True,
-                             timeout=10).stdout
-    except (OSError, subprocess.SubprocessError):
-        return []
-    return [line.strip() for line in out.splitlines() if case_name in line.split(' ')[0]]
+        jobs = slurm.case_jobs(case_dir)
+    except slurm.QueueError as e:
+        return [f"could not read the queue: {e}"]
+    name = Path(case_dir).resolve().name
+    shown = []
+    for job in jobs:
+        text = f"{job.name} {job.jobid} {job.state}"
+        if job.kind != 'other' and not job.named_for(name):
+            text += f" (named for another case; expected {job.kind}{name})"
+        shown.append(text)
+    return shown
 
 
 # ---------------------------------------------------------------------------

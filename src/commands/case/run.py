@@ -202,24 +202,24 @@ class CaseRunCommand:
         return True
     
     def is_case_running(self):
-        """Check if this case is already running"""
-        case_name = self.case_dir.name
-        username = os.environ.get('USER', '')
-        
+        """Check if this case is already running.
+
+        A pre or main job submitted from this case directory counts, whatever
+        its name. When the queue cannot be read the answer is yes, so the case
+        is not submitted a second time on a guess.
+        """
+        from ...core import slurm
+
         # Method 1: Check SLURM queue
-        try:
-            result = subprocess.run(
-                ['squeue', '-u', username, '-h', '-o', '%j'],
-                capture_output=True, text=True, check=True
-            )
-            job_names = result.stdout.strip().split('\n')
-            
-            # Check for job names containing the case name
-            for job_name in job_names:
-                if case_name in job_name and ('main_' in job_name or 'pre_' in job_name):
-                    return True
-        except subprocess.CalledProcessError:
-            pass
+        if slurm.available():
+            try:
+                jobs = slurm.case_jobs(self.case_dir)
+            except slurm.QueueError as e:
+                print(f"Error: {e}")
+                print("Not submitting: the case may already be running.")
+                return True
+            if any(j.active and j.kind in ('main', 'pre') for j in jobs):
+                return True
         
         # Method 2: Check for active process
         try:
