@@ -140,25 +140,21 @@ flowchart TD
 
   <section id="history">
     <h2>2 · History (your steps 1–5, 15)</h2>
-    <p>The run-directory history is only moved when no main job of the case is running or queued. A running solver keeps writing into the moved file, and a queued job's <code>mainFlex.sh</code> archives the same file when it starts.</p>
+    <p>The run-directory history is only moved when no main job of the case is running, pending or completing. A running solver keeps writing into the moved file, and a queued job's <code>mainFlex.sh</code> archives the same file when it starts. The queue is read again just before the move, so a job submitted in between is caught.</p>
     <div class="diagram">
 <pre class="mermaid">
 flowchart TD
-  A(["Case"]) --> B{"Main job of this case running or pending?&lt;br/&gt;matched by WorkDir, not job name"}
+  A(["Case"]) --> B{"Main job of this case running, pending or completing?&lt;br/&gt;matched by WorkDir, not job name"}
   B -->|yes| S["Leave the run-dir history where it is"]
   S --> U0["Upload a snapshot of the live .othd and .oisd"]
   B -->|no| C{".othd or .oisd in the run directory?"}
   C -->|no| D
-  C -->|yes| C2{"Unchanged for 10 minutes?"}
-  C2 -->|no| W["Wait: next run"]
-  C2 -->|yes| H1["organise history --update&lt;br/&gt;run dir to archive/"]
+  C -->|yes| H1["Read the queue again, then&lt;br/&gt;organise history --update: run dir to archive/"]
   H1 --> D{"An archive/ part not yet in cleaned/?"}
   D -->|yes| H2["organise history --clean --compile"]
   D -->|no| H3
   H2 --> H3["Upload archive/, cleaned/, compiled file&lt;br/&gt;only what the md5 ledger lacks"]
-  classDef wait fill:#fbefd2,stroke:#8a5a00,color:#4a3000
   classDef ok fill:#ddf1e3,stroke:#1d6b3a,color:#0f3a1f
-  class W wait
   class U0,H1,H2,H3 ok
 </pre>
     </div>
@@ -204,7 +200,7 @@ flowchart TD
 <pre class="mermaid">
 flowchart TD
   A(["Case with a recorded post job"]) --> B{"Its state in sacct"}
-  B -->|"pending or running"| W["Wait"]
+  B -->|"pending, running or completing"| W["Wait"]
   B -->|"failed, timeout, cancelled"| NY1["Needs you: post job ended badly"]
   B -->|completed| C{"Every step has a valid binary PLT?&lt;br/&gt;header size, same size as the rest, newer than its .out"}
   C -->|no| NY2["Needs you: the bad steps"]
@@ -299,7 +295,7 @@ flowchart TD
     <h2>6 · What to check</h2>
     <ul class="check">
       <li>Would you have made the same post range for each case above, especially the ones cut at a queued restart (U1P0, U4P0)?</li>
-      <li>Is "wait for 10 minutes without change" long enough before moving run-dir history, and before treating a step as settled?</li>
+      <li>Is 10 minutes without change long enough before a step's <code>.out</code> counts as settled on a running case?</li>
       <li>Should a case with holes on cloud (some PLTs present, some missing) really stop at <em>needs you</em>, or should <code>auto</code> post the missing blocks?</li>
       <li>Are the <code>.rst</code> sets kept by thinning the right ones: every 500, the queued restart's set, and the newest complete set?</li>
       <li>Is there any step of your manual routine missing from the charts?</li>

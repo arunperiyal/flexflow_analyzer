@@ -132,8 +132,9 @@ const FlowChart = (() => {
         another case, which happens when a job script is copied without
         renaming it.
 
-        A running or queued case can still be post-processed (right). Its
-        history stays where it is until the run has ended.`,
+        A job that is COMPLETING (ending, still writing its files) counts
+        as running. A running or queued case can still be post-processed
+        (right). Its history stays where it is until the run has ended.`,
     },
     {
       id: 'liveWindow', kind: 'step', col: 2, row: 12, label: ['Window from the', 'live .othd'],
@@ -179,8 +180,9 @@ const FlowChart = (() => {
         later run computed again into cleaned/, and --compile joins them into
         one file.
 
-        Only when no main job of the case is running or queued: a queued
-        job's mainFlex.sh archives the same files when it starts.`,
+        Only when no main job of the case is running, queued or
+        completing: a queued job's mainFlex.sh archives the same files when
+        it starts.`,
     },
     {
       id: 'uploadHistory', kind: 'step', col: 1, row: 15, label: ['Upload the history'],

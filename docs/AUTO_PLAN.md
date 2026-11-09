@@ -540,7 +540,7 @@ case as far as its checks allow and records the stage in
 
 | stage | what | runs when (all of these hold) | command used |
 |---|---|---|---|
-| **H1 archive** | move run-dir history to `archive/` | no main job of the case is RUNNING or PENDING (squeue, by WorkDir); the live `.othd` hasn't changed for `settle_secs` | `case organise history --update` |
+| **H1 archive** | move run-dir history to `archive/` | no main job of the case is RUNNING, PENDING or COMPLETING (any active state; squeue, by WorkDir), checked again just before the move. No waiting on the file's mtime (13.9) | `case organise history --update` |
 | **H2 clean+compile** | `--clean`, `--compile` | H1 done (or nothing to move) and `archive/` has a part not yet in `cleaned/` | `case organise history --clean --compile` |
 | **H3 upload history** | archive/cleaned parts + compiled file; for a running case a snapshot of the live `.othd/.oisd` | cloud login ok; local file differs from the ledger | upgraded `case upload history` |
 | **P1 post** | submit post for steps `[t1, t2]` | no post job of the case in flight; **not running**: t1..t2 = first/last step of the newest `archive/` part, **running**: first step of the live `.othd`..last *settled* step; steps past a pending restart's `restartTsId` excluded; every step's `.out` complete (all `nsg` parts); quota headroom | `run post full` (or `convert` when ASCII PLT exist) |
@@ -575,7 +575,8 @@ lose data:
    `--update` is moving files, both pick run numbers at once. And on a
    *running* case, `--update` moves the file the solver is writing (same
    inode on Lustre, so the solver keeps writing into `archive/`). → H1 only
-   when no main job is running or pending, and `organise history --update`
+   when no main job is running, pending or completing (queue read again
+   right before the move), and `organise history --update`
    itself gets the same check (upgrade U-3).
 2. **Keeping `.rst` "every 500" deletes a restart point.** `BR0SG0U4P0`
    has a main job pending that resumes from **8250**, which isn't a multiple
@@ -632,7 +633,7 @@ disk_alert = 200G         # flag running cases above this
 |---|---|---|
 | U-1 | `run sq`, `case status` | G1 + G2: squeue errors (any stderr) raise; jobs matched to a case by WorkDir; shared `jobs_for_case()` incl. sacct for ended jobs |
 | U-2 | `run post` | callable from Python returning the job id; `--t1/--t2` taken from an `.othd` (`--from-othd PATH`); records the window in `.auto/state.json` |
-| U-3 | `case organise history --update` | refuses while a main job of the case is running or pending (override `--force`) |
+| U-3 | `case organise history --update` | refuses while a main job of the case is running, pending or completing (override `--force`) |
 | U-4 | `case organise plt --delete-binary` | `--verified`: only files whose md5 on cloud matches the ledger |
 | U-5 | `case organise output` | `.out` only when the PLT is valid (G3) / verified on cloud; never the `.rst` at a pending/running restart, nor the newest complete set; `--keep-freq` from `.auto.conf` |
 | U-6 | `case upload` | folder mapping from `.auto.conf`; key login via alias, password fallback; `.part` + rename; md5 check; ledger `.auto/ledger.jsonl`; creates folders |
@@ -717,7 +718,7 @@ pending/running main job.
 | **some, with holes** | no post job; the case is listed under *needs you* with the missing steps. You decide (e.g. `run post full --t1 .. --t2 ..`) |
 
 A case that is running or queued can get a post job too. Never while a
-post job of that case is pending or running.
+post job of that case is pending, running or completing.
 
 **Inputs must be there (2026-11-09).** A post job fails without its inputs,
 so before submitting, every step of the range to post must have either
@@ -727,3 +728,21 @@ so before submitting, every step of the range to post must have either
 If any step in the range has neither, no post job: the case goes under
 *needs you* with those steps ("no PLT on cloud and no .out here"). That
 means the data is somewhere else or lost; only a person can tell.
+
+### 13.9 No waiting before moving the history (2026-11-09)
+
+H1 used to wait until the run-dir `.othd` had not changed for 10 minutes.
+Dropped: once no main job of the case is RUNNING, PENDING or COMPLETING,
+nothing in the queue can be writing it (COMPLETING covers a job that is
+ending and still writing; a job that has left the queue has written its
+files). The one race that matters, a main job submitted while `auto` is
+moving the files, is closed by reading the queue again just before the
+move, not by waiting.
+
+Not covered: a solver started outside a batch job of the case directory
+(e.g. `mpiSimflow` in an interactive `salloc` session started elsewhere).
+That is not how cases are run.
+
+The `.out` "settled" rule in the post decision (§4.1) stays: a running
+case's newest step may be half-written, so it counts only once the solver
+has moved past it.
