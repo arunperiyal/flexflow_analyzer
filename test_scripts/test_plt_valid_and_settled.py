@@ -122,3 +122,14 @@ def test_empty_part(run):
     (run / 'riser.4450_2.out').write_text('')
     ok, why = settled_steps(out_steps(run, 'riser'), nsg=NSG, running=False)
     assert 4450 not in ok and why[4450] == '1 empty .out part(s)'
+
+
+def test_every_cut_point_is_caught_and_never_called_whole(tmp_path):
+    data = plt_bytes()
+    path = tmp_path / 'cut.plt'
+    for n in range(len(data)):
+        path.write_bytes(data[:n])
+        check = check_plt(path)
+        assert not check.ok, n
+        # when a full length is given it is the real one, never a guess
+        assert check.expected in (None, len(data)), (n, check.expected)
