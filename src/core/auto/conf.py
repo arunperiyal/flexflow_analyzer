@@ -21,30 +21,6 @@ from typing import Optional
 FILENAME = '.auto.conf'
 KEYS = ('remote', 'path', 'keep_rst', 'disk_alert', 'qos', 'account', 'partition')
 PLACEHOLDER = 'EDIT_ME'
-
-TEMPLATE = """\
-# Settings `auto` uses for the cases of this folder (.cases is next to this file).
-# Edit what says {placeholder}, then run: auto show
-#
-# remote: a remote from `remote list`{known}, or `local` for a folder on this machine
-remote     = {remote}
-#
-# path: the folder on the remote that holds these cases; case X goes to <path>/X
-path       = {placeholder}
-#
-# keep_rst: when .rst files are thinned, keep the steps divisible by this.
-# The restart point of a queued job and the newest complete set are always kept.
-# Left commented out: .rst files are not thinned.
-# keep_rst   = 500
-#
-# disk_alert: flag running cases whose run directory is bigger than this
-# disk_alert = 200G
-#
-# Only when set, passed to the post jobs auto submits (else the script's own header):
-# qos       =
-# account   =
-# partition =
-"""
 _UNITS = {'': 1, 'K': 1024, 'M': 1024 ** 2, 'G': 1024 ** 3, 'T': 1024 ** 4}
 
 
@@ -112,17 +88,55 @@ def read(folder) -> AutoConf:
                     partition=values.get('partition') or None)
 
 
-def template(remote: str = None, known=()) -> str:
-    """The text `auto init` writes: remote filled in when known, path left
-    for the user."""
+
+def template(remote: Optional[str] = None, path: Optional[str] = None,
+             keep_rst: Optional[int] = None, disk_alert: Optional[str] = None,
+             known=(), path_from: Optional[str] = None) -> str:
+    """The text `auto init` writes. What is given is filled in; remote and
+    path left as EDIT_ME when not known; keep_rst/disk_alert commented out
+    when not given."""
     names = f" ({', '.join(known)})" if known else ''
-    return TEMPLATE.format(placeholder=PLACEHOLDER, known=names, remote=remote or PLACEHOLDER)
+    source = f"  # from `remote set-path {path_from}`: check it" if path_from else ''
+
+    def opt(key, value, example):
+        return f"{key:<10} = {value}" if value is not None else f"# {key:<10} = {example}"
+    return "\n".join([
+        "# Settings `auto` uses for the cases of this folder (.cases is next to this file).",
+        f"# Edit what says {PLACEHOLDER}, then run: auto show",
+        "#",
+        f"# remote: a remote from `remote list`{names}, or `local` for a folder on this machine",
+        f"remote     = {remote or PLACEHOLDER}",
+        "#",
+        "# path: the folder on the remote that holds these cases; case X goes to <path>/X",
+        f"path       = {path or PLACEHOLDER}{source}",
+        "#",
+        "# keep_rst: when .rst files are thinned, keep the steps divisible by this.",
+        "# The restart point of a queued job and the newest complete set are always kept.",
+        "# Commented out: .rst files are not thinned.",
+        opt('keep_rst', keep_rst, 500),
+        "#",
+        "# disk_alert: flag running cases whose run directory is bigger than this",
+        opt('disk_alert', disk_alert, '200G'),
+        "#",
+        "# Only when set, passed to the post jobs auto submits (else the script's own header):",
+        "# qos       =",
+        "# account   =",
+        "# partition =",
+        "",
+    ])
 
 
-def write_template(folder, remote: str = None, known=(), force: bool = False) -> Path:
-    """Write .auto.conf in folder; AutoConfError when one is there (unless force)."""
-    path = Path(folder) / FILENAME
-    if path.exists() and not force:
-        raise AutoConfError(f"{path} exists; edit it, or `auto init --force` to start over")
-    path.write_text(template(remote, known))
-    return path
+def write_template(folder, remote: Optional[str] = None, path: Optional[str] = None,
+                   keep_rst: Optional[int] = None, disk_alert: Optional[str] = None,
+                   known=(), path_from: Optional[str] = None, force: bool = False) -> Path:
+    """Write .auto.conf in folder; AutoConfError when one is there (unless
+    force) or a value given is not valid."""
+    target = Path(folder) / FILENAME
+    if target.exists() and not force:
+        raise AutoConfError(f"{target} exists; edit it, or `auto init --force` to start over")
+    if keep_rst is not None and keep_rst <= 0:
+        raise AutoConfError(f"--keep-rst must be a positive whole number, got {keep_rst}")
+    if disk_alert is not None:
+        parse_size(disk_alert)                  # raises on a bad size
+    target.write_text(template(remote, path, keep_rst, disk_alert, known, path_from))
+    return target
