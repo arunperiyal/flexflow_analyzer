@@ -43,6 +43,8 @@ test_standard_py313/
 *.bak
 *.backup
 
+# Temporary directories
+tmp/
 
 # Test case directories
 CS4SG*/
