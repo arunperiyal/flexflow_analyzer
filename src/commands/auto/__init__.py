@@ -3,16 +3,16 @@ auto - the per-case workflow for a folder of cases (docs/AUTO_PLAN.md §13)
 
     auto init [--remote NAME] [--path DIR] [--keep-rst N] [--disk-alert SIZE]
                          write .auto.conf here, for you to check and edit
-    auto show [case]     what auto would do for each case; changes nothing
+    auto show [case]     what auto would do for a case (use case:, or case:* for all)
     auto apply [case]    (not built yet)
     auto log [case]      (not built yet)
 """
 
 from ..base import BaseCommand
-from src.cli.context import context_flag
+from src.cli.context import case_arg, context_flag
 
 SUBCOMMANDS = (('init', 'Write .auto.conf in this folder, for you to edit'),
-               ('show', 'What auto would do for each case in this folder (changes nothing)'),
+               ('show', 'What auto would do for a case, or every case with case:* (changes nothing)'),
                ('apply', 'Carry it out (not built yet)'),
                ('log', 'What earlier runs did (not built yet)'))
 
@@ -32,7 +32,7 @@ class AutoCommand(BaseCommand):
         parser = subparsers.add_parser(self.name, add_help=False, help=self.description)
         parser.add_argument('what', nargs='?', metavar='init|show|apply|log',
                             help='; '.join(f"{n}: {h}" for n, h in SUBCOMMANDS)).completer = _complete_sub
-        parser.add_argument('case', nargs='?', help='Only this case (a name from .cases)')
+        case_arg(parser, help="show: the case folder (default: use case:); '*' for every case in .cases")
         context_flag(parser, 'remote', '--remote', type=str, metavar='NAME',
                      help='init: the remote (or use remote:NAME); `local` for a folder')
         parser.add_argument('--path', metavar='DIR',

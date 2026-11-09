@@ -320,11 +320,14 @@ const FlowChart = (() => {
     {
       id: 'autoShow', kind: 'step', col: 3, row: 12, label: ['See the plan'],
       title: 'See the plan (auto)',
-      command: 'auto show\nauto show <case>',
-      detail: `For every case in this folder's .cases: its state, then what
-        "auto apply" would do and why: organise the history, a post job and
-        its steps, uploads, and what is deleted once its copy on the remote is
-        checked. A summary table ends it. It changes nothing.
+      command: 'use case:*\nauto show\n# or one case: auto show <case>',
+      detail: `For the case (the argument or "use case:"), or every case in
+        .cases with "use case:*", like case check: its state, then what "auto
+        apply" would do and why: organise the history, a post job and its
+        steps, uploads, and what is deleted once its copy on the remote is
+        checked. Several cases end with a summary table. It changes nothing.
+
+        Each case uses the .auto.conf of its parent folder.
 
         If the queue cannot be read, no case is looked at: one that looks
         idle may be running.`,
