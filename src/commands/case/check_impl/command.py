@@ -673,12 +673,23 @@ def _check_plt(cfg, case_dir: Path, console: Console, freq: Optional[int] = None
     restart = cfg.restart_tsid if cfg.restart_flag else None
     stale, dated_from = ({}, None) if restart is None else \
         _stale_plts(stats, run_dir, problem, restart)
+    # binary PLTs that are there but not whole (cut short, not TDV112): read
+    # from each file's header, see src/core/plt_valid.py
+    from ....core.plt_valid import check_plt
+    broken = {}
+    for t, st in sorted(stats.get('binary/', {}).items()):
+        if t in expected and st.st_size > 0:
+            result = check_plt(binary_dir / f"{problem}.{t}.plt")
+            if not result.ok:
+                broken[t] = result.reason
 
-    bad = missing or empty or stale
+    bad = missing or empty or stale or broken
     mark = "[red]✗[/red]" if bad else "[green]✓[/green]"
     parts = [f"[red]{len(missing)} missing[/red]" if missing else "none missing"]
     if empty:
         parts.append(f"[yellow]{len(empty)} empty[/yellow]")
+    if broken:
+        parts.append(f"[red]{len(broken)} broken[/red]")
     if stale:
         parts.append(f"[red]{sum(len(v) for v in stale.values())} from before the restart[/red]")
     console.print(f"  {mark} {len(upto) - len(missing)} of {len(upto)} present up to "
@@ -692,6 +703,11 @@ def _check_plt(cfg, case_dir: Path, console: Console, freq: Optional[int] = None
         details.add_row("    [red]missing[/red]", _fmt_steps(missing, out_freq))
     if empty:
         details.add_row("    [yellow]empty[/yellow]", _fmt_steps(empty, out_freq))
+    if broken:
+        first = min(broken)
+        details.add_row("    [red]broken[/red]",
+                        f"{_fmt_steps(sorted(broken), out_freq)}  [dim](in binary/; e.g. {first}: "
+                        f"{escape(broken[first])}. Post them again)[/dim]")
     for label, steps in stale.items():
         details.add_row("    [red]stale[/red]",
                         f"{_fmt_steps(steps, out_freq)}  [dim](in {label}; older than the "

@@ -10,6 +10,7 @@ from rich.console import Console
 
 from src.commands.case.check_impl.command import _check_plt, _fmt_steps
 from src.core.simflow_config import SimflowConfig
+from plt_files import write_plt
 
 
 @pytest.fixture
@@ -21,7 +22,7 @@ def case(tmp_path):
     (case / 'riser.def').write_text('timeSteppingControl{\n maxTimeSteps = 2000\n}\n')
     for t in range(50, 1501, 50):
         if t not in (300, 650, 700, 750, 1200):
-            (case / 'binary' / f'riser.{t}.plt').write_text('x' * 10)
+            write_plt(case / 'binary' / f'riser.{t}.plt')
     (case / 'binary' / 'riser.900.plt').write_text('')            # empty
     (case / 'binary' / 'riser.825.plt').write_text('x')           # off the grid
     for t in (100, 1550, 1600):
@@ -64,7 +65,7 @@ def test_window_and_freq(case):
 
 def test_all_present(case):
     for t in (300, 650, 700, 750, 1200, 900):
-        (case / 'binary' / f'riser.{t}.plt').write_text('x')
+        write_plt(case / 'binary' / f'riser.{t}.plt')
     text = check(case, t2=1500)
     assert '✓ 30 of 30 present up to 1500, the last step found · none missing' in text
 
@@ -142,3 +143,11 @@ def test_restart_all_fresh(resumed):
 def test_no_restart_no_check(case):
     text = check(case)
     assert 'stale' not in text and 'restart' not in text
+
+
+def test_broken_binary_plt(case):
+    write_plt(case / 'binary' / 'riser.400.plt', cut=300)         # killed mid-write
+    (case / 'binary' / 'riser.450.plt').write_text('not a plt')
+    text = check(case)
+    assert '5 missing, 1 empty, 2 broken' in text
+    assert rows(text)['broken'].startswith('400–450 (2) (in binary/; e.g. 400: cut short: 300 of 424 bytes')

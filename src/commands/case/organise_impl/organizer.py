@@ -495,8 +495,13 @@ class CaseOrganizer(HistoryMixin):
         .rst files are restart points, so the steps divisible by keep_interval
         stay. .out files are not read by a restart -- only by the conversion
         that writes {problem}.T.plt -- so any step's .out can go, but only
-        once that .plt exists (in binary/ or the run directory): without it
-        the step's field data would be gone for good.
+        once binary/{problem}.T.plt can stand in for them: the file is whole
+        (as long as its header says, src/core/plt_valid.py) and was written
+        after every .out part of the step. Without that the step's field data
+        would be gone for good: an empty or cut-short PLT is left by a post
+        job killed at the walltime, and a PLT older than the .out was made
+        from a run that a restart has since computed again. An ASCII .plt
+        alone does not count; convert it first.
         """
         # Find out and rst files (plt files are handled by `plt --delete-ascii`/`--delete-binary`, not `output`)
         out_pattern = f'{problem}.*_*.out'
@@ -511,8 +516,33 @@ class CaseOrganizer(HistoryMixin):
                         f"in {output_dir.name}")
 
         binary_dir = self.case_dir / 'binary'
-        no_plt = set()          # steps whose .out stay: nothing has converted them
         all_out = getattr(self.args, 'all_out', False)
+
+        # Why each step's .out must stay (None: its binary PLT stands in for them)
+        out_by_step: Dict[int, List[Path]] = {}
+        for f in out_files:
+            s = self._extract_step_from_filename(f.name, problem)
+            if s is not None:
+                out_by_step.setdefault(s, []).append(f)
+        verdict: Dict[int, Optional[Tuple[str, str]]] = {}
+
+        def keep_out_because(step: int) -> Optional[Tuple[str, str]]:
+            """(kind, detail) when the step's .out must stay; kind is
+            'none', 'ascii' or 'bad'."""
+            if step not in verdict:
+                from ....core.plt_valid import plt_covers
+                plt = f'{problem}.{step}.plt'
+                binary = binary_dir / plt
+                if binary.exists():
+                    why = plt_covers(binary, out_by_step.get(step, []))
+                    verdict[step] = None if why is None else ('bad', why)
+                elif (output_dir / plt).exists():
+                    verdict[step] = ('ascii', '')
+                else:
+                    verdict[step] = ('none', '')
+            return verdict[step]
+
+        kept_out: Dict[str, Dict[int, str]] = {}   # kind -> {step: detail}
         protected = self._restart_points(rst_files, problem)
         for step, why in sorted(protected.items()):
             if any(self._extract_step_from_filename(f.name, problem) == step for f in rst_files):
@@ -528,12 +558,12 @@ class CaseOrganizer(HistoryMixin):
                 continue
 
             if file.suffix == '.out':
-                plt = f'{problem}.{step}.plt'
-                converted = (binary_dir / plt).exists() or (output_dir / plt).exists()
-                delete = converted or all_out
+                why = keep_out_because(step)
+                delete = why is None or all_out
                 if not delete:
-                    no_plt.add(step)
-                reason = f"step {step} has {plt}" if converted else "--all-out"
+                    kept_out.setdefault(why[0], {})[step] = why[1]
+                reason = (f"step {step}: binary/{problem}.{step}.plt is whole and newer"
+                          if why is None else "--all-out")
             elif step in protected:
                 delete = False
             else:
@@ -554,11 +584,28 @@ class CaseOrganizer(HistoryMixin):
                 if self.args.verbose:
                     self.logger.info(f"  Delete: {file.name} ({reason})")
 
-        if no_plt:
-            steps = sorted(no_plt)
-            shown = ', '.join(map(str, steps[:10])) + (', ...' if len(steps) > 10 else '')
+        def listed(steps):
+            steps = sorted(steps)
+            return ', '.join(map(str, steps[:10])) + (', ...' if len(steps) > 10 else '')
+
+        if 'bad' in kept_out:
+            bad = kept_out['bad']
+            self.console.print(f"  [red]Keeping .out of {len(bad)} step(s) whose binary PLT "
+                               f"cannot stand in for them:[/red]")
+            for step in sorted(bad)[:10]:
+                self.console.print(f"    {step}: binary/{problem}.{step}.plt {bad[step]}")
+            if len(bad) > 10:
+                self.console.print(f"    ... and {len(bad) - 10} more")
+            self.console.print("  [dim]Post those steps again (run post full --t1 .. --t2 ..), "
+                               "then run this again.[/dim]")
+        if 'ascii' in kept_out:
+            self.console.print(f"  [yellow]Keeping .out of {len(kept_out['ascii'])} step(s) with "
+                               f"only an ASCII .plt:[/yellow] {listed(kept_out['ascii'])}")
+            self.console.print("  [dim]Convert them first (run post convert).[/dim]")
+        if 'none' in kept_out:
+            steps = kept_out['none']
             self.console.print(f"  [yellow]Keeping .out of {len(steps)} step(s) with no "
-                               f"{problem}.<step>.plt yet:[/yellow] {shown}")
+                               f"{problem}.<step>.plt yet:[/yellow] {listed(steps)}")
             self.console.print("  [dim]Convert them first (run post), or add --all-out to "
                                "delete them anyway.[/dim]")
 

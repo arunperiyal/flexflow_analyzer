@@ -3,8 +3,9 @@
 --freq picks the binary/ steps that may go, --keep-freq spares the steps it
 divides; `output --keep-freq N` keeps the .rst steps divisible by N with no
 need to know outFreq; without it, 10 * freq. `output` deletes a step's .out
-once its .plt exists -- keep-freq steps too, since a restart reads only .rst
--- and keeps the .out of steps with no .plt.
+once a whole binary PLT written after it is in binary/ -- keep-freq steps too,
+since a restart reads only .rst -- and keeps the .out of steps with no PLT or
+only an ASCII one.
 """
 
 import argparse
@@ -17,6 +18,7 @@ from rich.console import Console
 from src.commands.case import CaseCommand
 from src.commands.case.organise_impl.command import _check_keep_flags
 from src.commands.case.organise_impl.organizer import CaseOrganizer
+from plt_files import write_plt
 
 
 class _Logger:
@@ -79,12 +81,12 @@ def run_dir(tmp_path):
 
 @pytest.fixture
 def converted(tmp_path, run_dir):
-    """Steps up to 1000 have their .plt: 50..500 in binary/, 550..1000 still in
-    the run directory."""
+    """Steps up to 1000 have a .plt: 50..500 a whole binary one in binary/,
+    550..1000 only an ASCII one in the run directory."""
     binary = tmp_path / 'binary'
     binary.mkdir()
     for t in range(50, 501, 50):
-        (binary / f'riser.{t}.plt').write_text('x')
+        write_plt(binary / f'riser.{t}.plt')
     for t in range(550, 1001, 50):
         (run_dir / f'riser.{t}.plt').write_text('x')
     return run_dir
@@ -100,9 +102,10 @@ def test_output_default_is_ten_times_freq(tmp_path, run_dir):
     assert steps(run_dir, '.rst') == [500, 1000, 1500, 2000]
 
 
-def test_output_deletes_out_once_its_plt_exists_keep_freq_steps_too(tmp_path, converted):
+def test_output_deletes_out_once_its_binary_plt_is_there_keep_freq_steps_too(tmp_path, converted):
     organise(tmp_path, 'output', keep_freq=500)
-    assert steps(converted, '.out') == list(range(1050, 2001, 50))     # no .plt for these
+    # 550..1000 have only an ASCII .plt, 1050.. none
+    assert steps(converted, '.out') == list(range(550, 2001, 50))
     assert steps(converted, '.rst') == [500, 1000, 1500, 2000]
 
 
@@ -125,7 +128,7 @@ def test_output_keep_out_deletes_no_out_and_still_thins_rst(tmp_path, converted)
 
 def test_output_out_respects_the_time_window(tmp_path, converted):
     organise(tmp_path, 'output', keep_freq=500, t1=300, t2=700)
-    assert steps(converted, '.out') == [50, 100, 150, 200, 250] + list(range(750, 2001, 50))
+    assert steps(converted, '.out') == [50, 100, 150, 200, 250] + list(range(550, 2001, 50))
 
 
 @pytest.fixture
@@ -151,3 +154,30 @@ def test_parse_and_check(parse):
     assert _check_keep_flags(parse('output', 'C1', '--keep-out'), 'output') is None
     assert 'give one' in _check_keep_flags(parse('output', 'C1', '--keep-out', '--all-out'),
                                            'output')
+
+
+# --- a PLT must stand in for the .out before they go -----------------------
+
+def test_output_keeps_out_of_a_cut_short_or_empty_plt(tmp_path, run_dir):
+    binary = tmp_path / 'binary'
+    binary.mkdir()
+    write_plt(binary / 'riser.50.plt')
+    write_plt(binary / 'riser.100.plt', cut=200)          # post job killed mid-write
+    (binary / 'riser.150.plt').write_bytes(b'')           # empty
+    (binary / 'riser.200.plt').write_text('x')            # not a binary PLT
+    organise(tmp_path, 'output', keep_freq=500)
+    assert steps(run_dir, '.out')[:4] == [100, 150, 200, 250]
+
+
+def test_output_keeps_out_newer_than_its_plt(tmp_path, run_dir):
+    # a restart wrote step 100's .out again after its PLT was made
+    import os
+    binary = tmp_path / 'binary'
+    binary.mkdir()
+    for t in (50, 100):
+        write_plt(binary / f'riser.{t}.plt')
+    old = (binary / 'riser.100.plt').stat().st_mtime - 3600
+    os.utime(binary / 'riser.100.plt', (old, old))
+    organise(tmp_path, 'output', keep_freq=500)
+    left = steps(run_dir, '.out')
+    assert 50 not in left and 100 in left
