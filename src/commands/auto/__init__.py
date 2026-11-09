@@ -1,13 +1,15 @@
 """
 auto - the per-case workflow for a folder of cases (docs/AUTO_PLAN.md §13)
 
-    auto init            write .auto.conf here, for you to edit
+    auto init [--remote NAME] [--path DIR] [--keep-rst N] [--disk-alert SIZE]
+                         write .auto.conf here, for you to check and edit
     auto show [case]     what auto would do for each case; changes nothing
     auto apply [case]    (not built yet)
     auto log [case]      (not built yet)
 """
 
 from ..base import BaseCommand
+from src.cli.context import context_flag
 
 SUBCOMMANDS = (('init', 'Write .auto.conf in this folder, for you to edit'),
                ('show', 'What auto would do for each case in this folder (changes nothing)'),
@@ -31,6 +33,15 @@ class AutoCommand(BaseCommand):
         parser.add_argument('what', nargs='?', metavar='init|show|apply|log',
                             help='; '.join(f"{n}: {h}" for n, h in SUBCOMMANDS)).completer = _complete_sub
         parser.add_argument('case', nargs='?', help='Only this case (a name from .cases)')
+        context_flag(parser, 'remote', '--remote', type=str, metavar='NAME',
+                     help='init: the remote (or use remote:NAME); `local` for a folder')
+        parser.add_argument('--path', metavar='DIR',
+                            help="init: the folder on the remote (default: the remote's "
+                                 "`remote set-path`)")
+        parser.add_argument('--keep-rst', type=int, metavar='N',
+                            help='init: keep the .rst of the steps divisible by N when thinning')
+        parser.add_argument('--disk-alert', metavar='SIZE',
+                            help='init: flag running cases whose run directory is bigger (e.g. 200G)')
         parser.add_argument('--force', action='store_true',
                             help='init: replace an existing .auto.conf')
         parser.add_argument('-h', '--help', action='store_true', help='Show help')

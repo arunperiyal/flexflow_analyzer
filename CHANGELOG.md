@@ -14,9 +14,11 @@
   the remote, a pruned `archive/`, a run stopped with nothing queued.
 - Settings in `.auto.conf` next to `.cases` (remote, its folder,
   `keep_rst`, `disk_alert`); `auto --help`. `auto init` writes one with
-  every setting explained, the remote taken from `use remote:` when set and
-  the remote folder left as `EDIT_ME`: `auto show` will not run until it is
-  set. It does not overwrite an existing one without `--force`.
+  every setting explained: `--remote` (or `use remote:`), `--path` (default:
+  the remote's `remote set-path`, with a warning when its last folder is not
+  this folder's name), `--keep-rst N`, `--disk-alert SIZE`. What is not known
+  is left as `EDIT_ME`, and `auto show` will not run until it is set. It does
+  not overwrite an existing one without `--force`.
 - Help -> Flowchart and docs/auto_flow.html: the auto lane starts with
   "Write .auto.conf" (`auto init`); `auto init` and `auto show` are drawn as
   built, `auto apply` and `auto log` still dashed as planned.

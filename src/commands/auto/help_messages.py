@@ -8,7 +8,12 @@ def print_auto_help():
 {b}{c}auto — check every case in this folder and do its next safe step{r}
 
 {b}USAGE:{r}
-    auto init [--force]    write .auto.conf here, for you to edit (path, remote, ...)
+    auto init              write .auto.conf here, for you to check and edit
+         [--remote NAME]   the remote (default: use remote:NAME); `local` for a folder
+         [--path DIR]      the folder there (default: the remote's `remote set-path`)
+         [--keep-rst N]    keep the .rst of steps divisible by N when thinning
+         [--disk-alert SIZE]  flag running cases bigger than SIZE (e.g. 200G)
+         [--force]         replace an existing .auto.conf
     auto show [case]       what auto would do, case by case; changes nothing
     auto apply [case]      carry it out {Colors.GRAY}(not built yet){r}
     auto log [case]        what earlier runs did {Colors.GRAY}(not built yet){r}
