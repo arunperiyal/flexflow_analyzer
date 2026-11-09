@@ -5,7 +5,7 @@ What is already on the remote, case by case: {relative path: size}.
     files = cloud.listing('case2')    # {'binary/riser.400.plt': 424, ...}
     cloud.close()
 
-`remote = local` in .auto.conf is a folder on this machine (the dummy cases,
+The remote `local` (remotes: {local: DIR} in .cases.yml) is a folder on this machine (the dummy cases,
 tests). Any other name is a remote from `remote list`, reached over SFTP
 with its password from ~/.flexflow/remotes.json -- the way `case upload`
 connects, and what worked from both the login and a compute node in the
@@ -98,7 +98,7 @@ class SftpCloud:
 
 
 def open_cloud(conf):
-    """The remote .auto.conf names; CloudError when it cannot be used."""
+    """The remote conf names; CloudError when it cannot be used."""
     if conf.is_local:
         return LocalCloud(conf.path)
     from src.utils.remote_config import RemoteConfig

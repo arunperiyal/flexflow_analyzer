@@ -37,17 +37,22 @@ def _duration(seconds: float) -> str:
 
 def resolve_cases(case, base_dir: Path):
     """The case folders `auto show` looks at: `case` is the argument or the
-    `use case:` context. '*' is every case in base_dir's .cases, as for
+    `use case:` context. '*' is every case in base_dir's .cases.yml, as for
     case check. Raises AutoConfError when nothing names a case."""
+    from src.core import cases_file
     from src.core.auto.conf import AutoConfError
-    from src.commands.case_iteration import is_wildcard_case, load_cases_from_directory
+    from src.commands.case_iteration import is_wildcard_case
     if not case:
         raise AutoConfError("no case given: auto show <case>, or `use case:<dir>` "
-                            "(`use case:*` for every case in .cases)")
+                            f"(`use case:*` for every case in {cases_file.FILENAME})")
     if is_wildcard_case(case):
-        entries = load_cases_from_directory(base_dir)
+        try:
+            entries = cases_file.read(base_dir).cases
+        except cases_file.CasesFileError as e:
+            raise AutoConfError(str(e))
         if not entries:
-            raise AutoConfError(f"no cases in {base_dir / '.cases'} (run `case add` first)")
+            raise AutoConfError(f"no cases in {cases_file.path_for(base_dir)} "
+                                f"(run `case add` first)")
         return [Path(e['path']) for e in entries]
     path = Path(case).expanduser()
     path = path if path.is_absolute() else base_dir / path
@@ -56,11 +61,12 @@ def resolve_cases(case, base_dir: Path):
     return [path.resolve()]
 
 
-def gather(case_dirs):
-    """([(snapshot, plan)], {folder: conf}, problems) for these case folders.
+def gather(case_dirs, remote):
+    """([(snapshot, plan)], {folder: conf}, problems) for these case folders,
+    against this remote.
 
-    Each case uses the .auto.conf of its parent folder (next to .cases); a
-    folder without a usable one raises AutoConfError. The queue and sacct are
+    Each case uses its parent folder's .cases.yml: the remote's folder there
+    and auto's settings; a folder without them raises AutoConfError. The queue and sacct are
     read once; each remote is opened once. When the queue cannot be read no
     case is looked at (problems says why).
     """
@@ -74,7 +80,7 @@ def gather(case_dirs):
     for case_dir in case_dirs:
         folder = Path(case_dir).parent
         if folder not in confs:
-            confs[folder] = auto_conf.read(folder)
+            confs[folder] = auto_conf.read(folder, remote)
 
     try:
         queue = slurm.read_queue()
@@ -125,7 +131,7 @@ def execute_show(args) -> int:
     base = Path(current_dir())
     try:
         case_dirs = resolve_cases(getattr(args, 'case', None), base)
-        results, confs, problems = gather(case_dirs)
+        results, confs, problems = gather(case_dirs, getattr(args, 'remote', None))
     except AutoConfError as e:
         console.print(f"[red]Error:[/red] {escape(str(e))}")
         return 2

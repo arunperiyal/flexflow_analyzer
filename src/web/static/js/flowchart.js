@@ -304,18 +304,19 @@ const FlowChart = (() => {
         Layout -> Export for a PNG or PDF.`,
     },
     {
-      id: 'autoInit', kind: 'step', col: 3, row: 11, label: ['Write .auto.conf'],
-      title: 'Write .auto.conf (auto)',
-      command: 'use remote:cloud\nauto init\n# then edit .auto.conf: set path',
-      detail: `Once per folder of cases, next to .cases. "auto init" writes
-        .auto.conf with every setting explained: the remote (from "use
-        remote:" when set), the folder there that holds these cases, the .rst
-        grid to keep (keep_rst, optional) and the size above which a running
-        case is flagged (disk_alert, optional).
+      id: 'autoInit', kind: 'step', col: 3, row: 11, label: ['Set up .cases.yml'],
+      title: 'Set up .cases.yml (auto)',
+      command: 'auto init --remote cloud --path /shares/.../bare --keep-rst 500\nuse remote:cloud',
+      detail: `Once per folder of cases and remote. .cases.yml (made by "case
+        add") lists the cases, and under "remotes" the folder these cases have
+        on each remote. "auto init --remote NAME" adds that folder (--path,
+        default: the remote's "remote set-path") and auto's settings: the .rst
+        grid to keep (--keep-rst) and the size above which a running case is
+        flagged (--disk-alert).
 
-        The folder on the remote is left as EDIT_ME for you to set: "auto
-        show" will not run until it is. An existing .auto.conf is kept unless
-        --force.`,
+        A folder it cannot know is left as EDIT_ME: "auto show" will not run
+        until it is set. An existing folder is kept unless --force. Several
+        remotes can be listed; "use remote:NAME" or --remote picks one.`,
     },
     {
       id: 'autoShow', kind: 'step', col: 3, row: 12, label: ['See the plan'],
