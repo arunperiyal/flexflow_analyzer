@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### 🤖 `auto show`: what each case of a folder needs next
+
+- New top-level `auto`. `auto show [case]` looks at every case in this
+  folder's `.cases` and prints, case by case, what `auto apply` will do
+  (not built yet), and changes nothing: organise the history, submit a
+  post job for the newest run's steps whose PLT is neither on the remote nor
+  whole here, upload what the remote lacks, and delete what is safely
+  copied. Anything it will not guess is listed as **needs you**: a failed
+  main job, a post job that ended badly or left steps unconverted, holes on
+  the remote, a pruned `archive/`, a run stopped with nothing queued.
+- Settings in `.auto.conf` next to `.cases` (remote, its folder,
+  `keep_rst`, `disk_alert`); `auto --help`.
+- The queue is read once; if it cannot be read, no case is looked at. Jobs
+  belong to cases by working directory; how a case's last jobs ended comes
+  from sacct. The remote is listed over SFTP with the password from
+  `remotes.json` (or a local folder, `remote = local`).
+- Rules in docs/AUTO_PLAN.md §13 and Help -> Flowchart; tried on the dummy
+  cases (`tools/make_dummy.py`), each case getting what its README says.
+
 ### 🛡️ A PLT must stand in for the `.out` before they go
 
 - `case organise output` deletes a step's `.out` only once

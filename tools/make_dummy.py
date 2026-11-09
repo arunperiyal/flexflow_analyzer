@@ -184,9 +184,10 @@ class Case:
         CaseOrganizer(case, args, Quiet(), Console(file=io.StringIO())).organize('history')
 
 
-def cloud_copy(case, cloud_root, steps=(), history=True):
+def cloud_copy(case, cloud_root, steps=(), history=True, everything=False):
     """What is already on the cloud for this case: binary PLTs of `steps`,
-    and the history folders as they stand."""
+    and the history folders as they stand. everything: also the inputs,
+    program files and the newest restart set, as a case fully uploaded."""
     dest = cloud_root / case.name
     dest.mkdir(parents=True, exist_ok=True)
     for t in steps:
@@ -196,6 +197,15 @@ def cloud_copy(case, cloud_root, steps=(), history=True):
             src = case.dir / f'{ext}_files'
             if src.exists():
                 shutil.copytree(src, dest / f'{ext}_files', dirs_exist_ok=True)
+    if everything:
+        for f in case.dir.iterdir():
+            if f.is_file():
+                shutil.copy2(f, dest / f.name)
+        rsts = sorted(case.run.glob('riser.*_*.rst'), key=lambda p: int(p.name.split('.')[1].split('_')[0]))
+        newest = rsts[-1].name.split('_')[0] if rsts else None
+        for f in rsts:
+            if f.name.split('_')[0] == newest:
+                write(dest / 'RUN_1' / f.name, f.read_bytes(), f.stat().st_mtime)
 
 
 # --- the cases ---------------------------------------------------------------
@@ -234,7 +244,7 @@ def build(root: Path):
     c.archive(1, range(1, 1001), week)
     c.organise('clean', 'compile')
     c.rsts(c.steps(200, 1000)[::4], week)                  # the 200 grid only
-    cloud_copy(c, cloud, c.steps(50, 1000))
+    cloud_copy(c, cloud, c.steps(50, 1000), everything=True)
     job(c, 'main', 'COMPLETED', ended_days=7)
     job(c, 'post', 'COMPLETED', ended_days=6, ran=3600)
     cases.append(('case1', 'finished, everything converted, uploaded and tidied',
@@ -295,7 +305,8 @@ def build(root: Path):
     job(c, 'main', 'TIMEOUT', ended_days=1)
     cases.append(('case5', 'main ended (TIMEOUT) yesterday; its .othd still in RUN_1; '
                   '.out 350-500; cloud up to 300',
-                  'history: --update (riser2), --clean, --compile, upload; post 350-500'))
+                  'history: --update (riser2), --clean, --compile, upload; post 350-500; needs you: '
+                  'stopped at 520 of 1000 with nothing queued'))
 
     # case6 -- the post job was killed at the walltime
     c = Case(bare, 'case6')
@@ -356,7 +367,7 @@ def build(root: Path):
     cloud_copy(c, cloud, c.steps(50, 400) + c.steps(500, 600))
     job(c, 'main', 'TIMEOUT', ended_days=5)
     cases.append(('case11', 'ended (TIMEOUT at 700); cloud has 50-400 and 500-600 (450 '
-                  'missing); .out only 650-700', 'needs you: holes on the cloud (450)'))
+                  'missing); .out only 650-700', 'needs you: holes on the cloud (450); stopped at 700 of 1000'))
 
     # the folder
     (bare / '.cases').write_text(json.dumps(

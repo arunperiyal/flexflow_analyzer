@@ -58,12 +58,13 @@ def _register_commands(app):
     from src.commands.utils import DocsCommand
     from src.commands.run import RunCommand
     from src.commands.remote import RemoteCommand
+    from src.commands.auto import AutoCommand
 
     app.register(
         # Domain commands
         CaseCommand, DataCommand, FieldCommand, DefCommand,
         # Execution commands
-        RunCommand,
+        RunCommand, AutoCommand,
         # File inspection
         CheckCommand,
         # Visualization commands

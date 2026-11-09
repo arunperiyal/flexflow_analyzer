@@ -56,6 +56,7 @@ class Job:
     state: str
     partition: str
     workdir: str
+    end: str = ''               # sacct only: when it ended
 
     @property
     def kind(self) -> str:
@@ -127,6 +128,42 @@ def parse_queue(text: str) -> List[Job]:
             raise QueueError(f"squeue line without a job id: {line!r}")
         jobs.append(Job(jobid, name, state, partition, workdir))
     return jobs
+
+
+SACCT_FORMAT = 'JobID,JobName%200,State,End,WorkDir'
+
+
+def read_ended(days: int = 30, user: Optional[str] = None) -> List[Job]:
+    """Jobs of the last `days` days from sacct (one line each, no steps),
+    oldest first. A job leaves squeue minutes after it ends (MinJobAge), so
+    how a case's last main or post job ended is only here. Raises QueueError
+    like read_queue."""
+    if not shutil.which('sacct'):
+        raise QueueError("sacct not found (not on a SLURM cluster?)")
+    user = user or os.environ.get('USER', '')
+    cmd = ['sacct', '-X', '-n', '-P', '-S', f'now-{days}days', f'--format={SACCT_FORMAT}']
+    if user:
+        cmd += ['-u', user]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=TIMEOUT)
+    except subprocess.TimeoutExpired:
+        raise QueueError(f"sacct did not answer within {TIMEOUT} s")
+    except OSError as e:
+        raise QueueError(f"could not run sacct: {e}")
+    err = result.stderr.strip()
+    if result.returncode != 0 or err:
+        raise QueueError("sacct failed: " + (err.splitlines()[0] if err else f"exit {result.returncode}"))
+    jobs = []
+    for line in result.stdout.splitlines():
+        if not line.strip():
+            continue
+        parts = line.split('|')
+        if len(parts) != 5:
+            raise QueueError(f"unexpected sacct line: {line!r}")
+        jobid, name, state, end, workdir = (p.strip() for p in parts)
+        # "CANCELLED by 6176" -> CANCELLED
+        jobs.append(Job(jobid, name, state.split()[0] if state else '', '', workdir, end))
+    return sorted(jobs, key=lambda j: int(j.jobid.split('_')[0]) if j.jobid.split('_')[0].isdigit() else 0)
 
 
 def _real(path) -> str:
