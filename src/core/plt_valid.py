@@ -35,6 +35,11 @@ class PltCheck:
     expected: Optional[int] = None  # bytes a complete file has, when the header could be read
 
 
+def _flag(f) -> int:
+    import struct
+    return struct.unpack('<i', f.read(4))[0]
+
+
 class CutShort(Exception):
     """The file ends before a zone's preamble: it is at least `at_least` bytes."""
 
@@ -62,7 +67,22 @@ def expected_size(path) -> int:
         for i, zone in enumerate(plt.zones):
             if f.tell() >= size:
                 raise CutShort(f.tell() + 1, i + 1)
+            # the preamble's min/max pairs are read with f.read(16), which
+            # comes back short at the end of the file instead of failing; the
+            # preamble's length is known, so check it was all there
+            start = f.tell()
             fmts, present, shareconn, _, _ = plt._read_data_preamble(f, nvar)
+            length = 4 + 4 * nvar + 4 + 4 + 4 + 16 * sum(present)
+            # passive/shared lists add 4 * nvar each when flagged; read them back
+            f.seek(start + 4 + 4 * nvar)
+            if _flag(f) == 1:
+                length += 4 * nvar
+                f.seek(4 * nvar, 1)
+            if _flag(f) == 1:
+                length += 4 * nvar
+            if start + length > size:
+                raise CutShort(start + length, i + 1)
+            f.seek(start + length)
             for v in range(nvar):
                 if present[v]:
                     f.seek(zone["npts"] * FMT_SIZE[fmts[v]], 1)
