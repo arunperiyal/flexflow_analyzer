@@ -25,7 +25,7 @@ def dummy(tmp_path, monkeypatch):
 
 
 def plans(dummy, case='*', base=None):
-    results, confs, problems = gather(resolve_cases(case, base or dummy / 'bare'))
+    results, confs, problems = gather(resolve_cases(case, base or dummy / 'bare'), 'local')
     return {snap.name: plan for snap, plan in results}, problems
 
 
@@ -108,16 +108,18 @@ def test_one_case_from_anywhere_uses_its_folders_settings(dummy, tmp_path):
 
 
 def test_each_case_uses_its_own_folders_auto_conf(dummy, tmp_path):
-    import json, shutil
+    import shutil
+    from src.core import cases_file
     other = tmp_path / 'other'
     shutil.copytree(dummy / 'bare' / 'case5', other / 'case5')
-    (other / '.auto.conf').write_text(f"remote = local\npath = {dummy / 'cloud' / 'bare'}\n")
+    cases_file.write(cases_file.CasesFile(cases_file.path_for(other),
+                                          remotes={'local': str(dummy / 'cloud' / 'bare')}))
     mixed = tmp_path / 'mixed'
     mixed.mkdir()
-    (mixed / '.cases').write_text(json.dumps([
+    cases_file.write(cases_file.CasesFile(cases_file.path_for(mixed), cases=[
         {'name': 'case2', 'path': str(dummy / 'bare' / 'case2')},
         {'name': 'case5', 'path': str(other / 'case5')}]))
-    results, confs, _ = gather(resolve_cases('*', mixed))
+    results, confs, _ = gather(resolve_cases('*', mixed), 'local')
     assert set(confs) == {dummy / 'bare', other}
     assert {s.name for s, _ in results} == {'case2', 'case5'}
     assert confs[other].keep_rst is None and confs[dummy / 'bare'].keep_rst == 200
@@ -127,8 +129,16 @@ def test_a_folder_without_auto_conf_is_an_error(dummy, tmp_path):
     import shutil
     lone = tmp_path / 'lone'
     shutil.copytree(dummy / 'bare' / 'case2', lone / 'case2')
-    with pytest.raises(AutoConfError, match='no .auto.conf'):
-        gather(resolve_cases(str(lone / 'case2'), tmp_path))
+    with pytest.raises(AutoConfError, match='no .cases.yml'):
+        gather(resolve_cases(str(lone / 'case2'), tmp_path), 'local')
+
+
+def test_the_remote_must_be_named_and_listed(dummy):
+    case = resolve_cases('case2', dummy / 'bare')
+    with pytest.raises(AutoConfError, match='which remote'):
+        gather(case, None)
+    with pytest.raises(AutoConfError, match="no folder for remote 'cloud'"):
+        gather(case, 'cloud')
 
 
 def test_the_case_context(dummy, monkeypatch, capsys):
@@ -144,13 +154,15 @@ def test_the_case_context(dummy, monkeypatch, capsys):
     monkeypatch.setattr(shellkit.runtime, '_current', shellkit.runtime._current)
     rt = Runtime(create_app(), console=Console(file=io.StringIO(), width=200, color_system=None),
                  err_console=Console(file=io.StringIO(), width=200, color_system=None))
-    assert rt.execute_line('auto show') == 2                     # nothing set
+    assert rt.execute_line('auto show --remote local') == 2      # no case set
     assert 'no case given' in capsys.readouterr().out
     assert rt.execute_line('use case:case3') == 0
-    assert rt.execute_line('auto show') == 0
+    assert rt.execute_line('auto show') == 2                     # no remote set
+    assert 'which remote' in capsys.readouterr().out
+    assert rt.execute_line('auto show --remote local') == 0
     out = capsys.readouterr().out
     assert 'case3  queued' in out and 'case2' not in out and 'summary' not in out
     assert rt.execute_line('use case:*') == 0
-    assert rt.execute_line('auto show') == 1                     # some cases need you
+    assert rt.execute_line('auto show --remote local') == 1      # some cases need you
     out = capsys.readouterr().out
     assert '11 cases' in out and 'summary' in out

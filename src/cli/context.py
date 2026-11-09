@@ -87,7 +87,7 @@ def _case_name(value):
 CONTEXTS = [
     ContextKey('case', parse=_parse_case, path=True, label='c', style='#00aaff bold',
                format=_case_name,
-               description='Case directory (or * for every case in the .cases registry)'),
+               description='Case directory (or * for every case in the .cases.yml registry)'),
     ContextKey('problem', label='p', style='#ffaa00', description='Problem name'),
     ContextKey('rundir', parse=_parse_rundir, path=True, label='r', style='#ff00ff',
                format=lambda v: Path(v).name,

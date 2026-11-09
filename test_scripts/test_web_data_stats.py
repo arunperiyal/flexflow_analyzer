@@ -13,6 +13,7 @@ import pytest
 
 from src.web.server import create_app
 from src.web.services.data_stats import FUNCS, locate, zeroloc
+from registry_files import write_registry
 
 EXAMPLE = Path(__file__).resolve().parent.parent / 'examples' / 'BR0SG0U1P0'
 _NEEDED_FILES = ('simflow.config', 'riser.def', 'riser.cyl_nodes.nbc', 'probe_dat.txt',
@@ -29,7 +30,7 @@ def client(tmp_path_factory):
         shutil.copy(EXAMPLE / name, case_dir / name)
     shutil.copytree(EXAMPLE / 'othd_files', case_dir / 'othd_files')
     shutil.copytree(EXAMPLE / 'oisd_files', case_dir / 'oisd_files')
-    (root / '.cases').write_text(json.dumps([{'name': 'BR0SG0U1P0', 'path': str(case_dir)}]))
+    write_registry(root, [{'name': 'BR0SG0U1P0', 'path': str(case_dir)}])
     return create_app(root).test_client()
 
 

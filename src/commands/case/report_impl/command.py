@@ -20,7 +20,7 @@ def _get_context_rundir() -> 'str | None':
 _CACHE_FILE = '.case_report'
 _CACHE_VERSION = 1
 
-# The .cases directories whose report was computed afresh in this process. The
+# The .cases.yml directories whose report was computed afresh in this process. The
 # shell runs commands in-process, so this lasts the session: its first
 # `case report` recomputes and rewrites .case_report, later ones read it.
 _refreshed = set()
@@ -37,15 +37,15 @@ def execute_report(args):
     show_run  = bool(getattr(args, 'run',  False))
     show_size = bool(getattr(args, 'size', False))
 
-    # Locate .cases file
+    # Locate .cases.yml file
     search_dir = Path(getattr(args, 'dir', None) or '.').resolve()
     from ..add_impl.command import load_cases_file
     entries = load_cases_file(search_dir)
 
     if not entries:
-        cases_path = search_dir / '.cases'
+        cases_path = search_dir / '.cases.yml'
         console.print()
-        console.print(f"[yellow]No .cases file found at {cases_path}[/yellow]")
+        console.print(f"[yellow]No .cases.yml file found at {cases_path}[/yellow]")
         console.print("[dim]Run `case add` first to build the registry.[/dim]")
         console.print()
         return
@@ -55,7 +55,7 @@ def execute_report(args):
 
     fresh = bool(getattr(args, 'update', False)) or search_dir not in _refreshed
     old_cache = _load_cache(search_dir)
-    cache = {}                                  # only the cases still in .cases
+    cache = {}                                  # only the cases still in .cases.yml
     now = time.time()
     oldest = None                               # when the oldest value shown was computed
 
@@ -377,7 +377,7 @@ def _show_help(console):
     console.print("    case report [--dir PATH] [--run] [--size] [--update]")
     console.print()
     console.print("[bold]OPTIONS:[/bold]")
-    console.print("    --dir PATH    Directory containing .cases file (default: current directory)")
+    console.print("    --dir PATH    Directory containing .cases.yml file (default: current directory)")
     console.print("    --run         Add column with last timestep from each case's run directory")
     console.print("    --size        Add column with total disk usage of each case")
     console.print("    --update      Recompute everything, not reading .case_report")

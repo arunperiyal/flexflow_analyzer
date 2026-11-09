@@ -114,8 +114,8 @@ ul.check { margin: 0; padding-left: 20px; display: flex; flex-direction: column;
     <div class="diagram">
 <pre class="mermaid">
 flowchart TD
-  A(["auto show / auto apply"]) --> B{".auto.conf here, with remote and path set?"}
-  B -->|no| X1["Stop: run auto init, then edit .auto.conf&lt;br/&gt;remote and path left as EDIT_ME are refused"]
+  A(["auto show / auto apply"]) --> B{"Remote chosen, and its folder in .cases.yml?"}
+  B -->|no| X1["Stop: --remote NAME or use remote:NAME;&lt;br/&gt;auto init --remote NAME --path DIR adds its folder"]
   B -->|yes| C{"squeue and sacct answer cleanly?"}
   C -->|"no: error, or anything on stderr"| X2["Stop: no action on any case"]
   C -->|yes| D{"cloud login: key through the alias, else password from remotes.json"}
@@ -214,7 +214,7 @@ flowchart TD
   DEL -->|yes| C1["Delete ASCII PLTs of verified steps"]
   C1 --> C2["Delete binary PLTs verified on cloud"]
   C2 --> C3["Delete .out of verified steps&lt;br/&gt;never the step being written, never past a queued restart"]
-  C3 --> C4["Thin .rst to the keep_rst grid you set in .auto.conf&lt;br/&gt;keep the queued restart's set and the newest complete set"]
+  C3 --> C4["Thin .rst to the auto.keep_rst grid in .cases.yml&lt;br/&gt;keep the queued restart's set and the newest complete set"]
   C4 --> RST{"Newest complete .rst set on cloud?"}
   RST -->|yes| E(["Done"])
   RST -->|no| U2["Upload it, md5 check"] --> E
@@ -303,7 +303,7 @@ flowchart TD
       <li>Is there any step of your manual routine missing from the charts?</li>
     </ul>
     <p class="note">The commands the charts belong to:</p>
-<pre class="cmds">auto init [--force]     <span># write .auto.conf to edit: remote, path, keep_rst, disk_alert   (built)</span>
+<pre class="cmds">auto init --remote NAME <span># that remote's folder and keep_rst, disk_alert in .cases.yml     (built)</span>
 auto show [case]        <span># the plan for the case (use case:), every case with case:*      (built)</span>
 auto apply [case]       <span># do it once; asks once before deleting (--yes skips)            (planned)</span>
 auto log [case]         <span># what earlier runs did                                          (planned)</span></pre>

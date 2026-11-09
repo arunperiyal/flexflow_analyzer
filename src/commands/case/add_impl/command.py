@@ -1,6 +1,5 @@
-"""case add — scan a directory for FlexFlow cases and write a .cases registry."""
+"""case add — scan a directory for FlexFlow cases and write a .cases.yml registry."""
 
-import json
 from pathlib import Path
 
 from rich.console import Console
@@ -8,11 +7,11 @@ from rich.table import Table
 from rich import box
 
 
-_CASES_FILE = '.cases'
+_CASES_FILE = '.cases.yml'
 
 
 def execute_add(args):
-    """Scan a directory for cases and build / refresh the .cases registry."""
+    """Scan a directory for cases and build / refresh the .cases.yml registry."""
     console = Console()
 
     if hasattr(args, 'help') and args.help:
@@ -96,32 +95,27 @@ def scan_for_cases(directory: Path) -> list:
 
 
 def write_cases_file(directory: Path, cases: list) -> Path:
-    """Write *cases* (a list of Paths) to directory/.cases, replacing it. Returns the path."""
-    cases_path = directory / _CASES_FILE
-    entries = [{'name': p.name, 'path': str(p)} for p in cases]
-    with open(cases_path, 'w') as f:
-        json.dump(entries, f, indent=2)
-    return cases_path
+    """Write *cases* (a list of Paths) as the `cases` of directory/.cases.yml,
+    replacing the list and keeping its `remotes` and `auto`. Returns the path."""
+    from ....core import cases_file
+    cf = cases_file.read_or_new(directory)
+    cf.cases = [{'name': p.name, 'path': str(p)} for p in cases]
+    return cases_file.write(cf)
 
 
 def load_cases_file(directory: Path) -> list:
-    """Load .cases from *directory* and return list of dicts with 'name' and 'path'."""
-    cases_path = directory / _CASES_FILE
-    if not cases_path.exists():
-        return []
+    """The cases of directory/.cases.yml, as dicts with 'name' and 'path';
+    [] when there is none or it cannot be read."""
+    from ....core import cases_file
     try:
-        with open(cases_path) as f:
-            data = json.load(f)
-        if isinstance(data, list):
-            return data
-    except Exception:
-        pass
-    return []
+        return cases_file.read(directory).cases
+    except cases_file.CasesFileError:
+        return []
 
 
 def _show_help(console):
     console.print()
-    console.print("[bold cyan]case add[/bold cyan] — Build or refresh the .cases registry")
+    console.print("[bold cyan]case add[/bold cyan] — Build or refresh the .cases.yml registry")
     console.print()
     console.print("[bold]USAGE:[/bold]")
     console.print("    case add [--dir PATH]")
@@ -133,8 +127,8 @@ def _show_help(console):
     console.print("[bold]DESCRIPTION:[/bold]")
     console.print("    Scans the immediate children of a directory for folders that contain")
     console.print("    a simflow.config file.  Presents the list and lets you exclude entries")
-    console.print("    by number before writing a .cases JSON file in the scanned directory.")
-    console.print("    Re-running always replaces the previous .cases file.")
+    console.print("    by number before writing a .cases.yml file (YAML) in the scanned directory.")
+    console.print("    Re-running always replaces the previous .cases.yml file.")
     console.print()
     console.print("[bold]EXAMPLES:[/bold]")
     console.print("    case add                    # scan current directory")

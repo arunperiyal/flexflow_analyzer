@@ -62,4 +62,17 @@ def test_add_no_cases_found(tmp_path, monkeypatch, capsys):
     execute_add(_args(dir=str(tmp_path)))
     out = capsys.readouterr().out
     assert 'No case directories found' in out
-    assert not (tmp_path / '.cases').exists()
+    assert not (tmp_path / '.cases.yml').exists()
+
+
+def test_add_keeps_the_remotes_and_auto_settings(workspace, monkeypatch):
+    from src.core import cases_file
+    cases_file.write(cases_file.CasesFile(cases_file.path_for(workspace),
+                                          cases=[{'name': 'old', 'path': '/gone/old'}],
+                                          remotes={'cloud': '/shares/x/ws'},
+                                          auto={'keep_rst': 500}))
+    monkeypatch.setattr('builtins.input', lambda: '')
+    execute_add(_args(dir=str(workspace)))
+    cf = cases_file.read(workspace)
+    assert sorted(c['name'] for c in cf.cases) == ['caseA', 'caseB']
+    assert cf.remotes == {'cloud': '/shares/x/ws'} and cf.auto == {'keep_rst': 500}

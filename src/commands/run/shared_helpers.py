@@ -19,24 +19,24 @@ def is_wildcard_case(case_name: Optional[str]) -> bool:
 
 
 def load_cases_from_directory(base_dir: Path):
-    """Load cases from .cases file in base directory."""
+    """Load cases from .cases.yml file in base directory."""
     from .. import case_iteration
     return case_iteration.load_cases_from_directory(base_dir)
 
 
 def execute_on_all_cases(case_name: str, base_dir: Path, action: Callable, action_name: str):
     """
-    Execute an action on all cases from .cases file.
+    Execute an action on all cases from .cases.yml file.
     
     Args:
         case_name: Should be "*" (wildcard marker)
-        base_dir: Base directory containing .cases file
+        base_dir: Base directory containing .cases.yml file
         action: Callable that takes (case_path: Path, case_name: str) and executes action
         action_name: Display name of action (e.g., "Main simulation", "Pre-processing")
     """
     cases = load_cases_from_directory(base_dir)
     if not cases:
-        print(f"Error: No cases found in .cases file")
+        print(f"Error: No cases found in .cases.yml file")
         return
     
     console = Console()

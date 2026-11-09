@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 
 from src.web.server import create_app
+from registry_files import write_registry
 
 EXAMPLE = Path(__file__).resolve().parent.parent / 'examples' / 'BR0SG0U1P0'
 _NEEDED_FILES = ('simflow.config', 'riser.def')
@@ -27,7 +28,7 @@ def client(tmp_path_factory):
         shutil.copy(EXAMPLE / name, case_dir / name)
     (case_dir / 'binary').mkdir()
     shutil.copy(EXAMPLE / 'binary' / 'riser.100.plt', case_dir / 'binary' / 'riser.100.plt')
-    (root / '.cases').write_text(json.dumps([{'name': 'BR0SG0U1P0', 'path': str(case_dir)}]))
+    write_registry(root, [{'name': 'BR0SG0U1P0', 'path': str(case_dir)}])
     return create_app(root).test_client()
 
 
@@ -153,7 +154,7 @@ def test_extract_caps_the_number_of_timesteps(client, tmp_path_factory):
     binary_dir.mkdir()
     for ts in range(0, 5100, 100):
         (binary_dir / f'riser.{ts}.plt').touch()
-    (root / '.cases').write_text(json.dumps([{'name': 'BR0SG0U1P0', 'path': str(case_dir)}]))
+    write_registry(root, [{'name': 'BR0SG0U1P0', 'path': str(case_dir)}])
     capped_client = create_app(root).test_client()
 
     res = capped_client.post('/api/cases/BR0SG0U1P0/field/extract', json={

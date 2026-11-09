@@ -2,8 +2,9 @@
 auto - the per-case workflow for a folder of cases (docs/AUTO_PLAN.md §13)
 
     auto init [--remote NAME] [--path DIR] [--keep-rst N] [--disk-alert SIZE]
-                         write .auto.conf here, for you to check and edit
-    auto show [case]     what auto would do for a case (use case:, or case:* for all)
+                         set a remote's folder and auto's settings in .cases.yml
+    auto show [case] [--remote NAME]
+                         what auto would do for a case (use case:, or case:* for all)
     auto apply [case]    (not built yet)
     auto log [case]      (not built yet)
 """
@@ -11,7 +12,7 @@ auto - the per-case workflow for a folder of cases (docs/AUTO_PLAN.md §13)
 from ..base import BaseCommand
 from src.cli.context import case_arg, context_flag
 
-SUBCOMMANDS = (('init', 'Write .auto.conf in this folder, for you to edit'),
+SUBCOMMANDS = (('init', "Set a remote's folder and auto's settings in .cases.yml"),
                ('show', 'What auto would do for a case, or every case with case:* (changes nothing)'),
                ('apply', 'Carry it out (not built yet)'),
                ('log', 'What earlier runs did (not built yet)'))
@@ -32,9 +33,9 @@ class AutoCommand(BaseCommand):
         parser = subparsers.add_parser(self.name, add_help=False, help=self.description)
         parser.add_argument('what', nargs='?', metavar='init|show|apply|log',
                             help='; '.join(f"{n}: {h}" for n, h in SUBCOMMANDS)).completer = _complete_sub
-        case_arg(parser, help="show: the case folder (default: use case:); '*' for every case in .cases")
+        case_arg(parser, help="show: the case folder (default: use case:); '*' for every case in .cases.yml")
         context_flag(parser, 'remote', '--remote', type=str, metavar='NAME',
-                     help='init: the remote (or use remote:NAME); `local` for a folder')
+                     help='the remote (or use remote:NAME); `local` for a folder')
         parser.add_argument('--path', metavar='DIR',
                             help="init: the folder on the remote (default: the remote's "
                                  "`remote set-path`)")
@@ -43,7 +44,7 @@ class AutoCommand(BaseCommand):
         parser.add_argument('--disk-alert', metavar='SIZE',
                             help='init: flag running cases whose run directory is bigger (e.g. 200G)')
         parser.add_argument('--force', action='store_true',
-                            help='init: replace an existing .auto.conf')
+                            help="init: replace the remote's folder already in .cases.yml")
         parser.add_argument('-h', '--help', action='store_true', help='Show help')
         return parser
 

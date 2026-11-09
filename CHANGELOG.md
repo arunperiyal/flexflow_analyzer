@@ -2,11 +2,26 @@
 
 ## Unreleased
 
+### 🗂️ `.cases.yml` replaces `.cases` (and `.auto.conf`)
+
+- **Run `case add` once in each folder of cases**: commands now read only
+  `.cases.yml`, and an old `.cases` (JSON) is not read any more.
+- One YAML file per folder: `cases` (what `case add` finds), `remotes` (the
+  folder these cases have on each remote; logins stay in `remotes.json`) and
+  `auto` (`keep_rst`, `disk_alert`, ...). `case add` rewrites only `cases`,
+  keeping the rest. Every command that went over `.cases` (`*` / `use case:*`,
+  `case report`, the web UI) reads it.
+- `case upload`/`download` and `run post --remote` put a case at
+  `<folder>/<case>`, the folder being `--remote-path`, else the remote's entry
+  in that case folder's `.cases.yml`, else `remote set-path`. Cases from
+  several folders each go to their own place, with no switching set-path.
+
 ### 🤖 `auto show`: what each case of a folder needs next
 
 - New top-level `auto`. `auto show [case]` works like `case check`: the
   case is the argument or `use case:`, and `use case:*` (or `'*'`) is every
-  case in this folder's `.cases`; with neither it is an error. It prints,
+  case in this folder's `.cases.yml`; with neither it is an error. The
+  remote is `--remote NAME` or `use remote:NAME`. It prints,
   case by case (a summary table for several), what `auto apply` will do
   (not built yet), and changes nothing: organise the history, submit a
   post job for the newest run's steps whose PLT is neither on the remote nor
@@ -14,16 +29,17 @@
   copied. Anything it will not guess is listed as **needs you**: a failed
   main job, a post job that ended badly or left steps unconverted, holes on
   the remote, a pruned `archive/`, a run stopped with nothing queued.
-- Settings in `.auto.conf` next to `.cases`, read from each case's parent
-  folder, so cases from several folders can be shown together (remote, its folder,
-  `keep_rst`, `disk_alert`); `auto --help`. `auto init` writes one with
-  every setting explained: `--remote` (or `use remote:`), `--path` (default:
-  the remote's `remote set-path`, with a warning when its last folder is not
-  this folder's name), `--keep-rst N`, `--disk-alert SIZE`. What is not known
-  is left as `EDIT_ME`, and `auto show` will not run until it is set. It does
-  not overwrite an existing one without `--force`.
+- Settings live in the folder's `.cases.yml`, read from each case's parent
+  folder, so cases from several folders can be shown together: `remotes:`
+  maps each remote to these cases' folder there (several remotes, one at a
+  time), `auto:` holds `keep_rst`, `disk_alert`, `qos/account/partition`;
+  `auto --help`. `auto init --remote NAME` sets that remote's folder
+  (`--path`, default: its `remote set-path`, with a warning when the last
+  folder is not this folder's name; an existing one is kept unless
+  `--force`) and `--keep-rst N`, `--disk-alert SIZE`. A folder it cannot
+  know is left as `EDIT_ME`, and `auto show` will not run until it is set.
 - Help -> Flowchart and docs/auto_flow.html: the auto lane starts with
-  "Write .auto.conf" (`auto init`); `auto init` and `auto show` are drawn as
+  "Set up .cases.yml" (`auto init`); `auto init` and `auto show` are drawn as
   built, `auto apply` and `auto log` still dashed as planned.
 - The queue is read once; if it cannot be read, no case is looked at. Jobs
   belong to cases by working directory; how a case's last jobs ended comes

@@ -10,7 +10,7 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog='python -m src.web',
                                       description='FlexFlow web UI')
     parser.add_argument('--root', default=None,
-                         help='Workspace directory holding .cases (default: cwd)')
+                         help='Workspace directory holding .cases.yml (default: cwd)')
     parser.add_argument('--host', default='127.0.0.1',
                          help='Bind address (default: 127.0.0.1 — loopback only)')
     parser.add_argument('--port', type=int, default=8080,

@@ -80,7 +80,7 @@ def builtins():
                         "  [cyan]--dir A,B[/cyan] Directories of the case to check, each with the\n"
                         "            directories one level in it (field render's camera views).\n"
                         "            The first word is then the case, by default `use case:`;\n"
-                        "            '*' (or use case:*) is every case in .cases here\n"
+                        "            '*' (or use case:*) is every case in .cases.yml here\n"
                         "[dim]Expects t1, t1+freq, ... up to t2; zero padding follows the files.\n"
                         "With no pattern, names that differ only in a number form a series\n"
                         "(riser.{}_0.out, riser.{}_1.out, ... one per subgrid), and each is\n"
@@ -411,7 +411,7 @@ def _missing_in_case(rt, rest, numbers, flags, dirs):
     case's directories A, B -- in it and in each subdirectory one level down,
     which is where `field render` files each camera view. The case is the
     `use case:` context when not given, else the current directory; '*' is
-    every case in the .cases registry here."""
+    every case in the .cases.yml registry here."""
     pattern = rest.pop() if rest and '{}' in rest[-1] else None
     if len(rest) > 1:
         rt.error(_MISSING_USAGE)
@@ -430,11 +430,11 @@ def _missing_in_case(rt, rest, numbers, flags, dirs):
 
 
 def _missing_in_all_cases(rt, pattern, numbers, flags, dirs):
-    """--dir over every case in .cases, one block per case, then a count."""
+    """--dir over every case in .cases.yml, one block per case, then a count."""
     from src.commands.case_iteration import load_cases_from_directory
     cases = load_cases_from_directory(rt.cwd)
     if not cases:
-        rt.error(f"missing: case is '*' but there is no .cases in {escape(str(rt.cwd))} "
+        rt.error(f"missing: case is '*' but there is no .cases.yml in {escape(str(rt.cwd))} "
                  f"(case add builds it)")
         return 2
     status, bad = 0, []

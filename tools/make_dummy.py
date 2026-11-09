@@ -370,14 +370,12 @@ def build(root: Path):
                   'missing); .out only 650-700', 'needs you: holes on the cloud (450); stopped at 700 of 1000'))
 
     # the folder
-    (bare / '.cases').write_text(json.dumps(
-        [{'name': name, 'path': str(bare / name)} for name, _, _ in cases], indent=2))
-    (bare / '.auto.conf').write_text(
-        "# what `auto` uses for this folder\n"
-        "remote     = local\n"
-        f"path       = {cloud}\n"
-        "keep_rst   = 200\n"
-        "disk_alert = 1M\n")
+    from src.core import cases_file
+    cases_file.write(cases_file.CasesFile(
+        path=cases_file.path_for(bare),
+        cases=[{'name': name, 'path': str(bare / name)} for name, _, _ in cases],
+        remotes={'local': str(cloud)},
+        auto={'keep_rst': 200, 'disk_alert': '1M'}))
     (slurm / 'queue.json').write_text(json.dumps(queue, indent=1))
     (slurm / 'history.json').write_text(json.dumps(history, indent=1))
 
@@ -404,6 +402,7 @@ Not tracked by git.
 ```
 source dummy/env.sh          # fake squeue, sacct, sbatch, scontrol, scancel first on PATH
 cd dummy/bare
+flexflow auto show '*' --remote local
 fake-slurm list              # the queue and the ended jobs
 fake-slurm start ID          # PENDING -> RUNNING
 fake-slurm finish ID TIMEOUT # leave the queue (COMPLETED, FAILED, CANCELLED, ...)
@@ -411,9 +410,9 @@ fake-slurm fail on           # squeue/sacct/scontrol fail until `fail off`
 ```
 
 `bare/` holds the cases (problem riser, nsg = 4, outFreq 50, maxTimeSteps
-1000), `cloud/bare/` what is already "on the cloud" (`.auto.conf`: remote
-`local`, i.e. a folder), `slurm/` the fake queue (`submitted.log` records every
-sbatch).
+1000) and their `.cases.yml` (the remote `local` is the folder `cloud/bare/`:
+what is already "on the cloud"), `slurm/` the fake queue (`submitted.log`
+records every sbatch).
 
 | case | state | what `auto` should do |
 |---|---|---|
@@ -439,7 +438,7 @@ def main():
         shutil.rmtree(root)
     root.mkdir(parents=True)
     build(root)
-    print(f"Built {root}: {len(list((root / 'bare').iterdir())) - 2} cases. "
+    print(f"Built {root}: {len([d for d in (root / 'bare').iterdir() if d.is_dir()])} cases. "
           f"See {root / 'README.md'}.")
 
 

@@ -10,7 +10,7 @@ anything else that needs a body can start from a name a person actually uses.
 `field` edit the result; `--check` says which of it the case still agrees with.
 
 Accepts the `*` wildcard case for the read-only paths and for `--init`, in which
-case every case in the `.cases` registry is done in turn -- a case that cannot be
+case every case in the `.cases.yml` registry is done in turn -- a case that cannot be
 done is reported and stepped over rather than ending the batch.
 """
 
@@ -465,10 +465,10 @@ def _list_all(console, logger, kind=None):
 
 
 def _registry(logger):
-    """[(name, path)] from the .cases file in the current directory."""
+    """[(name, path)] from the .cases.yml file in the current directory."""
     cases = load_cases_from_directory(Path.cwd())
     if not cases:
-        logger.error(f"No cases found. Is there a .cases file in {Path.cwd()}? "
+        logger.error(f"No cases found. Is there a .cases.yml file in {Path.cwd()}? "
                      "Build one with `case add`.")
         sys.exit(1)
     out = []
@@ -477,7 +477,7 @@ def _registry(logger):
         if path:
             out.append((entry.get('name', Path(path).name), path))
         else:
-            logger.warning(f"{entry.get('name', '?')}: no path in .cases; skipped")
+            logger.warning(f"{entry.get('name', '?')}: no path in .cases.yml; skipped")
     return out
 
 

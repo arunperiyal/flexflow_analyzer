@@ -19,7 +19,7 @@ What a case's domain is made of -- the fluid field and the bodies in it -- kept 
     flexflow case domain field [CASE] [options]
 
     CASE may be left out: the interactive case context is used, or the current
-    directory. {Colors.YELLOW}*{Colors.RESET} means every case in the .cases registry, for reading
+    directory. {Colors.YELLOW}*{Colors.RESET} means every case in the .cases.yml registry, for reading
     and for --init.
 
 {Colors.BOLD}WHY:{Colors.RESET}

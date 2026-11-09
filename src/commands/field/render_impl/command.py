@@ -662,7 +662,7 @@ def execute_render(args):
         _render_colorbar(args, logger)
         return
 
-    # `*` means every case in the .cases registry, as it does for `case out`,
+    # `*` means every case in the .cases.yml registry, as it does for `case out`,
     # `case check` and `run`. Rendering is the same job per case, so it is the
     # loop that differs, not the work.
     if is_wildcard_case(getattr(args, "case", None)):
@@ -672,7 +672,7 @@ def execute_render(args):
 
 
 def _render_all_cases(args, mode, logger):
-    """Render every case in the .cases registry of the working directory.
+    """Render every case in the .cases.yml registry of the working directory.
 
     One bad case does not stop the rest: a registry usually outlives some of
     the runs in it, and a missing binary/ in the third of twenty is a reason to
@@ -691,7 +691,7 @@ def _render_all_cases(args, mode, logger):
 
     cases = load_cases_from_directory(Path.cwd())
     if not cases:
-        logger.error(f"`*` renders every case in the .cases registry, and there "
+        logger.error(f"`*` renders every case in the .cases.yml registry, and there "
                      f"is none in {Path.cwd()}.\n"
                      f"        Build one with `case add`, or name a case "
                      f"directly: `field render {mode} <case>`.")

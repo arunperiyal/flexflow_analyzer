@@ -106,7 +106,7 @@ def _check_keep_flags(args, subcommand):
 
 def _execute_organise_on_all_cases(args, logger, console, subcommand):
     """
-    Execute organise on all cases from .cases file.
+    Execute organise on all cases from .cases.yml file.
 
     Parameters:
     -----------
@@ -119,26 +119,19 @@ def _execute_organise_on_all_cases(args, logger, console, subcommand):
     subcommand : str
         'history', 'output', 'plt' or 'vtu'
     """
-    import json
     from pathlib import Path
-    
+    from src.core import cases_file
+
     # Get base directory (current directory)
     base_dir = Path.cwd()
-    cases_file = base_dir / '.cases'
-    
-    if not cases_file.exists():
-        logger.error(f"No .cases file found in {base_dir}")
-        return
-    
     try:
-        with open(cases_file) as f:
-            cases_data = json.load(f)
-    except Exception as e:
-        logger.error(f"Could not load .cases file: {e}")
+        cases_data = cases_file.read(base_dir).cases
+    except cases_file.CasesFileError as e:
+        logger.error(str(e))
         return
-    
+
     if not cases_data:
-        logger.warning("No cases found in .cases file")
+        logger.warning("No cases found in .cases.yml file")
         return
     
     # Display header
@@ -159,7 +152,7 @@ def _execute_organise_on_all_cases(args, logger, console, subcommand):
         case_path = case_info.get('path')
         
         if not case_path:
-            logger.warning(f"Skipping case {case_name}: No path in .cases file")
+            logger.warning(f"Skipping case {case_name}: No path in .cases.yml file")
             continue
         
         case_dir = Path(case_path)

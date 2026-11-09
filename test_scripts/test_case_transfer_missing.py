@@ -137,7 +137,7 @@ def command(tmp_path):
     cmd._get_transfer_state_file = lambda: tmp_path / 'state.json'
     cmd.validate_remote = lambda name: {'user': 'u', 'ip': 'h', 'port': 22,
                                         'password': None, 'path': '/r'}
-    cmd.construct_remote_case_path = lambda base, path: '/r/CS1'
+    cmd.construct_remote_case_path = lambda base, path, *rest: '/r/CS1'
     return cmd
 
 

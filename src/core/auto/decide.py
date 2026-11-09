@@ -300,7 +300,7 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
             plan.add('delete', f"thin .rst to every {conf.keep_rst}: {steps_text(thin, f)} "
                                f"(restart point and newest set kept)")
         if snap.rst and not conf.keep_rst:
-            plan.add('note', ".rst not thinned (keep_rst not set in .auto.conf)")
+            plan.add('note', ".rst not thinned (auto.keep_rst not set in .cases.yml)")
 
     # -- stopped short --------------------------------------------------------------
     if state == 'stopped' and reached and snap.max_steps and reached < snap.max_steps \

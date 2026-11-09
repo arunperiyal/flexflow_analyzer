@@ -1,7 +1,7 @@
-"""The .cases registry, read and written non-interactively.
+"""The .cases.yml registry, read and written non-interactively.
 
 Wraps the same scan_for_cases() / write_cases_file() / load_cases_file()
-that `case add` uses, so `.cases` written from the browser is
+that `case add` uses, so `.cases.yml` written from the browser is
 byte-for-byte what the CLI would have written.
 """
 
@@ -38,7 +38,7 @@ def browse(dir_path: Path) -> dict:
     """*dir_path*'s own subdirectories, plus its parent -- for Case -> Add's
     directory browser, so finding the directory to scan doesn't require
     already knowing (and typing out) its exact absolute path. Dotfiles
-    (.git, .cases' own directory entries, etc.) are left out as clutter a
+    (.git, .cases.yml' own directory entries, etc.) are left out as clutter a
     case-directory browse never needs; a directory this process cannot
     list (permissions) is reported empty rather than raising, same as an
     empty folder -- there is nothing this dialog can do about either one."""
@@ -56,7 +56,7 @@ def browse(dir_path: Path) -> dict:
 
 def add_cases(root: Path, scan_dir: Path, exclude: set) -> list:
     """Scan *scan_dir*, drop names in *exclude*, and merge the result into
-    root/.cases -- adding a case from one directory must not lose cases
+    root/.cases.yml -- adding a case from one directory must not lose cases
     already registered from a previous scan of a different directory
     (write_cases_file always replaces the file wholesale, so the existing
     entries have to be read and folded in here first)."""
