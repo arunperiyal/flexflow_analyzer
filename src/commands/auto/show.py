@@ -100,43 +100,76 @@ def execute_show(args) -> int:
         console.print(f"[red]Error:[/red] {escape(str(e))}")
         return 2
 
+    from rich import box
+    from rich.table import Table
+    from src.core.auto.decide import _size_text
+
     console.print()
-    console.print(f"[bold]auto show[/bold]  [dim]{escape(str(folder))} -> {escape(conf.remote)}:"
-                  f"{escape(conf.path)}[/dim]")
+    console.rule(f"[bold]auto show[/bold]  [dim]{escape(folder.name)}[/dim]", style='cyan')
+    console.print(f"[dim]cases   {escape(str(folder))}\n"
+                  f"remote  {escape(conf.remote)}:{escape(conf.path)}[/dim]")
     for problem in problems:
-        console.print(f"  [bold red]![/bold red] {escape(problem)}")
+        console.print(f"[bold red]![/bold red] {escape(problem)}")
     if not results:
+        console.rule(style='cyan')
         console.print()
         return 1
 
-    total, posts, needs = 0, 0, 0
+    summary = []
     for snap, plan in results:
         console.print()
-        facts = '  ·  '.join(plan.facts)
-        console.print(f"[bold cyan]{escape(plan.name)}[/bold cyan]  "
-                      f"[{STATE_STYLE.get(plan.state, 'white')}]{plan.state}[/]"
-                      + (f"  [dim]{escape(facts)}[/dim]" if facts else ''))
+        state = f"[{STATE_STYLE.get(plan.state, 'white')}]{plan.state}[/]"
+        console.rule(f"[bold cyan]{escape(plan.name)}[/bold cyan]  {state}", align='left',
+                     style='grey50')
+        if plan.facts:
+            console.print(f"  [dim]{escape('  ·  '.join(plan.facts))}[/dim]")
         items = sorted(plan.items, key=lambda i: ORDER.index(i.kind))
+        lines = Table.grid(padding=(0, 1))
+        lines.add_column(width=3, no_wrap=True)       # indent + mark
+        lines.add_column(overflow='fold')
         if all(i.kind == 'note' for i in items):
-            console.print("  [green]✓[/green] nothing to do")
+            lines.add_row("  [green]✓[/green]", "nothing to do")
         for item in items:
             mark, style = STYLE[item.kind]
-            label = 'needs you: ' if item.kind == 'needs' else ''
-            console.print(f"  [{style}]{mark}[/] {label}{escape(item.text)}")
-        total += sum(plan.uploads.values())
-        posts += plan.post is not None
-        needs += plan.needs_you
+            label = '[bold red]needs you:[/bold red] ' if item.kind == 'needs' else ''
+            lines.add_row(f"  [{style}]{mark}[/]", label + escape(item.text))
+        console.print(lines)
+        summary.append((plan, sum(plan.uploads.values())))
 
+    # summary
     console.print()
+    console.rule("[bold]summary[/bold]", style='cyan')
+    table = Table(box=box.SIMPLE_HEAD, header_style='bold', pad_edge=False, expand=False)
+    table.add_column('case', style='cyan', no_wrap=True)
+    table.add_column('state', no_wrap=True)
+    table.add_column('post job', no_wrap=True)
+    table.add_column('upload', justify='right', no_wrap=True)
+    table.add_column('needs you', overflow='fold')
+    for plan, size in summary:
+        post = f"{plan.post[0]}-{plan.post[1]}" + (" (convert)" if plan.post[2] == 'convert' else '') \
+            if plan.post else '[dim]-[/dim]'
+        wait = next((i for i in plan.items if i.kind == 'wait'), None)
+        if wait and not plan.post:
+            post = '[yellow]waits[/yellow]'
+        needs = [i.text for i in plan.items if i.kind == 'needs']
+        first = needs[0].split(':')[0] if needs else ''
+        more = f" (+{len(needs) - 1})" if len(needs) > 1 else ''
+        table.add_row(escape(plan.name), f"[{STATE_STYLE.get(plan.state, 'white')}]{plan.state}[/]",
+                      post, _size_text(size) if size else '[dim]-[/dim]',
+                      f"[red]{escape(first)}{more}[/red]" if needs else '')
+    console.print(table)
+
+    total = sum(size for _, size in summary)
+    posts = sum(plan.post is not None for plan, _ in summary)
+    needs = sum(plan.needs_you for plan, _ in summary)
     speed = _speed_mbps()
-    if total:
-        from src.core.auto.decide import _size_text
-        upload = (f"{_size_text(total)} to upload: {_duration(total * 8 / (speed * 1e6))} "
-                  f"at {speed:g} Mbps (set transfer_speed)")
-    else:
-        upload = "nothing to upload"
-    console.print(f"[bold]{len(results)} case(s)[/bold] · {posts} post job(s) · {upload} · "
-                  + (f"[bold red]{needs} need(s) you[/bold red]" if needs else "[green]none needs you[/green]"))
+    upload = (f"{_size_text(total)} to upload, {_duration(total * 8 / (speed * 1e6))} at "
+              f"{speed:g} Mbps (set transfer_speed)" if total else "nothing to upload")
+    console.print(f"[bold]{len(summary)} case(s)[/bold] · {posts} post job(s) · "
+                  + (f"[bold red]{needs} need(s) you[/bold red]" if needs
+                     else "[green]none needs you[/green]"))
+    console.print(upload)
     console.print("[dim]Nothing was changed. `auto apply` will carry this out (not built yet).[/dim]")
+    console.rule(style='cyan')
     console.print()
     return 1 if needs or problems else 0
