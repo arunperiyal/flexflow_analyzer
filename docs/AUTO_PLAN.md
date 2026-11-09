@@ -708,8 +708,8 @@ The unit is a **run**, not a step:
 - else the newest part in `othd_files/archive/`, **never `cleaned/`**: a
   cleaned part is rewritten by `--clean` (steps a later run computed again
   are cut), so its first/last tsId are not the run's (13.10);
-- neither: no post decision; *needs you* ("no archive/ part to take the
-  window from").
+- neither: no post decision; *needs you* ("archive/ missing or empty:
+  every case keeps archive/ and cleaned/", 13.11).
 
 Its first and last tsId, rounded to outFreq, give the range `[t1, t2]`,
 trimmed to the last settled step (§4.1) and to the `restartTsId` of a
@@ -766,3 +766,23 @@ has moved past it.
   thins nothing and says so. The restart point of a queued job, the newest
   complete set and a set still being written are kept whatever the grid
   (as `case organise output` now does).
+
+### 13.11 Folder rule: every case keeps archive/ and cleaned/ (2026-11-09)
+
+A rule of the case folders, not a situation for `auto` to work around:
+**every case that has history keeps both `othd_files/{archive,cleaned}/` and
+`oisd_files/{archive,cleaned}/`.** `archive/` is never pruned
+(`case organise history --prune` is not part of the workflow, and `auto`
+never runs it).
+
+`auto show` checks the rule for each case with history (a case with no run
+yet, such as one whose main failed at once, has none and is not checked):
+- `archive/` missing or without parts while `cleaned/` has them, or
+  `cleaned/` missing while `archive/` has parts not yet cleaned (H2 makes
+  it): the case is listed under *needs you*, "archive/ pruned or missing",
+  and gets no post decision.
+- To put `archive/` back from the cloud copy:
+  `case download history --archive`.
+
+On the cluster (probe, 2026-11-09) BR0SG0U2P0, U3P0, U5P0 and U6P0 have
+only `cleaned/`; they break the rule until `archive/` is restored.

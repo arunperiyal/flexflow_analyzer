@@ -170,7 +170,7 @@ flowchart TD
   P0 -->|yes| W["Wait for it"]
   P0 -->|no| R["Look for the run: .othd in the run dir,&lt;br/&gt;else the newest archive/ part&lt;br/&gt;never cleaned/: --clean rewrites it"]
   R --> RF{"Found?"}
-  RF -->|no| NY0["Needs you: no archive/ part to take the window from"]
+  RF -->|no| NY0["Needs you: archive/ missing or empty&lt;br/&gt;every case keeps archive/ and cleaned/"]
   RF -->|yes| T["t1..t2 = its first and last tsId on the outFreq grid"]
   T --> T2["Cut t2 to the last settled step&lt;br/&gt;and to a queued restart's restartTsId"]
   T2 --> Q{"Binary PLTs of t1..t2 on cloud?"}
@@ -257,7 +257,7 @@ flowchart TD
             <td class="case">BR0SG0U3P0</td>
             <td>No job. Reached 9000 = maxTimeSteps. <span class="steps">.out 8950–9000</span>, binary/ empty</td>
             <td>Nothing in the run dir; upload <code>cleaned/</code> and compiled file if missing</td>
-            <td>No <code>archive/</code> part (pruned) and no run-dir <code>.othd</code>: <span class="chip stop">needs you</span>. By hand: <code>run post full</code> for <span class="steps">8950–9000</span> if cloud lacks them</td>
+            <td><code>archive/</code> pruned, against the folder rule: <span class="chip stop">needs you</span>. Restore it (<code>case download history --archive</code>), then <code>auto</code> posts <span class="steps">8950–9000</span> if cloud lacks them</td>
             <td>After upload: delete <span class="steps">.out 8950–9000</span>; newest <span class="steps">.rst 9000</span> set to cloud</td>
           </tr>
           <tr>
@@ -271,14 +271,14 @@ flowchart TD
             <td class="case">BR0SG0U5P0</td>
             <td>No job. Last <span class="steps">.out 8150</span>, 32 days old, of 9000. <span class="steps">.out 8050–8150</span></td>
             <td>Upload <code>cleaned/</code> and compiled file if missing</td>
-            <td>No <code>archive/</code> part (pruned) and no run-dir <code>.othd</code>: <span class="chip stop">needs you</span></td>
+            <td><code>archive/</code> pruned, against the folder rule: <span class="chip stop">needs you</span> until it is restored</td>
             <td><span class="chip stop">needs you</span> stopped short of maxTimeSteps with nothing queued</td>
           </tr>
           <tr>
             <td class="case">BR0SG0U6P0</td>
             <td>main 1222068 <span class="chip wait">PENDING</span>, resumes from 6500. No <code>.out</code>. <span class="steps">.rst 1000–7000</span></td>
             <td>Left in place</td>
-            <td>Nothing to convert (no <code>.out</code>, no <code>archive/</code> part)</td>
+            <td>Nothing to convert (no <code>.out</code>). <span class="chip stop">flag</span> <code>archive/</code> pruned, against the folder rule</td>
             <td>Keep the <span class="steps">.rst 6500</span> set for the queued restart</td>
           </tr>
           <tr>

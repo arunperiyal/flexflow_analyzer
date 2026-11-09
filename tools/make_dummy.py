@@ -318,7 +318,8 @@ def build(root: Path):
     cases.append(('case7', 'main FAILED after 16 s, no output; postFlex.sh is named '
                   'postcase6', 'needs you: main failed; job name flagged'))
 
-    # case8 -- finished, but archive/ was pruned
+    # case8 -- finished, but archive/ was pruned: breaks the folder rule
+    # (every case keeps archive/ and cleaned/)
     c = Case(bare, 'case8')
     c.archive(1, range(1, 1001), week)
     c.organise('clean', 'compile', 'prune')
@@ -326,8 +327,10 @@ def build(root: Path):
     c.rsts([200, 400, 600, 800, 1000], week)
     cloud_copy(c, cloud, c.steps(50, 900))
     job(c, 'main', 'COMPLETED', ended_days=7)
-    cases.append(('case8', 'finished (1000); archive/ pruned, only cleaned/; .out 950-1000; '
-                  'cloud up to 900', 'needs you: no archive/ part to take the window from'))
+    cases.append(('case8', 'finished (1000); archive/ pruned, only cleaned/ (against the '
+                  'folder rule); .out 950-1000; cloud up to 900',
+                  'needs you: archive/ pruned or missing; no post decision until it is '
+                  'restored (case download history --archive)'))
 
     # case9 -- broken simflow.config
     c = Case(bare, 'case9', problem=None)
