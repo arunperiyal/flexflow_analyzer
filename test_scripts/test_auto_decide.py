@@ -42,7 +42,7 @@ def kinds(plan, kind):
 
 def test_none_on_cloud_posts_the_whole_run():
     plan = decide(snap(cloud=cloud_with()), CONF, True, True)
-    assert plan.post is None and 'no PLT on the cloud and no .out here for 50-400 (8)' in kinds(plan, 'needs')[0]
+    assert plan.post is None and 'Steps 50–400 (8 steps) have no PLT on the remote and no .out here' in kinds(plan, 'needs')[0]
 
 
 def test_unbroken_prefix_posts_the_rest():
@@ -66,7 +66,7 @@ def test_whole_local_plt_counts_as_converted():
 def test_holes_need_you():
     plan = decide(snap(cloud=cloud_with(*range(50, 401, 50), 500)), CONF, True, True)
     assert plan.post is None
-    assert kinds(plan, 'needs')[0].startswith('holes on the cloud: no PLT for 450, 550-600 (2)')
+    assert kinds(plan, 'needs')[0].startswith('Holes on the remote: steps 450, 550–600 (2 steps) of 50–600 have no PLT')
 
 
 def test_running_stops_at_the_last_settled_step():
@@ -85,7 +85,7 @@ def test_queued_restart_cuts_the_window():
     plan = decide(s, CONF, True, True)
     assert plan.post == (550, 700, 'full') and plan.state == 'queued'
     assert 'binary/riser.750.plt' not in plan.uploads     # provisional
-    assert any('750 will be computed again' in n for n in kinds(plan, 'note'))
+    assert 'Step 750 is left alone: the queued job restarts from 700 and computes it again.' in kinds(plan, 'note')
 
 
 def test_ended_run_still_in_run_dir_is_organised_and_posted():
@@ -93,7 +93,7 @@ def test_ended_run_still_in_run_dir_is_organised_and_posted():
              out={t: [] for t in range(650, 801, 50)}, cloud=cloud_with(*range(50, 601, 50)),
              ended=[job('maincase', 'TIMEOUT')])
     plan = decide(s, CONF, True, True)
-    assert kinds(plan, 'history')[0].endswith('RUN_1/riser.othd -> archive/riser2.othd')
+    assert kinds(plan, 'history')[0].startswith('Move RUN_1/riser.othd and .oisd into archive/ as run 2')
     assert plan.post == (650, 800, 'full')
 
 
@@ -107,14 +107,14 @@ def test_post_that_ended_badly_needs_you():
              binary={550: PltCheck(Path('b/550'), False, 'cut short', 200)})
     plan = decide(s, CONF, True, True)
     assert plan.post is None
-    assert kinds(plan, 'needs')[0].startswith('last post job 9 ended TIMEOUT')
+    assert kinds(plan, 'needs')[0].startswith('Post job 9 ended TIMEOUT: steps')
 
 
 def test_archive_pruned_breaks_the_rule():
     s = snap(history={'othd': History(cleaned={1: Path('c/riser1.othd')}),
                       'oisd': History(cleaned={1: Path('c/riser1.oisd')})}, archive_range=None)
     plan = decide(s, CONF, True, True)
-    assert plan.post is None and 'archive/ pruned or missing' in kinds(plan, 'needs')[0]
+    assert plan.post is None and 'archive/ is pruned or missing' in kinds(plan, 'needs')[0]
 
 
 def test_convert_when_every_step_has_ascii():
@@ -132,8 +132,8 @@ def test_job_and_script_named_for_another_case_are_flagged():
     s = snap(jobs=[job('maincase1', 'RUNNING')], live=(401, 652), settled=[],
              script_names={'postFlex.sh': 'postcase6'})
     flags = kinds(decide(s, CONF, True, True), 'flag')
-    assert any('named maincase1, not maincase' in f for f in flags)
-    assert any('postFlex.sh names its job postcase6' in f for f in flags)
+    assert any('is named maincase1; for this case it should be maincase.' in f for f in flags)
+    assert any('postFlex.sh names its jobs postcase6' in f for f in flags)
 
 
 def test_failed_main_and_skipped_config_need_you():
@@ -141,19 +141,19 @@ def test_failed_main_and_skipped_config_need_you():
     s = snap(history={'othd': History(), 'oisd': History()}, archive_range=None,
              ended=[job('maincase', 'FAILED', jobid='5')])
     assert kinds(decide(s, CONF, True, True), 'needs') == [
-        'last main job 5 FAILED: find the cause (run list log)']
+        'Main job 5 FAILED. Find the cause first (run list log, case check run).']
 
 
 def test_rst_thinning_keeps_restart_point_and_newest():
     s = snap(cloud=cloud_with(*range(50, 601, 50)), restart_tsid=350,
              rst={t: 4 for t in (200, 250, 300, 350, 400, 450)})
     deletes = kinds(decide(s, CONF, True, True), 'delete')
-    assert deletes[-1].startswith('thin .rst to every 200: 250-300 (2)')
+    assert deletes[-1].startswith('Steps 250–300 (2 steps): not a multiple of 200.')
 
 
 def test_stopped_short_is_asked():
     s = snap(cloud=cloud_with(*range(50, 601, 50)), ended=[job('maincase', 'TIMEOUT')])
-    assert kinds(decide(s, CONF, True, True), 'needs')[-1].startswith('stopped at 600 of 1000')
+    assert kinds(decide(s, CONF, True, True), 'needs')[-1].startswith('Stopped at step 600 of 1000 with nothing queued')
 
 
 def test_completed_post_that_left_steps_unconverted_needs_you():
@@ -161,7 +161,7 @@ def test_completed_post_that_left_steps_unconverted_needs_you():
     s = snap(cloud=cloud_with(*range(50, 401, 50)), ended=[done],
              out_time={t: 1_000.0 for t in (450, 500, 550, 600)})
     plan = decide(s, CONF, True, True)
-    assert plan.post is None and kinds(plan, 'needs')[0].startswith('post job 7 ended COMPLETED')
+    assert plan.post is None and kinds(plan, 'needs')[0].startswith('Post job 7 ended COMPLETED')
     # .out written after that post job: posting them is right
     s.out_time = {t: 4e9 for t in (450, 500, 550, 600)}
     assert decide(s, CONF, True, True).post == (450, 600, 'full')
@@ -174,3 +174,10 @@ def test_completed_post_is_only_held_to_the_steps_it_was_given():
              post_windows={'7': (400, 450)})
     # it was given 400..450 only (and made them); 500-600 are new work
     assert decide(s, CONF, True, True).post == (500, 600, 'full')
+
+
+def test_steps_read_as_a_phrase():
+    from src.core.auto.decide import steps_phrase, steps_text
+    assert steps_phrase([750], 50) == 'Step 750'
+    assert steps_phrase([450, 500, 550, 700], 50) == 'Steps 450–550 (3 steps), 700'
+    assert steps_text([5, 10, 15], 5) == '5–15 (3 steps)'
