@@ -29,10 +29,15 @@ BAD_END = ('FAILED', 'TIMEOUT', 'CANCELLED', 'NODE_FAIL', 'OUT_OF_MEMORY', 'PREE
            'BOOT_FAIL', 'DEADLINE')
 
 
+TOPIC_OF = {'needs': 'needs', 'flag': 'flag', 'history': 'history', 'post': 'post',
+            'wait': 'post', 'upload': 'upload', 'delete': 'delete', 'note': 'other'}
+
+
 @dataclass
 class Item:
     kind: str
     text: str
+    topic: str = 'other'        # the heading it is shown under: TOPIC_OF[kind] unless given
 
 
 @dataclass
@@ -44,8 +49,8 @@ class CasePlan:
     uploads: Dict[str, int] = field(default_factory=dict)    # relative path -> bytes
     post: Optional[Tuple[int, int, str]] = None              # (t1, t2, 'full' | 'convert')
 
-    def add(self, kind, text):
-        self.items.append(Item(kind, text))
+    def add(self, kind, text, topic=None):
+        self.items.append(Item(kind, text, topic or TOPIC_OF[kind]))
 
     @property
     def needs_you(self) -> bool:
@@ -53,17 +58,22 @@ class CasePlan:
 
 
 def steps_text(steps: List[int], freq: Optional[int], limit: int = 8) -> str:
-    """Steps as runs: '450-600 (4), 700'."""
+    """Steps as runs: '450–600 (4 steps), 700'."""
     runs: List[List[int]] = []
     for t in sorted(steps):
         if runs and freq and t - runs[-1][-1] == freq:
             runs[-1].append(t)
         else:
             runs.append([t])
-    parts = [str(r[0]) if len(r) == 1 else f"{r[0]}-{r[-1]} ({len(r)})" for r in runs]
+    parts = [str(r[0]) if len(r) == 1 else f"{r[0]}–{r[-1]} ({len(r)} steps)" for r in runs]
     if len(parts) > limit:
         parts = parts[:limit // 2] + [f"... {len(parts) - limit} more ..."] + parts[-limit // 2:]
     return ', '.join(parts)
+
+
+def steps_phrase(steps: List[int], freq: Optional[int]) -> str:
+    """'Step 750' or 'Steps 450–600 (4 steps)': the noun agrees with the count."""
+    return f"{'Step' if len(steps) == 1 else 'Steps'} {steps_text(steps, freq)}"
 
 
 def _size_text(n: int) -> str:
@@ -83,7 +93,7 @@ def _ended_at(job) -> Optional[float]:
 def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan:
     if snap.error:
         plan = CasePlan(snap.name, 'skipped')
-        plan.add('needs', f"skipped: {snap.error}")
+        plan.add('needs', f"Skipped: {snap.error}.")
         return plan
 
     p, f, name = snap.problem, snap.out_freq, snap.name
@@ -100,26 +110,31 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
              else 'stopped' if has_history or last_main else 'new')
     plan = CasePlan(name, state)
     if reached:
-        of = f" of {snap.max_steps}" if snap.max_steps else ''
-        plan.facts.append(f"step {reached}{of}")
+        of = (f" of {snap.max_steps} ({100 * reached // snap.max_steps}%)"
+              if snap.max_steps else '')
+        plan.facts.append(f"reached step {reached}{of}")
     for job in main_now + post_now:
-        plan.facts.append(f"{job.name} {job.jobid} {job.state}")
+        resume = (f", restarts from {snap.restart_tsid}"
+                  if job.kind == 'main' and job.pending and snap.restart_tsid is not None else '')
+        plan.facts.append(f"{job.kind} job {job.jobid} {job.state.lower()}{resume}")
     cloud = snap.cloud if cloud_ok else None
 
     # -- flags ------------------------------------------------------------------
     for job in snap.jobs:
         if job.kind != 'other' and not job.named_for(name):
-            plan.add('flag', f"job {job.jobid} is named {job.name}, not {job.kind}{name} "
-                             f"(a job script copied from another case?)")
+            plan.add('flag', f"Job {job.jobid} is named {job.name}; for this case it should be "
+                             f"{job.kind}{name}. Was its job script copied from another case?")
     for script, kind in (('mainFlex.sh', 'main'), ('postFlex.sh', 'post')):
         got = snap.script_names.get(script)
         if got and got != f"{kind}{name}":
-            plan.add('flag', f"{script} names its job {got}, not {kind}{name}")
+            plan.add('flag', f"{script} names its jobs {got}; for this case it should be "
+                             f"{kind}{name}.")
     if running and conf.disk_alert and snap.run_size > conf.disk_alert:
-        plan.add('flag', f"run directory {_size_text(snap.run_size)}, over disk_alert "
-                         f"({_size_text(conf.disk_alert)})")
+        plan.add('flag', f"The run directory holds {_size_text(snap.run_size)}, more than "
+                         f"disk_alert ({_size_text(conf.disk_alert)}).")
     if last_main and last_main.state == 'FAILED' and not main_now:
-        plan.add('needs', f"last main job {last_main.jobid} FAILED: find the cause (run list log)")
+        plan.add('needs', f"Main job {last_main.jobid} FAILED. Find the cause first "
+                          f"(run list log, case check run).")
 
     # -- the folder rule: archive/ and cleaned/ ---------------------------------
     broken_rule = []
@@ -129,41 +144,45 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
             broken_rule.append(f"{ext}_files/archive/ lacks run(s) {', '.join(map(str, missing))} "
                                f"that cleaned/ has")
     if broken_rule:
-        plan.add('needs', "archive/ pruned or missing: " + '; '.join(broken_rule) +
-                 " -- every case keeps archive/ and cleaned/ (case download history --archive)")
+        plan.add('needs', "archive/ is pruned or missing: " + '; '.join(broken_rule) +
+                 ". Every case keeps archive/ and cleaned/; restore it with "
+                 "`case download history --archive`. No post decision until then.")
 
     # -- history ------------------------------------------------------------------
     organising = False
     if snap.live:
         if main_now:
-            plan.add('note', f"history stays in {snap.run_rel}/ while main job is "
-                             f"{main_now[0].state.lower()}")
+            plan.add('note', f"Left in {snap.run_rel}/ while main job {main_now[0].jobid} is "
+                             f"{main_now[0].state.lower()}; it is archived after the job ends.",
+                     'history')
             if running and cloud is not None:
                 stale = {k: v for k, v in snap.live_files.items() if cloud.get(k) != v}
                 if stale:
                     plan.uploads.update(stale)
-                    plan.add('upload', f"snapshot of the live {p}.othd/.oisd "
-                                       f"({_size_text(sum(stale.values()))})")
+                    plan.add('upload', f"A copy of the live {p}.othd and {p}.oisd "
+                                       f"({_size_text(sum(stale.values()))}), refreshed each run")
         elif not broken_rule:
             numbers = [n for h in snap.history.values() for n in (*h.archive, *h.cleaned)]
             n = max(numbers, default=0) + 1
-            plan.add('history', f"organise history --update --clean --compile: "
-                                f"{snap.run_rel}/{p}.othd -> archive/{p}{n}.othd")
+            plan.add('history', f"Move {snap.run_rel}/{p}.othd and .oisd into archive/ as run "
+                                f"{n}, then clean and compile "
+                                f"(organise history --update --clean --compile)")
             organising = True
     if not organising and not broken_rule:
         uncleaned = sorted(set(snap.history['othd'].archive) - set(snap.history['othd'].cleaned))
         if uncleaned:
-            plan.add('history', f"organise history --clean --compile (archive part(s) "
-                                f"{', '.join(map(str, uncleaned))} not in cleaned/)")
+            plan.add('history', f"Clean and compile archive run(s) "
+                                f"{', '.join(map(str, uncleaned))}, not yet in cleaned/ "
+                                f"(organise history --clean --compile)")
             organising = True
     if cloud is not None:
         hist = {k: v for k, v in snap.files.items() if k.startswith(('othd_files/', 'oisd_files/'))
                 and cloud.get(k) != v}
         if organising:
-            plan.add('upload', "the history, once organised")
+            plan.add('upload', "The history files, once organised")
         elif hist:
             plan.uploads.update(hist)
-            plan.add('upload', f"history: {len(hist)} file(s), {_size_text(sum(hist.values()))}")
+            plan.add('upload', f"History files: {len(hist)} ({_size_text(sum(hist.values()))})")
 
     # -- the post decision --------------------------------------------------------
     provisional = (lambda t: pending and snap.restart_tsid is not None and t > snap.restart_tsid)
@@ -172,18 +191,18 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
     local_ok = (lambda t: t in snap.binary and snap.binary[t].ok)
     covered: List[int] = []                 # steps whose PLT is whole here or on the cloud
     if post_now:
-        plan.add('wait', f"post job {post_now[0].jobid} is {post_now[0].state.lower()}: "
-                         f"nothing posted or uploaded for its steps until it ends")
+        plan.add('wait', f"Post job {post_now[0].jobid} is {post_now[0].state.lower()}: nothing "
+                         f"is posted or uploaded for this case until it ends.")
     elif broken_rule:
         pass
     elif window is None:
         if not has_history and not last_main:
-            plan.add('note', "no run yet")
+            plan.add('note', "No run yet.")
     elif cloud is None:
-        plan.add('note', "post: not decided (the cloud could not be listed)")
+        plan.add('note', "Not decided: the remote could not be listed.", 'post')
     elif not sacct_ok:
-        plan.add('note', "post: not decided (sacct could not be read, so how the last "
-                         "post job ended is unknown)")
+        plan.add('note', "Not decided: sacct could not be read, so how the last post job "
+                         "ended is unknown.", 'post')
     else:
         t1 = math.ceil(window[0] / f) * f
         t2 = math.floor(window[1] / f) * f
@@ -207,41 +226,49 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
                   and snap.out_time[t] < ended_at
                   and (given is None or given[0] <= t <= given[1])]
         if not grid:
-            plan.add('note', "post: no step settled yet")
+            plan.add('note', "No post job yet: no step of the run is finished.", 'post')
         elif not missing:
-            plan.add('note', f"post: PLTs of {t1}-{t2} all on the cloud or here")
+            plan.add('note', f"No post job needed: every step {t1}–{t2} has a PLT, on the "
+                             f"remote or in binary/.", 'post')
         elif missed and not bad_post:
-            plan.add('needs', f"post job {last_post.jobid} ended {last_post.state} after the .out "
-                              f"of {steps_text(missed, f)} were written, but they have no whole "
-                              f"PLT here or on the cloud: check its log (run list log)")
+            plan.add('needs', f"Post job {last_post.jobid} ended {last_post.state} after the .out "
+                              f"of steps {steps_text(missed, f)} were written, yet they have no "
+                              f"whole PLT here or on the remote. Check its log (run list log) "
+                              f"before posting them again.")
         elif bad_post:
             broken = [t for t in grid if t in snap.binary and not snap.binary[t].ok]
-            detail = f"; broken: {steps_text(broken, f)}" if broken else ''
-            plan.add('needs', f"last post job {bad_post.jobid} ended {bad_post.state}: no whole "
-                              f"PLT for {steps_text(missing, f)}{detail}. Post them again by hand")
+            detail = f" (broken: {steps_text(broken, f)})" if broken else ''
+            plan.add('needs', f"Post job {bad_post.jobid} ended {bad_post.state}: steps "
+                              f"{steps_text(missing, f)} have no whole PLT{detail}. Post them again "
+                              f"by hand once the cause is known.")
         else:
             prefix = grid[:len(have)] == have
             if have and not prefix:
-                plan.add('needs', f"holes on the cloud: no PLT for {steps_text(missing, f)} in "
-                                  f"{t1}-{t2}, while later steps have one")
+                plan.add('needs', f"Holes on the remote: steps {steps_text(missing, f)} of "
+                                  f"{t1}–{t2} have no PLT, while later steps have one. Find out "
+                                  f"why before posting.")
             else:
                 start = missing[0]
                 todo = [t for t in grid if t >= start]
                 no_input = [t for t in todo if t not in snap.settled and t not in snap.ascii]
                 if no_input:
-                    plan.add('needs', f"no PLT on the cloud and no .out here for "
-                                      f"{steps_text(no_input, f)}")
+                    plan.add('needs', f"Steps {steps_text(no_input, f)} have no PLT on the remote "
+                                      f"and no .out here to make one from.")
                 else:
                     mode = 'convert' if all(t in snap.ascii for t in todo) else 'full'
                     plan.post = (todo[0], todo[-1], mode)
-                    src = f"live {p}.othd" if snap.live else \
+                    src = f"{snap.run_rel}/{p}.othd" if snap.live else \
                         f"archive/{p}{max(snap.history['othd'].archive)}.othd"
-                    plan.add('post', f"run post {mode} --t1 {todo[0]} --t2 {todo[-1]} "
-                                     f"({len(todo)} steps; window from {src})")
+                    plan.add('post', f"Submit `run post {mode} --t1 {todo[0]} --t2 {todo[-1]}`: "
+                                     f"{len(todo)} step{'s' if len(todo) != 1 else ''} of the run "
+                                     f"in {src} with no PLT yet")
         later = [t for t in snap.out if pending and provisional(t)]
         if later:
-            plan.add('note', f"{steps_text(sorted(later), f)} will be computed again by the "
-                             f"queued restart from {snap.restart_tsid}: left alone")
+            plan.add('note', f"{steps_phrase(sorted(later), f)} "
+                             f"{'is' if len(later) == 1 else 'are'} left alone: the queued job "
+                             f"restarts from {snap.restart_tsid} and computes "
+                             f"{'it' if len(later) == 1 else 'them'} again.",
+                     'post')
 
     # -- uploads: binary PLTs, the newest restart set, inputs and program files ----
     if cloud is not None and not post_now:
@@ -249,8 +276,8 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
                 if c.ok and not provisional(t) and cloud.get(f"binary/{p}.{t}.plt") != c.size}
         if plts:
             plan.uploads.update(plts)
-            plan.add('upload', f"binary PLT {steps_text([int(k.split('.')[1]) for k in plts], f)} "
-                               f"({_size_text(sum(plts.values()))})")
+            plan.add('upload', f"Binary PLTs, {steps_phrase([int(k.split('.')[1]) for k in plts], f).lower()}: "
+                               f"{_size_text(sum(plts.values()))}")
         sets = [t for t, n in snap.rst.items() if snap.nsg and n == snap.nsg and not provisional(t)
                 and not (running and snap.live and t >= snap.live[1])]
         if sets:
@@ -258,17 +285,17 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
             stale = {k: v for k, v in snap.rst_files.get(newest, {}).items() if cloud.get(k) != v}
             if stale:
                 plan.uploads.update(stale)
-                plan.add('upload', f"newest restart set {newest} ({len(stale)} file(s), "
-                                   f"{_size_text(sum(stale.values()))})")
+                plan.add('upload', f"Newest restart set, step {newest}: {len(stale)} files, "
+                                   f"{_size_text(sum(stale.values()))}")
         inputs = {k: v for k, v in snap.files.items()
                   if not k.startswith(('othd_files/', 'oisd_files/')) and cloud.get(k) != v}
         if inputs:
             plan.uploads.update(inputs)
-            plan.add('upload', f"inputs and program files: {len(inputs)} file(s) "
+            plan.add('upload', f"Inputs and case files: {len(inputs)} files "
                                f"({', '.join(sorted(inputs)[:4])}{', ...' if len(inputs) > 4 else ''})")
     for t, c in sorted(snap.binary.items()):
         if not c.ok:
-            plan.add('flag', f"binary/{p}.{t}.plt: {c.reason}")
+            plan.add('flag', f"binary/{p}.{t}.plt is broken: {c.reason}.")
 
     # -- deletions, once the copies on the cloud are checked ----------------------
     if cloud is not None and not post_now:
@@ -278,11 +305,11 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
         binary = [t for t in gone if local_ok(t)]
         parts = []
         if ascii:
-            parts.append(f"ASCII PLT {steps_text(ascii, f)}")
+            parts.append(f"ASCII PLTs, {steps_phrase(ascii, f).lower()}")
         if binary:
-            parts.append(f"binary PLT {steps_text(binary, f)}")
+            parts.append(f"Binary PLTs, {steps_phrase(binary, f).lower()}")
         if outs:
-            parts.append(f".out of {steps_text(outs, f)}")
+            parts.append(f".out files, {steps_phrase(outs, f).lower()}")
         thin = []
         if conf.keep_rst and snap.rst:
             keep = set()
@@ -295,16 +322,19 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
             thin = [t for t in snap.rst if t % conf.keep_rst and t not in keep
                     and not provisional(t) and not (running and snap.live and t >= snap.live[1])]
         if parts:
-            plan.add('delete', "once their copy on the cloud is checked: " + '; '.join(parts))
+            for part in parts:
+                plan.add('delete', part)
         if conf.keep_rst and snap.rst and thin:
-            plan.add('delete', f"thin .rst to every {conf.keep_rst}: {steps_text(thin, f)} "
-                               f"(restart point and newest set kept)")
+            plan.add('delete', f"{steps_phrase(thin, f)}: not a multiple of {conf.keep_rst}. "
+                               f"The restart point and the newest set stay.", 'thin')
         if snap.rst and not conf.keep_rst:
-            plan.add('note', ".rst not thinned (auto.keep_rst not set in .cases.yml)")
+            plan.add('note', "Not thinned: auto.keep_rst is not set (auto init --keep-rst N).",
+                     'thin')
 
     # -- stopped short --------------------------------------------------------------
     if state == 'stopped' and reached and snap.max_steps and reached < snap.max_steps \
             and last_main and last_main.state != 'FAILED':
-        plan.add('needs', f"stopped at {reached} of {snap.max_steps} with nothing queued "
-                          f"(last main job {last_main.state}): queue a restart?")
+        plan.add('needs', f"Stopped at step {reached} of {snap.max_steps} with nothing queued "
+                          f"(main job {last_main.jobid} ended {last_main.state}). Queue a restart "
+                          f"(run main restart <tsId>)?")
     return plan

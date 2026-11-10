@@ -1,6 +1,7 @@
 """auto show [case]: what auto would do for a case, or for every case with
 `use case:*`. Reads only."""
 
+import re
 from pathlib import Path
 
 from rich.console import Console
@@ -13,7 +14,42 @@ STYLE = {
 }
 STATE_STYLE = {'running': 'green', 'queued': 'yellow', 'post running': 'yellow',
                'done': 'bold green', 'stopped': 'cyan', 'new': 'dim', 'skipped': 'red'}
-ORDER = ('flag', 'needs', 'wait', 'history', 'post', 'upload', 'delete', 'note')
+# a case's lines, grouped under these headings in this order
+TOPICS = (('needs', 'Needs you', 'bold red'),
+          ('flag', 'Worth a look', 'yellow'),
+          ('history', 'History (.othd, .oisd)', 'cyan'),
+          ('post', 'Post-processing', 'green'),
+          ('upload', 'Upload to {remote}', 'green'),
+          ('delete', 'Delete here, once the copy on {remote} is checked', 'magenta'),
+          ('thin', 'Thin restart files (.rst)', 'magenta'),
+          ('other', 'Notes', 'dim'))
+
+
+def _print_case(console, plan, conf):
+    """The facts line, then the case's lines under their headings."""
+    from rich.table import Table
+    from src.core.auto.decide import _size_text
+    if plan.facts:
+        facts = '  ·  '.join(plan.facts)
+        console.print(f"  {escape(facts[:1].upper() + facts[1:])}")
+    if all(i.kind == 'note' for i in plan.items):
+        console.print("  [green]✓[/green] nothing to do")
+    for topic, heading, style in TOPICS:
+        items = [i for i in plan.items if i.topic == topic]
+        if not items:
+            continue
+        heading = heading.format(remote=conf.remote)
+        if topic == 'upload' and plan.uploads:
+            total = sum(plan.uploads.values())
+            heading += f"  [dim]{_size_text(total)}, {_duration(total * 8 / (_speed_mbps() * 1e6))}[/dim]"
+        console.print(f"  [{style}]{heading}[/]")
+        lines = Table.grid(padding=(0, 1))
+        lines.add_column(width=5, no_wrap=True)       # indent + mark
+        lines.add_column(overflow='fold')
+        for item in items:
+            mark, mark_style = STYLE[item.kind]
+            lines.add_row(f"    [{mark_style}]{mark}[/]", escape(item.text))
+        console.print(lines)
 
 
 def _speed_mbps() -> float:
@@ -32,7 +68,7 @@ def _duration(seconds: float) -> str:
     if minutes < 1:
         return "under a minute"
     hours, minutes = divmod(minutes, 60)
-    return f"{hours} h {minutes} min" if hours else f"{minutes} min"
+    return f"about {hours} h {minutes} min" if hours else f"about {minutes} min"
 
 
 def resolve_cases(case, base_dir: Path):
@@ -144,7 +180,7 @@ def execute_show(args) -> int:
     title = case_dirs[0].name if len(case_dirs) == 1 else f"{len(case_dirs)} cases"
     console.rule(f"[bold]auto show[/bold]  [dim]{escape(title)}[/dim]", style='cyan')
     for folder, conf in confs.items():
-        console.print(f"[dim]cases   {escape(str(folder))}\n"
+        console.print(f"[dim]folder  {escape(str(folder))}\n"
                       f"remote  {escape(conf.remote)}:{escape(conf.path)}[/dim]")
     for problem in problems:
         console.print(f"[bold red]![/bold red] {escape(problem)}")
@@ -155,23 +191,12 @@ def execute_show(args) -> int:
 
     summary = []
     for snap, plan in results:
+        conf = confs[Path(snap.dir).parent]
         console.print()
         state = f"[{STATE_STYLE.get(plan.state, 'white')}]{plan.state}[/]"
         console.rule(f"[bold cyan]{escape(plan.name)}[/bold cyan]  {state}", align='left',
                      style='grey50')
-        if plan.facts:
-            console.print(f"  [dim]{escape('  ·  '.join(plan.facts))}[/dim]")
-        items = sorted(plan.items, key=lambda i: ORDER.index(i.kind))
-        lines = Table.grid(padding=(0, 1))
-        lines.add_column(width=3, no_wrap=True)       # indent + mark
-        lines.add_column(overflow='fold')
-        if all(i.kind == 'note' for i in items):
-            lines.add_row("  [green]✓[/green]", "nothing to do")
-        for item in items:
-            mark, style = STYLE[item.kind]
-            label = '[bold red]needs you:[/bold red] ' if item.kind == 'needs' else ''
-            lines.add_row(f"  [{style}]{mark}[/]", label + escape(item.text))
-        console.print(lines)
+        _print_case(console, plan, conf)
         summary.append((plan, sum(plan.uploads.values())))
 
     # summary: the table for several cases, the totals always
@@ -190,7 +215,7 @@ def execute_show(args) -> int:
         if wait and not plan.post:
             post = '[yellow]waits[/yellow]'
         needs = [i.text for i in plan.items if i.kind == 'needs']
-        first = needs[0].split(':')[0] if needs else ''
+        first = re.split(r'[:.](?:\s|$)', needs[0])[0] if needs else ''
         more = f" (+{len(needs) - 1})" if len(needs) > 1 else ''
         table.add_row(escape(plan.name), f"[{STATE_STYLE.get(plan.state, 'white')}]{plan.state}[/]",
                       post, _size_text(size) if size else '[dim]-[/dim]',
@@ -203,7 +228,7 @@ def execute_show(args) -> int:
     needs = sum(plan.needs_you for plan, _ in summary)
     speed = _speed_mbps()
     upload = (f"{_size_text(total)} to upload, {_duration(total * 8 / (speed * 1e6))} at "
-              f"{speed:g} Mbps (set transfer_speed)" if total else "nothing to upload")
+              f"{speed:g} Mbps (change with `set transfer_speed`)" if total else "nothing to upload")
     console.print(f"[bold]{len(summary)} case(s)[/bold] · {posts} post job(s) · "
                   + (f"[bold red]{needs} need(s) you[/bold red]" if needs
                      else "[green]none needs you[/green]"))

@@ -46,19 +46,20 @@ def test_every_case_gets_what_the_readme_says(dummy):
         'case5', 'case6', 'case7', 'case8', 'case9', 'case11'}
     assert [i.kind for i in got['case1'].items] == ['note']            # nothing to do
     assert [i.kind for i in got['case4'].items] == ['wait']
-    assert got['case6'].post is None and needs(got['case6'])[0].startswith('last post job')
-    assert 'archive/ pruned or missing' in needs(got['case8'])[0]
-    assert needs(got['case11'])[0].startswith('holes on the cloud: no PLT for 450')
+    assert got['case6'].post is None and needs(got['case6'])[0].startswith('Post job')
+    assert 'archive/ is pruned or missing' in needs(got['case8'])[0]
+    assert needs(got['case11'])[0].startswith('Holes on the remote: steps 450')
     assert got['case9'].state == 'skipped'
     assert [i.text for i in got['case5'].items if i.kind == 'history'] == [
-        'organise history --update --clean --compile: RUN_1/riser.othd -> archive/riser2.othd']
+        'Move RUN_1/riser.othd and .oisd into archive/ as run 2, then clean and compile '
+        '(organise history --update --clean --compile)']
 
 
 def test_a_job_named_for_case1_does_not_make_case1_busy(dummy):
     got, _ = plans(dummy)
     assert got['case1'].state == 'done'
     assert got['case10'].state == 'running'
-    assert any('named maincase1, not maincase10' in i.text for i in got['case10'].items)
+    assert any('named maincase1; for this case it should be maincase10' in i.text for i in got['case10'].items)
 
 
 def test_unreadable_queue_looks_at_no_case(dummy):
@@ -87,8 +88,8 @@ def test_a_completed_post_that_made_no_plt_needs_you(dummy):
     # it 'completed' after the .out of 650-800 were written but made no PLT
     # (it is fake): auto does not post them again blindly
     assert got['case4'].post is None
-    assert needs(got['case4'])[0].startswith(f"post job {post4['jobid']} ended COMPLETED after "
-                                             f"the .out of 650-800 (4) were written")
+    assert needs(got['case4'])[0].startswith(f"Post job {post4['jobid']} ended COMPLETED after "
+                                             f"the .out of steps 650–800 (4 steps) were written")
 
 
 # --- which cases: the argument, `use case:`, or '*' -----------------------------
@@ -162,6 +163,11 @@ def test_the_case_context(dummy, monkeypatch, capsys):
     assert rt.execute_line('auto show --remote local') == 0
     out = capsys.readouterr().out
     assert 'case3  queued' in out and 'case2' not in out and 'summary' not in out
+    # a case's lines come under headings
+    for heading in ('History (.othd, .oisd)', 'Post-processing', 'Upload to local',
+                    'Thin restart files (.rst)'):
+        assert heading in out
+    assert 'main job 1300105 pending, restarts from 700' in out
     assert rt.execute_line('use case:*') == 0
     assert rt.execute_line('auto show --remote local') == 1      # some cases need you
     out = capsys.readouterr().out
