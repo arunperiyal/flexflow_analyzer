@@ -44,7 +44,12 @@ def test_every_case_gets_what_the_readme_says(dummy):
     }
     assert {n for n, p in got.items() if p.needs_you} == {
         'case5', 'case6', 'case7', 'case8', 'case9', 'case11'}
-    assert [i.kind for i in got['case1'].items] == ['note']            # nothing to do
+    assert {i.kind for i in got['case1'].items} == {'note'}            # nothing to do
+    assert [i.text for i in got['case1'].items] == [
+        'The newest run is archive/riser1.othd (steps 1–1000). It writes output every 50 steps: '
+        '20 from 50 to 1000.',
+        'No post job needed: all 20 output steps have a PLT (20 on local). Matched by file name '
+        'and size; the md5 is checked before anything is deleted.']
     assert [i.kind for i in got['case4'].items] == ['wait']
     assert got['case6'].post is None and needs(got['case6'])[0].startswith('Post job')
     assert 'archive/ is pruned or missing' in needs(got['case8'])[0]

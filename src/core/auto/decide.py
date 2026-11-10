@@ -217,6 +217,23 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
         have = [t for t in grid if on_cloud(t) or local_ok(t)]
         covered = have
         missing = [t for t in grid if t not in have]
+
+        # which run, and why its output steps run from t1 to t2
+        src = (f"{snap.run_rel}/{p}.othd" if snap.live
+               else f"archive/{p}{max(snap.history['othd'].archive)}.othd")
+        if running:
+            cut = ", the last one the running job has finished."
+        elif pending and snap.restart_tsid is not None and t2 < window[1]:
+            cut = f"; it stops there because the queued job restarts from {snap.restart_tsid}."
+        else:
+            cut = '.'
+        if grid:
+            plan.add('note', f"The newest run is {src} (steps {window[0]}–{window[1]}). It writes "
+                             f"output every {f} steps: {len(grid)} from {t1} to {t2}{cut}", 'post')
+        n_cloud = sum(1 for t in grid if on_cloud(t))
+        n_here = sum(1 for t in grid if local_ok(t) and not on_cloud(t))
+        where = f"{n_cloud} on {conf.remote}" + (f", {n_here} only in binary/ (not uploaded yet)"
+                                                 if n_here else '')
         bad_post = last_post if last_post and last_post.state in BAD_END else None
         # a post job that ended after these steps' .out were written should have
         # made their PLTs: if it did not, something is wrong -- do not repost blindly
@@ -228,8 +245,9 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
         if not grid:
             plan.add('note', "No post job yet: no step of the run is finished.", 'post')
         elif not missing:
-            plan.add('note', f"No post job needed: every step {t1}–{t2} has a PLT, on the "
-                             f"remote or in binary/.", 'post')
+            plan.add('note', f"No post job needed: all {len(grid)} output steps have a PLT "
+                             f"({where}). Matched by file name and size; the md5 is checked "
+                             f"before anything is deleted.", 'post')
         elif missed and not bad_post:
             plan.add('needs', f"Post job {last_post.jobid} ended {last_post.state} after the .out "
                               f"of steps {steps_text(missed, f)} were written, yet they have no "
@@ -257,11 +275,11 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
                 else:
                     mode = 'convert' if all(t in snap.ascii for t in todo) else 'full'
                     plan.post = (todo[0], todo[-1], mode)
-                    src = f"{snap.run_rel}/{p}.othd" if snap.live else \
-                        f"archive/{p}{max(snap.history['othd'].archive)}.othd"
+                    already = (f"; the {len(have)} before {todo[0]} have one ({where})"
+                               if have else '')
                     plan.add('post', f"Submit `run post {mode} --t1 {todo[0]} --t2 {todo[-1]}`: "
-                                     f"{len(todo)} step{'s' if len(todo) != 1 else ''} of the run "
-                                     f"in {src} with no PLT yet")
+                                     f"{len(todo)} output step{'s' if len(todo) != 1 else ''} "
+                                     f"with no PLT yet{already}")
         later = [t for t in snap.out if pending and provisional(t)]
         if later:
             plan.add('note', f"{steps_phrase(sorted(later), f)} "

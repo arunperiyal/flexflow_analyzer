@@ -181,3 +181,17 @@ def test_steps_read_as_a_phrase():
     assert steps_phrase([750], 50) == 'Step 750'
     assert steps_phrase([450, 500, 550, 700], 50) == 'Steps 450–550 (3 steps), 700'
     assert steps_text([5, 10, 15], 5) == '5–15 (3 steps)'
+
+
+def test_post_says_which_run_and_where_the_plts_are():
+    binary = {t: PltCheck(Path(f'b/{t}'), True, '', 424, 424) for t in (550, 600)}
+    plan = decide(snap(cloud=cloud_with(*range(50, 501, 50)), binary=binary), CONF, True, True)
+    notes = kinds(plan, 'note')
+    assert notes[0] == ('The newest run is archive/riser1.othd (steps 1–600). It writes output '
+                        'every 50 steps: 12 from 50 to 600.')
+    assert notes[1].startswith('No post job needed: all 12 output steps have a PLT '
+                               '(10 on local, 2 only in binary/ (not uploaded yet)).')
+    s = snap(cloud=cloud_with(*range(50, 401, 50)))
+    assert kinds(decide(s, CONF, True, True), 'post') == [
+        'Submit `run post full --t1 450 --t2 600`: 4 output steps with no PLT yet; '
+        'the 8 before 450 have one (8 on local)']
