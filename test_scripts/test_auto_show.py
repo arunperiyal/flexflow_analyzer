@@ -212,7 +212,8 @@ def test_report_sections_of_a_queued_case(dummy):
     assert plt['Skipped'] == '750: the queued job restarts from 700 and computes it again'
     assert sec['plt'].actions == ['run post full case3 --t1 550 --t2 700 --no-remote']
     # uploads first (the grid set 400), then the deletion that follows
-    assert sec['rst'].actions[0] == 'case upload rst case3 --t1 400 --t2 400 --to local'
+    assert sec['rst'].actions[0] == ('case upload rst case3 --t1 400 --t2 400 --freq 400 '
+                                     '--missing --to local')
     assert sec['rst'].actions[1].startswith('auto apply: delete .rst of steps 550, 650')
     assert dict(sec['history'].rows)['Run dir'].startswith('riser.othd steps 501–760')
 
@@ -301,5 +302,93 @@ def test_the_rst_section_says_what_the_remote_holds_and_what_is_due(dummy):
     assert done['Upload'] == 'every 400 + the final set 1000: due none, up to date'
     sec = report_of(dummy, 'case12')['rst']
     assert sec.subtitle == 'keep_rst 200 · upload_rst 400'
-    assert dict(sec.rows)['Remote'] == 'none' and dict(sec.rows)['Upload'] == 'every 400: due 400'
-    assert sec.actions == ['case upload rst case12 --t1 400 --t2 400 --to local']
+    assert dict(sec.rows)['Remote'] == 'none'
+    assert dict(sec.rows)['Upload'] == 'every 400: due 400 (not there)'
+    assert sec.actions == ['case upload rst case12 --t1 400 --t2 400 --freq 400 --missing '
+                           '--to local']
+
+
+def plan_and_report(dummy, case):
+    from src.core.auto.report import build
+    results, confs, _ = gather(resolve_cases(case, dummy / 'bare'), 'local')
+    snap, plan = results[0]
+    return plan, {s.key: s for s in build(snap, plan, confs[snap.dir.parent])}
+
+
+def put_remote(dummy, case, rel, text='x'):
+    path = dummy / 'cloud' / 'bare' / case / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text)
+
+
+def test_a_set_whose_remote_copy_differs_says_it_replaces_it(dummy):
+    """The remote holds set 400 of case3, but at another size: an older run's copy."""
+    for k in range(4):
+        put_remote(dummy, 'case3', f'RUN_1/riser.400_{k}.rst', 'an older run wrote more' * 5)
+    plan, sec = plan_and_report(dummy, 'case3')
+    rows = dict(sec['rst'].rows)
+    assert rows['Remote'] == '1 sets: 400'
+    assert rows['Upload'] == 'every 400: due 400 (replaces 4 of 4 files that differ in size)'
+    assert any(i.text.startswith('Restart set 400: 4 of 4 files on local differ in size from here, '
+                                 'so they were probably written by an earlier run')
+               for i in plan.items if i.kind == 'flag')
+    assert plan.ctx['rst_why'] == {400: (0, 4, 4)}
+
+
+def test_a_restore_message_checks_whether_the_remote_has_the_archive(dummy):
+    plan, _ = plan_and_report(dummy, 'case8')
+    need = [i.text for i in plan.items if i.kind == 'needs'][0]
+    assert 'local has no archive/ copy either, so it cannot be restored from there' in need
+    for ext in ('othd', 'oisd'):                       # put the archive on the remote
+        put_remote(dummy, 'case8', f'{ext}_files/archive/riser1.{ext}')
+    plan, _ = plan_and_report(dummy, 'case8')
+    need = [i.text for i in plan.items if i.kind == 'needs'][0]
+    assert 'local has it: restore with `case download history case8 --archive --from local`' in need
+
+
+def test_history_parts_only_on_the_remote_are_flagged(dummy):
+    """BR0SG0U6P0: the remote holds archive runs 1-8; here archive/ is empty, cleaned/ has run 1."""
+    for n in range(1, 9):
+        for ext in ('othd', 'oisd'):
+            put_remote(dummy, 'case8', f'{ext}_files/archive/riser{n}.{ext}')
+    plan, sec = plan_and_report(dummy, 'case8')
+    assert dict(sec['history'].rows)['Only there'] == 'archive runs 1–8 (on local, not here)'
+    assert sec['history'].actions == ['case download history case8 --archive --from local']
+    flags = [i.text for i in plan.items if i.kind == 'flag']
+    assert ('local holds archive runs 1–8 that this case does not have (archive/ here: empty), so '
+            'they exist only on local. Bring them back with `case download history case8 '
+            '--archive --from local`.') in flags
+    assert plan.ctx['hist_only_remote'][('othd', 'archive')] == list(range(1, 9))
+
+
+def test_nothing_only_there_means_no_row_and_no_flag(dummy):
+    plan, sec = plan_and_report(dummy, 'case1')
+    assert 'Only there' not in dict(sec['history'].rows) and 'Only there' not in dict(sec['rst'].rows)
+    assert not [i for i in plan.items if i.kind == 'flag' and 'holds archive run' in i.text]
+
+
+def test_restart_sets_only_on_the_remote_are_listed(dummy):
+    for k in range(4):
+        put_remote(dummy, 'case1', f'RUN_1/riser.100_{k}.rst')
+    _, sec = plan_and_report(dummy, 'case1')
+    assert dict(sec['rst'].rows)['Only there'] == '100 (on local, not here)'
+
+
+def test_run_numbers_read_as_ranges():
+    from src.core.auto.decide import runs_text
+    assert runs_text([1, 2, 3, 4, 5, 6, 7, 8]) == '1–8'
+    assert runs_text([8, 1, 3, 4, 7]) == '1, 3–4, 7–8'
+    assert runs_text([2]) == '2' and runs_text([]) == ''
+
+
+def test_the_dry_run_says_what_the_files_are(dummy):
+    from src.commands.auto.apply import _intended
+    results, _, _ = gather(resolve_cases('case3', dummy / 'bare'), 'local')
+    items = _intended(results[0][1], {'upload'})
+    assert items[0][1] == '14 files, 26.9 KB'
+    assert [t for k, t in items if k == 'detail'] == [
+        'inputs and case files: 10 files, 26.8 KB', 'restart sets 400: 4 files, 112 B']
+    plan = results[0][1]
+    plan.ctx['rst_why'] = {400: (0, 4, 4)}                  # a set that replaces remote files
+    detail = [t for k, t in _intended(plan, {'upload'}) if k == 'detail']
+    assert 'set 400 replaces files on the remote that differ in size' in detail[1]

@@ -16,7 +16,7 @@ import time
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
-from .decide import CasePlan, _size_text, steps_phrase, steps_text
+from .decide import CasePlan, _size_text, runs_text, steps_phrase, steps_text
 from .observe import CaseSnapshot
 
 SECTIONS = ('state', 'needs', 'flags', 'history', 'plt', 'out', 'rst', 'inputs')
@@ -137,6 +137,16 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
         on_remote = sum(v for k, v in cloud.items() if k.startswith(('othd_files/', 'oisd_files/')))
         size += f" here · {_size_text(on_remote)} on {remote}"
     s.row('Size', size)
+    only = c.get('hist_only_remote') or {}
+    if only:
+        parts = []
+        for kind in ('archive', 'cleaned'):
+            runs = sorted(set(only.get(('othd', kind), [])) | set(only.get(('oisd', kind), [])))
+            if runs:
+                parts.append(f"{kind} runs {runs_text(runs)}")
+        s.row('Only there', ' · '.join(parts) + f" (on {remote}, not here)")
+    if only and (only.get(('othd', 'archive')) or only.get(('oisd', 'archive'))):
+        s.actions.append(f"case download history {name} --archive --from {remote}")
     organise = c.get('organise')
     if organise and organise[0] == 'update':
         s.actions.append(f"case organise history {name} --update --clean --compile")
@@ -255,18 +265,35 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
         part = sorted(t for t in held if t not in whole)
         s.row('Remote', (f"{len(whole)} sets: {steps_text(whole)}" if whole else 'none')
               + (f" · incomplete: {steps_text(part)}" if part else ''))
+        there_only = sorted(t for t in held if t not in snap.rst)
+        if there_only:
+            s.row('Only there', f"{steps_text(there_only)} (on {remote}, not here)")
     if conf.upload_rst:
         due, todo = c.get('rst_due') or [], c.get('rst_todo') or {}
+        why = c.get('rst_why') or {}
+
+        def reason(t):
+            absent, differ, total = why.get(t, (0, 0, 0))
+            if differ:
+                return f"{t} (replaces {differ} of {total} files that differ in size)"
+            if absent and absent < total:
+                return f"{t} ({absent} of {total} files missing there)"
+            return f"{t} (not there)"
         if cloud is not None:
-            now = ', '.join(map(str, sorted(todo))) if todo else 'none, up to date'
+            now = ', '.join(reason(t) for t in sorted(todo)) if todo else 'none, up to date'
             s.row('Upload', f"every {conf.upload_rst}"
                             + (f" + the final set {c['rst_final']}" if c.get('rst_final') else '')
                             + f": due {now}")
         if c.get('rst_lost'):
             s.row('Lost', f"{steps_text(c['rst_lost'])}: on the upload grid, but neither here "
                           f"nor on {remote}")
-        for t in sorted(todo):
-            s.actions.append(f"case upload rst {name} --t1 {t} --t2 {t} --to {remote}")
+        grid_due = [t for t in sorted(todo) if t != c.get('rst_final')]
+        if grid_due:
+            s.actions.append(f"case upload rst {name} --t1 {grid_due[0]} --t2 {grid_due[-1]} "
+                             f"--freq {conf.upload_rst} --missing --to {remote}")
+        if c.get('rst_final') in todo:
+            n = c['rst_final']
+            s.actions.append(f"case upload rst {name} --t1 {n} --t2 {n} --missing --to {remote}")
     thin = c.get('thin') or []
     if snap.rst and thin:                      # after the uploads: deleting follows from them
         s.actions.append(AUTO_ONLY + f"delete .rst of {steps_phrase(thin).lower()}: not "

@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+### 🔎 `auto show`: what the remote holds that this case does not
+
+- **History parts and restart sets only on the remote** are listed ("Only
+  there") and, for archive runs, flagged with the command to bring them back
+  (`case download history CASE --archive --from REMOTE`), which is also an
+  Action. Found on a real case: the remote held archive runs 1–8 while here
+  `archive/` was empty and `cleaned/` had run 1.
+- **The archive restore message checks the remote**: it says whether the
+  remote has the missing archive (and the command), has only part of it, or
+  has none, instead of always suggesting a download that may fail.
+- **A restart set due for upload says why**: not there, partly there, or
+  "replaces N of M files that differ in size" (an earlier run's copy, from
+  before a restart computed the step again), with a flag, so replacing
+  data on the remote is never silent.
+- **One command for the grid**: `case upload rst CASE --t1 A --t2 B --freq N
+  --missing --to REMOTE` (a final set gets its own `--t1 N --t2 N`), from the
+  new `--freq`/`--missing` for rst.
+- `auto apply --dry-run` says what the files are (restart sets with their
+  steps, history files, PLTs, inputs, live copy) and which sets replace
+  files on the remote.
+
 ### 📤 `case upload|download rst`: `--freq` and `--missing`
 
 - `case upload rst CASE --freq 1000 --missing --to cloud` sends the restart

@@ -74,6 +74,17 @@ def steps_phrase(steps: List[int], freq: Optional[int] = None) -> str:
     return f"{'Step' if len(steps) == 1 else 'Steps'} {steps_text(steps, freq)}"
 
 
+def runs_text(runs) -> str:
+    """Run numbers, consecutive ones joined: 1, 3, 5-7 (en dash)."""
+    runs, out = sorted(set(runs)), []
+    for n in runs:
+        if out and n == out[-1][1] + 1:
+            out[-1][1] = n
+        else:
+            out.append([n, n])
+    return ', '.join(str(a) if a == b else f"{a}–{b}" for a, b in out)
+
+
 def _size_text(n: int) -> str:
     for unit, div in (('GB', 1 << 30), ('MB', 1 << 20), ('KB', 1 << 10)):
         if n >= div:
@@ -183,9 +194,54 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
                                f"that cleaned/ has")
     plan.ctx['broken_rule'] = broken_rule
     if broken_rule:
+        lacking = sorted({(ext, n) for ext, h in snap.history.items()
+                          for n in set(h.cleaned) - set(h.archive)})
+        if cloud is None:
+            how = (f"restore it with `case download history {name} --archive --from {conf.remote}` "
+                   f"if {conf.remote} has it (it could not be listed)")
+        else:
+            there = [(ext, n) for ext, n in lacking
+                     if f"{ext}_files/archive/{p}{n}.{ext}" in cloud]
+            if len(there) == len(lacking):
+                how = (f"{conf.remote} has it: restore with "
+                       f"`case download history {name} --archive --from {conf.remote}`")
+            elif there:
+                how = (f"{conf.remote} has only some of it ("
+                       f"{', '.join(f'{e} run {n}' for e, n in there)}): restore those with "
+                       f"`case download history {name} --archive --from {conf.remote}`")
+            else:
+                how = (f"{conf.remote} has no archive/ copy either, so it cannot be restored "
+                       f"from there")
         plan.add('needs', "archive/ is pruned or missing: " + '; '.join(broken_rule) +
-                 ". Every case keeps archive/ and cleaned/; restore it with "
-                 "`case download history --archive`. No post decision until then.")
+                 f". Every case keeps archive/ and cleaned/; {how}. No post decision until "
+                 f"then.")
+
+    # history parts the remote holds that this case does not have (here: neither in
+    # archive/ nor in cleaned/ under that run number)
+    remote_hist = {}
+    if cloud is not None:
+        hist_pat = re.compile(rf'^(othd|oisd)_files/(archive|cleaned)/{re.escape(p)}(\d+)\.(othd|oisd)$')
+        for key in cloud:
+            m = hist_pat.match(key)
+            if m and m.group(1) == m.group(4):
+                remote_hist.setdefault((m.group(1), m.group(2)), set()).add(int(m.group(3)))
+    only_remote = {}
+    for (ext, kind), runs in remote_hist.items():
+        extra = sorted(runs - set(getattr(snap.history[ext], kind)))
+        if extra:
+            only_remote[(ext, kind)] = extra
+    plan.ctx.update(hist_remote=remote_hist, hist_only_remote=only_remote)
+    gone_archive = sorted(set(only_remote.get(('othd', 'archive'), []))
+                          | set(only_remote.get(('oisd', 'archive'), [])))
+    if gone_archive:
+        have = sorted(set(snap.history['othd'].archive) | set(snap.history['oisd'].archive))
+        plan.add('flag', f"{conf.remote} holds archive run{'s' if len(gone_archive) > 1 else ''} "
+                         f"{runs_text(gone_archive)} that this case does not have (archive/ here: "
+                         f"{runs_text(have) if have else 'empty'}), so "
+                         f"{'they exist' if len(gone_archive) > 1 else 'it exists'} only on "
+                         f"{conf.remote}. Bring "
+                         f"{'them' if len(gone_archive) > 1 else 'it'} back with "
+                         f"`case download history {name} --archive --from {conf.remote}`.")
 
     # -- history ------------------------------------------------------------------
     organising = False
@@ -388,12 +444,21 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
             if state == 'done' and sets and max(sets) % conf.upload_rst:
                 final = max(sets)
                 due.append(final)
-        todo_rst = {}
+        todo_rst, why = {}, {}
         for t in due:
             stale = {k: v for k, v in snap.rst_files.get(t, {}).items() if cloud.get(k) != v}
             if stale:
                 todo_rst[t] = stale
-        plan.ctx.update(rst_due=due, rst_final=final, rst_todo=todo_rst)
+                total = len(snap.rst_files.get(t, {}))
+                absent = sum(1 for k in stale if k not in cloud)
+                why[t] = (absent, len(stale) - absent, total)       # not there, differ, of
+        plan.ctx.update(rst_due=due, rst_final=final, rst_todo=todo_rst, rst_why=why)
+        for t, (absent, differ, total) in sorted(why.items()):
+            if differ:
+                plan.add('flag', f"Restart set {t}: {differ} of {total} files on {conf.remote} differ "
+                                 f"in size from here, so they were probably written by an earlier "
+                                 f"run (before a restart computed this step again). Sending the set "
+                                 f"replaces them.")
         if todo_rst:
             files = {k: v for stale in todo_rst.values() for k, v in stale.items()}
             plan.uploads.update(files)
