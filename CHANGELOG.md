@@ -7,6 +7,11 @@
 - The upload line for binary PLTs now says when some replace files on the
   remote from before a restart ("replaces 3 on the remote (5745–5755, from
   before the restart)"), as the restart-set line already did.
+- A case that stopped short with nothing queued (TIMEOUT or cancelled) now
+  names the command: "Queue a restart with `run main restart 5000`?", using
+  the newest complete restart set not above the stop and not from an earlier
+  run. A set cut short by the stop is not used; with no complete set the
+  prompt keeps `<tsId>`. `auto` still never queues the job.
 - `auto show`: the local old-run row is labelled "Old here" (it was a second
   "Old run"), and "predate" agrees with one step ("predates").
 

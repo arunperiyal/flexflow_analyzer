@@ -634,7 +634,13 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
     # -- stopped short --------------------------------------------------------------
     if state == 'stopped' and reached and snap.max_steps and reached < snap.max_steps \
             and last_main and last_main.state != 'FAILED':
+        sets = sorted(t for t, n in snap.rst.items() if snap.nsg and n == snap.nsg
+                      and t <= reached and not stale_rst(t))
+        plan.ctx['restart_from'] = sets[-1] if sets else None
+        ask = (f"run main restart {sets[-1]}" if sets else "run main restart <tsId>")
+        why = (f" (the newest complete restart set; a set cut short by the stop is not used)"
+               if sets else " (no complete restart set found)")
         plan.add('needs', f"Stopped at step {reached} of {snap.max_steps} with nothing queued "
                           f"(main job {last_main.jobid} ended {last_main.state}). Queue a restart "
-                          f"(run main restart <tsId>)?")
+                          f"with `{ask}`?{why}")
     return plan

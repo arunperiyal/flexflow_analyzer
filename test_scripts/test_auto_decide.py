@@ -642,3 +642,19 @@ def test_a_restart_in_dot_restarts_that_no_history_part_starts_at_is_flagged():
 def test_dot_restarts_that_agrees_with_the_history_says_nothing():
     s = snap(run_starts=[1, 4951], restarts=[{'after': '4950', 'first': '4951', 'part': 'x'}])
     assert not [t for t in kinds(decide(s, CONF, True, True), 'flag') if t.startswith('.restarts')]
+
+
+def test_stopped_short_names_the_newest_complete_set_to_restart_from():
+    # TIMEOUT at 600: sets 500 (complete), 550 (complete), 600 cut short by the stop
+    s = snap(cloud=cloud_with(*range(50, 601, 50)), ended=[job('maincase', 'TIMEOUT')],
+             rst={500: 4, 550: 4, 600: 2})
+    plan = decide(s, CONF, True, True)
+    assert 'run main restart 550`' in kinds(plan, 'needs')[-1]
+    assert plan.ctx['restart_from'] == 550
+
+
+def test_stopped_short_without_a_complete_set_keeps_the_placeholder():
+    s = snap(cloud=cloud_with(*range(50, 601, 50)), ended=[job('maincase', 'TIMEOUT')],
+             rst={600: 1})
+    text = kinds(decide(s, CONF, True, True), 'needs')[-1]
+    assert 'run main restart <tsId>' in text and 'no complete restart set' in text
