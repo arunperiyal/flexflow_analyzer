@@ -1,7 +1,7 @@
 """
 auto - the per-case workflow for a folder of cases (docs/AUTO_PLAN.md §13)
 
-    auto init [--remote NAME] [--path DIR] [--keep-rst N] [--disk-alert SIZE]
+    auto init [--remote NAME] [--path DIR] [--keep-rst N] [--upload-rst N] [--disk-alert SIZE]
                          set a remote's folder and auto's settings in .cases.yml
     auto show [case] [--remote NAME] [--detail] [--only SECTIONS]
                          what auto would do: labelled sections for a case; the summary
@@ -46,7 +46,10 @@ class AutoCommand(BaseCommand):
                             help="init: the folder on the remote (default: the remote's "
                                  "`remote set-path`)")
         parser.add_argument('--keep-rst', type=int, metavar='N',
-                            help='init: keep the .rst of the steps divisible by N when thinning')
+                            help='init: keep here the .rst of the steps divisible by N when thinning')
+        parser.add_argument('--upload-rst', type=int, metavar='N',
+                            help='init: upload the .rst of the steps divisible by N (a multiple '
+                                 'of --keep-rst)')
         parser.add_argument('--disk-alert', metavar='SIZE',
                             help='init: flag running cases whose run directory is bigger (e.g. 200G)')
         parser.add_argument('--detail', action='store_true',

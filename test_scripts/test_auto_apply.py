@@ -310,3 +310,13 @@ def test_apply_never_waits_for_an_answer(dummy, monkeypatch):
     script = dummy / 'bare' / 'case3' / 'postFlex.sh'
     script.write_text(script.read_text().replace('#SBATCH -J postcase3', '# no job name here'))
     assert apply('*') == 1                       # case3's post fails; nothing was asked
+
+
+def test_apply_sends_the_grid_sets_and_not_the_newest(dummy):
+    # case3 holds restart sets 200, 400, 550-750; upload_rst is 400 (dummy settings)
+    assert apply('case3', only='upload') == 0
+    remote = dummy / 'cloud' / 'bare' / 'case3' / 'RUN_1'
+    sent = sorted({p.name.split('.')[1].split('_')[0] for p in remote.glob('riser.*_*.rst')})
+    assert sent == ['400']                                      # not 700, not 750
+    led = Ledger(dummy / 'bare').data['local']['case3']
+    assert {k for k in led if k.endswith('.rst')} == {f'RUN_1/riser.400_{k}.rst' for k in range(4)}

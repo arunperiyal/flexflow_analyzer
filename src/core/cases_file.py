@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Dict, List
 
 FILENAME = '.cases.yml'
-AUTO_KEYS = ('keep_rst', 'disk_alert', 'qos', 'account', 'partition')
+AUTO_KEYS = ('keep_rst', 'upload_rst', 'disk_alert', 'qos', 'account', 'partition')
 
 HEADER = """\
 # flexflow: the cases of this folder, where they go on each remote, and auto's
@@ -35,8 +35,12 @@ HEADER = """\
 # `use remote:NAME`. A case goes to <remotes.NAME>/<case name> on that remote.
 #
 # auto:
-#   keep_rst    .rst thinning keeps the steps divisible by this (unset: no thinning;
-#               a queued restart's set and the newest complete set are always kept)
+#   keep_rst    .rst thinning keeps the steps divisible by this on this machine, for
+#               resuming after a failure (unset: no thinning; a queued restart's set
+#               and the newest complete set are always kept)
+#   upload_rst  the .rst of steps divisible by this are uploaded, to resume the run
+#               in the future (a multiple of keep_rst; unset: no restart sets are
+#               uploaded). A finished run's final set is uploaded too
 #   disk_alert  flag running cases whose run directory is bigger (e.g. 200G)
 #   qos, account, partition   only if set: passed to the post jobs auto submits
 """

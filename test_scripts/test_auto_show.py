@@ -211,7 +211,8 @@ def test_report_sections_of_a_queued_case(dummy):
     assert plt['Binary'] == 'present 750 · broken none'
     assert plt['Skipped'] == '750: the queued job restarts from 700 and computes it again'
     assert sec['plt'].actions == ['run post full case3 --t1 550 --t2 700 --no-remote']
-    assert sec['rst'].actions[0] == 'case upload rst case3 --t1 700 --t2 700 --to local'
+    # uploads first (the grid set 400), then the deletion that follows
+    assert sec['rst'].actions[0] == 'case upload rst case3 --t1 400 --t2 400 --to local'
     assert sec['rst'].actions[1].startswith('auto apply: delete .rst of steps 550, 650')
     assert dict(sec['history'].rows)['Run dir'].startswith('riser.othd steps 501–760')
 
@@ -279,8 +280,7 @@ def test_a_single_step_reads_as_a_step(dummy):
 
 def test_the_newest_set_a_queued_restart_will_recompute_is_said_so(dummy):
     rows = dict(report_of(dummy, 'case3')['rst'].rows)
-    assert rows['Complete'] == ('newest 750 (the queued job restarts from 700 and computes it '
-                                'again, so 700 is the set to keep and send)')
+    assert rows['Complete'] == 'newest 750 (the queued job restarts from 700 and computes it again)'
     assert dict(report_of(dummy, 'case5')['rst'].rows)['Complete'] == 'newest 500'
 
 
@@ -292,3 +292,14 @@ def test_the_footer_does_not_claim_apply_is_missing(dummy, monkeypatch, capsys):
     out = ' '.join(capsys.readouterr().out.split())
     assert 'not built yet).' not in out
     assert '`auto apply --dry-run` lists what it would do: history, uploads, post jobs. Deleting is not built yet.' in out
+
+
+def test_the_rst_section_says_what_the_remote_holds_and_what_is_due(dummy):
+    done = dict(report_of(dummy, 'case1')['rst'].rows)
+    assert done['Remote'] == '5 sets: 200–1000 every 200 (5 steps)'
+    # case1 is finished: grid sets every 400 and the final set 1000, all on the remote
+    assert done['Upload'] == 'every 400 + the final set 1000: due none, up to date'
+    sec = report_of(dummy, 'case12')['rst']
+    assert sec.subtitle == 'keep_rst 200 · upload_rst 400'
+    assert dict(sec.rows)['Remote'] == 'none' and dict(sec.rows)['Upload'] == 'every 400: due 400'
+    assert sec.actions == ['case upload rst case12 --t1 400 --t2 400 --to local']

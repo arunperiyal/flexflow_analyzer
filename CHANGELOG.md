@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+### 🗄️ `auto`: restart sets uploaded on their own grid (`upload_rst`)
+
+- Restart sets do two jobs. Those kept here (`auto.keep_rst`, e.g. 500) are
+  insurance against a failed run; those on the remote are to resume the run
+  in the future, where a coarser grid is enough. New `auto.upload_rst` (e.g.
+  1000): the sets of steps divisible by it are uploaded, only the ones the
+  remote lacks. The newest set is no longer uploaded; a **finished** run's
+  final set is, when it is off the grid (it is where a run is extended
+  from). Unset: no restart sets are uploaded.
+- `upload_rst` must be a multiple of `keep_rst`, or `auto` refuses the
+  settings: thinning deletes the sets off the keep grid, and one due for
+  upload would go before it was sent. `auto init --upload-rst N`.
+- The RST section lists the sets the remote holds (complete or not) and the
+  ones due, with one `case upload rst … --t1 N --t2 N` per set, ahead of the
+  deletion. A set on the upload grid that exists neither here nor on the
+  remote is flagged. A set a queued restart will compute again waits.
+
 ### 🗂️ `.cases.yml` replaces `.cases` (and `.auto.conf`)
 
 - **Run `case add` once in each folder of cases**: commands now read only

@@ -786,3 +786,28 @@ yet, such as one whose main failed at once, has none and is not checked):
 
 On the cluster (probe, 2026-11-09) BR0SG0U2P0, U3P0, U5P0 and U6P0 have
 only `cleaned/`; they break the rule until `archive/` is restored.
+
+### 13.12 Restart sets: keep_rst here, upload_rst on the remote (2026-11-12)
+
+Replaces "upload only the newest complete set" (13.7, point 2) and the
+`keep_rst`-only reading of C4/U2 in 13.2.
+
+- `auto.keep_rst` (e.g. 500): the sets kept on this machine, to resume after
+  a failure. Thinning (a later stage) deletes the others, except a queued
+  restart's set and the newest complete set.
+- `auto.upload_rst` (e.g. 1000): the sets uploaded, to resume the run in the
+  future: steps divisible by it, only those the remote lacks (a partial set
+  there is sent again). Unset: no restart set is uploaded.
+- A **finished** run (reached maxTimeSteps) also uploads its final set when
+  it is off the grid: that is where a run is extended from (after `data
+  check steady` says not steady). While a run goes on the newest set is not
+  needed: the next grid set replaces it.
+- `upload_rst` must be a multiple of `keep_rst`; `auto` refuses the settings
+  otherwise (thinning would delete a set due for upload).
+- A set on the upload grid that exists neither here nor on the remote is
+  flagged. A grid set a queued restart will compute again waits.
+- Not yet: a remote copy made before a restart recomputed that step is only
+  compared by size; the md5 ledger of the deletion stage will tell.
+
+Real case (BR0SG0U1P0, cloud holds 500, 4000, 5000; local 34 sets): with
+upload_rst 1000, 1000/2000/3000 are due (5740 is not).

@@ -201,11 +201,8 @@ def cloud_copy(case, cloud_root, steps=(), history=True, everything=False):
         for f in case.dir.iterdir():
             if f.is_file():
                 shutil.copy2(f, dest / f.name)
-        rsts = sorted(case.run.glob('riser.*_*.rst'), key=lambda p: int(p.name.split('.')[1].split('_')[0]))
-        newest = rsts[-1].name.split('_')[0] if rsts else None
-        for f in rsts:
-            if f.name.split('_')[0] == newest:
-                write(dest / 'RUN_1' / f.name, f.read_bytes(), f.stat().st_mtime)
+        for f in case.run.glob('riser.*_*.rst'):                  # every set, as fully uploaded
+            write(dest / 'RUN_1' / f.name, f.read_bytes(), f.stat().st_mtime)
 
 
 # --- the cases ---------------------------------------------------------------
@@ -389,7 +386,7 @@ def build(root: Path):
         path=cases_file.path_for(bare),
         cases=[{'name': name, 'path': str(bare / name)} for name, _, _ in cases],
         remotes={'local': str(cloud)},
-        auto={'keep_rst': 200, 'disk_alert': '1M'}))
+        auto={'keep_rst': 200, 'upload_rst': 400, 'disk_alert': '1M'}))
     (slurm / 'queue.json').write_text(json.dumps(queue, indent=1))
     (slurm / 'history.json').write_text(json.dumps(history, indent=1))
 
