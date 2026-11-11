@@ -69,7 +69,7 @@ def steps_text(steps: List[int], freq: Optional[int] = None, limit: int = 8) -> 
     return text(steps, limit=limit)
 
 
-def steps_phrase(steps: List[int], freq: Optional[int]) -> str:
+def steps_phrase(steps: List[int], freq: Optional[int] = None) -> str:
     """'Step 750' or 'Steps 450–600 (4 steps)': the noun agrees with the count."""
     return f"{'Step' if len(steps) == 1 else 'Steps'} {steps_text(steps, freq)}"
 
