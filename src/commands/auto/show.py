@@ -1,5 +1,10 @@
-"""auto show [case]: what auto would do for a case, or for every case with
-`use case:*`. Reads only."""
+"""auto show / commands / status: what auto would do for a case, or for every
+case with `use case:*`. Reads only.
+
+    auto show [case] [--detail] [--only SECTIONS]   labelled sections per case
+    auto commands [case]                             just the commands, numbered
+    auto status [case]                               one line per case
+"""
 
 import re
 from pathlib import Path
@@ -7,49 +12,10 @@ from pathlib import Path
 from rich.console import Console
 from rich.markup import escape
 
-STYLE = {
-    'flag': ('⚑', 'yellow'), 'history': ('↻', 'cyan'), 'post': ('▶', 'green'),
-    'upload': ('↑', 'green'), 'delete': ('✗', 'magenta'), 'wait': ('…', 'yellow'),
-    'needs': ('!', 'bold red'), 'note': ('·', 'dim'),
-}
 STATE_STYLE = {'running': 'green', 'queued': 'yellow', 'post running': 'yellow',
                'done': 'bold green', 'stopped': 'cyan', 'new': 'dim', 'skipped': 'red'}
-# a case's lines, grouped under these headings in this order
-TOPICS = (('needs', 'Needs you', 'bold red'),
-          ('flag', 'Worth a look', 'yellow'),
-          ('history', 'History (.othd, .oisd)', 'cyan'),
-          ('post', 'Post-processing', 'green'),
-          ('upload', 'Upload to {remote}', 'green'),
-          ('delete', 'Delete here, once the copy on {remote} is checked', 'magenta'),
-          ('thin', 'Thin restart files (.rst)', 'magenta'),
-          ('other', 'Notes', 'dim'))
-
-
-def _print_case(console, plan, conf):
-    """The facts line, then the case's lines under their headings."""
-    from rich.table import Table
-    from src.core.auto.decide import _size_text
-    if plan.facts:
-        facts = '  ·  '.join(plan.facts)
-        console.print(f"  {escape(facts[:1].upper() + facts[1:])}")
-    if all(i.kind == 'note' for i in plan.items):
-        console.print("  [green]✓[/green] nothing to do")
-    for topic, heading, style in TOPICS:
-        items = [i for i in plan.items if i.topic == topic]
-        if not items:
-            continue
-        heading = heading.format(remote=conf.remote)
-        if topic == 'upload' and plan.uploads:
-            total = sum(plan.uploads.values())
-            heading += f"  [dim]{_size_text(total)}, {_duration(total * 8 / (_speed_mbps() * 1e6))}[/dim]"
-        console.print(f"  [{style}]{heading}[/]")
-        lines = Table.grid(padding=(0, 1))
-        lines.add_column(width=5, no_wrap=True)       # indent + mark
-        lines.add_column(overflow='fold')
-        for item in items:
-            mark, mark_style = STYLE[item.kind]
-            lines.add_row(f"    [{mark_style}]{mark}[/]", escape(item.text))
-        console.print(lines)
+SECTION_STYLE = {'state': 'bold', 'needs': 'bold red', 'flags': 'yellow', 'history': 'cyan',
+                 'plt': 'cyan', 'out': 'cyan', 'rst': 'cyan', 'inputs': 'cyan'}
 
 
 def _speed_mbps() -> float:
@@ -159,77 +125,164 @@ def gather(case_dirs, remote):
     return results, confs, problems
 
 
-def execute_show(args) -> int:
-    from src.cli.context import current_dir
-    from src.core.auto.conf import AutoConfError
+def _only(args):
+    """--only plt,history -> {'plt', 'history'} (state always shown); None for all."""
+    from src.core.auto.report import SECTIONS
+    raw = getattr(args, 'only', None)
+    if not raw:
+        return None
+    wanted = {w.strip().lower() for w in raw.split(',') if w.strip()}
+    unknown = wanted - set(SECTIONS)
+    if unknown:
+        from src.core.auto.conf import AutoConfError
+        raise AutoConfError(f"--only: unknown section(s) {', '.join(sorted(unknown))} "
+                            f"(sections: {', '.join(SECTIONS)})")
+    return wanted | {'state'}
 
-    console = Console()
-    base = Path(current_dir())
-    try:
-        case_dirs = resolve_cases(getattr(args, 'case', None), base)
-        results, confs, problems = gather(case_dirs, getattr(args, 'remote', None))
-    except AutoConfError as e:
-        console.print(f"[red]Error:[/red] {escape(str(e))}")
-        return 2
 
+def _print_sections(console, sections, only=None):
+    from rich.table import Table
+    from src.core.auto.report import AUTO_ONLY
+    for sec in sections:
+        if only is not None and sec.key not in only:
+            continue
+        title = f"[{SECTION_STYLE.get(sec.key, 'cyan')}]{escape(sec.title)}[/]"
+        if sec.subtitle:
+            title += f"  [dim]{escape(sec.subtitle)}[/dim]"
+        console.print(f"  {title}")
+        grid = Table.grid(padding=(0, 1))
+        grid.add_column(width=4, no_wrap=True)
+        grid.add_column(style='dim', no_wrap=True, width=11)   # same label width in every section
+        grid.add_column(overflow='fold')
+        for label, value in sec.rows:
+            grid.add_row('', f"{escape(label)}:", escape(str(value)))
+        if sec.key not in ('needs', 'flags'):
+            if not sec.actions:
+                grid.add_row('', 'Action:', '[dim]none[/dim]')
+            for n, action in enumerate(sec.actions, 1):
+                label = 'Action:' if n == 1 else ''
+                if action.startswith(AUTO_ONLY):
+                    text = f"[magenta]{n}: {escape(action)}[/magenta]"
+                elif action.startswith('wait:'):
+                    text = f"[yellow]{n}: {escape(action)}[/yellow]"
+                else:
+                    text = f"{n}: [green]{escape(action)}[/green]"
+                grid.add_row('', label, text)
+        console.print(grid)
+
+
+def _summary_table(console, results):
     from rich import box
     from rich.table import Table
     from src.core.auto.decide import _size_text
+    table = Table(box=box.SIMPLE_HEAD, header_style='bold', pad_edge=False, expand=False)
+    table.add_column('case', style='cyan', no_wrap=True)
+    table.add_column('state', no_wrap=True)
+    table.add_column('steps', justify='right', no_wrap=True)
+    table.add_column('post job', no_wrap=True)
+    table.add_column('upload', justify='right', no_wrap=True)
+    table.add_column('needs you', overflow='fold')
+    for snap, plan in results:
+        post = (f"{plan.post[0]}-{plan.post[1]}" + (" (convert)" if plan.post[2] == 'convert' else '')
+                if plan.post else '[dim]-[/dim]')
+        if plan.ctx.get('post_now') and not plan.post:
+            post = '[yellow]waits[/yellow]'
+        needs = [i.text for i in plan.items if i.kind == 'needs']
+        first = re.split(r'[:.](?:\s|$)', needs[0])[0] if needs else ''
+        more = f" (+{len(needs) - 1})" if len(needs) > 1 else ''
+        reached, top = plan.ctx.get('reached'), snap.max_steps
+        steps = (f"{reached}/{top}" if reached and top else str(reached or '-'))
+        size = sum(plan.uploads.values())
+        table.add_row(escape(plan.name), f"[{STATE_STYLE.get(plan.state, 'white')}]{plan.state}[/]",
+                      steps, post, _size_text(size) if size else '[dim]-[/dim]',
+                      f"[red]{escape(first)}{more}[/red]" if needs else '')
+    console.print(table)
+
+
+def _window_context():
+    """'t1:450 t2:600' when a t1/t2 context is set, else ''. The commands below
+    name every step range, but `case organise history` would still take a
+    t1/t2 context as a window for the files it moves."""
+    try:
+        from shellkit.runtime import current_runtime
+        rt = current_runtime()
+        if rt is None:
+            return ''
+        return ' '.join(f"{k}:{rt.get(k)}" for k in ('t1', 't2') if rt.get(k) is not None)
+    except Exception:
+        return ''
+
+
+def _collect(args):
+    """(results, confs, problems), or an int exit code after printing why."""
+    from src.cli.context import current_dir
+    from src.core.auto.conf import AutoConfError
+    try:
+        case_dirs = resolve_cases(getattr(args, 'case', None), Path(current_dir()))
+        return gather(case_dirs, getattr(args, 'remote', None))
+    except AutoConfError as e:
+        Console().print(f"[red]Error:[/red] {escape(str(e))}")
+        return 2
+
+
+def execute_show(args) -> int:
+    from src.core.auto.conf import AutoConfError
+    from src.core.auto.decide import _size_text
+    from src.core.auto.report import build
+
+    console = Console()
+    try:
+        only = _only(args)
+    except AutoConfError as e:
+        console.print(f"[red]Error:[/red] {escape(str(e))}")
+        return 2
+    got = _collect(args)
+    if isinstance(got, int):
+        return got
+    results, confs, problems = got
+    detail = len(results) == 1 or getattr(args, 'detail', False) or only is not None
 
     console.print()
-    title = case_dirs[0].name if len(case_dirs) == 1 else f"{len(case_dirs)} cases"
+    title = results[0][0].name if len(results) == 1 else f"{len(results)} cases"
     console.rule(f"[bold]auto show[/bold]  [dim]{escape(title)}[/dim]", style='cyan')
     for folder, conf in confs.items():
         console.print(f"[dim]folder  {escape(str(folder))}\n"
                       f"remote  {escape(conf.remote)}:{escape(conf.path)}[/dim]")
     for problem in problems:
         console.print(f"[bold red]![/bold red] {escape(problem)}")
+    window = _window_context()
+    if window:
+        console.print(f"[yellow]Note:[/yellow] the context {escape(window)} is set; `case organise "
+                      f"history` would use it. `unuse t1 t2` before running the actions.")
     if not results:
         console.rule(style='cyan')
         console.print()
         return 1
 
-    summary = []
-    for snap, plan in results:
-        conf = confs[Path(snap.dir).parent]
+    if detail:
+        for snap, plan in results:
+            conf = confs[Path(snap.dir).parent]
+            console.print()
+            state = f"[{STATE_STYLE.get(plan.state, 'white')}]{plan.state}[/]"
+            console.rule(f"[bold cyan]{escape(plan.name)}[/bold cyan]  {state}", align='left',
+                         style='grey50')
+            _print_sections(console, build(snap, plan, conf), only)
+    if len(results) > 1:
         console.print()
-        state = f"[{STATE_STYLE.get(plan.state, 'white')}]{plan.state}[/]"
-        console.rule(f"[bold cyan]{escape(plan.name)}[/bold cyan]  {state}", align='left',
-                     style='grey50')
-        _print_case(console, plan, conf)
-        summary.append((plan, sum(plan.uploads.values())))
+        console.rule("[bold]summary[/bold]", style='cyan')
+        _summary_table(console, results)
+        if not detail:
+            console.print("[dim]Each case in full: auto show <case>, or --detail; "
+                          "the commands alone: auto commands.[/dim]")
 
-    # summary: the table for several cases, the totals always
-    console.print()
-    console.rule("[bold]summary[/bold]" if len(summary) > 1 else '', style='cyan')
-    table = Table(box=box.SIMPLE_HEAD, header_style='bold', pad_edge=False, expand=False)
-    table.add_column('case', style='cyan', no_wrap=True)
-    table.add_column('state', no_wrap=True)
-    table.add_column('post job', no_wrap=True)
-    table.add_column('upload', justify='right', no_wrap=True)
-    table.add_column('needs you', overflow='fold')
-    for plan, size in summary:
-        post = f"{plan.post[0]}-{plan.post[1]}" + (" (convert)" if plan.post[2] == 'convert' else '') \
-            if plan.post else '[dim]-[/dim]'
-        wait = next((i for i in plan.items if i.kind == 'wait'), None)
-        if wait and not plan.post:
-            post = '[yellow]waits[/yellow]'
-        needs = [i.text for i in plan.items if i.kind == 'needs']
-        first = re.split(r'[:.](?:\s|$)', needs[0])[0] if needs else ''
-        more = f" (+{len(needs) - 1})" if len(needs) > 1 else ''
-        table.add_row(escape(plan.name), f"[{STATE_STYLE.get(plan.state, 'white')}]{plan.state}[/]",
-                      post, _size_text(size) if size else '[dim]-[/dim]',
-                      f"[red]{escape(first)}{more}[/red]" if needs else '')
-    if len(summary) > 1:
-        console.print(table)
-
-    total = sum(size for _, size in summary)
-    posts = sum(plan.post is not None for plan, _ in summary)
-    needs = sum(plan.needs_you for plan, _ in summary)
+    total = sum(sum(plan.uploads.values()) for _, plan in results)
+    posts = sum(plan.post is not None for _, plan in results)
+    needs = sum(plan.needs_you for _, plan in results)
     speed = _speed_mbps()
     upload = (f"{_size_text(total)} to upload, {_duration(total * 8 / (speed * 1e6))} at "
               f"{speed:g} Mbps (change with `set transfer_speed`)" if total else "nothing to upload")
-    console.print(f"[bold]{len(summary)} case(s)[/bold] · {posts} post job(s) · "
+    console.print()
+    console.print(f"[bold]{len(results)} case(s)[/bold] · {posts} post job(s) · "
                   + (f"[bold red]{needs} need(s) you[/bold red]" if needs
                      else "[green]none needs you[/green]"))
     console.print(upload)
@@ -237,3 +290,77 @@ def execute_show(args) -> int:
     console.rule(style='cyan')
     console.print()
     return 1 if needs or problems else 0
+
+
+def execute_commands(args) -> int:
+    """The commands of every case, plain text (no colour), numbered per case,
+    so the output can be saved as a script and read before running it."""
+    import sys
+    from src.core.auto.report import AUTO_ONLY, build
+    got = _collect(args)
+    if isinstance(got, int):
+        return got
+    results, confs, problems = got
+    out = sys.stdout
+    for problem in problems:
+        out.write(f"# ! {problem}\n")
+    window = _window_context()
+    if window:
+        out.write(f"# ! the context {window} is set: `unuse t1 t2` before running these\n")
+    for snap, plan in results:
+        conf = confs[Path(snap.dir).parent]
+        sections = build(snap, plan, conf)
+        out.write(f"\n# {plan.name} ({plan.state})\n")
+        n = 0
+        for need in (i.text for i in plan.items if i.kind == 'needs'):
+            out.write(f"#   needs you: {need}\n")
+        for sec in sections:
+            for action in sec.actions:
+                if action.startswith(AUTO_ONLY) or action.startswith('wait:'):
+                    out.write(f"#   {action}\n")
+                else:
+                    n += 1
+                    out.write(f"{action}    # {n}, {sec.title}\n")
+        if n == 0:
+            out.write("#   no commands\n")
+    return 1 if problems else 0
+
+
+def execute_status(args) -> int:
+    """One line per case: state, steps, jobs, what is next."""
+    from rich.table import Table
+    from rich import box
+    from src.core.auto.decide import _size_text
+    got = _collect(args)
+    if isinstance(got, int):
+        return got
+    results, confs, problems = got
+    console = Console()
+    for problem in problems:
+        console.print(f"[bold red]![/bold red] {escape(problem)}")
+    table = Table(box=box.SIMPLE, header_style='bold', pad_edge=False)
+    for col in ('case', 'state', 'steps', 'job', 'next'):
+        table.add_column(col, no_wrap=col != 'next', overflow='fold')
+    for snap, plan in results:
+        c = plan.ctx
+        reached = c.get('reached')
+        steps = (f"{reached}/{snap.max_steps}" if reached and snap.max_steps else str(reached or '-'))
+        jobs = ' '.join(f"{j.kind} {j.state.lower()}" for j in
+                        list(c.get('main_now', [])) + list(c.get('post_now', []))) or '-'
+        nxt = []
+        if plan.needs_you:
+            nxt.append('[red]needs you[/red]')
+        if c.get('post_now'):
+            nxt.append(f"[yellow]waits for post job {c['post_now'][0].jobid}[/yellow]")
+        if plan.post:
+            nxt.append(f"post {plan.post[0]}-{plan.post[1]}")
+        if c.get('organise'):
+            nxt.append('organise history')
+        if plan.uploads:
+            nxt.append(f"upload {_size_text(sum(plan.uploads.values()))}")
+        if c.get('del_out') or c.get('del_binary') or c.get('thin'):
+            nxt.append('clean up')
+        table.add_row(escape(plan.name), f"[{STATE_STYLE.get(plan.state, 'white')}]{plan.state}[/]",
+                      steps, jobs, ', '.join(nxt) or '[green]nothing[/green]')
+    console.print(table)
+    return 1 if problems or any(plan.needs_you for _, plan in results) else 0

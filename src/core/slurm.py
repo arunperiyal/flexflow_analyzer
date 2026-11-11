@@ -57,6 +57,7 @@ class Job:
     partition: str
     workdir: str
     end: str = ''               # sacct only: when it ended
+    start: str = ''             # sacct only: when it started
 
     @property
     def kind(self) -> str:
@@ -130,7 +131,7 @@ def parse_queue(text: str) -> List[Job]:
     return jobs
 
 
-SACCT_FORMAT = 'JobID,JobName%200,State,End,WorkDir'
+SACCT_FORMAT = 'JobID,JobName%200,State,Start,End,WorkDir'
 
 
 def read_ended(days: int = 30, user: Optional[str] = None) -> List[Job]:
@@ -158,11 +159,11 @@ def read_ended(days: int = 30, user: Optional[str] = None) -> List[Job]:
         if not line.strip():
             continue
         parts = line.split('|')
-        if len(parts) != 5:
+        if len(parts) != 6:
             raise QueueError(f"unexpected sacct line: {line!r}")
-        jobid, name, state, end, workdir = (p.strip() for p in parts)
+        jobid, name, state, start, end, workdir = (p.strip() for p in parts)
         # "CANCELLED by 6176" -> CANCELLED
-        jobs.append(Job(jobid, name, state.split()[0] if state else '', '', workdir, end))
+        jobs.append(Job(jobid, name, state.split()[0] if state else '', '', workdir, end, start))
     return sorted(jobs, key=lambda j: int(j.jobid.split('_')[0]) if j.jobid.split('_')[0].isdigit() else 0)
 
 

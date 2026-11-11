@@ -321,12 +321,15 @@ const FlowChart = (() => {
     {
       id: 'autoShow', kind: 'step', col: 3, row: 12, label: ['See the plan'],
       title: 'See the plan (auto)',
-      command: 'use case:*\nauto show\n# or one case: auto show <case>',
+      command: 'auto show <case>\nuse case:*\nauto status\nauto commands',
       detail: `For the case (the argument or "use case:"), or every case in
         .cases with "use case:*", like case check: its state, then what "auto
         apply" would do and why: organise the history, a post job and its
         steps, uploads, and what is deleted once its copy on the remote is
-        checked. Several cases end with a summary table. It changes nothing.
+        checked, as labelled sections (State, History, PLT, OUT and RST files,
+        Inputs) with numbered Action commands. Several cases show a summary
+        table (each in full with --detail); "auto status" is one line per
+        case, "auto commands" just the commands. It changes nothing.
 
         Each case uses the .auto.conf of its parent folder.
 

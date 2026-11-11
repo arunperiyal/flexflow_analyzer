@@ -168,12 +168,75 @@ def test_the_case_context(dummy, monkeypatch, capsys):
     assert rt.execute_line('auto show --remote local') == 0
     out = capsys.readouterr().out
     assert 'case3  queued' in out and 'case2' not in out and 'summary' not in out
-    # a case's lines come under headings
-    for heading in ('History (.othd, .oisd)', 'Post-processing', 'Upload to local',
-                    'Thin restart files (.rst)'):
+    # a case reads as labelled sections
+    for heading in ('State', 'History', 'PLT files', 'OUT files', 'RST files',
+                    'Inputs and case files', 'Steps:', 'Remote:', 'Action:'):
         assert heading in out
-    assert 'main job 1300105 pending, restarts from 700' in out
+    assert 'main 1300105 PENDING, restarts from 700' in out
+    assert '1: run post full case3 --t1 550 --t2 700 --no-remote' in out
     assert rt.execute_line('use case:*') == 0
     assert rt.execute_line('auto show --remote local') == 1      # some cases need you
     out = capsys.readouterr().out
     assert '11 cases' in out and 'summary' in out
+    assert 'PLT files' not in out                                # table only for several
+    assert rt.execute_line('auto show --remote local --detail --only plt') == 1
+    out = capsys.readouterr().out
+    assert out.count('PLT files') == 10 and 'RST files' not in out   # case9 has none
+    assert rt.execute_line('auto show --remote local --only nonsense') == 2
+
+
+# --- the report, auto commands, auto status --------------------------------------------
+
+def report_of(dummy, case):
+    from src.core.auto.report import build
+    results, confs, _ = gather(resolve_cases(case, dummy / 'bare'), 'local')
+    snap, plan = results[0]
+    return {sec.key: sec for sec in build(snap, plan, confs[snap.dir.parent])}
+
+
+def test_report_sections_of_a_queued_case(dummy):
+    sec = report_of(dummy, 'case3')
+    assert list(sec) == ['state', 'history', 'plt', 'out', 'rst', 'inputs']
+    state = dict(sec['state'].rows)
+    assert state['Steps'] == '760 of 1000 (76%)'
+    assert state['Job'] == 'main 1300105 PENDING, restarts from 700'
+    assert state['Last jobs'].startswith('main 1300104 TIMEOUT, ended ')
+    plt = dict(sec['plt'].rows)
+    assert sec['plt'].subtitle == 'run RUN_1/riser.othd: output steps 550–700, every 50 (4)'
+    assert plt['Remote'] == 'present none · missing 550–700 (4 steps)'
+    assert plt['Binary'] == 'present 750 · broken none'
+    assert plt['Skipped'] == '750: the queued job restarts from 700 and computes it again'
+    assert sec['plt'].actions == ['run post full case3 --t1 550 --t2 700 --no-remote']
+    assert sec['rst'].actions[0] == 'case upload rst case3 --t1 700 --t2 700 --to local'
+    assert sec['rst'].actions[1].startswith('auto apply: delete .rst of steps 550, 650')
+    assert dict(sec['history'].rows)['Run dir'].startswith('riser.othd steps 501–760')
+
+
+def test_report_needs_and_flags_come_after_state(dummy):
+    sec = report_of(dummy, 'case6')
+    assert list(sec)[:3] == ['state', 'needs', 'flags']
+    assert dict(sec['plt'].rows)['Binary'] == 'present 450–500 (2 steps) · broken 550'
+    assert sec['plt'].actions[0] == 'case upload binary case6 --t1 450 --t2 500 --missing --to local'
+
+
+def test_auto_commands_is_plain_text_to_read_or_save(dummy, monkeypatch, capsys):
+    from types import SimpleNamespace
+    from src.commands.auto.show import execute_commands
+    monkeypatch.chdir(dummy / 'bare')
+    assert execute_commands(SimpleNamespace(case='*', remote='local')) == 0
+    out = capsys.readouterr().out
+    assert '\x1b[' not in out                                     # no colour codes
+    assert 'run post full case2 --t1 450 --t2 600 --no-remote    # 1, PLT files' in out
+    assert '#   wait: post job' in out                            # case4
+    assert '#   needs you: Main job' in out                       # case7
+    assert '#   auto apply: delete' in out
+
+
+def test_auto_status_one_line_per_case(dummy, monkeypatch, capsys):
+    from types import SimpleNamespace
+    from src.commands.auto.show import execute_status
+    monkeypatch.chdir(dummy / 'bare')
+    assert execute_status(SimpleNamespace(case='*', remote='local')) == 1   # some need you
+    out = ' '.join(capsys.readouterr().out.split())
+    assert 'case4 post running 800/1000 post running waits for post job' in out
+    assert 'case1 done 1000/1000 - nothing' in out
