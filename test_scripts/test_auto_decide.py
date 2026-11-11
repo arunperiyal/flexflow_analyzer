@@ -42,7 +42,10 @@ def kinds(plan, kind):
 
 def test_none_on_cloud_posts_the_whole_run():
     plan = decide(snap(cloud=cloud_with()), CONF, True, True)
-    assert plan.post is None and 'Steps 50–400 (8 steps) have no PLT on the remote and no .out here' in kinds(plan, 'needs')[0]
+    # nothing posted for 50-400 (no .out, no PLT anywhere): flagged; 450-600 can still be posted
+    assert plan.post == (450, 600, 'full')
+    assert kinds(plan, 'needs')[0].startswith(
+        'Steps 50–400 every 50 (8 steps) have no PLT and no .out anywhere (local or here)')
 
 
 def test_unbroken_prefix_posts_the_rest():
@@ -66,7 +69,8 @@ def test_whole_local_plt_counts_as_converted():
 def test_holes_need_you():
     plan = decide(snap(cloud=cloud_with(*range(50, 401, 50), 500)), CONF, True, True)
     assert plan.post is None
-    assert kinds(plan, 'needs')[0].startswith('Holes on the remote: steps 450, 550–600 (2 steps) of 50–600 have no PLT')
+    assert kinds(plan, 'needs')[0] == ('Holes on the remote: steps 450, 550, 600 have no PLT, '
+                                       'while later steps have one. Find out why before posting.')
 
 
 def test_running_stops_at_the_last_settled_step():
@@ -148,7 +152,7 @@ def test_rst_thinning_keeps_restart_point_and_newest():
     s = snap(cloud=cloud_with(*range(50, 601, 50)), restart_tsid=350,
              rst={t: 4 for t in (200, 250, 300, 350, 400, 450)})
     deletes = kinds(decide(s, CONF, True, True), 'delete')
-    assert deletes[-1].startswith('Steps 250–300 (2 steps): not a multiple of 200.')
+    assert deletes[-1].startswith('Steps 250, 300: not a multiple of 200.')
 
 
 def test_stopped_short_is_asked():
@@ -179,19 +183,86 @@ def test_completed_post_is_only_held_to_the_steps_it_was_given():
 def test_steps_read_as_a_phrase():
     from src.core.auto.decide import steps_phrase, steps_text
     assert steps_phrase([750], 50) == 'Step 750'
-    assert steps_phrase([450, 500, 550, 700], 50) == 'Steps 450–550 (3 steps), 700'
-    assert steps_text([5, 10, 15], 5) == '5–15 (3 steps)'
+    assert steps_phrase([450, 500, 550, 700], 50) == 'Steps 450–550 every 50 (3 steps), 700'
+    assert steps_text([5, 10, 15], 5) == '5–15 every 5 (3 steps)'
+    assert steps_text([450, 500]) == '450, 500'
 
 
 def test_post_says_which_run_and_where_the_plts_are():
     binary = {t: PltCheck(Path(f'b/{t}'), True, '', 424, 424) for t in (550, 600)}
     plan = decide(snap(cloud=cloud_with(*range(50, 501, 50)), binary=binary), CONF, True, True)
     notes = kinds(plan, 'note')
-    assert notes[0] == ('The newest run is archive/riser1.othd (steps 1–600). It writes output '
-                        'every 50 steps: 12 from 50 to 600.')
+    assert notes[0] == ('The newest run is archive/riser1.othd (steps 1–600). Its output steps: '
+                        '50–600 every 50 (12 steps).')
     assert notes[1].startswith('No post job needed: all 12 output steps have a PLT '
                                '(10 on local, 2 only in binary/ (not uploaded yet)).')
     s = snap(cloud=cloud_with(*range(50, 401, 50)))
     assert kinds(decide(s, CONF, True, True), 'post') == [
         'Submit `run post full --t1 450 --t2 600`: 4 output steps with no PLT yet; '
         'the 8 before 450 have one (8 on local)']
+
+
+# --- a run that changed its output frequency --------------------------------------
+
+def mixed_remote():
+    """Every 50 steps up to 500, then every 5 up to 4000, all on the remote."""
+    return cloud_with(*range(50, 501, 50), *range(505, 4001, 5))
+
+
+def test_a_change_of_frequency_is_neither_a_hole_nor_missing():
+    s = snap(out_freq=5, max_steps=5000, archive_range=(1, 4000), cloud=mixed_remote(),
+             settled=[], out={})
+    plan = decide(s, CONF, True, True)
+    assert not plan.needs_you and plan.post is None
+    assert plan.ctx['lost'] == [] and plan.ctx['missing'] == []
+    assert kinds(plan, 'note')[0] == ('The newest run is archive/riser1.othd (steps 1–4000). Its '
+                                      'output steps: 50–500 every 50 (10 steps), 505–4000 every 5 '
+                                      '(700 steps).')
+
+
+def test_the_new_steps_are_posted_at_their_own_frequency():
+    steps = list(range(4005, 4101, 5))
+    s = snap(out_freq=5, max_steps=5000, archive_range=(1, 4100), cloud=mixed_remote(),
+             settled=steps, out={t: [] for t in steps})
+    plan = decide(s, CONF, True, True)
+    assert plan.post_jobs == [(4005, 4100, 5, 'full')] and not plan.needs_you
+    assert kinds(plan, 'post')[-1] == ('Submit `run post full --t1 4005 --t2 4100`: 20 output '
+                                       'steps with no PLT yet; the 710 before 4005 have one '
+                                       '(710 on local)')
+
+
+def test_two_schedules_need_two_post_jobs_each_with_its_freq():
+    steps = list(range(50, 501, 50)) + list(range(505, 526, 5))
+    s = snap(out_freq=5, archive_range=(1, 525), cloud={}, settled=steps,
+             out={t: [] for t in steps})
+    plan = decide(s, CONF, True, True)
+    assert plan.post_jobs == [(50, 500, 50, 'full'), (505, 525, 5, 'full')]
+    assert plan.post == (50, 525, 'full') and not plan.needs_you
+    posts = kinds(plan, 'post')
+    assert posts[0].startswith('Submit `run post full --t1 50 --t2 500 --freq 50`: 10 output steps')
+    assert posts[1].startswith('Submit `run post full --t1 505 --t2 525 --freq 5`: 5 output steps')
+    assert any('takes 2 post jobs' in n for n in kinds(plan, 'note'))
+
+
+def test_a_step_missing_inside_a_stretch_is_flagged_but_the_rest_is_posted():
+    have = [t for t in range(50, 401, 50) if t != 300]
+    s = snap(cloud=cloud_with(*have))
+    plan = decide(s, CONF, True, True)
+    assert plan.ctx['lost'] == [300] and plan.post == (450, 600, 'full')
+    assert kinds(plan, 'needs')[0].startswith('Step 300 has no PLT and no .out anywhere')
+
+
+def test_steps_off_the_grid_of_their_spacing_cannot_be_posted():
+    steps = [55, 105, 155, 205]                    # every 50, but not on a multiple of 50
+    s = snap(archive_range=(1, 205), cloud={}, settled=steps, out={t: [] for t in steps})
+    plan = decide(s, CONF, True, True)
+    assert plan.post_jobs == [] and plan.post is None
+    assert 'not on a multiple of the spacing around them' in kinds(plan, 'needs')[-1]
+
+
+def test_a_run_that_stops_short_of_its_last_step_is_flagged_at_the_tail():
+    s = snap(out_freq=5, max_steps=5000, archive_range=(1, 5000), cloud=mixed_remote(),
+             settled=[], out={})                        # the run reached 5000, PLTs stop at 4000
+    plan = decide(s, CONF, True, True)
+    assert plan.ctx['lost'] == list(range(4005, 5001, 5))
+    assert kinds(plan, 'needs')[0].startswith('Steps 4005–5000 every 5 (200 steps) have no PLT')

@@ -150,27 +150,30 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
 
     # -- PLT files --------------------------------------------------------------------
     grid = c.get('grid') or []
+    lost = c.get('lost') or []
     s = Section('plt', 'PLT files')
-    if grid:
-        s.subtitle = (f"run {c['src']}: output steps {c['t1']}–{c['t2']}, every {f} "
-                      f"({len(grid)})")
+    if c.get('src'):
+        s.subtitle = f"run {c['src']}: output steps {steps_text(grid) if grid else 'none'}"
     plt_cloud = {int(k.split('.')[-2]): v for k, v in (cloud or {}).items()
                  if k.startswith('binary/') and k.endswith('.plt') and k.split('.')[-2].isdigit()}
     ok_here = sorted(t for t, chk in snap.binary.items() if chk.ok)
     broken = sorted(t for t, chk in snap.binary.items() if not chk.ok)
     if cloud is None:
         s.row('Remote', 'not listed')
-    elif grid:
-        on = [t for t in grid if plt_cloud.get(t, 0) > 0]
-        s.row('Remote', _present_missing(on, [t for t in grid if t not in on], f))
     else:
-        s.row('Remote', f"{len(plt_cloud)} files")
-    s.row('Binary', f"present {steps_text(ok_here, f) if ok_here else 'none'}"
-                    f" · broken {steps_text(broken, f) if broken else 'none'}")
-    s.row('ASCII', f"present {steps_text(sorted(snap.ascii), f) if snap.ascii else 'none'}")
+        # everything the remote holds, whatever the frequency; missing is what the run
+        # needs that is not there (steps only in binary/ are not uploaded yet)
+        gone = [t for t in grid if plt_cloud.get(t, 0) == 0]
+        s.row('Remote', f"present {steps_text(sorted(plt_cloud)) if plt_cloud else 'none'}"
+                        f" · missing {steps_text(gone) if gone else 'none'}")
+    s.row('Binary', f"present {steps_text(ok_here) if ok_here else 'none'}"
+                    f" · broken {steps_text(broken) if broken else 'none'}")
+    s.row('ASCII', f"present {steps_text(sorted(snap.ascii)) if snap.ascii else 'none'}")
+    if lost:
+        s.row('Lost', f"{steps_text(lost)}: no PLT and no .out anywhere")
     if c.get('later'):
         one = len(c['later']) == 1
-        s.row('Skipped', f"{steps_text(c['later'], f)}: the queued job restarts from "
+        s.row('Skipped', f"{steps_text(c['later'])}: the queued job restarts from "
                          f"{snap.restart_tsid} and computes {'it' if one else 'them'} again")
     sizes = [f"binary {_size_text(sum(chk.size for chk in snap.binary.values()))} here"]
     if cloud is not None:
@@ -183,28 +186,31 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
     if c.get('post_now'):
         s.actions.append(f"wait: post job {c['post_now'][0].jobid} is "
                          f"{c['post_now'][0].state.lower()}")
-    if plan.post:
-        a, b, mode = plan.post
-        s.actions.append(f"run post {mode} {name} --t1 {a} --t2 {b} --no-remote")
+    jobs = plan.post_jobs
+    for a, b, d, mode in jobs:
+        freq_part = f" --freq {d}" if (len(jobs) > 1 or d != f) else ''
+        s.actions.append(f"run post {mode} {name} --t1 {a} --t2 {b}{freq_part} --no-remote")
+    if len(jobs) > 1:
+        s.actions.append("wait: submit each post job after the previous one has ended")
     if c.get('plt_upload'):
         up = c['plt_upload']
         s.actions.append(f"case upload binary {name} --t1 {up[0]} --t2 {up[-1]} --missing "
                          f"--to {remote}")
     if c.get('del_ascii'):
-        s.actions.append(AUTO_ONLY + f"delete ASCII PLTs {steps_text(c['del_ascii'], f)} once the "
+        s.actions.append(AUTO_ONLY + f"delete ASCII PLTs {steps_text(c['del_ascii'])} once the "
                                      f"binary copy on {remote} is md5-checked")
     if c.get('del_binary'):
-        s.actions.append(AUTO_ONLY + f"delete binary PLTs {steps_text(c['del_binary'], f)} once "
+        s.actions.append(AUTO_ONLY + f"delete binary PLTs {steps_text(c['del_binary'])} once "
                                      f"their copy on {remote} is md5-checked")
     sections.append(s)
 
     # -- OUT files --------------------------------------------------------------------
     s = Section('out', 'OUT files')
     steps = sorted(snap.out)
-    s.row('Present', steps_text(steps, f) if steps else 'none')
+    s.row('Present', steps_text(steps) if steps else 'none')
     if steps:
         s.row('Finished', f"{len(snap.settled)} of {len(steps)}"
-              + (f" · not: {steps_text(sorted(snap.unsettled), f)} "
+              + (f" · not: {steps_text(sorted(snap.unsettled))} "
                  f"({snap.unsettled[max(snap.unsettled)]})" if snap.unsettled else ''))
         s.row('Size', f"{_size_text(sum(snap.out_size.values()))} here")
         s.row('Newest', f"written {ago(max(snap.out_time.values()), now)}"
@@ -212,7 +218,7 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
     if c.get('del_out'):
         outs = c['del_out']
         freed = _size_text(sum(snap.out_size.get(t, 0) for t in outs))
-        s.actions.append(AUTO_ONLY + f"delete .out of steps {steps_text(outs, f)} ({freed}) once "
+        s.actions.append(AUTO_ONLY + f"delete .out of steps {steps_text(outs)} ({freed}) once "
                                      f"their PLT on {remote} is md5-checked")
     sections.append(s)
 
@@ -222,9 +228,9 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
     if snap.rst:
         complete = sorted(t for t, n in snap.rst.items() if snap.nsg and n == snap.nsg)
         partial = sorted(t for t, n in snap.rst.items() if t not in complete)
-        s.row('Present', f"{len(snap.rst)} sets: {steps_text(sorted(snap.rst), None)}")
+        s.row('Present', f"{len(snap.rst)} sets: {steps_text(sorted(snap.rst))}")
         s.row('Complete', (f"newest {max(complete)}" if complete else 'none')
-              + (f" · incomplete: {steps_text(partial, None)}" if partial else ''))
+              + (f" · incomplete: {steps_text(partial)}" if partial else ''))
         if snap.restart_tsid is not None:
             s.row('Restart', f"restartTsId {snap.restart_tsid} (kept)")
         here = sum(sum(files.values()) for files in snap.rst_files.values())
@@ -239,7 +245,7 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
             n = c['rst_newest']
             s.actions.append(f"case upload rst {name} --t1 {n} --t2 {n} --to {remote}")
         if thin:
-            s.actions.append(AUTO_ONLY + f"delete .rst of steps {steps_text(thin, None)}: not "
+            s.actions.append(AUTO_ONLY + f"delete .rst of steps {steps_text(thin)}: not "
                                          f"multiples of {conf.keep_rst}")
     else:
         s.row('Present', 'none')

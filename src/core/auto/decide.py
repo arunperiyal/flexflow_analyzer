@@ -18,11 +18,13 @@ Item kinds, in the order a case shows them:
 """
 
 import math
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
 from .observe import CaseSnapshot
+from .stretches import gaps as stretch_gaps, stretches
 
 RUNNING = ('RUNNING', 'COMPLETING', 'CONFIGURING')
 BAD_END = ('FAILED', 'TIMEOUT', 'CANCELLED', 'NODE_FAIL', 'OUT_OF_MEMORY', 'PREEMPTED',
@@ -47,7 +49,8 @@ class CasePlan:
     facts: List[str] = field(default_factory=list)
     items: List[Item] = field(default_factory=list)
     uploads: Dict[str, int] = field(default_factory=dict)    # relative path -> bytes
-    post: Optional[Tuple[int, int, str]] = None              # (t1, t2, 'full' | 'convert')
+    post: Optional[Tuple[int, int, str]] = None              # (first t1, last t2, 'full' | 'convert')
+    post_jobs: List[Tuple[int, int, int, str]] = field(default_factory=list)   # (t1, t2, freq, mode)
     ctx: Dict[str, object] = field(default_factory=dict)     # what decide worked out, for report.py
 
     def add(self, kind, text, topic=None):
@@ -58,18 +61,12 @@ class CasePlan:
         return any(i.kind == 'needs' for i in self.items)
 
 
-def steps_text(steps: List[int], freq: Optional[int], limit: int = 8) -> str:
-    """Steps as runs: '450–600 (4 steps), 700'."""
-    runs: List[List[int]] = []
-    for t in sorted(steps):
-        if runs and freq and t - runs[-1][-1] == freq:
-            runs[-1].append(t)
-        else:
-            runs.append([t])
-    parts = [str(r[0]) if len(r) == 1 else f"{r[0]}–{r[-1]} ({len(r)} steps)" for r in runs]
-    if len(parts) > limit:
-        parts = parts[:limit // 2] + [f"... {len(parts) - limit} more ..."] + parts[-limit // 2:]
-    return ', '.join(parts)
+def steps_text(steps: List[int], freq: Optional[int] = None, limit: int = 8) -> str:
+    """Steps as stretches of constant spacing, read from the steps themselves
+    (stretches.py): '50–500 every 50 (10 steps), 505–5000 every 5 (900 steps)'.
+    `freq` is kept for callers and no longer used: a case may change frequency."""
+    from .stretches import text
+    return text(steps, limit=limit)
 
 
 def steps_phrase(steps: List[int], freq: Optional[int]) -> str:
@@ -89,6 +86,34 @@ def _ended_at(job) -> Optional[float]:
         return datetime.strptime(job.end[:19], '%Y-%m-%dT%H:%M:%S').timestamp()
     except (ValueError, TypeError, AttributeError):
         return None
+
+
+def _post_jobs(todo: List[int], freq: int, ascii_steps) -> Tuple[List[Tuple[int, int, int, str]], List[int]]:
+    """The `run post` jobs that convert these steps: ([(t1, t2, freq, mode)], steps
+    that cannot be posted). One job per stretch of equal spacing, since one
+    --freq cannot serve two schedules; steps too few to claim a spacing use
+    outFreq and join a neighbouring job when contiguous at that spacing. A job
+    must start and end on a multiple of its freq (run post rounds to it)."""
+    pieces = []
+    for r in stretches(todo):
+        if r.solid:
+            pieces.append((r.first, r.last, r.step))
+        else:
+            pieces += [(t, t, freq) for t in sorted({r.first, r.last})]
+    jobs: List[List[int]] = []
+    for a, b, d in pieces:
+        if jobs and jobs[-1][2] == d and a - jobs[-1][1] == d:
+            jobs[-1][1] = b
+        else:
+            jobs.append([a, b, d])
+    out, off = [], []
+    for a, b, d in jobs:
+        steps = list(range(a, b + 1, d))
+        if a % d or b % d:
+            off += steps
+            continue
+        out.append((a, b, d, 'convert' if all(t in ascii_steps for t in steps) else 'full'))
+    return out, off
 
 
 def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan:
@@ -213,37 +238,47 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
         plan.add('note', "Not decided: sacct could not be read, so how the last post job "
                          "ended is unknown.", 'post')
     else:
-        t1 = math.ceil(window[0] / f) * f
-        t2 = math.floor(window[1] / f) * f
-        if snap.max_steps:
-            t2 = min(t2, snap.max_steps)
+        lo, hi_run = window
+        hi = min(hi_run, snap.max_steps) if snap.max_steps else hi_run
         if running:
-            done = [t for t in snap.settled if t <= t2]
-            t2 = max(done) if done else t1 - f
+            done = [t for t in snap.settled if t <= hi]
+            hi = max(done) if done else lo - 1
         if pending and snap.restart_tsid is not None:
-            t2 = min(t2, math.floor(snap.restart_tsid / f) * f)
-        grid = list(range(t1, t2 + 1, f))
-        have = [t for t in grid if on_cloud(t) or local_ok(t)]
-        covered = have
-        missing = [t for t in grid if t not in have]
+            hi = min(hi, snap.restart_tsid)
 
-        # which run, and why its output steps run from t1 to t2
+        # The run's output steps, from what the files show -- .out and ASCII PLTs
+        # here, binary PLTs here and on the remote -- not from one outFreq: a run
+        # may write every 50 steps and then every 5 (stretches.py).
+        remote_plt = set()
+        for key in cloud:
+            m = re.match(rf'binary/{re.escape(p)}\.(\d+)\.plt$', key)
+            if m:
+                remote_plt.add(int(m.group(1)))
+        seen = set(snap.out) | snap.ascii | set(snap.binary) | remote_plt
+        E = sorted(t for t in seen if lo <= t <= hi)
+        have = [t for t in E if on_cloud(t) or local_ok(t)]
+        covered = have
+        missing = [t for t in E if t not in have]
+        # steps the stretches say should be there, with no file anywhere
+        lost = stretch_gaps(E, lo, hi, f)
+
+        # which run, and what its output steps are
         src = (f"{snap.run_rel}/{p}.othd" if snap.live
                else f"archive/{p}{max(snap.history['othd'].archive)}.othd")
         if running:
-            cut = ", the last one the running job has finished."
-        elif pending and snap.restart_tsid is not None and t2 < window[1]:
+            cut = ", up to the last step the running job has finished."
+        elif pending and snap.restart_tsid is not None and hi < hi_run:
             cut = f"; it stops there because the queued job restarts from {snap.restart_tsid}."
         else:
             cut = '.'
-        if grid:
-            plan.add('note', f"The newest run is {src} (steps {window[0]}–{window[1]}). It writes "
-                             f"output every {f} steps: {len(grid)} from {t1} to {t2}{cut}", 'post')
-        plan.ctx.update(window=window, src=src, t1=t1, t2=t2, grid=grid, have=have,
-                        missing=missing, cut=('running' if running else 'restart' if cut.startswith(';')
-                                              else None))
-        n_cloud = sum(1 for t in grid if on_cloud(t))
-        n_here = sum(1 for t in grid if local_ok(t) and not on_cloud(t))
+        if E:
+            plan.add('note', f"The newest run is {src} (steps {lo}–{hi_run}). Its output steps: "
+                             f"{steps_text(E)}{cut}", 'post')
+        plan.ctx.update(window=window, src=src, t1=E[0] if E else lo, t2=E[-1] if E else hi,
+                        grid=E, have=have, missing=missing, lost=lost,
+                        cut=('running' if running else 'restart' if cut.startswith(';') else None))
+        n_cloud = sum(1 for t in E if on_cloud(t))
+        n_here = sum(1 for t in E if local_ok(t) and not on_cloud(t))
         where = f"{n_cloud} on {conf.remote}" + (f", {n_here} only in binary/ (not uploaded yet)"
                                                  if n_here else '')
         bad_post = last_post if last_post and last_post.state in BAD_END else None
@@ -254,44 +289,66 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
         missed = [t for t in missing if ended_at and t in snap.out_time
                   and snap.out_time[t] < ended_at
                   and (given is None or given[0] <= t <= given[1])]
-        if not grid:
-            plan.add('note', "No post job yet: no step of the run is finished.", 'post')
+        if lost:
+            plan.add('needs', f"{steps_phrase(lost, f)} {'has' if len(lost) == 1 else 'have'} no PLT "
+                              f"and no .out anywhere ({conf.remote} or here): lost, or never "
+                              f"written. {'It falls' if len(lost) == 1 else 'They fall'} inside "
+                              f"the run's regular output steps"
+                              + (f" ({steps_text(E)})" if E else '') + ".")
+        if not E:
+            if not lost:
+                plan.add('note', "No post job yet: no step of the run is finished.", 'post')
         elif not missing:
-            plan.add('note', f"No post job needed: all {len(grid)} output steps have a PLT "
+            plan.add('note', f"No post job needed: all {len(E)} output steps have a PLT "
                              f"({where}). Matched by file name and size; the md5 is checked "
                              f"before anything is deleted.", 'post')
         elif missed and not bad_post:
             plan.add('needs', f"Post job {last_post.jobid} ended {last_post.state} after the .out "
-                              f"of steps {steps_text(missed, f)} were written, yet they have no "
+                              f"of steps {steps_text(missed)} were written, yet they have no "
                               f"whole PLT here or on the remote. Check its log (run list log) "
                               f"before posting them again.")
         elif bad_post:
-            broken = [t for t in grid if t in snap.binary and not snap.binary[t].ok]
-            detail = f" (broken: {steps_text(broken, f)})" if broken else ''
+            broken = [t for t in E if t in snap.binary and not snap.binary[t].ok]
+            detail = f" (broken: {steps_text(broken)})" if broken else ''
             plan.add('needs', f"Post job {bad_post.jobid} ended {bad_post.state}: steps "
-                              f"{steps_text(missing, f)} have no whole PLT{detail}. Post them again "
+                              f"{steps_text(missing)} have no whole PLT{detail}. Post them again "
                               f"by hand once the cause is known.")
         else:
-            prefix = grid[:len(have)] == have
+            prefix = E[:len(have)] == have
             if have and not prefix:
-                plan.add('needs', f"Holes on the remote: steps {steps_text(missing, f)} of "
-                                  f"{t1}–{t2} have no PLT, while later steps have one. Find out "
-                                  f"why before posting.")
+                plan.add('needs', f"Holes on the remote: steps {steps_text(missing)} have no PLT, "
+                                  f"while later steps have one. Find out why before posting.")
             else:
-                start = missing[0]
-                todo = [t for t in grid if t >= start]
+                todo = [t for t in E if t >= missing[0]]
                 no_input = [t for t in todo if t not in snap.settled and t not in snap.ascii]
                 if no_input:
-                    plan.add('needs', f"Steps {steps_text(no_input, f)} have no PLT on the remote "
-                                      f"and no .out here to make one from.")
+                    plan.add('needs', f"{steps_phrase(no_input, f)} {'has' if len(no_input) == 1 else 'have'} "
+                                      f"no PLT on the remote and no .out here to make "
+                                      f"{'one' if len(no_input) == 1 else 'them'} from.")
                 else:
-                    mode = 'convert' if all(t in snap.ascii for t in todo) else 'full'
-                    plan.post = (todo[0], todo[-1], mode)
-                    already = (f"; the {len(have)} before {todo[0]} have one ({where})"
-                               if have else '')
-                    plan.add('post', f"Submit `run post {mode} --t1 {todo[0]} --t2 {todo[-1]}`: "
-                                     f"{len(todo)} output step{'s' if len(todo) != 1 else ''} "
-                                     f"with no PLT yet{already}")
+                    jobs, off = _post_jobs(todo, f, snap.ascii)
+                    if off:
+                        plan.add('needs', f"{steps_phrase(off, f)} {'is' if len(off) == 1 else 'are'} "
+                                          f"not on a multiple of the spacing around "
+                                          f"{'it' if len(off) == 1 else 'them'}; `run post` only "
+                                          f"converts multiples of its --freq. Post "
+                                          f"{'it' if len(off) == 1 else 'them'} by hand.")
+                    plan.post_jobs = jobs
+                    if jobs:
+                        plan.post = (jobs[0][0], jobs[-1][1],
+                                     'convert' if all(j[3] == 'convert' for j in jobs) else 'full')
+                    for n, (a, b, d, mode) in enumerate(jobs):
+                        freq_part = f" --freq {d}" if (len(jobs) > 1 or d != f) else ''
+                        count = len(range(a, b + 1, d))
+                        already = (f"; the {len(have)} before {todo[0]} have one ({where})"
+                                   if have and n == 0 else '')
+                        plan.add('post', f"Submit `run post {mode} --t1 {a} --t2 {b}{freq_part}`: "
+                                         f"{count} output step{'s' if count != 1 else ''} "
+                                         f"with no PLT yet{already}")
+                    if len(jobs) > 1:
+                        plan.add('note', f"The run changed its output frequency, so it takes "
+                                         f"{len(jobs)} post jobs (one --freq each). Submit the next "
+                                         f"when the previous has ended.", 'post')
         later = [t for t in snap.out if pending and provisional(t)]
         plan.ctx['later'] = sorted(later)
         if later:
