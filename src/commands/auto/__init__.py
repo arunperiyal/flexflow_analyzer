@@ -8,7 +8,8 @@ auto - the per-case workflow for a folder of cases (docs/AUTO_PLAN.md §13)
                          table for several (case:*), each in full with --detail
     auto commands [case] just the commands to run, numbered, as plain text
     auto status [case]   one line per case
-    auto apply [case]    (not built yet)
+    auto apply [case] [--remote NAME] [--only history,upload,post] [--dry-run] [--yes]
+                         organise history, upload (checked, never deleting), submit post jobs
     auto log [case]      (not built yet)
 """
 
@@ -19,7 +20,7 @@ SUBCOMMANDS = (('init', "Set a remote's folder and auto's settings in .cases.yml
                ('show', 'What auto would do for a case, or every case with case:* (changes nothing)'),
                ('commands', 'Just the commands to run, numbered, as plain text'),
                ('status', 'One line per case: state, steps, jobs, what is next'),
-               ('apply', 'Carry it out (not built yet)'),
+               ('apply', 'Organise history, upload (checked), submit post jobs; deletes nothing'),
                ('log', 'What earlier runs did (not built yet)'))
 
 
@@ -52,7 +53,12 @@ class AutoCommand(BaseCommand):
                             help='show: every case in full, not only the summary table')
         parser.add_argument('--only', metavar='SECTIONS',
                             help='show: only these sections (state, needs, flags, history, '
-                                 'plt, out, rst, inputs), comma-separated')
+                                 'plt, out, rst, inputs); apply: only these steps '
+                                 '(history, upload, post); comma-separated')
+        parser.add_argument('--dry-run', action='store_true',
+                            help='apply: list what would be done, do nothing')
+        parser.add_argument('--yes', action='store_true',
+                            help='apply: do not ask before starting')
         parser.add_argument('--force', action='store_true',
                             help="init: replace the remote's folder already in .cases.yml")
         parser.add_argument('-h', '--help', action='store_true', help='Show help')
@@ -76,8 +82,11 @@ class AutoCommand(BaseCommand):
         if what == 'status':
             from .show import execute_status
             return execute_status(args)
-        if what in ('apply', 'log'):
-            print(f"auto {what} is not built yet; `auto show` shows the plan.")
+        if what == 'apply':
+            from .apply import execute_apply
+            return execute_apply(args)
+        if what == 'log':
+            print("auto log is not built yet; the log of each apply run is in auto_logs/.")
             return 2
         print(f"Unknown subcommand: {what} (init, show, commands, status, apply, log)")
         return 2

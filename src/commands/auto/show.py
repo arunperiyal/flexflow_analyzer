@@ -63,9 +63,11 @@ def resolve_cases(case, base_dir: Path):
     return [path.resolve()]
 
 
-def gather(case_dirs, remote):
+def gather(case_dirs, remote, clouds=None):
     """([(snapshot, plan)], {folder: conf}, problems) for these case folders,
-    against this remote.
+    against this remote. `clouds` is a {(remote, path): cloud} cache: pass one
+    to reuse open connections across calls (the caller closes them); without
+    it they are opened here and closed before returning.
 
     Each case uses its parent folder's .cases.yml: the remote's folder there
     and auto's settings; a folder without them raises AutoConfError. The queue and sacct are
@@ -96,7 +98,8 @@ def gather(case_dirs, remote):
         ended, sacct_ok = [], False
         problems.append(f"sacct could not be read ({e}): no post decisions")
 
-    clouds = {}                                  # (remote, path) -> cloud, or None
+    own = clouds is None
+    clouds = {} if own else clouds               # (remote, path) -> cloud, or None
     results = []
     try:
         for case_dir in case_dirs:
@@ -119,10 +122,16 @@ def gather(case_dirs, remote):
             results.append((snap, decide(snap, conf, cloud_ok=listing is not None,
                                          sacct_ok=sacct_ok)))
     finally:
-        for cloud in clouds.values():
-            if cloud is not None:
-                cloud.close()
+        if own:
+            for cloud in clouds.values():
+                if cloud is not None:
+                    cloud.close()
     return results, confs, problems
+
+
+def _size_text_of(files: dict) -> str:
+    from src.core.auto.decide import _size_text
+    return _size_text(sum(files.values()))
 
 
 def _only(args):
