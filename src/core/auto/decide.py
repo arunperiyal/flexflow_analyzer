@@ -140,6 +140,8 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
     pending = bool(main_now) and not running
     last_main, last_post = snap.last_ended('main'), snap.last_ended('post')
     reached = max([r[1] for r in (snap.live, snap.archive_range) if r] or [0]) or None
+    if any(j.state in RUNNING for j in snap.active('main')) and snap.live:
+        reached = snap.live[1]          # a running job is at its own .othd, not at an earlier run's end
     has_history = bool(snap.live) or any(h.any for h in snap.history.values())
 
     state = ('running' if running else 'queued' if pending else 'post running' if post_now
@@ -322,7 +324,9 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
         seen = set(snap.out) | snap.ascii | set(snap.binary) | remote_plt
         E = sorted(t for t in seen if lo <= t <= hi)
         have = [t for t in E if on_cloud(t) or local_ok(t)]
-        covered = have
+        # earlier runs' steps (below this run's window) count too, so their .out and
+        # PLT files are listed for deletion once they are on the cloud
+        covered = sorted(set(have) | {t for t in seen if t < lo and (on_cloud(t) or local_ok(t))})
         missing = [t for t in E if t not in have]
         # steps the stretches say should be there, with no file anywhere
         lost = stretch_gaps(E, lo, hi, f)

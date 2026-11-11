@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### 🔎 `auto show`: fixes from real cases
+
+- A running case shows the step its job is at (its `.othd`), not where an
+  earlier run ended.
+- `.out` / PLT files of an earlier run's steps that are on the cloud are now
+  listed for deletion too, not only the newest run's.
+- `Remote: ... missing N files` names the first few files.
+
 ### 🛟 `keep_newest_rst`: thinning keeps the two newest complete sets
 
 - A job killed while writing a restart set can leave the newest one cut
