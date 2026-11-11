@@ -505,10 +505,10 @@ def log_section(s):
 
 
 def test_the_tail_of_a_failed_jobs_log_is_in_the_report():
-    failed = Job('7', 'maincase', 'TIMEOUT', '', '/c/case', '2026-11-08T10:00:00')
+    failed = Job('7', 'maincase', 'FAILED', '', '/c/case', '2026-11-08T10:00:00')
     s = snap(ended=[failed], log_tails={'7': ['step 5', 'DUE TO TIME LIMIT']})
     [sec] = log_section(s)
-    assert sec.rows[0] == ('Job', 'main 7 TIMEOUT, ended 11-08 10:00')
+    assert sec.rows[0] == ('Job', 'main 7 FAILED, ended 11-08 10:00')
     assert sec.rows[1] == ('File', 'slurm-7.out, last 2 lines')
     assert sec.rows[2:] == [('', 'step 5'), ('', 'DUE TO TIME LIMIT')]
 
@@ -533,3 +533,112 @@ def test_tail_reads_the_last_fifteen_lines(tmp_path):
     got = _tail(tmp_path, '5')
     assert len(got) == 15 and got[0] == 'line 25' and got[-1] == 'line 39'
     assert _tail(tmp_path, '6') is None
+
+
+# --- real case: a post job that was given fewer steps than the .out files there --------------
+
+def test_a_step_beyond_what_the_post_job_made_is_not_a_failed_post():
+    from src.core.plt_valid import PltCheck
+    ended = _time.mktime(_time.strptime('2026-11-11 19:58:00', '%Y-%m-%d %H:%M:%S'))
+    done = Job('7', 'postcase', 'COMPLETED', '', '/c/case', '2026-11-11T19:58:00', '2026-11-11T19:50:00')
+    s = snap(ended=[done], cloud=cloud_with(*range(50, 401, 50)),
+             binary={t: PltCheck(Path(f'b/riser.{t}.plt'), True, '', 424) for t in (450, 500, 550)},
+             binary_time={t: ended - 60 for t in (450, 500, 550)},
+             out_time={600: ended - 120})
+    plan = decide(s, CONF, True, True)
+    assert not plan.needs_you
+    assert plan.post == (600, 600, 'full')
+
+
+def test_without_a_made_plt_the_old_alarm_still_rings():
+    done = Job('7', 'postcase', 'COMPLETED', '', '/c/case', '2026-11-11T19:58:00', '2026-11-11T19:50:00')
+    ended = _time.mktime(_time.strptime('2026-11-11 19:58:00', '%Y-%m-%d %H:%M:%S'))
+    s = snap(ended=[done], cloud=cloud_with(*range(50, 401, 50)), out_time={600: ended - 120})
+    assert any('yet they have no whole PLT' in t for t in kinds(decide(s, CONF, True, True), 'needs'))
+
+
+def test_the_upload_command_drops_missing_when_an_old_plt_must_be_replaced():
+    from src.core.plt_valid import PltCheck
+    from src.core.auto.report import build, commands
+    s = restarted_snap(binary={350: PltCheck(Path('b/riser.350.plt'), True, '', 424)},
+                       binary_time={350: START + 900}, sent_at={})
+    plan = decide(s, CONF, True, True)
+    cmds = [c for c in commands(build(s, plan, CONF)) if c.startswith('case upload binary')]
+    assert cmds == ['case upload binary case --t1 350 --t2 350 --to local']
+
+
+# --- more real cases ---------------------------------------------------------------------
+
+def test_a_timeout_or_cancel_is_not_a_failure_worth_a_log():
+    from src.core.auto.observe import _tail  # noqa: F401  (the rule lives in observe_case)
+    import inspect
+    from src.core.auto import observe
+    assert "'TIMEOUT'" in inspect.getsource(observe.observe_case)
+
+
+def test_a_skipped_run_number_is_flagged():
+    h = History(archive={1: Path('a/riser1.othd'), 3: Path('a/riser3.othd')},
+                cleaned={1: Path('c/riser1.othd'), 3: Path('c/riser3.othd')})
+    s = snap(history={'othd': h, 'oisd': History(archive={1: Path('a'), 3: Path('b')},
+                                                 cleaned={1: Path('c'), 3: Path('d')})},
+             cloud={'othd_files/archive/riser2.othd': 10})
+    flags = kinds(decide(s, CONF, True, True), 'flag')
+    assert any(t.startswith('othd_files has runs 1, 3 but not 2') and 'local has 2' in t
+               for t in flags)
+
+
+def test_a_cloud_plt_written_after_the_restart_job_started_is_the_new_runs():
+    s = restarted_snap(cloud_mtime={f'binary/riser.{t}.plt': START + 600 for t in (350, 400)})
+    assert decide(s, CONF, True, True).ctx['stale_plt'] == [450, 500, 550, 600]
+
+
+def test_stale_plts_whose_out_is_gone_are_the_users_to_decide_not_holes():
+    s = restarted_snap(out={}, settled=[], jobs=[])
+    plan = decide(s, CONF, True, True)
+    assert any('predates the restart from 300 and the new run\'s .out is gone' in t
+               for t in kinds(plan, 'needs'))
+    assert not any(t.startswith('Holes') for t in kinds(plan, 'needs'))
+
+
+def test_a_local_cloud_listing_carries_mtimes(tmp_path):
+    from src.core.auto.cloud import LocalCloud
+    (tmp_path / 'case' / 'binary').mkdir(parents=True)
+    (tmp_path / 'case' / 'binary' / 'riser.50.plt').write_bytes(b'x' * 7)
+    got = LocalCloud(tmp_path).listing('case')
+    assert got == {'binary/riser.50.plt': 7}
+    assert set(got.mtimes) == {'binary/riser.50.plt'} and got.mtimes['binary/riser.50.plt'] > 0
+
+
+# --- the by-hand commands next to a deletion that apply cannot do yet ---------------------
+
+def test_runs_apart_never_cover_a_file_that_is_not_in_the_list():
+    from src.core.auto.report import _runs_apart
+    assert _runs_apart([5, 10, 20, 25], [15]) == [(5, 10), (20, 25)]
+    assert _runs_apart([5, 10, 15], [3, 40]) == [(5, 15)]
+    assert _runs_apart([], [1]) == []
+
+
+def test_thinning_names_the_organise_command():
+    from src.core.auto.report import build
+    s = restarted_snap(restart_tsid=None, live=(1, 450), jobs=[])
+    s.rst = {t: 4 for t in (100, 200, 300, 400, 500, 550, 600)}
+    s.rst_files = {t: {f"RUN_1/riser.{t}_{k}.rst": 100 for k in range(4)} for t in s.rst}
+    plan = decide(s, CONF, True, True)
+    acts = [a for sec in build(s, plan, CONF) for a in sec.actions if 'delete .rst' in a]
+    assert acts and ('by hand: case organise output case --keep-out --keep-freq 200 '
+                     '--keep-newest 2 --t1 100 --t2') in acts[0]
+
+
+def test_a_restart_in_dot_restarts_that_no_history_part_starts_at_is_flagged():
+    s = snap(run_starts=[1, 4951],
+             restarts=[{'after': '900', 'first': '901', 'part': 'riser2.othd'},
+                       {'after': '4950', 'first': '4951', 'part': 'riser3.othd'}])
+    flags = kinds(decide(s, CONF, True, True), 'flag')
+    assert len([t for t in flags if t.startswith('.restarts records')]) == 1
+    [one] = [t for t in flags if t.startswith('.restarts records')]
+    assert 'after step 900 (first step 901, riser2.othd)' in one and 'start at 1, 4951' in one
+
+
+def test_dot_restarts_that_agrees_with_the_history_says_nothing():
+    s = snap(run_starts=[1, 4951], restarts=[{'after': '4950', 'first': '4951', 'part': 'x'}])
+    assert not [t for t in kinds(decide(s, CONF, True, True), 'flag') if t.startswith('.restarts')]

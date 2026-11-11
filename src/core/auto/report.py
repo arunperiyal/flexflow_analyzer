@@ -24,6 +24,30 @@ AUTO_ONLY = 'auto apply: '
 NOT_YET = ' [not built yet: delete by hand for now]'      # deleting is a later stage of apply
 
 
+def _by_hand(commands) -> str:
+    """The NOT_YET note with the commands that do the same by hand."""
+    if not commands:
+        return NOT_YET
+    return " [not built yet; by hand: " + '; '.join(commands) + "]"
+
+
+def _runs_apart(steps, others):
+    """`steps` split into runs (first, last) so that no step of `others` lies inside a run:
+    a range command cannot touch a file that is not in the list."""
+    steps, others = sorted(set(steps)), sorted(set(others) - set(steps))
+    runs, start, prev = [], None, None
+    for t in steps:
+        if start is not None and any(prev < o < t for o in others):
+            runs.append((start, prev))
+            start = None
+        if start is None:
+            start = t
+        prev = t
+    if start is not None:
+        runs.append((start, prev))
+    return runs
+
+
 @dataclass
 class Section:
     key: str
@@ -200,13 +224,13 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
         s.row('Remote', f"present {steps_text(sorted(plt_cloud)) if plt_cloud else 'none'}"
                         f" · missing {steps_text(gone) if gone else 'none'}")
         if c.get('stale_plt'):
-            s.row('Earlier run', f"{steps_text(c['stale_plt'])} on {remote} predate the restart: "
+            s.row('Old run', f"{steps_text(c['stale_plt'])} on {remote} predate the restart: "
                                  f"posted again and replaced")
     s.row('Binary', f"present {steps_text(ok_here) if ok_here else 'none'}"
                     f" · broken {steps_text(broken) if broken else 'none'}")
     s.row('ASCII', f"present {steps_text(sorted(snap.ascii)) if snap.ascii else 'none'}")
     if c.get('stale_local_plt'):
-        s.row('Earlier run', f"binary {steps_text(c['stale_local_plt'])} here predate the "
+        s.row('Old run', f"binary {steps_text(c['stale_local_plt'])} here predate the "
                              f"restart: not trusted, not uploaded")
     if lost:
         s.row('Lost', f"{steps_text(lost)}: no PLT and no .out anywhere")
@@ -233,14 +257,22 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
         s.actions.append("wait: submit each post job after the previous one has ended")
     if c.get('plt_upload'):
         up = c['plt_upload']
-        s.actions.append(f"case upload binary {name} --t1 {up[0]} --t2 {up[-1]} --missing "
+        # --missing skips a file the remote holds at the same size, which would leave an
+        # earlier run's PLT in place after a restart
+        flag = '' if set(up) & set(c.get('stale_plt') or []) else ' --missing'
+        s.actions.append(f"case upload binary {name} --t1 {up[0]} --t2 {up[-1]}{flag} "
                          f"--to {remote}")
     if c.get('del_ascii'):
         s.actions.append(AUTO_ONLY + f"delete ASCII PLTs, {steps_phrase(c['del_ascii']).lower()}, "
-                                     f"once the binary copy on {remote} is md5-checked" + NOT_YET)
+                                     f"once the binary copy on {remote} is md5-checked"
+                         + _by_hand([f"case organise plt {name} --delete-ascii --t1 {a} --t2 {b}"
+                                     for a, b in _runs_apart(c['del_ascii'], [])]))
     if c.get('del_binary'):
         s.actions.append(AUTO_ONLY + f"delete binary PLTs, {steps_phrase(c['del_binary']).lower()}, "
-                                     f"once their copy on {remote} is md5-checked" + NOT_YET)
+                                     f"once their copy on {remote} is md5-checked"
+                         + _by_hand([f"case organise plt {name} --delete-binary --t1 {a} --t2 {b}"
+                                     for a, b in _runs_apart(
+                                         c['del_binary'], set(snap.binary) - set(c['del_binary']))]))
     sections.append(s)
 
     # -- OUT files --------------------------------------------------------------------
@@ -259,7 +291,11 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
         freed = _size_text(sum(snap.out_size.get(t, 0) for t in outs))
         s.actions.append(AUTO_ONLY + f"delete .out of {steps_phrase(outs).lower()} ({freed}) once "
                                      f"{'its' if len(outs) == 1 else 'their'} PLT on {remote} is "
-                                     f"md5-checked" + NOT_YET)
+                                     f"md5-checked"
+                         + _by_hand([f"case organise output {name} --all-out --keep-freq "
+                                     f"{conf.keep_rst} --t1 {a} --t2 {b}"
+                                     for a, b in _runs_apart(outs, set(snap.out) - set(outs))]
+                                    if conf.keep_rst else []))
     sections.append(s)
 
     # -- RST files --------------------------------------------------------------------
@@ -283,7 +319,7 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
         if snap.restart_tsid is not None:
             s.row('Restart', f"restartTsId {snap.restart_tsid} (kept)")
         if old:
-            s.row('Earlier run', f"{steps_text(sorted(old))}: above the solver's step, written "
+            s.row('Old run', f"{steps_text(sorted(old))}: above the solver's step, written "
                                  f"before the restart; not counted, sent or deleted")
         if c.get('rst_newest_kept'):
             sets = c['rst_newest_kept']
@@ -335,7 +371,10 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
     thin = c.get('thin') or []
     if snap.rst and thin:                      # after the uploads: deleting follows from them
         s.actions.append(AUTO_ONLY + f"delete .rst of {steps_phrase(thin).lower()}: not "
-                                     f"multiples of {conf.keep_rst}" + NOT_YET)
+                                     f"multiples of {conf.keep_rst}"
+                         + _by_hand([f"case organise output {name} --keep-out --keep-freq "
+                                     f"{conf.keep_rst} --keep-newest {conf.keep_newest_rst} "
+                                     f"--t1 {min(thin)} --t2 {max(thin)}"] if conf.keep_rst else []))
     sections.append(s)
 
     # -- inputs and case files ----------------------------------------------------------

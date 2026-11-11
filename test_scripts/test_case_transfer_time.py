@@ -196,3 +196,18 @@ def test_rate_is_reported_against_the_setting(monkeypatch, capsys):
     cmd._report_rate(MB, 1)                                 # too small to say
     assert text(capsys) == ''
 
+
+
+def test_a_shellkit_without_time_left_just_sends(cases, monkeypatch, capsys):
+    """The cluster's shellkit may be older than the one with the session timeout
+    (`'Runtime' object has no attribute 'time_left'`): the check is skipped."""
+    class OldRuntime:
+        def __init__(self):
+            self.settings = Settings(10.0)
+    here, there = cases
+    monkeypatch.setattr(shellkit, 'current_runtime', lambda: OldRuntime())
+    cmd = CaseDownloadCommand()
+    cmd._time_policy = 'ask'
+    ssh = FakeRemote(there)
+    assert cmd.upload_binary_range(ssh, '/r/CS1', str(here), (1, 10))
+    assert len(ssh.sent) == 10

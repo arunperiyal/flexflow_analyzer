@@ -2,6 +2,45 @@
 
 ## Unreleased
 
+### 🔎 `auto show`: fourth round of real cases
+
+- A restart recorded in `.restarts` that no `othd_files` part starts at
+  (e.g. after 900, first step 901, while the parts start at 1 and 4951) is
+  flagged under "Worth a look".
+- Deletions that `auto apply` cannot do yet now name the command that does
+  the same by hand: `case organise output --keep-out --keep-freq N
+  --keep-newest M --t1 .. --t2 ..` for the `.rst` thinning (no `.out`
+  touched), `--all-out` for `.out` whose PLT is on the remote (one command
+  per run of steps, so no other `.out` falls inside the range), `case
+  organise plt --delete-ascii / --delete-binary`.
+- `case upload` no longer stops with `'Runtime' object has no attribute
+  'time_left'` on a shellkit without the session timeout.
+
+### 🔎 `auto show`: third round of real cases
+
+- After a restart, a PLT on the remote also counts as the new run's when the
+  remote says it was written after the restart job started (step reached by
+  the new run, no older local copy): a post job that ran while the main job
+  was running no longer makes its PLTs look like the earlier run's. The
+  listing of a remote now carries each file's modification time.
+- A PLT from before the restart whose `.out` is gone cannot be posted again:
+  it is listed under "Needs you" (keep the old PLT, or run the steps again)
+  instead of as "Holes on the remote".
+- The "Job log" section is shown for failed jobs (FAILED, OUT_OF_MEMORY,
+  NODE_FAIL ...), not for TIMEOUT or CANCELLED, which are routine.
+- A skipped run number in `othd_files` / `oisd_files` (runs 1 and 3, no 2) is
+  flagged, with a hint when the remote has it.
+
+### 🔎 `auto show`: fixes from the second round of real cases
+
+- A post job with no "started: steps a..b" line in `.casestatus.md` is no
+  longer blamed for a step beyond the ones it made (taken from the binary
+  PLTs written while it ran): `BR0SG0U1P0` step 5780 is simply posted next.
+- After a restart, the suggested `case upload binary` drops `--missing`
+  (it skips a PLT the remote holds at the same size, which would leave the
+  earlier run's file there).
+- Row label "Old run" (the long one was cut off).
+
 ### 📜 `auto show`: the end of a failed job's log
 
 - When the last main or post job ended FAILED, TIMEOUT, CANCELLED and so on

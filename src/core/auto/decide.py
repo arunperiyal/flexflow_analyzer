@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
-from .observe import CaseSnapshot
+from .observe import CaseSnapshot, _parse_time
 from .stretches import gaps as stretch_gaps, stretches
 
 RUNNING = ('RUNNING', 'COMPLETING', 'CONFIGURING')
@@ -195,6 +195,29 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
             broken_rule.append(f"{ext}_files/archive/ lacks run(s) {', '.join(map(str, missing))} "
                                f"that cleaned/ has")
     plan.ctx['broken_rule'] = broken_rule
+    # .restarts rows that no history part starts at
+    if snap.restarts and snap.run_starts:
+        odd = [r for r in snap.restarts if r.get('first', '').isdigit()
+               and int(r['first']) not in snap.run_starts]
+        for r in odd:
+            plan.add('flag', f".restarts records a restart after step {r['after']} (first step "
+                             f"{r['first']}, {r.get('part', '?')}) but no history part starts "
+                             f"there (they start at {', '.join(map(str, snap.run_starts))}). "
+                             f"Check with `case check history`; .restarts is only rewritten by "
+                             f"`case organise history --clean`.")
+    # run numbers that skip: history of a run that is in neither archive/ nor cleaned/
+    for ext, h in snap.history.items():
+        have_runs = set(h.archive) | set(h.cleaned)
+        if len(have_runs) >= 2:
+            skipped = sorted(set(range(min(have_runs), max(have_runs) + 1)) - have_runs)
+            if skipped:
+                there = [n for n in skipped if cloud is not None and any(
+                    f"{ext}_files/{kind}/{p}{n}.{ext}" in cloud for kind in ('archive', 'cleaned'))]
+                plan.add('flag', f"{ext}_files has runs {', '.join(map(str, sorted(have_runs)))} "
+                                 f"but not {', '.join(map(str, skipped))}: that run's history is "
+                                 f"in neither archive/ nor cleaned/ here"
+                                 + (f"; {conf.remote} has {', '.join(map(str, there))}" if there
+                                    else '') + ".")
     if broken_rule:
         lacking = sorted({(ext, n) for ext, h in snap.history.items()
                           for n in set(h.cleaned) - set(h.archive)})
@@ -307,7 +330,17 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
     restarted = (T is not None and not pending and bool(snap.live)
                  and 0 < snap.live[0] - T <= 5 and snap.main_start is not None)
     sent_new = (lambda rel: snap.sent_at.get(rel, 0) >= (snap.main_start or 0))
-    stale_plt = (lambda t: restarted and t > T and not sent_new(f"binary/{p}.{t}.plt"))
+    def fresh_plt(t):
+        # the new run's: auto sent it after the restart job started, or the remote says it
+        # was written after that, for a step the new run has reached and not from an old
+        # local file sent late
+        rel = f"binary/{p}.{t}.plt"
+        if sent_new(rel):
+            return True
+        when = snap.cloud_mtime.get(rel)
+        return bool(when and when >= snap.main_start and t <= snap.live[1]
+                    and not (t in snap.binary_time and snap.binary_time[t] < snap.main_start))
+    stale_plt = (lambda t: restarted and t > T and not fresh_plt(t))
     stale_rst = (lambda t: T is not None and not pending and bool(snap.live)
                  and t > max(T, snap.live[1]))
     on_cloud = (lambda t: cloud is not None and cloud.get(f"binary/{p}.{t}.plt", 0) > 0
@@ -370,6 +403,17 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
         # PLT files are listed for deletion once they are on the cloud
         covered = sorted(set(have) | {t for t in seen if t < lo and (on_cloud(t) or local_ok(t))})
         missing = [t for t in E if t not in have]
+        # a PLT on the remote from before the restart whose .out is gone (and no new PLT
+        # here): it cannot be made again, so it is the user's to decide, not a hole
+        orphans = [t for t in missing if t in remote_plt and stale_plt(t)
+                   and t not in snap.out and t not in snap.ascii]
+        missing = [t for t in missing if t not in orphans]
+        plan.ctx['stale_orphans'] = orphans
+        if orphans:
+            plan.add('needs', f"{steps_phrase(orphans, f)}: the PLT on {conf.remote} predates the "
+                              f"restart from {T} and the new run's .out is gone, so "
+                              f"{'it' if len(orphans) == 1 else 'they'} cannot be posted again. "
+                              f"Keep the old PLT, or run those steps again.")
         # steps the stretches say should be there, with no file anywhere
         lost = stretch_gaps(E, lo, hi, f)
 
@@ -397,6 +441,14 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
         # made their PLTs: if it did not, something is wrong -- do not repost blindly
         ended_at = _ended_at(last_post) if last_post else None
         given = snap.post_windows.get(last_post.jobid) if last_post else None
+        if given is None and last_post and ended_at:
+            # no "post job N started: steps a..b" line: the steps it made are the binary
+            # PLTs written while it ran, so a later step was not given to it
+            began = _parse_time(last_post.start)
+            made = [t for t, when in snap.binary_time.items()
+                    if began is not None and began - 60 <= when <= ended_at + 120]
+            if made:
+                given = (min(made), max(made))
         missed = [t for t in missing if ended_at and t in snap.out_time
                   and snap.out_time[t] < ended_at
                   and (given is None or given[0] <= t <= given[1])]
@@ -425,8 +477,9 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
                               f"{steps_text(missing)} have no whole PLT{detail}. Post them again "
                               f"by hand once the cause is known.")
         else:
-            prefix = E[:len(have)] == have
-            if have and not prefix:
+            have_all = sorted(set(have) | set(orphans))
+            prefix = E[:len(have_all)] == have_all
+            if have_all and not prefix:
                 plan.add('needs', f"Holes on the remote: steps {steps_text(missing)} have no PLT, "
                                   f"while later steps have one. Find out why before posting.")
             else:
