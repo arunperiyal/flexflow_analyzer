@@ -43,7 +43,7 @@ Submit and manage SLURM jobs for FlexFlow simulations.
     run main Case001
 
     # Submit main with restart
-    run main restart 5000 Case001
+    run main restart Case001 --time 5000
 
     # Submit main fresh, ignoring restart settings
     run main reset Case001

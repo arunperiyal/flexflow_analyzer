@@ -208,7 +208,8 @@ run pre Case001 --dry-run
      - Resume simulation from last available restart file
 
    - **Manual restart** (with `run main restart`):
-     - Use `run main restart <tsId>` to restart from specific time step
+     - Use `run main restart [case] --time <tsId>` to restart from a specific time step (the positional `run main restart 5000` is no longer accepted)
+     - `run main restart [case]` without `--time` restarts from the last written (unnumbered) .rst file; both forms ask for confirmation first (`-y` skips it)
      - Runs the restart algorithm (see Restart Algorithm section below)
 
 4. **Simulation Execution:**
@@ -264,7 +265,7 @@ use case:Case001
 run main
 
 # Restart from specific time step
-run main restart 5000 Case001
+run main restart Case001 --time 5000
 
 # With dependency on previous job
 run main Case001 --dependency <job_id>
@@ -504,7 +505,7 @@ Time 3:45 → All .out, .rst, .plt files still present (no cleanup)
 
 ## Restart Algorithm
 
-When using `run main restart <tsId>`, the following automated workflow is executed:
+When using `run main restart --time <tsId>`, the following automated workflow is executed:
 
 ### 1. Pre-restart Organization
 
@@ -515,7 +516,7 @@ Run `case organise` to prepare the case directory:
 
 ### 2. Archive Completed Results
 
-When using `run main restart <tsId>`, the system automatically runs `run post full --t2 <tsId> --cleanup`:
+When using `run main restart --time <tsId>`, the system automatically runs `run post full --t2 <tsId> --cleanup`:
 
 **What happens:**
 ```bash
@@ -568,7 +569,7 @@ Submit `mainFlex.sh` with SLURM dependency:
 ### Workflow Diagram
 
 ```
-run main restart 5000
+run main restart --time 5000
     ↓
 [1] case organise (immediate)
     ↓
@@ -796,7 +797,7 @@ run post full Case001 --t2 5000 --freq 100
 run post full Case001 --last 2500 --no-cleanup
 
 # Restart from specific time step
-run main restart 5000 Case001
+run main restart Case001 --time 5000
 ```
 
 ---
@@ -867,7 +868,7 @@ use case:Case001
 # 2. Submit postprocessing jobs (asynchronous, may take hours)
 # 3. Clean output directory (after jobs complete)
 # 4. Submit simulation to resume from step 5000 (with dependency)
-run main restart 5000
+run main restart --time 5000
 
 # Monitor progress - you'll see two jobs in the queue
 squeue -u $USER
@@ -937,10 +938,10 @@ case status
 
 # 2. First restart (from time step 10000)
 # Automatically archives results and resumes
-run main restart 10000
+run main restart --time 10000
 
 # 3. Second restart (from time step 20000)
-run main restart 20000
+run main restart --time 20000
 
 # 4. Final postprocessing after simulation completes
 # This submits jobs to create binary PLT files and clean up
@@ -1345,7 +1346,7 @@ The `run` command integrates seamlessly with other FlexFlow Manager commands:
 | `run check [case]`               | Validate case directory                   | `run check Case001`            |
 | `run pre [case]`                 | Submit preprocessing job                  | `run pre Case001`              |
 | `run main [case]`                | Submit main simulation                    | `run main Case001`             |
-| `run main restart <tsId>`      | Restart from specific time step           | `run main restart 5000`      |
+| `run main restart --time <tsId>` | Restart from specific time step (without `--time`: from the last written .rst) | `run main restart --time 5000` |
 | `run main --dependency <job_id>` | Submit with SLURM dependency              | `run main --dependency 123456` |
 | `run post full [case]`                | Submit postprocessing (no auto cleanup)   | `run post full Case001`             |
 | `run post full --cleanup`             | Submit postprocessing with cleanup job    | `run post full --cleanup`           |

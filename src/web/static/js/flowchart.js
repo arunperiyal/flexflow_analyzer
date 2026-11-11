@@ -99,7 +99,7 @@ const FlowChart = (() => {
     {
       id: 'restartRun', kind: 'step', col: 2, row: 9, label: ['Restart from a step'],
       title: 'Restart from a step',
-      command: 'run main restart <tsId>',
+      command: 'run main restart --time <tsId>',
       detail: `Sets the restart in simflow.config and submits mainFlex.sh,
         which first moves the previous run's .othd and .oisd into
         othd_files/archive/ and oisd_files/archive/.`,
@@ -275,7 +275,7 @@ const FlowChart = (() => {
       title: 'Does the run go on?',
       command: null,
       detail: `Not yet at maxTimeSteps: queue a restart from the newest
-        restart set ("run main restart <tsId>"), often before the current job
+        restart set ("run main restart --time <tsId>"), often before the current job
         has ended. A finished case goes on to its record and the analysis.`,
     },
     {

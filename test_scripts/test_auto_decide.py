@@ -649,7 +649,7 @@ def test_stopped_short_names_the_newest_complete_set_to_restart_from():
     s = snap(cloud=cloud_with(*range(50, 601, 50)), ended=[job('maincase', 'TIMEOUT')],
              rst={500: 4, 550: 4, 600: 2})
     plan = decide(s, CONF, True, True)
-    assert 'run main restart 550`' in kinds(plan, 'needs')[-1]
+    assert 'run main restart case --time 550`' in kinds(plan, 'needs')[-1]
     assert plan.ctx['restart_from'] == 550
 
 
@@ -657,7 +657,7 @@ def test_stopped_short_without_a_complete_set_keeps_the_placeholder():
     s = snap(cloud=cloud_with(*range(50, 601, 50)), ended=[job('maincase', 'TIMEOUT')],
              rst={600: 1})
     text = kinds(decide(s, CONF, True, True), 'needs')[-1]
-    assert 'run main restart <tsId>' in text and 'no complete restart set' in text
+    assert 'run main restart case --time <tsId>' in text and 'no complete restart set' in text
 
 
 def test_stopped_short_with_no_main_job_in_the_history_still_names_the_restart():
@@ -665,7 +665,7 @@ def test_stopped_short_with_no_main_job_in_the_history_still_names_the_restart()
     s = snap(cloud=cloud_with(*range(50, 601, 50)), rst={500: 4, 550: 4})
     plan = decide(s, CONF, True, True)
     text = kinds(plan, 'needs')[-1]
-    assert 'no main job in the job history' in text and 'run main restart 550`' in text
+    assert 'no main job in the job history' in text and 'run main restart case --time 550`' in text
 
 
 def test_a_failed_main_job_is_not_offered_a_restart():
@@ -678,7 +678,7 @@ def test_the_state_action_is_the_restart_command_with_the_case_name():
     from src.core.auto.report import build
     s = snap(cloud=cloud_with(*range(50, 601, 50)), rst={500: 4, 550: 4})
     state = [sec for sec in build(s, decide(s, CONF, True, True), CONF) if sec.key == 'state'][0]
-    assert state.actions == ['run main restart 550 case']
+    assert state.actions == ['run main restart case --time 550']
 
 
 def test_no_job_history_and_no_restart_set_means_no_prompt():
