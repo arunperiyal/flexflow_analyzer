@@ -135,7 +135,10 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
         missing = c.get('hist_missing', {})
         shown = sorted(missing)
         names = (': ' + ', '.join(shown[:4]) + (', ...' if len(shown) > 4 else '')) if shown else ''
-        s.row('Remote', f"present {len(hist_here) - len(missing)} · missing {len(missing)} files{names}")
+        shrink = c.get('hist_shrink') or {}
+        s.row('Remote', f"present {len(hist_here) - len(missing) - len(shrink)} · missing "
+                        f"{len(missing)} files{names}"
+              + (f" · larger there, not sent: {', '.join(sorted(shrink))}" if shrink else ''))
         on_remote = sum(v for k, v in cloud.items() if k.startswith(('othd_files/', 'oisd_files/')))
         size += f" here · {_size_text(on_remote)} on {remote}"
     s.row('Size', size)
@@ -179,9 +182,15 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
         gone = [t for t in grid if plt_cloud.get(t, 0) == 0]
         s.row('Remote', f"present {steps_text(sorted(plt_cloud)) if plt_cloud else 'none'}"
                         f" · missing {steps_text(gone) if gone else 'none'}")
+        if c.get('stale_plt'):
+            s.row('Earlier run', f"{steps_text(c['stale_plt'])} on {remote} predate the restart: "
+                                 f"posted again and replaced")
     s.row('Binary', f"present {steps_text(ok_here) if ok_here else 'none'}"
                     f" · broken {steps_text(broken) if broken else 'none'}")
     s.row('ASCII', f"present {steps_text(sorted(snap.ascii)) if snap.ascii else 'none'}")
+    if c.get('stale_local_plt'):
+        s.row('Earlier run', f"binary {steps_text(c['stale_local_plt'])} here predate the "
+                             f"restart: not trusted, not uploaded")
     if lost:
         s.row('Lost', f"{steps_text(lost)}: no PLT and no .out anywhere")
     if c.get('later'):
