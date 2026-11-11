@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### 🔁 `run main restart [case] --time TSID`
+
+- The step is now given with `--time`: `run main restart BR0SG0U5P0 --time 8150`
+  sets `restartTsId = 8150`, `restartFlag = 1` and submits.
+- Without `--time`, `run main restart BR0SG0U5P0` resumes from the last
+  written (unnumbered) .rst file: `restartTsId` is commented out and
+  `restartFlag = 1`.
+- Both forms say what they will change and ask once (`-y`/`--yes` skips the
+  question; no answer counts as no). `--dry-run` shows the plan only.
+- The old `run main restart 5000 [case]` is refused with a message naming the
+  new form. `--time` outside `restart` is refused.
+- `run main --help`, `RUN_COMMANDS.md`, the web flowchart and the `auto show`
+  prompt/State action (`run main restart BR0SG0U5P0 --time 8150`) use the new
+  form.
+
 ### 🔎 `auto apply --dry-run`: says what it overwrites
 
 - The upload line for binary PLTs now says when some replace files on the

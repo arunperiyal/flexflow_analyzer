@@ -639,7 +639,8 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
         plan.ctx['restart_from'] = sets[-1] if sets else None
         if not last_main and not sets:
             return plan                      # nothing known: no job history, no set to name
-        ask = (f"run main restart {sets[-1]}" if sets else "run main restart <tsId>")
+        ask = (f"run main restart {snap.name} --time {sets[-1]}" if sets
+               else f"run main restart {snap.name} --time <tsId>")
         why = (f" (the newest complete restart set; a set cut short by the stop is not used)"
                if sets else " (no complete restart set found)")
         how = (f"main job {last_main.jobid} ended {last_main.state}" if last_main

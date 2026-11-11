@@ -92,8 +92,13 @@ class RunCommand(BaseCommand):
         )
         case_arg(main_parser, help="Case directory, or 'restart' / 'reset'").completer = _complete_main_mode
         main_parser.add_argument('words', nargs='*', metavar='ARG',
-                                 help='After restart: TSID [case]; after reset: [case]').completer = paths(dirs_only=True)
+                                 help='After restart or reset: [case]').completer = paths(dirs_only=True)
         main_parser.add_argument('-n', '--np', type=int, metavar='N', help='Set #SBATCH -n/--ntasks in script before submission')
+        main_parser.add_argument('--time', type=str, metavar='TSID',
+                                 help='With restart: the step to restart from '
+                                      '(default: the last written .rst file)')
+        main_parser.add_argument('-y', '--yes', action='store_true',
+                                 help='With restart: do not ask for confirmation')
         main_parser.add_argument('--dependency', type=str, metavar='JOB_ID', help='Job dependency')
         main_parser.add_argument('--partition', type=str, metavar='NAME', help='Apply partition header to script')
         main_parser.add_argument('--account', type=str, metavar='NAME', help='Set SLURM account (passed to sbatch)')

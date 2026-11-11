@@ -97,39 +97,50 @@ def execute_main(args):
     _execute_main_on_case(case_dir.resolve(), args)
 
 
-_MAIN_USAGE = "Usage: run main [restart <TSID> | reset] [case_directory] [options]"
+_MAIN_USAGE = "Usage: run main [restart [--time TSID] | reset] [case_directory] [options]"
 
 
 def _take_main_mode(args) -> bool:
     """
-    Read the mode word: run main restart <TSID> [case] / run main reset [case].
+    Read the mode word: run main restart [case] [--time TSID] / run main reset [case].
 
-    Sets args.restart / args.reset and moves the case that follows the mode
-    word into args.case. Returns False (after printing why) on bad input.
+    Sets args.restart (the step from --time, or None), args.restart_last (restart
+    without --time: from the last written, unnumbered .rst) and args.reset, and moves
+    the case that follows the mode word into args.case. Returns False (after printing
+    why) on bad input.
     """
     words = list(getattr(args, 'words', None) or [])
     args.restart = None
+    args.restart_last = False
     args.reset = False
+    time = getattr(args, 'time', None)
 
     mode = getattr(args, 'case', None)
     if mode == 'restart':
-        if not words:
-            print("Error: restart needs a timestep (usage: run main restart <TSID> [case])")
-            return False
-        tsid = words.pop(0)
-        try:
-            args.restart = int(tsid)
-        except ValueError:
-            print(f"Error: restart timestep must be an integer, got '{tsid}'")
-            return False
-        if args.restart <= 0:
-            print("Error: restart timestep must be a positive integer")
+        if words and words[0].isdigit():
+            print(f"Error: 'run main restart {words[0]}' is no longer accepted; "
+                  f"the step is given with --time:")
+            print(f"  run main restart [case] --time {words[0]}")
             return False
         args.case = words.pop(0) if words else None
+        if time is None:
+            args.restart_last = True
+        else:
+            try:
+                args.restart = int(time)
+            except ValueError:
+                print(f"Error: --time must be an integer, got '{time}'")
+                return False
+            if args.restart <= 0:
+                print("Error: --time must be a positive integer")
+                return False
     elif mode == 'reset':
         args.reset = True
         args.case = words.pop(0) if words else None
 
+    if time is not None and mode != 'restart':
+        print("Error: --time belongs to restart (usage: run main restart [case] --time TSID)")
+        return False
     if words:
         print(f"Error: unexpected argument '{words[0]}'")
         print(_MAIN_USAGE)
@@ -285,8 +296,10 @@ def show_dry_run(script_path, case_dir, args, console):
     # Check for restart/reset option
     if hasattr(args, 'reset') and args.reset:
         table.add_row("Mode", "Reset (restartFlag/restartTsId will be commented out)")
-    elif hasattr(args, 'restart') and args.restart:
+    elif getattr(args, 'restart', None):
         table.add_row("Restart from TSID", str(args.restart))
+    elif getattr(args, 'restart_last', False):
+        table.add_row("Restart from", LAST_WRITTEN)
 
     # Check for dependency option
     if hasattr(args, 'dependency') and args.dependency:
@@ -803,6 +816,46 @@ def handle_restart(case_dir, restart_tsid, console):
     return True
 
 
+LAST_WRITTEN = "the last written .rst file (restartTsId commented out, restartFlag = 1)"
+
+
+def handle_restart_last(case_dir, console):
+    """simflow.config: restartFlag = 1 and no restartTsId, so the solver resumes from
+    the last written (unnumbered) .rst file."""
+    from src.core.simflow_config import SimflowConfig
+
+    try:
+        cfg = SimflowConfig.find(case_dir)
+        cfg.comment_out_keys(['restartTsId'])
+        cfg.update_values({'restartFlag': 1})
+    except Exception as e:
+        console.print(f"[red]Error updating simflow.config: {e}[/red]")
+        return False
+    console.print("[green]✓ simflow.config updated:[/green] restartTsId commented out, restartFlag = 1")
+    console.print()
+    return True
+
+
+def confirm_restart(case_dir, args, console) -> bool:
+    """Say what a restart will do and ask once; --yes skips the question."""
+    what = (f"restartTsId = {args.restart}, restartFlag = 1" if args.restart
+            else f"restart from {LAST_WRITTEN}")
+    console.print()
+    console.print(f"[bold cyan]Restart {case_dir.name}[/bold cyan]")
+    console.print(f"  simflow.config: {what}")
+    console.print("  then the main job is submitted")
+    if getattr(args, 'yes', False):
+        return True
+    try:
+        answer = input("Continue? [y/N] ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        answer = ''
+    if answer in ('y', 'yes'):
+        return True
+    console.print("[yellow]Nothing changed, nothing submitted.[/yellow]")
+    return False
+
+
 def _log_submit(case_dir, line):
     """A line in the case's notes (`case status`); never fatal."""
     try:
@@ -836,9 +889,21 @@ def submit_main_job(script_path, case_dir, args, console):
         return
 
     has_dependency = bool(getattr(args, 'dependency', None))
+    restart_last   = bool(getattr(args, 'restart_last', False))
     has_restart    = bool(getattr(args, 'restart',    None))
 
-    if has_restart:
+    if (has_restart or restart_last) and not confirm_restart(case_dir, args, console):
+        return
+
+    if restart_last:
+        console.print()
+        console.print("[bold cyan]Preparing restart from the last written .rst file[/bold cyan]")
+        console.print()
+        if not handle_restart_last(case_dir, console):
+            return
+        _set_apply_restart(script_path, False, console)
+
+    elif has_restart:
         # Explicit tsId: update config immediately (existing behaviour).
         # If a dependency is also given the job is still chained, but the
         # config is already correct so APPLY_RESTART is not needed.
@@ -899,7 +964,9 @@ def submit_main_job(script_path, case_dir, args, console):
     table.add_row("Case", case_dir.name)
     table.add_row("Script", script_path.name)
 
-    if has_restart:
+    if restart_last:
+        table.add_row("Mode", "Restart from the last written .rst file")
+    elif has_restart:
         table.add_row("Mode", f"Restart from TSID {args.restart}")
     elif has_dependency:
         table.add_row("Mode", "Auto-restart (tsId detected at job start)")
@@ -981,7 +1048,8 @@ def submit_main_job(script_path, case_dir, args, console):
             job_id = output.split()[-1]
 
         if job_id:
-            how = (f"resume from {args.restart}" if has_restart else
+            how = ("resume from the last written .rst file" if restart_last else
+                   f"resume from {args.restart}" if has_restart else
                    f"after job {args.dependency}, resuming where it stops" if has_dependency
                    else "fresh start" if getattr(args, 'reset', False) else None)
             note = _restart_note(case_dir)
@@ -1038,14 +1106,18 @@ This runs the primary FlexFlow simulation (mpiSimflow).
 
 {Colors.BOLD}USAGE:{Colors.RESET}
     run main [case_directory] [options]
-    run main restart <TSID> [case_directory] [options]
+    run main restart [case_directory] [--time TSID] [options]
     run main reset [case_directory] [options]
 
 {Colors.BOLD}SUBCOMMANDS:{Colors.RESET}
-    {Colors.YELLOW}restart TSID{Colors.RESET}          Restart from specific timestep ID
+    {Colors.YELLOW}restart{Colors.RESET}               Restart the case. Asks for confirmation first (-y skips it)
+                          with --time TSID: from that numbered restart set
+                          without --time:   from the last written (unnumbered) .rst file
     {Colors.YELLOW}reset{Colors.RESET}                 Comment out restartFlag/restartTsId and start fresh
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
+    {Colors.YELLOW}--time TSID{Colors.RESET}           With restart: the step to restart from
+    {Colors.YELLOW}-y, --yes{Colors.RESET}             With restart: do not ask for confirmation
     {Colors.YELLOW}-n, --np N{Colors.RESET}            Set #SBATCH -n/--ntasks in main script before submit
     {Colors.YELLOW}--dependency JOB_ID{Colors.RESET}   Wait for another job to complete first
     {Colors.YELLOW}--partition NAME{Colors.RESET}      Apply partition header to script before submission
@@ -1064,8 +1136,11 @@ This runs the primary FlexFlow simulation (mpiSimflow).
     use case:Case001
     run main
 
-    # Restart from timestep 5000
-    run main restart 5000 Case001
+    # Restart from timestep 5000 (sets restartTsId = 5000, restartFlag = 1)
+    run main restart Case001 --time 5000
+
+    # Restart from the last written .rst file (restartTsId commented out)
+    run main restart Case001
 
     # Start fresh, ignoring restartFlag/restartTsId in simflow.config
     run main reset Case001
@@ -1105,7 +1180,7 @@ This runs the primary FlexFlow simulation (mpiSimflow).
     # Option 2: Restart simulation
     run main Case001            # Initial run
     # ... simulation runs, stops at TSID 5000
-    run main restart 5000 Case001
+    run main restart Case001 --time 5000
 
 {Colors.BOLD}AFTER SUBMISSION:{Colors.RESET}
     {Colors.GREEN}Monitor job status:{Colors.RESET}
