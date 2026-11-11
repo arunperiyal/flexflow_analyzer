@@ -49,6 +49,17 @@
   remote named), or `auto apply:` for deletions that wait for an md5 check.
   `auto show '*'` prints the summary table (with steps); `--detail` adds
   every case, `--only plt,rst` limits the sections.
+- A run need not write output at one frequency (every 50 steps up to 500,
+  then every 5). `auto` no longer assumes `outFreq`: it reads the steps
+  actually present -- PLTs on the remote and here, `.out`, ASCII -- as
+  stretches of equal spacing ("50–500 every 50 (10 steps), 505–5000 every 5
+  (900 steps)"; fewer than three steps are listed one by one). A change of
+  frequency is not a hole; a step missing inside a stretch, before the first
+  step found or after the last, is **lost** and listed under Needs you (the
+  rest is still posted). A run with two schedules gets one `run post` per
+  stretch, each with its own `--freq`, to be submitted one after another;
+  steps off the grid of their spacing cannot be posted by `run post` and are
+  flagged. The Remote line lists everything the remote holds.
 - `auto commands [case]`: just those commands, numbered, as plain text to
   read or save. `auto status [case]`: one line per case.
 - The queue is read once; if it cannot be read, no case is looked at. Jobs

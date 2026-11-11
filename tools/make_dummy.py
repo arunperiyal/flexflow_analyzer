@@ -369,6 +369,20 @@ def build(root: Path):
     cases.append(('case11', 'ended (TIMEOUT at 700); cloud has 50-400 and 500-600 (450 '
                   'missing); .out only 650-700', 'needs you: holes on the cloud (450); stopped at 700 of 1000'))
 
+    # case12 -- changed its output frequency: every 50 steps up to 500, then every 5
+    c = Case(bare, 'case12', out_freq=5, max_steps=1000)
+    c.archive(1, range(1, 601), week)
+    c.organise('clean', 'compile')
+    c.outs(range(565, 601, 5), week)
+    c.rsts([200, 400, 600], week)
+    cloud_copy(c, cloud, list(range(50, 501, 50)) + list(range(505, 561, 5)))
+    job(c, 'main', 'TIMEOUT', ended_days=5)
+    cases.append(('case12', 'ended (TIMEOUT at 600); outFreq 5 now, but it wrote every 50 up to '
+                  '500 and every 5 after: cloud has 50-500 (every 50) and 505-560 (every 5); '
+                  '.out 565-600',
+                  'post 565-600 (--freq 5 as outFreq says); no hole at the change of frequency; '
+                  'needs you: stopped at 600 of 1000'))
+
     # the folder
     from src.core import cases_file
     cases_file.write(cases_file.CasesFile(

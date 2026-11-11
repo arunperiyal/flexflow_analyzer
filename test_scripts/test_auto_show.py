@@ -41,19 +41,21 @@ def test_every_case_gets_what_the_readme_says(dummy):
         'case3': (550, 700, 'full'),      # queued restart from 700
         'case5': (350, 500, 'full'),      # ended, history still in RUN_1
         'case10': (5, 115, 'full'),       # running at outFreq 5
+        'case11': (650, 700, 'full'),     # 450 lost; 650-700 still posted
+        'case12': (565, 600, 'full'),     # wrote every 50, then every 5: only 565-600 left
     }
     assert {n for n, p in got.items() if p.needs_you} == {
-        'case5', 'case6', 'case7', 'case8', 'case9', 'case11'}
+        'case5', 'case6', 'case7', 'case8', 'case9', 'case11', 'case12'}
     assert {i.kind for i in got['case1'].items} == {'note'}            # nothing to do
     assert [i.text for i in got['case1'].items] == [
-        'The newest run is archive/riser1.othd (steps 1–1000). It writes output every 50 steps: '
-        '20 from 50 to 1000.',
+        'The newest run is archive/riser1.othd (steps 1–1000). Its output steps: '
+        '50–1000 every 50 (20 steps).',
         'No post job needed: all 20 output steps have a PLT (20 on local). Matched by file name '
         'and size; the md5 is checked before anything is deleted.']
     assert [i.kind for i in got['case4'].items] == ['wait']
     assert got['case6'].post is None and needs(got['case6'])[0].startswith('Post job')
     assert 'archive/ is pruned or missing' in needs(got['case8'])[0]
-    assert needs(got['case11'])[0].startswith('Holes on the remote: steps 450')
+    assert needs(got['case11'])[0].startswith('Step 450 has no PLT and no .out anywhere')
     assert got['case9'].state == 'skipped'
     assert [i.text for i in got['case5'].items if i.kind == 'history'] == [
         'Move RUN_1/riser.othd and .oisd into archive/ as run 2, then clean and compile '
@@ -94,7 +96,7 @@ def test_a_completed_post_that_made_no_plt_needs_you(dummy):
     # (it is fake): auto does not post them again blindly
     assert got['case4'].post is None
     assert needs(got['case4'])[0].startswith(f"Post job {post4['jobid']} ended COMPLETED after "
-                                             f"the .out of steps 650–800 (4 steps) were written")
+                                             f"the .out of steps 650–800 every 50 (4 steps) were written")
 
 
 # --- which cases: the argument, `use case:`, or '*' -----------------------------
@@ -177,11 +179,11 @@ def test_the_case_context(dummy, monkeypatch, capsys):
     assert rt.execute_line('use case:*') == 0
     assert rt.execute_line('auto show --remote local') == 1      # some cases need you
     out = capsys.readouterr().out
-    assert '11 cases' in out and 'summary' in out
+    assert '12 cases' in out and 'summary' in out
     assert 'PLT files' not in out                                # table only for several
     assert rt.execute_line('auto show --remote local --detail --only plt') == 1
     out = capsys.readouterr().out
-    assert out.count('PLT files') == 10 and 'RST files' not in out   # case9 has none
+    assert out.count('PLT files') == 11 and 'RST files' not in out   # case9 has none
     assert rt.execute_line('auto show --remote local --only nonsense') == 2
 
 
@@ -202,8 +204,10 @@ def test_report_sections_of_a_queued_case(dummy):
     assert state['Job'] == 'main 1300105 PENDING, restarts from 700'
     assert state['Last jobs'].startswith('main 1300104 TIMEOUT, ended ')
     plt = dict(sec['plt'].rows)
-    assert sec['plt'].subtitle == 'run RUN_1/riser.othd: output steps 550–700, every 50 (4)'
-    assert plt['Remote'] == 'present none · missing 550–700 (4 steps)'
+    assert sec['plt'].subtitle == 'run RUN_1/riser.othd: output steps 550–700 every 50 (4 steps)'
+    # everything the remote holds, then what the run needs that is not there
+    assert plt['Remote'] == ('present 50–500 every 50 (10 steps) · missing 550–700 every 50 '
+                             '(4 steps)')
     assert plt['Binary'] == 'present 750 · broken none'
     assert plt['Skipped'] == '750: the queued job restarts from 700 and computes it again'
     assert sec['plt'].actions == ['run post full case3 --t1 550 --t2 700 --no-remote']
@@ -215,7 +219,7 @@ def test_report_sections_of_a_queued_case(dummy):
 def test_report_needs_and_flags_come_after_state(dummy):
     sec = report_of(dummy, 'case6')
     assert list(sec)[:3] == ['state', 'needs', 'flags']
-    assert dict(sec['plt'].rows)['Binary'] == 'present 450–500 (2 steps) · broken 550'
+    assert dict(sec['plt'].rows)['Binary'] == 'present 450, 500 · broken 550'
     assert sec['plt'].actions[0] == 'case upload binary case6 --t1 450 --t2 500 --missing --to local'
 
 
@@ -240,3 +244,15 @@ def test_auto_status_one_line_per_case(dummy, monkeypatch, capsys):
     out = ' '.join(capsys.readouterr().out.split())
     assert 'case4 post running 800/1000 post running waits for post job' in out
     assert 'case1 done 1000/1000 - nothing' in out
+
+
+def test_a_change_of_output_frequency_is_not_a_hole(dummy):
+    """case12 wrote every 50 steps up to 500 and every 5 after (outFreq says 5 now)."""
+    sec = report_of(dummy, 'case12')
+    plt = dict(sec['plt'].rows)
+    assert sec['plt'].subtitle == ('run archive/riser1.othd: output steps 50–500 every 50 '
+                                   '(10 steps), 505–600 every 5 (20 steps)')
+    assert plt['Remote'] == ('present 50–500 every 50 (10 steps), 505–560 every 5 (12 steps) · '
+                             'missing 565–600 every 5 (8 steps)')
+    assert 'Lost' not in plt
+    assert sec['plt'].actions == ['run post full case12 --t1 565 --t2 600 --no-remote']
