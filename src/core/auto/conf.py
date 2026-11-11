@@ -30,6 +30,7 @@ class AutoConf:
     remote: str
     path: str
     keep_rst: Optional[int] = None      # .rst kept here: steps divisible by this
+    keep_newest_rst: int = 2            # ... and this many of the newest complete sets
     upload_rst: Optional[int] = None    # .rst uploaded: steps divisible by this
     disk_alert: Optional[int] = None    # bytes
     qos: Optional[str] = None
@@ -86,21 +87,24 @@ def read(folder, remote: Optional[str]) -> AutoConf:
     a = cf.auto
     keep, upload = check_keep_rst(a.get('keep_rst')), check_keep_rst(a.get('upload_rst'), 'upload_rst')
     check_rst_grids(keep, upload)
+    newest = check_keep_rst(a.get('keep_newest_rst'), 'keep_newest_rst') or 2
     return AutoConf(source=cf.path, remote=remote, path=path,
-                    keep_rst=keep, upload_rst=upload,
+                    keep_rst=keep, upload_rst=upload, keep_newest_rst=newest,
                     disk_alert=parse_size(a['disk_alert']) if a.get('disk_alert') else None,
                     qos=a.get('qos') or None, account=a.get('account') or None,
                     partition=a.get('partition') or None)
 
 
 def set_up(folder, remote: Optional[str] = None, path: Optional[str] = None,
-           keep_rst=None, disk_alert=None, replace: bool = False, upload_rst=None):
+           keep_rst=None, disk_alert=None, replace: bool = False, upload_rst=None,
+           keep_newest_rst=None):
     """Add or change auto's entries in the folder's .cases.yml (made, with no
     cases yet, when missing): the remote's folder and the given settings.
     An existing remote folder is changed only with replace. Returns
     (cases file, what changed, what was kept)."""
     check_keep_rst(keep_rst)
     check_keep_rst(upload_rst, 'upload_rst')
+    check_keep_rst(keep_newest_rst, 'keep_newest_rst')
     if disk_alert is not None:
         parse_size(disk_alert)
     try:
@@ -120,8 +124,8 @@ def set_up(folder, remote: Optional[str] = None, path: Optional[str] = None,
         elif old != new:
             cf.remotes[remote] = new
             changed.append(f"remotes.{remote}: {new}")
-    for key, value in (('keep_rst', keep_rst), ('upload_rst', upload_rst),
-                       ('disk_alert', disk_alert)):
+    for key, value in (('keep_rst', keep_rst), ('keep_newest_rst', keep_newest_rst),
+                       ('upload_rst', upload_rst), ('disk_alert', disk_alert)):
         if value is not None and cf.auto.get(key) != value:
             cf.auto[key] = value
             changed.append(f"auto.{key}: {value}")

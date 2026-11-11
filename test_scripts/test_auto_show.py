@@ -301,7 +301,7 @@ def test_the_rst_section_says_what_the_remote_holds_and_what_is_due(dummy):
     # case1 is finished: grid sets every 400 and the final set 1000, all on the remote
     assert done['Upload'] == 'every 400 + the final set 1000: due none, up to date'
     sec = report_of(dummy, 'case12')['rst']
-    assert sec.subtitle == 'keep_rst 200 · upload_rst 400'
+    assert sec.subtitle == 'keep_rst 200 · keep_newest_rst 2 · upload_rst 400'
     assert dict(sec.rows)['Remote'] == 'none'
     assert dict(sec.rows)['Upload'] == 'every 400: due 400 (not there)'
     assert sec.actions == ['case upload rst case12 --t1 400 --t2 400 --freq 400 --missing '
@@ -392,3 +392,8 @@ def test_the_dry_run_says_what_the_files_are(dummy):
     plan.ctx['rst_why'] = {400: (0, 4, 4)}                  # a set that replaces remote files
     detail = [t for k, t in _intended(plan, {'upload'}) if k == 'detail']
     assert 'set 400 replaces files on the remote that differ in size' in detail[1]
+
+
+def test_the_rst_section_says_which_sets_are_always_kept(dummy):
+    rows = dict(report_of(dummy, 'case12')['rst'].rows)
+    assert rows['Also kept'] == '600, 400 (the newest 2, whatever the grid)'

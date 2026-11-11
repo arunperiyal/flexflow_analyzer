@@ -80,8 +80,8 @@ Organize and clean up case directories. Pick one subcommand.
             --keep-freq (default: 10 * freq, freq from outFreq in
             simflow.config or auto-detected), and always: the step of
             restartTsId in simflow.config (where a restart resumes), the
-            newest complete set (all nsg parts), and a newest set that
-            is still incomplete
+            newest --keep-newest complete sets (all nsg parts; default 2),
+            and a newest set that is still incomplete
           • .out: deletes a step's .out once binary/<problem>.<step>.plt
             can stand in for them: whole (as long as its header says)
             and written after every .out part. keep-freq steps too -- a
@@ -91,6 +91,11 @@ Organize and clean up case directories. Pick one subcommand.
 
         {Colors.CYAN}--keep-freq N{Colors.RESET}
             Keep the .rst of the steps divisible by N
+
+        {Colors.CYAN}--keep-newest N{Colors.RESET}
+            Also keep the N newest complete .rst sets (default 2): if the
+            newest was cut short when a job was killed while writing it, the
+            one before it restarts the run. 1 keeps only the newest
 
         {Colors.CYAN}--all-out{Colors.RESET}
             Delete every .out in range, even at steps with no .plt.

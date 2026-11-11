@@ -343,3 +343,34 @@ def test_a_grid_set_that_exists_nowhere_is_flagged():
     assert plan.ctx['rst_lost'] == [3000]
     assert ('Restart step 3000 is on the upload grid (every 1000) but exists neither here nor '
             'on local.') in kinds(plan, 'flag')
+
+
+# --- thinning keeps the newest N complete sets ----------------------------------------
+
+def thin_of(local, **kw):
+    conf = AutoConf(source=Path('.auto.conf'), remote='local', path='/cloud', keep_rst=500, **kw)
+    s = rst_snap(local, remote=[], max_steps=7000, archive_range=(1, 5020))
+    s.out_freq = 50
+    return decide(s, conf, True, True)
+
+
+def test_a_stop_at_5020_keeps_5000_and_4950_with_the_grid():
+    steps = list(range(4000, 5001, 50))
+    plan = thin_of(steps)                                    # keep_newest_rst defaults to 2
+    assert plan.ctx['rst_newest_kept'] == [4950, 5000]
+    assert 4950 not in plan.ctx['thin'] and 5000 not in plan.ctx['thin']
+    assert plan.ctx['thin'] == [t for t in steps if t % 500 and t not in (4950, 5000)]
+
+
+def test_keep_newest_one_lets_the_second_newest_go():
+    plan = thin_of(list(range(4000, 5001, 50)), keep_newest_rst=1)
+    assert plan.ctx['rst_newest_kept'] == [5000] and 4950 in plan.ctx['thin']
+
+
+def test_a_cut_short_newest_set_does_not_count_among_the_newest_complete():
+    s = rst_snap([4900, 4950, 5000], remote=[], max_steps=7000, archive_range=(1, 5020))
+    s.rst[5050] = 2                                          # being written: 2 of 4 parts
+    s.rst_files.update(rst_files(5050, parts=2))
+    conf = AutoConf(source=Path('.auto.conf'), remote='local', path='/cloud', keep_rst=500)
+    plan = decide(s, conf, True, True)
+    assert plan.ctx['rst_newest_kept'] == [4950, 5000] and 5050 not in plan.ctx['thin']

@@ -21,7 +21,7 @@ def run_init(tmp_path, monkeypatch, **flags):
     monkeypatch.chdir(folder)
     monkeypatch.setattr(RemoteConfig, 'get_all_remotes', lambda self: REMOTES)
     args = SimpleNamespace(remote=None, path=None, keep_rst=None, upload_rst=None,
-                           disk_alert=None, force=False)
+                           keep_newest_rst=None, disk_alert=None, force=False)
     for k, v in flags.items():
         setattr(args, k, v)
     return init_cmd.execute_init(args), folder
@@ -182,3 +182,31 @@ def test_init_flag_parses():
     AutoCommand().setup_parser(parser.add_subparsers(dest='command'))
     args = parser.parse_args(['auto', 'init', '--keep-rst', '500', '--upload-rst', '1000'])
     assert (args.keep_rst, args.upload_rst) == (500, 1000)
+
+
+# --- keep_newest_rst -------------------------------------------------------------------
+
+def test_keep_newest_rst_defaults_to_two_and_can_be_set(tmp_path):
+    cases_file.write(cases_file.CasesFile(cases_file.path_for(tmp_path),
+                                          remotes={'cloud': '/shares/x/bare'}, auto={}))
+    assert conf.read(tmp_path, 'cloud').keep_newest_rst == 2
+    cases_file.write(cases_file.CasesFile(cases_file.path_for(tmp_path),
+                                          remotes={'cloud': '/shares/x/bare'},
+                                          auto={'keep_newest_rst': 1}))
+    assert conf.read(tmp_path, 'cloud').keep_newest_rst == 1
+    cases_file.write(cases_file.CasesFile(cases_file.path_for(tmp_path),
+                                          remotes={'cloud': '/shares/x/bare'},
+                                          auto={'keep_newest_rst': 0}))
+    with pytest.raises(conf.AutoConfError, match='keep_newest_rst must be a positive whole number'):
+        conf.read(tmp_path, 'cloud')
+
+
+def test_init_sets_keep_newest_rst(tmp_path, monkeypatch):
+    code, folder = run_init(tmp_path, monkeypatch, remote='cloud', keep_rst=500, keep_newest_rst=3)
+    assert code == 0 and cases_file.read(folder).auto == {'keep_rst': 500, 'keep_newest_rst': 3}
+    assert run_init(tmp_path, monkeypatch, remote='cloud', keep_newest_rst=0)[0] == 2
+    import argparse
+    from src.commands.auto import AutoCommand
+    parser = argparse.ArgumentParser()
+    AutoCommand().setup_parser(parser.add_subparsers(dest='command'))
+    assert parser.parse_args(['auto', 'init', '--keep-newest-rst', '3']).keep_newest_rst == 3

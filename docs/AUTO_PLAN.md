@@ -804,6 +804,13 @@ Replaces "upload only the newest complete set" (13.7, point 2) and the
   needed: the next grid set replaces it.
 - `upload_rst` must be a multiple of `keep_rst`; `auto` refuses the settings
   otherwise (thinning would delete a set due for upload).
+- `auto.keep_newest_rst` (default 2; `case organise output --keep-newest`):
+  thinning also keeps the N newest complete sets. Restarting from the newest
+  set is fine for the history (measured on BR0SG0U4P0: a restart reproduced the
+  earlier run bit for bit after 6000, and to 4e-8 after 6950: no jump), but a
+  job killed while writing a set can leave the newest cut short with all its
+  parts present; the set before it is then the way back (50 steps lost instead
+  of up to 500). It costs one extra set (~800 MB) until the next thinning.
 - A set on the upload grid that exists neither here nor on the remote is
   flagged. A grid set a queued restart will compute again waits.
 - Not yet: a remote copy made before a restart recomputed that step is only

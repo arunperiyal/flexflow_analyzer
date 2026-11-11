@@ -236,6 +236,7 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
 
     # -- RST files --------------------------------------------------------------------
     grids = [f"keep_rst {conf.keep_rst}" if conf.keep_rst else 'keep_rst not set',
+             f"keep_newest_rst {conf.keep_newest_rst}",
              f"upload_rst {conf.upload_rst}" if conf.upload_rst else 'upload_rst not set']
     s = Section('rst', 'RST files', ' · '.join(grids))
     if snap.rst:
@@ -251,6 +252,10 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
               + (f" · incomplete: {steps_text(partial)}" if partial else ''))
         if snap.restart_tsid is not None:
             s.row('Restart', f"restartTsId {snap.restart_tsid} (kept)")
+        if c.get('rst_newest_kept'):
+            sets = c['rst_newest_kept']
+            s.row('Also kept', f"{', '.join(map(str, reversed(sets)))} "
+                               f"(the newest {conf.keep_newest_rst}, whatever the grid)")
         here = sum(sum(files.values()) for files in snap.rst_files.values())
         thin = c.get('thin') or []
         freed = sum(sum(snap.rst_files.get(t, {}).values()) for t in thin)

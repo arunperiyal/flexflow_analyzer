@@ -511,9 +511,10 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
             keep = set()
             if snap.restart_tsid is not None:
                 keep.add(snap.restart_tsid)
-            complete = [t for t, n in snap.rst.items() if snap.nsg and n == snap.nsg]
-            if complete:
-                keep.add(max(complete))
+            complete = sorted(t for t, n in snap.rst.items() if snap.nsg and n == snap.nsg)
+            newest_sets = complete[-conf.keep_newest_rst:]
+            keep.update(newest_sets)
+            plan.ctx['rst_newest_kept'] = newest_sets
             keep.add(max(snap.rst))
             thin = [t for t in snap.rst if t % conf.keep_rst and t not in keep
                     and not provisional(t) and not (running and snap.live and t >= snap.live[1])]

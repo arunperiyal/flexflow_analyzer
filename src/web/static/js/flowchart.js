@@ -253,8 +253,10 @@ const FlowChart = (() => {
         In this order. "organise output" deletes each step's .out once its
         .plt exists, so it has to run while the PLTs are still here; it keeps
         the .rst of the steps divisible by N (your choice, e.g. 500), plus
-        the restart point in simflow.config, the newest complete set and a
-        set still being written. --delete-ascii deletes the ASCII PLTs that have a newer
+        the restart point in simflow.config, the two newest complete sets
+        (--keep-newest, default 2: if the newest was cut short when the job
+        was killed, the one before it restarts the run) and a set still being
+        written. --delete-ascii deletes the ASCII PLTs that have a newer
         binary copy, so it goes before --delete-binary.`,
     },
     {
