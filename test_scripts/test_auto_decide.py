@@ -374,3 +374,21 @@ def test_a_cut_short_newest_set_does_not_count_among_the_newest_complete():
     conf = AutoConf(source=Path('.auto.conf'), remote='local', path='/cloud', keep_rst=500)
     plan = decide(s, conf, True, True)
     assert plan.ctx['rst_newest_kept'] == [4950, 5000] and 5050 not in plan.ctx['thin']
+
+
+# --- real-cluster findings ---------------------------------------------------------
+
+def test_a_running_case_reports_its_own_position_not_an_earlier_runs_end():
+    s = snap(live=(1, 300), archive_range=(1, 600), cloud=cloud_with(),
+             jobs=[job('maincase', 'RUNNING')], settled=[250, 300])
+    plan = decide(s, CONF, True, True)
+    assert plan.ctx['reached'] == 300
+
+
+def test_steps_of_an_earlier_run_on_the_cloud_are_listed_for_deletion():
+    # the running window is 500-600; steps 450 and 475 come from the run before
+    s = snap(live=(500, 600), archive_range=(1, 600), settled=[550, 600],
+             out={t: [] for t in (450, 475, 550, 600)},
+             cloud=cloud_with(450, 475, 550, 600))
+    plan = decide(s, CONF, True, True)
+    assert {450, 475} <= set(plan.ctx['del_out'])

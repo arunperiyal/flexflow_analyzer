@@ -133,7 +133,9 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
         s.row('Remote', 'not listed')
     else:
         missing = c.get('hist_missing', {})
-        s.row('Remote', f"present {len(hist_here) - len(missing)} · missing {len(missing)} files")
+        shown = sorted(missing)
+        names = (': ' + ', '.join(shown[:4]) + (', ...' if len(shown) > 4 else '')) if shown else ''
+        s.row('Remote', f"present {len(hist_here) - len(missing)} · missing {len(missing)} files{names}")
         on_remote = sum(v for k, v in cloud.items() if k.startswith(('othd_files/', 'oisd_files/')))
         size += f" here · {_size_text(on_remote)} on {remote}"
     s.row('Size', size)
