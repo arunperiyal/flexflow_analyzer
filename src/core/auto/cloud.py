@@ -28,6 +28,15 @@ DEPTH = 3       # <case>/othd_files/archive/riserN.othd
 CHUNK = 1 << 20
 
 
+class Listing(dict):
+    """{path: size} of what a remote holds, with `.mtimes` {path: seconds} when the remote
+    says when each file was written."""
+
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        self.mtimes = {}
+
+
 @dataclass(frozen=True)
 class PutResult:
     """One file sent. verified: 'md5' (checked on the remote), 'size' (the remote
@@ -59,9 +68,9 @@ class LocalCloud:
             raise CloudError(f"{self.root} is not a folder")
         self.where = str(self.root)
 
-    def listing(self, case_name: str) -> Dict[str, int]:
+    def listing(self, case_name: str) -> 'Listing':
         base = self.root / case_name
-        found = {}
+        found = Listing()
         if not base.is_dir():
             return found
         for dirpath, dirnames, filenames in os.walk(base):
@@ -69,7 +78,9 @@ class LocalCloud:
             if len(rel.parts) >= DEPTH:
                 dirnames[:] = []
             for name in filenames:
-                found[(rel / name).as_posix()] = (Path(dirpath) / name).stat().st_size
+                st = (Path(dirpath) / name).stat()
+                found[(rel / name).as_posix()] = st.st_size
+                found.mtimes[(rel / name).as_posix()] = st.st_mtime
         return found
 
     def put(self, local, case_name: str, rel: str, snapshot: bool = False) -> PutResult:
@@ -123,8 +134,8 @@ class SftpCloud:
             self.close()
             raise CloudError(f"{root} is not a folder on {remote.get('name')}")
 
-    def listing(self, case_name: str) -> Dict[str, int]:
-        found = {}
+    def listing(self, case_name: str) -> 'Listing':
+        found = Listing()
         sftp = self.ssh.sftp_client
 
         def walk(path, rel, depth):
@@ -141,6 +152,8 @@ class SftpCloud:
                         walk(posixpath.join(path, a.filename), child_rel, depth + 1)
                 else:
                     found[child_rel] = a.st_size
+                    if a.st_mtime is not None:
+                        found.mtimes[child_rel] = float(a.st_mtime)
         walk(posixpath.join(self.root, case_name), '', 0)
         return found
 

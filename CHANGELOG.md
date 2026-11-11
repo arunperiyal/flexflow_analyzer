@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### 🔎 `auto show`: third round of real cases
+
+- After a restart, a PLT on the remote also counts as the new run's when the
+  remote says it was written after the restart job started (step reached by
+  the new run, no older local copy): a post job that ran while the main job
+  was running no longer makes its PLTs look like the earlier run's. The
+  listing of a remote now carries each file's modification time.
+- A PLT from before the restart whose `.out` is gone cannot be posted again:
+  it is listed under "Needs you" (keep the old PLT, or run the steps again)
+  instead of as "Holes on the remote".
+- The "Job log" section is shown for failed jobs (FAILED, OUT_OF_MEMORY,
+  NODE_FAIL ...), not for TIMEOUT or CANCELLED, which are routine.
+- A skipped run number in `othd_files` / `oisd_files` (runs 1 and 3, no 2) is
+  flagged, with a hint when the remote has it.
+
 ### 🔎 `auto show`: fixes from the second round of real cases
 
 - A post job with no "started: steps a..b" line in `.casestatus.md` is no

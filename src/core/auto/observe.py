@@ -56,6 +56,7 @@ class CaseSnapshot:
     ascii_size: Dict[int, int] = field(default_factory=dict)  # step -> bytes of its ASCII .plt
     binary_time: Dict[int, float] = field(default_factory=dict)
     log_tails: Dict[str, Optional[List[str]]] = field(default_factory=dict)  # job id -> last lines (None: no file)
+    cloud_mtime: Dict[str, float] = field(default_factory=dict)  # remote path -> when written
     main_start: Optional[float] = None          # when the newest main job started (sacct)
     sent_at: Dict[str, float] = field(default_factory=dict)   # remote path -> when auto sent it
     live_time: Optional[float] = None                         # mtime of the run dir's .othd
@@ -224,9 +225,10 @@ def observe_case(case_dir, jobs: List[slurm.Job], ended: List[slurm.Job],
     snap.jobs = slurm.jobs_for_case(case_dir, jobs)
     snap.ended = slurm.jobs_for_case(case_dir, ended)
     snap.main_start = _newest_main_start(snap.ended)
+    snap.cloud_mtime = dict(getattr(cloud_files, 'mtimes', {}) or {})
     for kind in ('main', 'post'):
         job = snap.last_ended(kind)
-        if job and job.state != 'COMPLETED':
+        if job and job.state.split()[0] not in ('COMPLETED', 'TIMEOUT', 'CANCELLED'):
             snap.log_tails[job.jobid] = _tail(case_dir, job.jobid)
     for rel, when in (sent or {}).items():
         t = _parse_time(when)

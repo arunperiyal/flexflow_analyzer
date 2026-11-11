@@ -505,10 +505,10 @@ def log_section(s):
 
 
 def test_the_tail_of_a_failed_jobs_log_is_in_the_report():
-    failed = Job('7', 'maincase', 'TIMEOUT', '', '/c/case', '2026-11-08T10:00:00')
+    failed = Job('7', 'maincase', 'FAILED', '', '/c/case', '2026-11-08T10:00:00')
     s = snap(ended=[failed], log_tails={'7': ['step 5', 'DUE TO TIME LIMIT']})
     [sec] = log_section(s)
-    assert sec.rows[0] == ('Job', 'main 7 TIMEOUT, ended 11-08 10:00')
+    assert sec.rows[0] == ('Job', 'main 7 FAILED, ended 11-08 10:00')
     assert sec.rows[1] == ('File', 'slurm-7.out, last 2 lines')
     assert sec.rows[2:] == [('', 'step 5'), ('', 'DUE TO TIME LIMIT')]
 
@@ -565,3 +565,45 @@ def test_the_upload_command_drops_missing_when_an_old_plt_must_be_replaced():
     plan = decide(s, CONF, True, True)
     cmds = [c for c in commands(build(s, plan, CONF)) if c.startswith('case upload binary')]
     assert cmds == ['case upload binary case --t1 350 --t2 350 --to local']
+
+
+# --- more real cases ---------------------------------------------------------------------
+
+def test_a_timeout_or_cancel_is_not_a_failure_worth_a_log():
+    from src.core.auto.observe import _tail  # noqa: F401  (the rule lives in observe_case)
+    import inspect
+    from src.core.auto import observe
+    assert "'TIMEOUT'" in inspect.getsource(observe.observe_case)
+
+
+def test_a_skipped_run_number_is_flagged():
+    h = History(archive={1: Path('a/riser1.othd'), 3: Path('a/riser3.othd')},
+                cleaned={1: Path('c/riser1.othd'), 3: Path('c/riser3.othd')})
+    s = snap(history={'othd': h, 'oisd': History(archive={1: Path('a'), 3: Path('b')},
+                                                 cleaned={1: Path('c'), 3: Path('d')})},
+             cloud={'othd_files/archive/riser2.othd': 10})
+    flags = kinds(decide(s, CONF, True, True), 'flag')
+    assert any(t.startswith('othd_files has runs 1, 3 but not 2') and 'local has 2' in t
+               for t in flags)
+
+
+def test_a_cloud_plt_written_after_the_restart_job_started_is_the_new_runs():
+    s = restarted_snap(cloud_mtime={f'binary/riser.{t}.plt': START + 600 for t in (350, 400)})
+    assert decide(s, CONF, True, True).ctx['stale_plt'] == [450, 500, 550, 600]
+
+
+def test_stale_plts_whose_out_is_gone_are_the_users_to_decide_not_holes():
+    s = restarted_snap(out={}, settled=[], jobs=[])
+    plan = decide(s, CONF, True, True)
+    assert any('predates the restart from 300 and the new run\'s .out is gone' in t
+               for t in kinds(plan, 'needs'))
+    assert not any(t.startswith('Holes') for t in kinds(plan, 'needs'))
+
+
+def test_a_local_cloud_listing_carries_mtimes(tmp_path):
+    from src.core.auto.cloud import LocalCloud
+    (tmp_path / 'case' / 'binary').mkdir(parents=True)
+    (tmp_path / 'case' / 'binary' / 'riser.50.plt').write_bytes(b'x' * 7)
+    got = LocalCloud(tmp_path).listing('case')
+    assert got == {'binary/riser.50.plt': 7}
+    assert set(got.mtimes) == {'binary/riser.50.plt'} and got.mtimes['binary/riser.50.plt'] > 0
