@@ -812,6 +812,18 @@ def _log_submit(case_dir, line):
         pass
 
 
+def _restart_note(case_dir) -> str:
+    """What simflow.config tells the solver to do: 'restartTsId 2750' or 'fresh start'."""
+    try:
+        from src.core.simflow_config import SimflowConfig
+        cfg = SimflowConfig.find(case_dir)
+        if cfg is not None and cfg.restart_flag and cfg.restart_tsid is not None:
+            return f"restartTsId {int(cfg.restart_tsid)}"
+        return "restartFlag off"
+    except Exception:
+        return ''
+
+
 def submit_main_job(script_path, case_dir, args, console):
     """Submit main simulation job to SLURM."""
 
@@ -972,7 +984,9 @@ def submit_main_job(script_path, case_dir, args, console):
             how = (f"resume from {args.restart}" if has_restart else
                    f"after job {args.dependency}, resuming where it stops" if has_dependency
                    else "fresh start" if getattr(args, 'reset', False) else None)
-            _log_submit(case_dir, f"main job {job_id} submitted" + (f": {how}" if how else ''))
+            note = _restart_note(case_dir)
+            _log_submit(case_dir, f"main job {job_id} submitted"
+                        + (f": {how}" if how else '') + (f" (simflow.config: {note})" if note else ''))
             console.print(f"[green]✓ Job submitted successfully[/green]")
             console.print()
             console.print(f"[bold]Job ID:[/bold] {job_id}")

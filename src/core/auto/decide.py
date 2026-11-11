@@ -288,8 +288,37 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
     # -- the post decision --------------------------------------------------------
     provisional = (lambda t: pending and snap.restart_tsid is not None and t > snap.restart_tsid)
     window = snap.live or snap.archive_range
-    on_cloud = (lambda t: cloud is not None and cloud.get(f"binary/{p}.{t}.plt", 0) > 0)
-    local_ok = (lambda t: t in snap.binary and snap.binary[t].ok)
+    # A restart from T computes the steps above T again. Whatever of those steps is on the
+    # remote from before the restart (PLTs, restart sets) is the earlier run's: it does not
+    # count as the new run's, and the new files replace it. A copy is the new run's only if
+    # auto sent it after the restart job started (the ledger).
+    T = snap.restart_tsid
+    restarted = (T is not None and not pending and bool(snap.live)
+                 and 0 < snap.live[0] - T <= 5 and snap.main_start is not None)
+    sent_new = (lambda rel: snap.sent_at.get(rel, 0) >= (snap.main_start or 0))
+    stale_plt = (lambda t: restarted and t > T and not sent_new(f"binary/{p}.{t}.plt"))
+    stale_rst = (lambda t: T is not None and not pending and bool(snap.live)
+                 and t > max(T, snap.live[1]))
+    on_cloud = (lambda t: cloud is not None and cloud.get(f"binary/{p}.{t}.plt", 0) > 0
+                and not stale_plt(t))
+    local_ok = (lambda t: t in snap.binary and snap.binary[t].ok
+                and (not stale_plt(t) or snap.binary_time.get(t, 0) >= snap.main_start))
+    if restarted and cloud is not None:
+        old_plt = sorted(int(m.group(1)) for k in cloud
+                         for m in [re.match(rf'binary/{re.escape(p)}\.(\d+)\.plt$', k)]
+                         if m and stale_plt(int(m.group(1))))
+        old_rst = sorted(t for t in snap.rst if stale_rst(t))
+        plan.ctx.update(stale_plt=old_plt, stale_rst=old_rst)
+        if old_plt or old_rst:
+            what = []
+            if old_plt:
+                what.append(f"PLTs on {conf.remote} for {steps_text(old_plt, f)} (from before the "
+                            f"restart, so they are posted again from the new run and replaced)")
+            if old_rst:
+                what.append(f"restart sets {steps_text(old_rst)} here (above the solver; not "
+                            f"counted as the newest, not sent, not deleted)")
+            plan.add('flag', f"Restarted from {T}: the earlier run's files above it are still "
+                             f"around: " + '; '.join(what) + ".")
     covered: List[int] = []                 # steps whose PLT is whole here or on the cloud
     if post_now:
         plan.add('wait', f"Post job {post_now[0].jobid} is {post_now[0].state.lower()}: nothing "
@@ -430,7 +459,8 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
     # -- uploads: binary PLTs, the newest restart set, inputs and program files ----
     if cloud is not None and not post_now:
         plts = {f"binary/{p}.{t}.plt": c.size for t, c in sorted(snap.binary.items())
-                if c.ok and not provisional(t) and cloud.get(f"binary/{p}.{t}.plt") != c.size}
+                if c.ok and not provisional(t) and local_ok(t)
+                and (cloud.get(f"binary/{p}.{t}.plt") != c.size or stale_plt(t))}
         plan.ctx['plt_upload'] = sorted(int(k.split('.')[-2]) for k in plts)
         if plts:
             plan.uploads.update(plts)
@@ -441,7 +471,7 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
         # steps on that grid, plus the final set of a finished run. A set a queued
         # restart will compute again, or one still being written, waits.
         sets = [t for t, n in snap.rst.items() if snap.nsg and n == snap.nsg and not provisional(t)
-                and not (running and snap.live and t >= snap.live[1])]
+                and not stale_rst(t) and not (running and snap.live and t >= snap.live[1])]
         due, final = [], None
         if conf.upload_rst:
             due = sorted(t for t in sets if t % conf.upload_rst == 0)
@@ -450,7 +480,8 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
                 due.append(final)
         todo_rst, why = {}, {}
         for t in due:
-            stale = {k: v for k, v in snap.rst_files.get(t, {}).items() if cloud.get(k) != v}
+            stale = {k: v for k, v in snap.rst_files.get(t, {}).items()
+                     if cloud.get(k) != v or (restarted and t > T and not sent_new(k))}
             if stale:
                 todo_rst[t] = stale
                 total = len(snap.rst_files.get(t, {}))
@@ -515,13 +546,14 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
             keep = set()
             if snap.restart_tsid is not None:
                 keep.add(snap.restart_tsid)
-            complete = sorted(t for t, n in snap.rst.items() if snap.nsg and n == snap.nsg)
+            complete = sorted(t for t, n in snap.rst.items() if snap.nsg and n == snap.nsg
+                              and not stale_rst(t))
             newest_sets = complete[-conf.keep_newest_rst:]
             keep.update(newest_sets)
             plan.ctx['rst_newest_kept'] = newest_sets
             keep.add(max(snap.rst))
             thin = [t for t in snap.rst if t % conf.keep_rst and t not in keep
-                    and not provisional(t) and not (running and snap.live and t >= snap.live[1])]
+                    and not provisional(t) and not stale_rst(t) and not (running and snap.live and t >= snap.live[1])]
         plan.ctx.update(del_ascii=ascii, del_binary=binary, del_out=outs, thin=thin)
         if parts:
             for part in parts:

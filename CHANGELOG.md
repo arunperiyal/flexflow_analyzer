@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### 🔁 `auto`: files of an earlier run above a restart
+
+- After a restart from T, the PLTs on the remote for steps above T are the
+  earlier run's unless `auto` sent them after the restart job started
+  (ledger). They no longer count as covering the step: the step is posted
+  again from the new `.out` and the new PLT replaces the old one, even when
+  the sizes match. A PLT left over locally from before the restart is not
+  trusted or uploaded; restart sets on the remote above T are sent again.
+- Restart sets above the solver's step belong to the earlier run: they are
+  not counted among the newest N, not uploaded and not thinned; `auto show`
+  says so (row "Earlier run" and a note under "Worth a look").
+- `run main` now also notes in `.casestatus.md` what simflow.config says
+  (`restartTsId N` or `restartFlag off`).
+
 ### 🔎 `auto show`: fixes from real cases
 
 - A running case shows the step its job is at (its `.othd`), not where an
