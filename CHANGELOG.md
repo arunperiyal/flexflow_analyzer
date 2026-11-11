@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### 📜 `auto show`: the end of a failed job's log
+
+- When the last main or post job ended FAILED, TIMEOUT, CANCELLED and so on
+  (and no newer job of that kind is queued or running), `auto show` has a
+  "Job log" section with the last 15 lines of its `slurm-<id>.out`, or says
+  the file is not in the case folder. `--only log` shows just that.
+
 ### 🛡️ `auto`: never shrink the remote's history
 
 - A history file that is larger on the remote than here (a folder whose

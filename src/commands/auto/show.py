@@ -14,7 +14,7 @@ from rich.markup import escape
 
 STATE_STYLE = {'running': 'green', 'queued': 'yellow', 'post running': 'yellow',
                'done': 'bold green', 'stopped': 'cyan', 'new': 'dim', 'skipped': 'red'}
-SECTION_STYLE = {'state': 'bold', 'needs': 'bold red', 'flags': 'yellow', 'history': 'cyan',
+SECTION_STYLE = {'state': 'bold', 'needs': 'bold red', 'flags': 'yellow', 'log': 'red', 'history': 'cyan',
                  'plt': 'cyan', 'out': 'cyan', 'rst': 'cyan', 'inputs': 'cyan'}
 
 
@@ -168,7 +168,7 @@ def _print_sections(console, sections, only=None):
         grid.add_column(style='dim', no_wrap=True, width=11)   # same label width in every section
         grid.add_column(overflow='fold')
         for label, value in sec.rows:
-            grid.add_row('', f"{escape(label)}:", escape(str(value)))
+            grid.add_row('', f"{escape(label)}:" if label else '', escape(str(value)))
         if sec.key not in ('needs', 'flags'):
             if not sec.actions:
                 grid.add_row('', 'Action:', '[dim]none[/dim]')

@@ -55,6 +55,7 @@ class CaseSnapshot:
     out_size: Dict[int, int] = field(default_factory=dict)    # step -> bytes of its .out parts
     ascii_size: Dict[int, int] = field(default_factory=dict)  # step -> bytes of its ASCII .plt
     binary_time: Dict[int, float] = field(default_factory=dict)
+    log_tails: Dict[str, Optional[List[str]]] = field(default_factory=dict)  # job id -> last lines (None: no file)
     main_start: Optional[float] = None          # when the newest main job started (sacct)
     sent_at: Dict[str, float] = field(default_factory=dict)   # remote path -> when auto sent it
     live_time: Optional[float] = None                         # mtime of the run dir's .othd
@@ -143,6 +144,25 @@ def _size(path: Path) -> Optional[int]:
         return None
 
 
+LOG_LINES = 15
+
+
+def _tail(case_dir, jobid, lines: int = LOG_LINES) -> Optional[List[str]]:
+    """The last lines of the job's slurm-<id>.out in the case folder; None when there is
+    no such file. Reads only the end of the file."""
+    path = Path(case_dir) / f"slurm-{jobid}.out"
+    try:
+        with open(path, 'rb') as f:
+            f.seek(0, 2)
+            size = f.tell()
+            f.seek(max(0, size - 64 * 1024))
+            data = f.read()
+    except OSError:
+        return None
+    text = data.decode('utf-8', errors='replace').rstrip('\n')
+    return [l.rstrip() for l in text.split('\n')[-lines:]] if text else []
+
+
 def _parse_time(text) -> Optional[float]:
     """sacct's 2026-11-09T03:31:00 or the ledger's 2026-11-09 03:31:00, as seconds; None
     when it is not a time ('Unknown' for a job that has not started)."""
@@ -204,6 +224,10 @@ def observe_case(case_dir, jobs: List[slurm.Job], ended: List[slurm.Job],
     snap.jobs = slurm.jobs_for_case(case_dir, jobs)
     snap.ended = slurm.jobs_for_case(case_dir, ended)
     snap.main_start = _newest_main_start(snap.ended)
+    for kind in ('main', 'post'):
+        job = snap.last_ended(kind)
+        if job and job.state != 'COMPLETED':
+            snap.log_tails[job.jobid] = _tail(case_dir, job.jobid)
     for rel, when in (sent or {}).items():
         t = _parse_time(when)
         if t is not None:
