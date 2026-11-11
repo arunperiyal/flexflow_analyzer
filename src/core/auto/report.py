@@ -200,13 +200,13 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
         s.row('Remote', f"present {steps_text(sorted(plt_cloud)) if plt_cloud else 'none'}"
                         f" · missing {steps_text(gone) if gone else 'none'}")
         if c.get('stale_plt'):
-            s.row('Earlier run', f"{steps_text(c['stale_plt'])} on {remote} predate the restart: "
+            s.row('Old run', f"{steps_text(c['stale_plt'])} on {remote} predate the restart: "
                                  f"posted again and replaced")
     s.row('Binary', f"present {steps_text(ok_here) if ok_here else 'none'}"
                     f" · broken {steps_text(broken) if broken else 'none'}")
     s.row('ASCII', f"present {steps_text(sorted(snap.ascii)) if snap.ascii else 'none'}")
     if c.get('stale_local_plt'):
-        s.row('Earlier run', f"binary {steps_text(c['stale_local_plt'])} here predate the "
+        s.row('Old run', f"binary {steps_text(c['stale_local_plt'])} here predate the "
                              f"restart: not trusted, not uploaded")
     if lost:
         s.row('Lost', f"{steps_text(lost)}: no PLT and no .out anywhere")
@@ -233,7 +233,10 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
         s.actions.append("wait: submit each post job after the previous one has ended")
     if c.get('plt_upload'):
         up = c['plt_upload']
-        s.actions.append(f"case upload binary {name} --t1 {up[0]} --t2 {up[-1]} --missing "
+        # --missing skips a file the remote holds at the same size, which would leave an
+        # earlier run's PLT in place after a restart
+        flag = '' if set(up) & set(c.get('stale_plt') or []) else ' --missing'
+        s.actions.append(f"case upload binary {name} --t1 {up[0]} --t2 {up[-1]}{flag} "
                          f"--to {remote}")
     if c.get('del_ascii'):
         s.actions.append(AUTO_ONLY + f"delete ASCII PLTs, {steps_phrase(c['del_ascii']).lower()}, "
@@ -283,7 +286,7 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
         if snap.restart_tsid is not None:
             s.row('Restart', f"restartTsId {snap.restart_tsid} (kept)")
         if old:
-            s.row('Earlier run', f"{steps_text(sorted(old))}: above the solver's step, written "
+            s.row('Old run', f"{steps_text(sorted(old))}: above the solver's step, written "
                                  f"before the restart; not counted, sent or deleted")
         if c.get('rst_newest_kept'):
             sets = c['rst_newest_kept']

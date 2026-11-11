@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
-from .observe import CaseSnapshot
+from .observe import CaseSnapshot, _parse_time
 from .stretches import gaps as stretch_gaps, stretches
 
 RUNNING = ('RUNNING', 'COMPLETING', 'CONFIGURING')
@@ -397,6 +397,14 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
         # made their PLTs: if it did not, something is wrong -- do not repost blindly
         ended_at = _ended_at(last_post) if last_post else None
         given = snap.post_windows.get(last_post.jobid) if last_post else None
+        if given is None and last_post and ended_at:
+            # no "post job N started: steps a..b" line: the steps it made are the binary
+            # PLTs written while it ran, so a later step was not given to it
+            began = _parse_time(last_post.start)
+            made = [t for t, when in snap.binary_time.items()
+                    if began is not None and began - 60 <= when <= ended_at + 120]
+            if made:
+                given = (min(made), max(made))
         missed = [t for t in missing if ended_at and t in snap.out_time
                   and snap.out_time[t] < ended_at
                   and (given is None or given[0] <= t <= given[1])]

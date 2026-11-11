@@ -533,3 +533,35 @@ def test_tail_reads_the_last_fifteen_lines(tmp_path):
     got = _tail(tmp_path, '5')
     assert len(got) == 15 and got[0] == 'line 25' and got[-1] == 'line 39'
     assert _tail(tmp_path, '6') is None
+
+
+# --- real case: a post job that was given fewer steps than the .out files there --------------
+
+def test_a_step_beyond_what_the_post_job_made_is_not_a_failed_post():
+    from src.core.plt_valid import PltCheck
+    ended = _time.mktime(_time.strptime('2026-11-11 19:58:00', '%Y-%m-%d %H:%M:%S'))
+    done = Job('7', 'postcase', 'COMPLETED', '', '/c/case', '2026-11-11T19:58:00', '2026-11-11T19:50:00')
+    s = snap(ended=[done], cloud=cloud_with(*range(50, 401, 50)),
+             binary={t: PltCheck(Path(f'b/riser.{t}.plt'), True, '', 424) for t in (450, 500, 550)},
+             binary_time={t: ended - 60 for t in (450, 500, 550)},
+             out_time={600: ended - 120})
+    plan = decide(s, CONF, True, True)
+    assert not plan.needs_you
+    assert plan.post == (600, 600, 'full')
+
+
+def test_without_a_made_plt_the_old_alarm_still_rings():
+    done = Job('7', 'postcase', 'COMPLETED', '', '/c/case', '2026-11-11T19:58:00', '2026-11-11T19:50:00')
+    ended = _time.mktime(_time.strptime('2026-11-11 19:58:00', '%Y-%m-%d %H:%M:%S'))
+    s = snap(ended=[done], cloud=cloud_with(*range(50, 401, 50)), out_time={600: ended - 120})
+    assert any('yet they have no whole PLT' in t for t in kinds(decide(s, CONF, True, True), 'needs'))
+
+
+def test_the_upload_command_drops_missing_when_an_old_plt_must_be_replaced():
+    from src.core.plt_valid import PltCheck
+    from src.core.auto.report import build, commands
+    s = restarted_snap(binary={350: PltCheck(Path('b/riser.350.plt'), True, '', 424)},
+                       binary_time={350: START + 900}, sent_at={})
+    plan = decide(s, CONF, True, True)
+    cmds = [c for c in commands(build(s, plan, CONF)) if c.startswith('case upload binary')]
+    assert cmds == ['case upload binary case --t1 350 --t2 350 --to local']

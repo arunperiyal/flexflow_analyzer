@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### 🔎 `auto show`: fixes from the second round of real cases
+
+- A post job with no "started: steps a..b" line in `.casestatus.md` is no
+  longer blamed for a step beyond the ones it made (taken from the binary
+  PLTs written while it ran): `BR0SG0U1P0` step 5780 is simply posted next.
+- After a restart, the suggested `case upload binary` drops `--missing`
+  (it skips a PLT the remote holds at the same size, which would leave the
+  earlier run's file there).
+- Row label "Old run" (the long one was cut off).
+
 ### 📜 `auto show`: the end of a failed job's log
 
 - When the last main or post job ended FAILED, TIMEOUT, CANCELLED and so on
