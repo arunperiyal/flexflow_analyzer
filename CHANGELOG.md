@@ -49,6 +49,20 @@
   remote named), or `auto apply:` for deletions that wait for an md5 check.
   `auto show '*'` prints the summary table (with steps); `--detail` adds
   every case, `--only plt,rst` limits the sections.
+- `auto apply [case] --remote NAME [--only history,upload,post] [--dry-run]
+  [--yes]` carries out the additive steps, for each case in this order, with
+  the plan made again from the files and the queue right before each step:
+  organise the history (only when no main job is active), upload what the
+  remote lacks, submit a post job for the first stretch with no PLT yet.
+  Uploads go to a temporary name on the remote, are compared (md5 of both
+  sides, size only when the remote has no md5sum) and only then renamed, so
+  the real name never holds half a file; each verified file is recorded in
+  `auto_logs/ledger.json`. It shows what it will do and asks once; it deletes
+  nothing; a failed step stops that case and the others go on; the record
+  of the run is `auto_logs/auto_<time>.log`. A lock file keeps two runs off
+  one folder (a stale one, older than 12 h, is taken over). It never reaches
+  an interactive question: a post script whose job name is wrong is reported
+  instead. `run post`'s submit now returns the job id.
 - A run need not write output at one frequency (every 50 steps up to 500,
   then every 5). `auto` no longer assumes `outFreq`: it reads the steps
   actually present -- PLTs on the remote and here, `.out`, ASCII -- as

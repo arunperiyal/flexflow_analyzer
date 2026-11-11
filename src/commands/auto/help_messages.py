@@ -22,8 +22,17 @@ def print_auto_help():
     auto commands [case]   just the Action commands, numbered, as plain text
                            (`auto commands '*' > todo.sh` to read before running)
     auto status [case]     one line per case: state, steps, jobs, what is next
-    auto apply [case]      carry it out {g}(not built yet){r}
-    auto log [case]        what earlier runs did {g}(not built yet){r}
+    auto apply [case] [--remote NAME] [--only history,upload,post] [--dry-run] [--yes]
+        does the additive steps for each case, in this order, planned again
+        from the files and the queue right before each: organise the history
+        (when no main job is active), upload what the remote lacks (to a
+        temporary name, checked by md5, then renamed; the verified files are
+        recorded in auto_logs/ledger.json), submit a post job for the first
+        stretch with no PLT yet. It shows what it will do and asks once
+        (--yes skips; --dry-run only shows). It deletes nothing. A step that
+        fails stops that case; the others go on. The record of the run is
+        auto_logs/auto_<time>.log. Deletions (.out, PLTs, .rst) are not built.
+    auto log [case]        {g}(not built yet; the logs are in auto_logs/){r}
 
     The remote is --remote NAME or `use remote:NAME`: its login comes from
     `remote list`, its folder for these cases from .cases.yml.

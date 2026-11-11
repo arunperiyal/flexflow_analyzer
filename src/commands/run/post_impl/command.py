@@ -668,7 +668,8 @@ def _ssh_key_login_works(target, port, console) -> bool:
 
 
 def submit_postprocessing_job(script_path, case_dir, args, console):
-    """Submit postprocessing job to SLURM."""
+    """Submit postprocessing job to SLURM. Returns the job id ('' when sbatch
+    gave none), or None when nothing was submitted."""
 
     # Check if SLURM is available
     if not check_slurm_available():
@@ -676,7 +677,7 @@ def submit_postprocessing_job(script_path, case_dir, args, console):
         console.print("[red]Error: SLURM commands not available[/red]")
         console.print("[dim]Cannot submit job without SLURM[/dim]")
         console.print()
-        return
+        return None
 
     # Apply partition header if requested
     partition_override = getattr(args, 'partition', None)
@@ -687,7 +688,7 @@ def submit_postprocessing_job(script_path, case_dir, args, console):
 
     # Ensure the SBATCH job name matches the expected name before submitting
     if not check_jobname_consistency(script_path, case_dir, 'post', console):
-        return
+        return None
 
     console.print()
     console.print("[bold cyan]Submitting Postprocessing Job[/bold cyan]")
@@ -703,7 +704,7 @@ def submit_postprocessing_job(script_path, case_dir, args, console):
 
     job = _job_exports(args, case_dir, script_path, console, check_remote=True)
     if job is None:
-        return
+        return None
     export_parts, rows = job
     for row in rows:
         table.add_row(*row)
@@ -787,6 +788,7 @@ def submit_postprocessing_job(script_path, case_dir, args, console):
             console.print(f"[dim]{output}[/dim]")
 
         console.print()
+        return job_id or ''
 
     except subprocess.CalledProcessError as e:
         console.print("[red]✗ Job submission failed[/red]")
@@ -795,9 +797,11 @@ def submit_postprocessing_job(script_path, case_dir, args, console):
             console.print("[red]Error:[/red]")
             console.print(e.stderr)
         console.print()
+        return None
     except Exception as e:
         console.print(f"[red]✗ Error: {e}[/red]")
         console.print()
+        return None
 
 
 def check_slurm_available():
