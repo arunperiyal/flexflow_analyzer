@@ -40,8 +40,46 @@ def _kinds(args):
     return wanted
 
 
+def _upload_breakdown(plan):
+    """The files of plan.uploads by what they are: [text], largest groups first."""
+    import re
+    from src.core.auto.decide import _size_text, steps_text
+    groups = {}                                  # label -> [files, bytes]
+    sets = {}                                    # restart step -> [files, bytes]
+    live = set(plan.ctx.get('live_upload') or {})
+    for rel, size in plan.uploads.items():
+        m = re.search(r'\.(\d+)_\d+\.rst$', rel)
+        if m:
+            entry = sets.setdefault(int(m.group(1)), [0, 0])
+        else:
+            if rel in live:
+                label = 'live history copy'
+            elif rel.startswith(('othd_files/', 'oisd_files/')):
+                label = 'history files'
+            elif rel.startswith('binary/'):
+                label = 'binary PLTs'
+            else:
+                label = 'inputs and case files'
+            entry = groups.setdefault(label, [0, 0])
+        entry[0] += 1
+        entry[1] += size
+    lines = []
+    if sets:
+        why = plan.ctx.get('rst_why') or {}
+        replaced = sorted(t for t, (_, differ, _) in why.items() if differ)
+        lines.append((sum(v[1] for v in sets.values()),
+                      f"restart sets {steps_text(sorted(sets))}: {sum(v[0] for v in sets.values())} "
+                      f"files, {_size_text(sum(v[1] for v in sets.values()))}"
+                      + (f"; set {', '.join(map(str, replaced))} replaces files on the remote that "
+                         f"differ in size" if replaced else '')))
+    for label, (n, size) in groups.items():
+        lines.append((size, f"{label}: {n} files, {_size_text(size)}"))
+    return [text for _, text in sorted(lines, key=lambda x: -x[0])]
+
+
 def _intended(plan, only):
-    """What the plan has apply do, in order: [(kind, text)]."""
+    """What the plan has apply do, in order: [(kind, text)]; a 'detail' line
+    belongs to the one before it."""
     out = []
     organise = plan.ctx.get('organise')
     if 'history' in only and organise:
@@ -49,6 +87,7 @@ def _intended(plan, only):
                     if organise[0] == 'update' else "organise history --clean --compile"))
     if 'upload' in only and plan.uploads:
         out.append(('upload', f"{len(plan.uploads)} files, {_size_text_of(plan.uploads)}"))
+        out += [('detail', line) for line in _upload_breakdown(plan)]
     if 'post' in only and plan.post_jobs:
         a, b, d, mode = plan.post_jobs[0]
         more = f" (+{len(plan.post_jobs) - 1} more after it)" if len(plan.post_jobs) > 1 else ''
@@ -126,7 +165,7 @@ def execute_apply(args) -> int:
 
     # what would be done
     todo = [(snap, plan, _intended(plan, only)) for snap, plan in first]
-    todo = [t for t in todo if t[2]]
+    todo = [t for t in todo if any(kind != 'detail' for kind, _ in t[2])]
     console.print()
     console.rule(f"[bold]auto apply[/bold]  [dim]{escape(remote or '')}[/dim]", style='cyan')
     if not todo:
@@ -138,7 +177,10 @@ def execute_apply(args) -> int:
     for snap, plan, items in todo:
         console.print(f"  [bold cyan]{escape(snap.name)}[/bold cyan]")
         for kind, text in items:
-            console.print(f"    {MARK[kind]} {escape(text)}")
+            if kind == 'detail':
+                console.print(f"        [dim]{escape(text)}[/dim]")
+            else:
+                console.print(f"    {MARK[kind]} {escape(text)}")
     if getattr(args, 'dry_run', False):
         console.print("[dim]--dry-run: nothing was done.[/dim]")
         console.rule(style='cyan')
