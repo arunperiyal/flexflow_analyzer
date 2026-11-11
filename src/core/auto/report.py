@@ -125,6 +125,8 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
     over = (f" (over disk_alert {_size_text(conf.disk_alert)})"
             if conf.disk_alert and snap.run_size > conf.disk_alert else '')
     s.row('Run dir', f"{snap.run_rel}/ {_size_text(snap.run_size)}{over}")
+    if c.get('restart_from') is not None:
+        s.actions.append(f"run main restart {c['restart_from']} {name}")
     sections.append(s)
 
     for key, kind, title in (('needs', 'needs', 'Needs you'), ('flags', 'flag', 'Worth a look')):

@@ -11,7 +11,11 @@
   names the command: "Queue a restart with `run main restart 5000`?", using
   the newest complete restart set not above the stop and not from an earlier
   run. A set cut short by the stop is not used; with no complete set the
-  prompt keeps `<tsId>`. `auto` still never queues the job.
+  prompt keeps `<tsId>`. `auto` still never queues the job. The command also
+  appears as the State action (`run main restart 8150 BR0SG0U5P0`). It is
+  offered too when sacct no longer lists the main job, as long as a complete
+  restart set exists (BR0SG0U5P0: stopped at 8183, set 8150). A FAILED main
+  job still gets only the "find the cause first" note.
 - `auto show`: the local old-run row is labelled "Old here" (it was a second
   "Old run"), and "predate" agrees with one step ("predates").
 
