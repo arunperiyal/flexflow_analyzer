@@ -32,6 +32,7 @@ def execute_init(args) -> int:
     try:
         cf, changed, kept = set_up(folder, remote=remote, path=path,
                                    keep_rst=getattr(args, 'keep_rst', None),
+                                   upload_rst=getattr(args, 'upload_rst', None),
                                    disk_alert=getattr(args, 'disk_alert', None),
                                    replace=getattr(args, 'force', False))
     except AutoConfError as e:

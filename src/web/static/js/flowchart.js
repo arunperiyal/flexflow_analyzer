@@ -258,12 +258,15 @@ const FlowChart = (() => {
         binary copy, so it goes before --delete-binary.`,
     },
     {
-      id: 'uploadRst', kind: 'step', col: 1, row: 21, label: ['Upload the newest', 'restart set'],
-      title: 'Upload the newest restart set',
-      command: 'case upload rst --t1 <newest complete step>',
-      detail: `Only the newest complete set (all nsg parts), and only if the
-        remote does not have it: the older ones may be there already. It is
-        what a later restart, here or elsewhere, needs.`,
+      id: 'uploadRst', kind: 'step', col: 1, row: 21, label: ['Upload the restart sets', 'on the upload grid'],
+      title: 'Upload the restart sets on the upload grid',
+      command: 'case upload rst --t1 5000 --t2 5000',
+      detail: `Restart sets have two jobs. The ones kept here (every 500, say)
+        are insurance against a failed run. The ones on the remote are to
+        resume the run in the future, so a coarser grid is enough: the steps
+        divisible by upload_rst (say 1000), only the ones the remote lacks,
+        one command per step. The newest set is not needed while the run
+        goes on, but a finished run's final set is, to extend it later.`,
     },
     {
       id: 'goOn', kind: 'decision', col: 1, row: 22, label: ['Does the run', 'go on?'],

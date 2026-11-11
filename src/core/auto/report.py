@@ -225,8 +225,9 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
     sections.append(s)
 
     # -- RST files --------------------------------------------------------------------
-    s = Section('rst', 'RST files',
-                f"keep_rst {conf.keep_rst}" if conf.keep_rst else 'keep_rst not set')
+    grids = [f"keep_rst {conf.keep_rst}" if conf.keep_rst else 'keep_rst not set',
+             f"upload_rst {conf.upload_rst}" if conf.upload_rst else 'upload_rst not set']
+    s = Section('rst', 'RST files', ' · '.join(grids))
     if snap.rst:
         complete = sorted(t for t, n in snap.rst.items() if snap.nsg and n == snap.nsg)
         partial = sorted(t for t, n in snap.rst.items() if t not in complete)
@@ -235,7 +236,7 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
         if complete and c.get('pending') and snap.restart_tsid is not None \
                 and max(complete) > snap.restart_tsid:
             newest_note = (f" (the queued job restarts from {snap.restart_tsid} and computes "
-                           f"it again, so {snap.restart_tsid} is the set to keep and send)")
+                           f"it again)")
         s.row('Complete', (f"newest {max(complete)}{newest_note}" if complete else 'none')
               + (f" · incomplete: {steps_text(partial)}" if partial else ''))
         if snap.restart_tsid is not None:
@@ -245,17 +246,31 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
         freed = sum(sum(snap.rst_files.get(t, {}).values()) for t in thin)
         s.row('Size', f"{_size_text(here)} here" + (f" · thinning frees {_size_text(freed)}"
                                                       if thin else ''))
-        if c.get('rst_newest') is not None and cloud is not None:
-            state = 'missing' if c.get('rst_upload') else 'present'
-            s.row('Remote', f"newest set {c['rst_newest']} {state}")
-        if c.get('rst_upload'):
-            n = c['rst_newest']
-            s.actions.append(f"case upload rst {name} --t1 {n} --t2 {n} --to {remote}")
-        if thin:
-            s.actions.append(AUTO_ONLY + f"delete .rst of {steps_phrase(thin).lower()}: not "
-                                         f"multiples of {conf.keep_rst}" + NOT_YET)
     else:
         s.row('Present', 'none')
+    # what the remote holds, what is due on the upload grid, what is nowhere
+    if cloud is not None:
+        held = c.get('rst_remote') or {}
+        whole = sorted(t for t, n in held.items() if snap.nsg and n == snap.nsg)
+        part = sorted(t for t in held if t not in whole)
+        s.row('Remote', (f"{len(whole)} sets: {steps_text(whole)}" if whole else 'none')
+              + (f" · incomplete: {steps_text(part)}" if part else ''))
+    if conf.upload_rst:
+        due, todo = c.get('rst_due') or [], c.get('rst_todo') or {}
+        if cloud is not None:
+            now = ', '.join(map(str, sorted(todo))) if todo else 'none, up to date'
+            s.row('Upload', f"every {conf.upload_rst}"
+                            + (f" + the final set {c['rst_final']}" if c.get('rst_final') else '')
+                            + f": due {now}")
+        if c.get('rst_lost'):
+            s.row('Lost', f"{steps_text(c['rst_lost'])}: on the upload grid, but neither here "
+                          f"nor on {remote}")
+        for t in sorted(todo):
+            s.actions.append(f"case upload rst {name} --t1 {t} --t2 {t} --to {remote}")
+    thin = c.get('thin') or []
+    if snap.rst and thin:                      # after the uploads: deleting follows from them
+        s.actions.append(AUTO_ONLY + f"delete .rst of {steps_phrase(thin).lower()}: not "
+                                     f"multiples of {conf.keep_rst}" + NOT_YET)
     sections.append(s)
 
     # -- inputs and case files ----------------------------------------------------------

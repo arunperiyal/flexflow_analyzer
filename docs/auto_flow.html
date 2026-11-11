@@ -215,9 +215,9 @@ flowchart TD
   C1 --> C2["Delete binary PLTs verified on cloud"]
   C2 --> C3["Delete .out of verified steps&lt;br/&gt;never the step being written, never past a queued restart"]
   C3 --> C4["Thin .rst to the auto.keep_rst grid in .cases.yml&lt;br/&gt;keep the queued restart's set and the newest complete set"]
-  C4 --> RST{"Newest complete .rst set on cloud?"}
+  C4 --> RST{"Every .rst set on the auto.upload_rst grid&lt;br/&gt;(and a finished run's final set) on cloud?"}
   RST -->|yes| E(["Done"])
-  RST -->|no| U2["Upload it, md5 check"] --> E
+  RST -->|no| U2["Upload the missing ones, md5 check"] --> E
   classDef stop fill:#f8e1de,stroke:#a3271f,color:#5c1510
   classDef wait fill:#fbefd2,stroke:#8a5a00,color:#4a3000
   classDef ok fill:#ddf1e3,stroke:#1d6b3a,color:#0f3a1f
@@ -258,7 +258,7 @@ flowchart TD
             <td>No job. Reached 9000 = maxTimeSteps. <span class="steps">.out 8950–9000</span>, binary/ empty</td>
             <td>Nothing in the run dir; upload <code>cleaned/</code> and compiled file if missing</td>
             <td><code>archive/</code> pruned, against the folder rule: <span class="chip stop">needs you</span>. Restore it (<code>case download history --archive</code>), then <code>auto</code> posts <span class="steps">8950–9000</span> if cloud lacks them</td>
-            <td>After upload: delete <span class="steps">.out 8950–9000</span>; newest <span class="steps">.rst 9000</span> set to cloud</td>
+            <td>After upload: delete <span class="steps">.out 8950–9000</span>; the <span class="steps">.rst</span> sets on the <code>upload_rst</code> grid, and the final set <span class="steps">9000</span>, to cloud if missing</td>
           </tr>
           <tr>
             <td class="case">BR0SG0U4P0</td>
@@ -299,7 +299,7 @@ flowchart TD
       <li>Would you have made the same post range for each case above, especially the ones cut at a queued restart (U1P0, U4P0)?</li>
       <li>Is 10 minutes without change long enough before a step's <code>.out</code> counts as settled on a running case?</li>
       <li>Should a case with holes on cloud (some PLTs present, some missing) really stop at <em>needs you</em>, or should <code>auto</code> post the missing blocks?</li>
-      <li>Are the <code>.rst</code> sets kept by thinning the right ones: your <code>keep_rst</code> grid, the queued restart's set, and the newest complete set?</li>
+      <li>Are the <code>.rst</code> sets kept by thinning the right ones (your <code>keep_rst</code> grid, the queued restart's set, the newest complete set), and the ones uploaded the right ones (your <code>upload_rst</code> grid, plus a finished run's final set)?</li>
       <li>Is there any step of your manual routine missing from the charts?</li>
     </ul>
     <p class="note">The commands the charts belong to:</p>

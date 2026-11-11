@@ -20,7 +20,8 @@ def run_init(tmp_path, monkeypatch, **flags):
     folder.mkdir(exist_ok=True)
     monkeypatch.chdir(folder)
     monkeypatch.setattr(RemoteConfig, 'get_all_remotes', lambda self: REMOTES)
-    args = SimpleNamespace(remote=None, path=None, keep_rst=None, disk_alert=None, force=False)
+    args = SimpleNamespace(remote=None, path=None, keep_rst=None, upload_rst=None,
+                           disk_alert=None, force=False)
     for k, v in flags.items():
         setattr(args, k, v)
     return init_cmd.execute_init(args), folder
@@ -139,3 +140,45 @@ def test_flags_parse():
         ('init', 'cloud', 500, '200G', '/x/bare')
     args = parser.parse_args(['auto', 'show', 'case2', '--remote', 'local'])
     assert (args.what, args.case, args.remote) == ('show', 'case2', 'local')
+
+
+# --- upload_rst ---------------------------------------------------------------------------
+
+def test_upload_rst_is_read_and_must_be_a_multiple_of_keep_rst(tmp_path):
+    cases_file.write(cases_file.CasesFile(cases_file.path_for(tmp_path),
+                                          remotes={'cloud': '/shares/x/bare'},
+                                          auto={'keep_rst': 500, 'upload_rst': 1000}))
+    got = conf.read(tmp_path, 'cloud')
+    assert (got.keep_rst, got.upload_rst) == (500, 1000)
+    cases_file.write(cases_file.CasesFile(cases_file.path_for(tmp_path),
+                                          remotes={'cloud': '/shares/x/bare'},
+                                          auto={'keep_rst': 500, 'upload_rst': 750}))
+    with pytest.raises(conf.AutoConfError, match=r'upload_rst \(750\) must be a multiple of '
+                                                 r'auto.keep_rst \(500\)'):
+        conf.read(tmp_path, 'cloud')
+    # upload_rst alone is fine: nothing is thinned
+    cases_file.write(cases_file.CasesFile(cases_file.path_for(tmp_path),
+                                          remotes={'cloud': '/shares/x/bare'},
+                                          auto={'upload_rst': 750}))
+    assert conf.read(tmp_path, 'cloud').upload_rst == 750
+
+
+def test_init_sets_upload_rst_and_refuses_a_mismatch(tmp_path, monkeypatch, capsys):
+    code, folder = run_init(tmp_path, monkeypatch, remote='cloud', keep_rst=500, upload_rst=1000)
+    assert code == 0 and cases_file.read(folder).auto == {'keep_rst': 500, 'upload_rst': 1000}
+    before = (folder / '.cases.yml').read_text()
+    # a new keep_rst that no longer divides the file's upload_rst is refused, nothing written
+    assert run_init(tmp_path, monkeypatch, remote='cloud', keep_rst=300)[0] == 2
+    assert 'must be a multiple of auto.keep_rst (300)' in capsys.readouterr().out
+    assert (folder / '.cases.yml').read_text() == before
+    assert run_init(tmp_path, monkeypatch, remote='cloud', upload_rst=750)[0] == 2
+    assert run_init(tmp_path, monkeypatch, remote='cloud', upload_rst=0)[0] == 2
+
+
+def test_init_flag_parses():
+    import argparse
+    from src.commands.auto import AutoCommand
+    parser = argparse.ArgumentParser()
+    AutoCommand().setup_parser(parser.add_subparsers(dest='command'))
+    args = parser.parse_args(['auto', 'init', '--keep-rst', '500', '--upload-rst', '1000'])
+    assert (args.keep_rst, args.upload_rst) == (500, 1000)

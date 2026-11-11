@@ -43,7 +43,7 @@ def test_twelve_cases_registered(dummy):
     assert [c['name'] for c in cf.cases] == [f'case{i}' for i in range(1, 13)]
     assert all(Path(c['path']).is_dir() for c in cf.cases)
     assert cf.remotes == {'local': str(dummy / 'cloud' / 'bare')}
-    assert cf.auto == {'keep_rst': 200, 'disk_alert': '1M'}
+    assert cf.auto == {'keep_rst': 200, 'upload_rst': 400, 'disk_alert': '1M'}
 
 
 def test_queue_read_through_the_real_reader(fake_path):

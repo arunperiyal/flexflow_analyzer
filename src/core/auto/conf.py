@@ -29,7 +29,8 @@ class AutoConf:
     source: Path
     remote: str
     path: str
-    keep_rst: Optional[int] = None
+    keep_rst: Optional[int] = None      # .rst kept here: steps divisible by this
+    upload_rst: Optional[int] = None    # .rst uploaded: steps divisible by this
     disk_alert: Optional[int] = None    # bytes
     qos: Optional[str] = None
     account: Optional[str] = None
@@ -47,12 +48,22 @@ def parse_size(text) -> int:
     return int(float(m.group(1)) * _UNITS[m.group(2).upper()])
 
 
-def check_keep_rst(value) -> Optional[int]:
+def check_keep_rst(value, key: str = 'keep_rst') -> Optional[int]:
     if value is None:
         return None
     if isinstance(value, bool) or not str(value).isdigit() or int(value) <= 0:
-        raise AutoConfError(f"keep_rst must be a positive whole number, got {value!r}")
+        raise AutoConfError(f"{key} must be a positive whole number, got {value!r}")
     return int(value)
+
+
+def check_rst_grids(keep, upload):
+    """upload_rst must be a multiple of keep_rst: thinning deletes the .rst that are
+    not multiples of keep_rst, so a set due for upload that is not one would be
+    deleted before it was sent."""
+    if keep and upload and upload % keep:
+        raise AutoConfError(f"auto.upload_rst ({upload}) must be a multiple of auto.keep_rst "
+                            f"({keep}): thinning would delete restart sets that are due for "
+                            f"upload")
 
 
 def read(folder, remote: Optional[str]) -> AutoConf:
@@ -73,26 +84,33 @@ def read(folder, remote: Optional[str]) -> AutoConf:
         raise AutoConfError(f"set the folder of remote '{remote}' in {cf.path} "
                             f"(it still says {PLACEHOLDER})")
     a = cf.auto
+    keep, upload = check_keep_rst(a.get('keep_rst')), check_keep_rst(a.get('upload_rst'), 'upload_rst')
+    check_rst_grids(keep, upload)
     return AutoConf(source=cf.path, remote=remote, path=path,
-                    keep_rst=check_keep_rst(a.get('keep_rst')),
+                    keep_rst=keep, upload_rst=upload,
                     disk_alert=parse_size(a['disk_alert']) if a.get('disk_alert') else None,
                     qos=a.get('qos') or None, account=a.get('account') or None,
                     partition=a.get('partition') or None)
 
 
 def set_up(folder, remote: Optional[str] = None, path: Optional[str] = None,
-           keep_rst=None, disk_alert=None, replace: bool = False):
+           keep_rst=None, disk_alert=None, replace: bool = False, upload_rst=None):
     """Add or change auto's entries in the folder's .cases.yml (made, with no
     cases yet, when missing): the remote's folder and the given settings.
     An existing remote folder is changed only with replace. Returns
     (cases file, what changed, what was kept)."""
     check_keep_rst(keep_rst)
+    check_keep_rst(upload_rst, 'upload_rst')
     if disk_alert is not None:
         parse_size(disk_alert)
     try:
         cf = cases_file.read_or_new(folder)
     except cases_file.CasesFileError as e:
         raise AutoConfError(str(e))
+    # the grids as they will stand after this change
+    check_rst_grids(check_keep_rst(keep_rst if keep_rst is not None else cf.auto.get('keep_rst')),
+                    check_keep_rst(upload_rst if upload_rst is not None
+                                   else cf.auto.get('upload_rst'), 'upload_rst'))
     changed, kept = [], []
     if remote:
         old = cf.remotes.get(remote)
@@ -102,7 +120,8 @@ def set_up(folder, remote: Optional[str] = None, path: Optional[str] = None,
         elif old != new:
             cf.remotes[remote] = new
             changed.append(f"remotes.{remote}: {new}")
-    for key, value in (('keep_rst', keep_rst), ('disk_alert', disk_alert)):
+    for key, value in (('keep_rst', keep_rst), ('upload_rst', upload_rst),
+                       ('disk_alert', disk_alert)):
         if value is not None and cf.auto.get(key) != value:
             cf.auto[key] = value
             changed.append(f"auto.{key}: {value}")

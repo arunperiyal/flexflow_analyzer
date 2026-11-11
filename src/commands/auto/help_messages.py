@@ -8,7 +8,7 @@ def print_auto_help():
 {b}{c}auto — check every case in this folder and do its next safe step{r}
 
 {b}USAGE:{r}
-    auto init [--remote NAME] [--path DIR] [--keep-rst N] [--disk-alert SIZE] [--force]
+    auto init [--remote NAME] [--path DIR] [--keep-rst N] [--upload-rst N] [--disk-alert SIZE] [--force]
         set, in this folder's .cases.yml, the remote's folder for these cases
         (default: the remote's `remote set-path`) and auto's settings
     auto show [case] [--remote NAME] [--detail] [--only SECTIONS]
@@ -58,7 +58,11 @@ def print_auto_help():
     remotes:
       cloud: /shares/...       the folder there; a case goes to <folder>/<case>
     auto:
-      keep_rst: 500            .rst grid kept when thinning (unset: no thinning)
+      keep_rst: 500            .rst kept here when thinning, to resume after a failure
+                               (unset: no thinning)
+      upload_rst: 1000         .rst uploaded, to resume in the future: steps divisible by
+                               this, plus a finished run's final set (a multiple of
+                               keep_rst; unset: no restart sets uploaded)
       disk_alert: 200G         flag running cases whose run directory is bigger
       qos / account / partition  only if set: passed to post jobs
 

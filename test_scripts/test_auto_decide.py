@@ -266,3 +266,80 @@ def test_a_run_that_stops_short_of_its_last_step_is_flagged_at_the_tail():
     plan = decide(s, CONF, True, True)
     assert plan.ctx['lost'] == list(range(4005, 5001, 5))
     assert kinds(plan, 'needs')[0].startswith('Steps 4005–5000 every 5 (200 steps) have no PLT')
+
+
+# --- restart sets: keep_rst here, upload_rst on the remote ------------------------------
+
+CONF_RST = AutoConf(source=Path('.auto.conf'), remote='local', path='/cloud', keep_rst=500,
+                    upload_rst=1000)
+
+
+def rst_files(*steps, parts=4):
+    return {t: {f"RUN_1/riser.{t}_{k}.rst": 10 for k in range(parts)} for t in steps}
+
+
+def on_remote(*steps, parts=4):
+    return {f"RUN_1/riser.{t}_{k}.rst": 10 for t in steps for k in range(parts)}
+
+
+def rst_snap(local, remote=(), **kw):
+    base = dict(max_steps=7000, archive_range=(1, 5759), settled=[], out={}, nsg=4,
+                rst={t: 4 for t in local}, rst_files=rst_files(*local),
+                cloud=on_remote(*remote))
+    base.update(kw)
+    return snap(**base)
+
+
+def test_sets_on_the_upload_grid_are_due_not_the_newest():
+    s = rst_snap([500, 1000, 1500, 2000, 4000, 5000, 5740],
+                 remote=[500, 4000, 5000], restart_tsid=5740, jobs=[job('maincase', 'PENDING')])
+    plan = decide(s, CONF_RST, True, True)
+    assert plan.ctx['rst_due'] == [1000, 2000, 4000, 5000]
+    assert sorted(plan.ctx['rst_todo']) == [1000, 2000]          # 4000 and 5000 are there
+    assert kinds(plan, 'upload')[-1] == 'Restart sets, steps 1000, 2000: 8 files, 80 B'
+    assert 'RUN_1/riser.5740_0.rst' not in plan.uploads          # the newest is not sent
+    assert plan.ctx['rst_remote'] == {500: 4, 4000: 4, 5000: 4}
+
+
+def test_a_finished_runs_final_set_is_sent_when_it_is_off_the_grid():
+    s = rst_snap([1000, 7000, 7350], remote=[1000, 7000], archive_range=(1, 7350), max_steps=7350)
+    plan = decide(s, CONF_RST, True, True)
+    assert plan.state == 'done' and plan.ctx['rst_final'] == 7350
+    assert sorted(plan.ctx['rst_todo']) == [7350]
+    assert 'final set of the finished run' in kinds(plan, 'upload')[-1]
+    # still running or stopped short: no final set, grid only
+    running = rst_snap([1000, 2000], remote=[1000], archive_range=(1, 2100))
+    assert decide(running, CONF_RST, True, True).ctx['rst_final'] is None
+
+
+def test_without_upload_rst_no_restart_set_is_uploaded():
+    conf = AutoConf(source=Path('.auto.conf'), remote='local', path='/cloud', keep_rst=500)
+    plan = decide(rst_snap([1000, 5000], remote=[]), conf, True, True)
+    assert not any(k.endswith('.rst') for k in plan.uploads)
+    assert 'Restart sets are not uploaded: auto.upload_rst is not set' in kinds(plan, 'note')[-1]
+
+
+def test_a_grid_set_a_queued_restart_will_compute_again_waits():
+    s = rst_snap([1000, 4000, 5000], remote=[1000], restart_tsid=4500,
+                 jobs=[job('maincase', 'PENDING')])
+    plan = decide(s, CONF_RST, True, True)
+    assert plan.ctx['rst_due'] == [1000, 4000] and sorted(plan.ctx['rst_todo']) == [4000]
+
+
+def test_a_partial_set_on_the_remote_is_sent_again():
+    s = rst_snap([1000], remote=[], cloud={**on_remote(1000, parts=2)})
+    plan = decide(s, CONF_RST, True, True)
+    assert sorted(plan.uploads) == ['RUN_1/riser.1000_2.rst', 'RUN_1/riser.1000_3.rst']
+    assert plan.ctx['rst_remote'] == {1000: 2}
+
+
+def test_a_grid_set_that_exists_nowhere_is_flagged():
+    s = rst_snap([500, 1000, 2000, 4000], remote=[3500, 5000])
+    # 3000 would be in line (every 500 here, and on the grid) but is neither here nor there
+    s.rst = {t: 4 for t in (500, 1000, 1500, 2000, 2500, 3500, 4000, 4500)}
+    s.rst_files = rst_files(*s.rst)
+    s.cloud = on_remote(3500, 5000)
+    plan = decide(s, CONF_RST, True, True)
+    assert plan.ctx['rst_lost'] == [3000]
+    assert ('Restart step 3000 is on the upload grid (every 1000) but exists neither here nor '
+            'on local.') in kinds(plan, 'flag')

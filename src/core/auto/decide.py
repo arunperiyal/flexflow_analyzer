@@ -144,6 +144,15 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
                   if job.kind == 'main' and job.pending and snap.restart_tsid is not None else '')
         plan.facts.append(f"{job.kind} job {job.jobid} {job.state.lower()}{resume}")
     cloud = snap.cloud if cloud_ok else None
+    rst_remote = {}                              # restart set step -> parts on the remote
+    if cloud is not None:
+        rst_pat = re.compile(rf'^{re.escape(snap.run_rel)}/{re.escape(snap.problem)}'
+                             rf'\.(\d+)_\d+\.rst$')
+        for key in cloud:
+            m = rst_pat.match(key)
+            if m:
+                rst_remote[int(m.group(1))] = rst_remote.get(int(m.group(1)), 0) + 1
+    plan.ctx['rst_remote'] = rst_remote
     plan.ctx.update(running=running, pending=pending, main_now=main_now, post_now=post_now,
                     last_main=last_main, last_post=last_post, reached=reached,
                     cloud=cloud, remote=conf.remote)
@@ -367,16 +376,47 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
             plan.uploads.update(plts)
             plan.add('upload', f"Binary PLTs, {steps_phrase([int(k.split('.')[1]) for k in plts], f).lower()}: "
                                f"{_size_text(sum(plts.values()))}")
+        # Restart sets: the local ones (keep_rst) are insurance against a failed run; the
+        # ones uploaded (upload_rst) are to resume the run in the future, so they are the
+        # steps on that grid, plus the final set of a finished run. A set a queued
+        # restart will compute again, or one still being written, waits.
         sets = [t for t, n in snap.rst.items() if snap.nsg and n == snap.nsg and not provisional(t)
                 and not (running and snap.live and t >= snap.live[1])]
-        if sets:
-            newest = max(sets)
-            stale = {k: v for k, v in snap.rst_files.get(newest, {}).items() if cloud.get(k) != v}
-            plan.ctx.update(rst_newest=newest, rst_upload=stale)
+        due, final = [], None
+        if conf.upload_rst:
+            due = sorted(t for t in sets if t % conf.upload_rst == 0)
+            if state == 'done' and sets and max(sets) % conf.upload_rst:
+                final = max(sets)
+                due.append(final)
+        todo_rst = {}
+        for t in due:
+            stale = {k: v for k, v in snap.rst_files.get(t, {}).items() if cloud.get(k) != v}
             if stale:
-                plan.uploads.update(stale)
-                plan.add('upload', f"Newest restart set, step {newest}: {len(stale)} files, "
-                                   f"{_size_text(sum(stale.values()))}")
+                todo_rst[t] = stale
+        plan.ctx.update(rst_due=due, rst_final=final, rst_todo=todo_rst)
+        if todo_rst:
+            files = {k: v for stale in todo_rst.values() for k, v in stale.items()}
+            plan.uploads.update(files)
+            note = f", {'including' if len(todo_rst) > 1 else 'the'} final set of the finished run" \
+                if final in todo_rst else ''
+            plan.add('upload', f"Restart sets, {steps_phrase(sorted(todo_rst)).lower()}: "
+                               f"{len(files)} files, {_size_text(sum(files.values()))}{note}")
+        elif not conf.upload_rst and snap.rst:
+            plan.add('note', "Restart sets are not uploaded: auto.upload_rst is not set "
+                             "(auto init --upload-rst N).", 'upload')
+        # a set on the upload grid that exists neither here nor on the remote
+        if conf.upload_rst:
+            known = sorted(set(snap.rst) | set(rst_remote))
+            if len(known) >= 3:
+                lost_sets = [g for g in stretch_gaps(known, known[0], known[-1], conf.upload_rst)
+                             if g % conf.upload_rst == 0]
+                plan.ctx['rst_lost'] = lost_sets
+                if lost_sets:
+                    plan.add('flag', f"Restart {steps_phrase(lost_sets).lower()} "
+                                     f"{'is' if len(lost_sets) == 1 else 'are'} on the upload grid "
+                                     f"(every {conf.upload_rst}) but "
+                                     f"{'exists' if len(lost_sets) == 1 else 'exist'} neither here "
+                                     f"nor on {conf.remote}.")
         inputs = {k: v for k, v in snap.files.items()
                   if not k.startswith(('othd_files/', 'oisd_files/')) and cloud.get(k) != v}
         plan.ctx['inputs_missing'] = inputs
