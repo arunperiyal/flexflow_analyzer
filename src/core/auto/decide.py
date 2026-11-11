@@ -48,6 +48,7 @@ class CasePlan:
     items: List[Item] = field(default_factory=list)
     uploads: Dict[str, int] = field(default_factory=dict)    # relative path -> bytes
     post: Optional[Tuple[int, int, str]] = None              # (t1, t2, 'full' | 'convert')
+    ctx: Dict[str, object] = field(default_factory=dict)     # what decide worked out, for report.py
 
     def add(self, kind, text, topic=None):
         self.items.append(Item(kind, text, topic or TOPIC_OF[kind]))
@@ -118,6 +119,9 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
                   if job.kind == 'main' and job.pending and snap.restart_tsid is not None else '')
         plan.facts.append(f"{job.kind} job {job.jobid} {job.state.lower()}{resume}")
     cloud = snap.cloud if cloud_ok else None
+    plan.ctx.update(running=running, pending=pending, main_now=main_now, post_now=post_now,
+                    last_main=last_main, last_post=last_post, reached=reached,
+                    cloud=cloud, remote=conf.remote)
 
     # -- flags ------------------------------------------------------------------
     for job in snap.jobs:
@@ -143,6 +147,7 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
             missing = sorted(set(h.cleaned) - set(h.archive))
             broken_rule.append(f"{ext}_files/archive/ lacks run(s) {', '.join(map(str, missing))} "
                                f"that cleaned/ has")
+    plan.ctx['broken_rule'] = broken_rule
     if broken_rule:
         plan.add('needs', "archive/ is pruned or missing: " + '; '.join(broken_rule) +
                  ". Every case keeps archive/ and cleaned/; restore it with "
@@ -157,6 +162,7 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
                      'history')
             if running and cloud is not None:
                 stale = {k: v for k, v in snap.live_files.items() if cloud.get(k) != v}
+                plan.ctx['live_upload'] = stale
                 if stale:
                     plan.uploads.update(stale)
                     plan.add('upload', f"A copy of the live {p}.othd and {p}.oisd "
@@ -164,6 +170,7 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
         elif not broken_rule:
             numbers = [n for h in snap.history.values() for n in (*h.archive, *h.cleaned)]
             n = max(numbers, default=0) + 1
+            plan.ctx['organise'] = ('update', n)
             plan.add('history', f"Move {snap.run_rel}/{p}.othd and .oisd into archive/ as run "
                                 f"{n}, then clean and compile "
                                 f"(organise history --update --clean --compile)")
@@ -171,6 +178,7 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
     if not organising and not broken_rule:
         uncleaned = sorted(set(snap.history['othd'].archive) - set(snap.history['othd'].cleaned))
         if uncleaned:
+            plan.ctx['organise'] = ('clean', uncleaned)
             plan.add('history', f"Clean and compile archive run(s) "
                                 f"{', '.join(map(str, uncleaned))}, not yet in cleaned/ "
                                 f"(organise history --clean --compile)")
@@ -178,6 +186,7 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
     if cloud is not None:
         hist = {k: v for k, v in snap.files.items() if k.startswith(('othd_files/', 'oisd_files/'))
                 and cloud.get(k) != v}
+        plan.ctx['hist_missing'] = hist
         if organising:
             plan.add('upload', "The history files, once organised")
         elif hist:
@@ -230,6 +239,9 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
         if grid:
             plan.add('note', f"The newest run is {src} (steps {window[0]}–{window[1]}). It writes "
                              f"output every {f} steps: {len(grid)} from {t1} to {t2}{cut}", 'post')
+        plan.ctx.update(window=window, src=src, t1=t1, t2=t2, grid=grid, have=have,
+                        missing=missing, cut=('running' if running else 'restart' if cut.startswith(';')
+                                              else None))
         n_cloud = sum(1 for t in grid if on_cloud(t))
         n_here = sum(1 for t in grid if local_ok(t) and not on_cloud(t))
         where = f"{n_cloud} on {conf.remote}" + (f", {n_here} only in binary/ (not uploaded yet)"
@@ -281,6 +293,7 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
                                      f"{len(todo)} output step{'s' if len(todo) != 1 else ''} "
                                      f"with no PLT yet{already}")
         later = [t for t in snap.out if pending and provisional(t)]
+        plan.ctx['later'] = sorted(later)
         if later:
             plan.add('note', f"{steps_phrase(sorted(later), f)} "
                              f"{'is' if len(later) == 1 else 'are'} left alone: the queued job "
@@ -292,6 +305,7 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
     if cloud is not None and not post_now:
         plts = {f"binary/{p}.{t}.plt": c.size for t, c in sorted(snap.binary.items())
                 if c.ok and not provisional(t) and cloud.get(f"binary/{p}.{t}.plt") != c.size}
+        plan.ctx['plt_upload'] = sorted(int(k.split('.')[-2]) for k in plts)
         if plts:
             plan.uploads.update(plts)
             plan.add('upload', f"Binary PLTs, {steps_phrase([int(k.split('.')[1]) for k in plts], f).lower()}: "
@@ -301,12 +315,14 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
         if sets:
             newest = max(sets)
             stale = {k: v for k, v in snap.rst_files.get(newest, {}).items() if cloud.get(k) != v}
+            plan.ctx.update(rst_newest=newest, rst_upload=stale)
             if stale:
                 plan.uploads.update(stale)
                 plan.add('upload', f"Newest restart set, step {newest}: {len(stale)} files, "
                                    f"{_size_text(sum(stale.values()))}")
         inputs = {k: v for k, v in snap.files.items()
                   if not k.startswith(('othd_files/', 'oisd_files/')) and cloud.get(k) != v}
+        plan.ctx['inputs_missing'] = inputs
         if inputs:
             plan.uploads.update(inputs)
             plan.add('upload', f"Inputs and case files: {len(inputs)} files "
@@ -339,6 +355,7 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
             keep.add(max(snap.rst))
             thin = [t for t in snap.rst if t % conf.keep_rst and t not in keep
                     and not provisional(t) and not (running and snap.live and t >= snap.live[1])]
+        plan.ctx.update(del_ascii=ascii, del_binary=binary, del_out=outs, thin=thin)
         if parts:
             for part in parts:
                 plan.add('delete', part)

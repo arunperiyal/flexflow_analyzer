@@ -11,9 +11,17 @@ def print_auto_help():
     auto init [--remote NAME] [--path DIR] [--keep-rst N] [--disk-alert SIZE] [--force]
         set, in this folder's .cases.yml, the remote's folder for these cases
         (default: the remote's `remote set-path`) and auto's settings
-    auto show [case] [--remote NAME]
-        what auto would do for the case; changes nothing. case: a folder, or
-        `use case:`; `use case:*` (or '*') for every case in .cases.yml
+    auto show [case] [--remote NAME] [--detail] [--only SECTIONS]
+        what auto would do; changes nothing. case: a folder, or `use case:`;
+        `use case:*` (or '*') for every case in .cases.yml. One case: labelled
+        sections (State, History, PLT files, OUT files, RST files, Inputs and
+        case files) with sizes, times and numbered Action commands. Several
+        cases: the summary table; each in full with --detail. --only plt,rst
+        shows just those sections (state, needs, flags, history, plt, out, rst,
+        inputs).
+    auto commands [case]   just the Action commands, numbered, as plain text
+                           (`auto commands '*' > todo.sh` to read before running)
+    auto status [case]     one line per case: state, steps, jobs, what is next
     auto apply [case]      carry it out {g}(not built yet){r}
     auto log [case]        what earlier runs did {g}(not built yet){r}
 

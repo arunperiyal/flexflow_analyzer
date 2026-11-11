@@ -52,6 +52,10 @@ class CaseSnapshot:
     archive_range: Optional[Tuple[int, int]] = None   # newest archive/ .othd part's tsIds
     out: Dict[int, List[Path]] = field(default_factory=dict)
     out_time: Dict[int, float] = field(default_factory=dict)  # step -> newest .out part's mtime
+    out_size: Dict[int, int] = field(default_factory=dict)    # step -> bytes of its .out parts
+    ascii_size: Dict[int, int] = field(default_factory=dict)  # step -> bytes of its ASCII .plt
+    binary_time: Dict[int, float] = field(default_factory=dict)
+    live_time: Optional[float] = None                         # mtime of the run dir's .othd
     post_windows: Dict[str, Tuple[int, int]] = field(default_factory=dict)  # post job id -> steps
     settled: List[int] = field(default_factory=list)
     unsettled: Dict[int, str] = field(default_factory=dict)
@@ -69,8 +73,13 @@ class CaseSnapshot:
         return [j for j in self.jobs if j.kind == kind and j.active]
 
     def last_ended(self, kind: str) -> Optional[slurm.Job]:
-        done = [j for j in self.ended if j.kind == kind]
+        """The newest job of this kind that has ended (sacct lists queued and
+        running ones too)."""
+        done = [j for j in self.ended if j.kind == kind and not j.active]
         return done[-1] if done else None
+
+    def sacct_entry(self, jobid: str) -> Optional[slurm.Job]:
+        return next((j for j in self.ended if j.jobid == jobid), None)
 
 
 def tsid_range(path, chunk: int = 1 << 16) -> Optional[Tuple[int, int]]:
@@ -180,6 +189,7 @@ def observe_case(case_dir, jobs: List[slurm.Job], ended: List[slurm.Job],
     live = run_dir / f'{p}.othd'
     if live.exists():
         snap.live = tsid_range(live)
+        snap.live_time = _mtime(live)
         for ext in HISTORY:
             f = run_dir / f'{p}.{ext}'
             if f.exists():
@@ -188,9 +198,15 @@ def observe_case(case_dir, jobs: List[slurm.Job], ended: List[slurm.Job],
     # run directory: .out, .rst, ASCII PLT, size
     snap.out = out_steps(run_dir, p)
     for step, parts in snap.out.items():
-        times = [t for t in (_mtime(x) for x in parts) if t is not None]
-        if times:
-            snap.out_time[step] = max(times)
+        stats = []
+        for x in parts:
+            try:
+                stats.append(x.stat())
+            except OSError:
+                pass
+        if stats:
+            snap.out_time[step] = max(st.st_mtime for st in stats)
+            snap.out_size[step] = sum(st.st_size for st in stats)
     running = any(j.state in ('RUNNING', 'COMPLETING', 'CONFIGURING') for j in snap.active('main'))
     solver_at = snap.live[1] if snap.live else None
     snap.settled, snap.unsettled = settled_steps(snap.out, snap.nsg, running=running,
@@ -210,6 +226,7 @@ def observe_case(case_dir, jobs: List[slurm.Job], ended: List[slurm.Job],
             m = plt_pat.match(f.name)
             if m:
                 snap.ascii.add(int(m.group(1)))
+                snap.ascii_size[int(m.group(1))] = size
 
     # binary PLTs, each checked from its header
     binary = case_dir / 'binary'
@@ -218,6 +235,7 @@ def observe_case(case_dir, jobs: List[slurm.Job], ended: List[slurm.Job],
             m = plt_pat.match(f.name)
             if m:
                 snap.binary[int(m.group(1))] = check_plt(f)
+                snap.binary_time[int(m.group(1))] = _mtime(f) or 0.0
 
     # the steps each post job was given, from the line postFlex.sh logs:
     # "post job 1225966 started: steps 4050..4550 every 50"
