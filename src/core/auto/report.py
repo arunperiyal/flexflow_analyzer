@@ -16,11 +16,12 @@ import time
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
-from .decide import CasePlan, _size_text, steps_text
+from .decide import CasePlan, _size_text, steps_phrase, steps_text
 from .observe import CaseSnapshot
 
 SECTIONS = ('state', 'needs', 'flags', 'history', 'plt', 'out', 'rst', 'inputs')
 AUTO_ONLY = 'auto apply: '
+NOT_YET = ' [not built yet: delete by hand for now]'      # deleting is a later stage of apply
 
 
 @dataclass
@@ -197,11 +198,11 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
         s.actions.append(f"case upload binary {name} --t1 {up[0]} --t2 {up[-1]} --missing "
                          f"--to {remote}")
     if c.get('del_ascii'):
-        s.actions.append(AUTO_ONLY + f"delete ASCII PLTs {steps_text(c['del_ascii'])} once the "
-                                     f"binary copy on {remote} is md5-checked")
+        s.actions.append(AUTO_ONLY + f"delete ASCII PLTs, {steps_phrase(c['del_ascii']).lower()}, "
+                                     f"once the binary copy on {remote} is md5-checked" + NOT_YET)
     if c.get('del_binary'):
-        s.actions.append(AUTO_ONLY + f"delete binary PLTs {steps_text(c['del_binary'])} once "
-                                     f"their copy on {remote} is md5-checked")
+        s.actions.append(AUTO_ONLY + f"delete binary PLTs, {steps_phrase(c['del_binary']).lower()}, "
+                                     f"once their copy on {remote} is md5-checked" + NOT_YET)
     sections.append(s)
 
     # -- OUT files --------------------------------------------------------------------
@@ -218,8 +219,9 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
     if c.get('del_out'):
         outs = c['del_out']
         freed = _size_text(sum(snap.out_size.get(t, 0) for t in outs))
-        s.actions.append(AUTO_ONLY + f"delete .out of steps {steps_text(outs)} ({freed}) once "
-                                     f"their PLT on {remote} is md5-checked")
+        s.actions.append(AUTO_ONLY + f"delete .out of {steps_phrase(outs).lower()} ({freed}) once "
+                                     f"{'its' if len(outs) == 1 else 'their'} PLT on {remote} is "
+                                     f"md5-checked" + NOT_YET)
     sections.append(s)
 
     # -- RST files --------------------------------------------------------------------
@@ -229,7 +231,12 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
         complete = sorted(t for t, n in snap.rst.items() if snap.nsg and n == snap.nsg)
         partial = sorted(t for t, n in snap.rst.items() if t not in complete)
         s.row('Present', f"{len(snap.rst)} sets: {steps_text(sorted(snap.rst))}")
-        s.row('Complete', (f"newest {max(complete)}" if complete else 'none')
+        newest_note = ''
+        if complete and c.get('pending') and snap.restart_tsid is not None \
+                and max(complete) > snap.restart_tsid:
+            newest_note = (f" (the queued job restarts from {snap.restart_tsid} and computes "
+                           f"it again, so {snap.restart_tsid} is the set to keep and send)")
+        s.row('Complete', (f"newest {max(complete)}{newest_note}" if complete else 'none')
               + (f" · incomplete: {steps_text(partial)}" if partial else ''))
         if snap.restart_tsid is not None:
             s.row('Restart', f"restartTsId {snap.restart_tsid} (kept)")
@@ -245,8 +252,8 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
             n = c['rst_newest']
             s.actions.append(f"case upload rst {name} --t1 {n} --t2 {n} --to {remote}")
         if thin:
-            s.actions.append(AUTO_ONLY + f"delete .rst of steps {steps_text(thin)}: not "
-                                         f"multiples of {conf.keep_rst}")
+            s.actions.append(AUTO_ONLY + f"delete .rst of {steps_phrase(thin).lower()}: not "
+                                         f"multiples of {conf.keep_rst}" + NOT_YET)
     else:
         s.row('Present', 'none')
     sections.append(s)

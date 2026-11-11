@@ -295,7 +295,8 @@ def execute_show(args) -> int:
                   + (f"[bold red]{needs} need(s) you[/bold red]" if needs
                      else "[green]none needs you[/green]"))
     console.print(upload)
-    console.print("[dim]Nothing was changed. `auto apply` will carry this out (not built yet).[/dim]")
+    console.print("[dim]Nothing was changed. `auto apply --dry-run` lists what it would do: "
+                  "history, uploads, post jobs. Deleting is not built yet.[/dim]")
     console.rule(style='cyan')
     console.print()
     return 1 if needs or problems else 0

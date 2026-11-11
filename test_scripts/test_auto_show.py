@@ -256,3 +256,39 @@ def test_a_change_of_output_frequency_is_not_a_hole(dummy):
                              'missing 565–600 every 5 (8 steps)')
     assert 'Lost' not in plt
     assert sec['plt'].actions == ['run post full case12 --t1 565 --t2 600 --no-remote']
+
+
+def test_deletions_say_they_are_not_built_and_agree_with_the_count(dummy):
+    sec = report_of(dummy, 'case6')
+    deletes = [a for s in sec.values() for a in s.actions if 'delete' in a]
+    assert deletes and all(a.endswith('[not built yet: delete by hand for now]') for a in deletes)
+    one = [a for a in deletes if 'delete binary PLTs' in a]
+    assert one == ['auto apply: delete binary PLTs, steps 450, 500, once their copy on local is '
+                   'md5-checked [not built yet: delete by hand for now]']
+    # the live-snapshot copy IS done by apply, so it carries no such label
+    live = [a for a in report_of(dummy, 'case2')['history'].actions if a.startswith('auto apply: copy')]
+    assert live and 'not built yet' not in live[0]
+
+
+def test_a_single_step_reads_as_a_step(dummy):
+    from src.core.auto.decide import steps_phrase
+    assert steps_phrase([5740]) == 'Step 5740'
+    sec = report_of(dummy, 'case3')
+    assert 'delete .rst of steps 550, 650' in sec['rst'].actions[1]
+
+
+def test_the_newest_set_a_queued_restart_will_recompute_is_said_so(dummy):
+    rows = dict(report_of(dummy, 'case3')['rst'].rows)
+    assert rows['Complete'] == ('newest 750 (the queued job restarts from 700 and computes it '
+                                'again, so 700 is the set to keep and send)')
+    assert dict(report_of(dummy, 'case5')['rst'].rows)['Complete'] == 'newest 500'
+
+
+def test_the_footer_does_not_claim_apply_is_missing(dummy, monkeypatch, capsys):
+    from types import SimpleNamespace
+    from src.commands.auto.show import execute_show
+    monkeypatch.chdir(dummy / 'bare')
+    execute_show(SimpleNamespace(case='case3', remote='local', detail=False, only=None))
+    out = ' '.join(capsys.readouterr().out.split())
+    assert 'not built yet).' not in out
+    assert '`auto apply --dry-run` lists what it would do: history, uploads, post jobs. Deleting is not built yet.' in out
