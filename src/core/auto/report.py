@@ -24,6 +24,10 @@ AUTO_ONLY = 'auto apply: '
 NOT_YET = ' [not built yet: delete by hand for now]'      # deleting is a later stage of apply
 
 
+def _predate(steps):
+    return 'predates' if len(steps) == 1 else 'predate'
+
+
 def _by_hand(commands) -> str:
     """The NOT_YET note with the commands that do the same by hand."""
     if not commands:
@@ -121,6 +125,8 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
     over = (f" (over disk_alert {_size_text(conf.disk_alert)})"
             if conf.disk_alert and snap.run_size > conf.disk_alert else '')
     s.row('Run dir', f"{snap.run_rel}/ {_size_text(snap.run_size)}{over}")
+    if c.get('restart_from') is not None:
+        s.actions.append(f"run main restart {c['restart_from']} {name}")
     sections.append(s)
 
     for key, kind, title in (('needs', 'needs', 'Needs you'), ('flags', 'flag', 'Worth a look')):
@@ -224,14 +230,14 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
         s.row('Remote', f"present {steps_text(sorted(plt_cloud)) if plt_cloud else 'none'}"
                         f" · missing {steps_text(gone) if gone else 'none'}")
         if c.get('stale_plt'):
-            s.row('Old run', f"{steps_text(c['stale_plt'])} on {remote} predate the restart: "
+            s.row('Old run', f"{steps_text(c['stale_plt'])} on {remote} {_predate(c['stale_plt'])} the restart: "
                                  f"posted again and replaced")
     s.row('Binary', f"present {steps_text(ok_here) if ok_here else 'none'}"
                     f" · broken {steps_text(broken) if broken else 'none'}")
     s.row('ASCII', f"present {steps_text(sorted(snap.ascii)) if snap.ascii else 'none'}")
     if c.get('stale_local_plt'):
-        s.row('Old run', f"binary {steps_text(c['stale_local_plt'])} here predate the "
-                             f"restart: not trusted, not uploaded")
+        s.row('Old here', f"binary {steps_text(c['stale_local_plt'])} here "
+                              f"{_predate(c['stale_local_plt'])} the restart: not trusted, not uploaded")
     if lost:
         s.row('Lost', f"{steps_text(lost)}: no PLT and no .out anywhere")
     if c.get('later'):
