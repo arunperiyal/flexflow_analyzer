@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### 🛡️ `auto`: never shrink the remote's history
+
+- A history file that is larger on the remote than here (a folder whose
+  `archive/` is empty, say) is no longer offered for upload: sending it would
+  replace the fuller copy. It is listed under "Needs you" instead.
+- After a restart, `auto show` names the earlier run's PLTs on the remote and
+  the leftover local binary PLTs (row "Earlier run" in the PLT section).
+
 ### 🔁 `auto`: files of an earlier run above a restart
 
 - After a restart from T, the PLTs on the remote for steps above T are the

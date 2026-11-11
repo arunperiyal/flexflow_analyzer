@@ -467,3 +467,30 @@ def test_run_main_notes_what_simflow_config_tells_the_solver(tmp_path):
     assert _restart_note(tmp_path) == 'restartTsId 2750'
     (tmp_path / 'simflow.config').write_text("dir = ./RUN_1\nrestartTsId = 2750\nrestartFlag = 0\n")
     assert _restart_note(tmp_path) == 'restartFlag off'
+
+
+# --- history that is larger on the remote is never overwritten -------------------------------
+
+def test_a_history_file_larger_on_the_remote_is_not_sent():
+    s = snap(files={'othd_files/cleaned/riser1.othd': 100, 'othd_files/cleaned/riser2.othd': 100},
+             cloud={'othd_files/cleaned/riser1.othd': 500})
+    plan = decide(s, CONF, True, True)
+    assert 'othd_files/cleaned/riser1.othd' not in plan.uploads
+    assert 'othd_files/cleaned/riser2.othd' in plan.uploads
+    assert any('smaller here than on local' in t and 'riser1.othd' in t
+               for t in kinds(plan, 'needs'))
+
+
+def test_a_larger_local_history_file_is_still_sent():
+    s = snap(files={'othd_files/cleaned/riser1.othd': 500},
+             cloud={'othd_files/cleaned/riser1.othd': 100})
+    plan = decide(s, CONF, True, True)
+    assert 'othd_files/cleaned/riser1.othd' in plan.uploads
+    assert not plan.ctx['hist_shrink']
+
+
+def test_stale_local_plt_is_reported():
+    from src.core.plt_valid import PltCheck
+    s = restarted_snap(binary={350: PltCheck(Path('b/riser.350.plt'), True, '', 424)},
+                       binary_time={350: START - 900})
+    assert decide(s, CONF, True, True).ctx['stale_local_plt'] == [350]

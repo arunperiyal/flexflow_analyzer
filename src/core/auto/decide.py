@@ -278,7 +278,18 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
     if cloud is not None:
         hist = {k: v for k, v in snap.files.items() if k.startswith(('othd_files/', 'oisd_files/'))
                 and cloud.get(k) != v}
+        # a file that is larger on the remote than here is not sent: it would shrink the
+        # remote's copy (this folder may have lost part of its history, e.g. an empty archive/)
+        shrink = {k: (v, cloud[k]) for k, v in hist.items() if cloud.get(k, 0) > v}
+        hist = {k: v for k, v in hist.items() if k not in shrink}
         plan.ctx['hist_missing'] = hist
+        plan.ctx['hist_shrink'] = shrink
+        if shrink:
+            plan.add('needs', "History files that are smaller here than on " + conf.remote +
+                              " (not sent, it would shrink the copy there): " +
+                              ', '.join(f"{k} ({_size_text(a)} here, {_size_text(b)} there)"
+                                        for k, (a, b) in sorted(shrink.items())) +
+                              ". Compare them (and restore archive/ if it is empty) first.")
         if organising:
             plan.add('upload', "The history files, once organised")
         elif hist:
@@ -308,7 +319,9 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
                          for m in [re.match(rf'binary/{re.escape(p)}\.(\d+)\.plt$', k)]
                          if m and stale_plt(int(m.group(1))))
         old_rst = sorted(t for t in snap.rst if stale_rst(t))
-        plan.ctx.update(stale_plt=old_plt, stale_rst=old_rst)
+        old_local = sorted(t for t in snap.binary
+                           if stale_plt(t) and snap.binary_time.get(t, 0) < snap.main_start)
+        plan.ctx.update(stale_plt=old_plt, stale_rst=old_rst, stale_local_plt=old_local)
         if old_plt or old_rst:
             what = []
             if old_plt:
