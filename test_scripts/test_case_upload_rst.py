@@ -195,6 +195,9 @@ class FakeRemote:
     def list_remote_dir(self, path):
         return sorted(p.name for p in self._local(path).iterdir())
 
+    def remote_file_sizes(self, path):
+        return {p.name: p.stat().st_size for p in self._local(path).iterdir() if p.is_file()}
+
     def download_file(self, path, local, callback=None):
         self.fetched.append(path)
         import shutil
@@ -244,3 +247,88 @@ def test_case_download_rst_without_steps_fetches_every_step(cmd, case, tmp_path)
         ns = args(what='rst', case=str(here), from_remote='srv', freq=None)
         assert cmd.execute_download(ns) == 0
     assert sorted(p.name for p in (here / 'RUN_1').iterdir()) == RST_4000 + RST_5000
+
+
+# --- --freq and --missing for restart sets -------------------------------------------------
+
+GRID = {t: [f'riser.{t}_{k}.rst' for k in range(4)] for t in (1000, 2000, 3000, 4000, 5000, 5740)}
+
+
+@pytest.fixture
+def sets(tmp_path):
+    case = tmp_path / 'CS2'
+    run = case / 'RUN_1'
+    run.mkdir(parents=True)
+    (case / 'simflow.config').write_text('problem = riser\nnsg \t= 4\ndir\t= ./RUN_1\n')
+    for names in GRID.values():
+        for name in names:
+            (run / name).write_text('x' * 10)
+    (run / 'riser.1500_0.rst').write_text('x' * 10)                # an incomplete set
+    return case
+
+
+def steps_sent(ssh):
+    return sorted({int(n.split('.')[1].split('_')[0]) for n, _ in uploaded(ssh)})
+
+
+def test_upload_rst_freq_sends_only_the_multiples(sets):
+    ssh = MagicMock()
+    ssh.remote_path_exists.return_value = True
+    assert CaseDownloadCommand().upload_restart(ssh, '/r/CS2', str(sets), None, freq=1000)
+    assert steps_sent(ssh) == [1000, 2000, 3000, 4000, 5000]         # not 5740, not 1500
+
+
+def test_upload_rst_freq_and_window_together(sets):
+    ssh = MagicMock()
+    ssh.remote_path_exists.return_value = True
+    assert CaseDownloadCommand().upload_restart(ssh, '/r/CS2', str(sets), (1000.0, 3000.0),
+                                                freq=1000)
+    assert steps_sent(ssh) == [1000, 2000, 3000]
+
+
+def test_upload_rst_missing_sends_only_what_the_remote_lacks(sets):
+    ssh = MagicMock()
+    ssh.remote_path_exists.return_value = True
+    there = {n: 10 for n in GRID[4000] + GRID[5000]}                  # both complete there
+    there[GRID[2000][1]] = 10                                         # one part of 2000
+    there.update({n: 10 for n in GRID[3000]})                         # 3000 complete there ...
+    there[GRID[3000][0]] = 7                                          # ... but 3000_0 at another size
+    ssh.remote_file_sizes.return_value = there
+    assert CaseDownloadCommand().upload_restart(ssh, '/r/CS2', str(sets), None, freq=1000,
+                                                missing=True)
+    sent = sorted(n for n, _ in uploaded(ssh))
+    assert sent == sorted([GRID[1000][k] for k in range(4)]            # all of 1000
+                          + [n for n in GRID[2000] if n != GRID[2000][1]]  # 2000 minus the one there
+                          + [GRID[3000][0]])                           # the one at another size
+
+
+def test_upload_rst_missing_with_everything_there_sends_nothing(sets, capsys):
+    ssh = MagicMock()
+    ssh.remote_path_exists.return_value = True
+    ssh.remote_file_sizes.return_value = {n: 10 for names in GRID.values() for n in names}
+    assert CaseDownloadCommand().upload_restart(ssh, '/r/CS2', str(sets), None, freq=1000,
+                                                missing=True)
+    assert not uploaded(ssh)
+    assert 'Missing: 0 of 20 file(s)' in ' '.join(capsys.readouterr().out.split())
+
+
+def test_download_rst_missing_and_freq(sets, tmp_path):
+    here = tmp_path / 'local'
+    (here / 'RUN_1').mkdir(parents=True)
+    for n in GRID[1000]:                                               # 1000 is here already
+        (here / 'RUN_1' / n).write_text('x' * 10)
+    remote = FakeRemote(sets)                                          # the case under /r/CS1
+    assert CaseDownloadCommand().download_restart(remote, '/r/CS1', str(here), None, freq=1000,
+                                                  missing=True)
+    got = sorted({int(p.name.split('.')[1].split('_')[0]) for p in (here / 'RUN_1').glob('*.rst')})
+    assert got == [1000, 2000, 3000, 4000, 5000]                       # not 5740, not 1500
+
+
+def test_the_flags_parse_for_upload_and_download():
+    from src.commands.case import CaseCommand
+    parser = argparse.ArgumentParser()
+    CaseCommand().setup_parser(parser.add_subparsers(dest='command'))
+    for verb in ('upload', 'download'):
+        a = parser.parse_args(['case', verb, 'rst', 'C1', '--freq', '1000', '--missing',
+                               '--t1', '1000', '--t2', '5000'])
+        assert (a.what, a.freq, a.missing, a.t1, a.t2) == ('rst', 1000, True, 1000.0, 5000.0)

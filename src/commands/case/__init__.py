@@ -60,7 +60,7 @@ def _transfer_positionals(parser, direction):
         parser.add_argument(f'--{name}', action='store_true',
                             help=f'history: only {where} (combinable; none carries all three)')
     parser.add_argument('--missing', action='store_true',
-                        help='binary: only the files the other side lacks (or holds at another size)')
+                        help='binary/rst: only the files the other side lacks (or holds at another size)')
     parser.add_argument('--fit', action='store_true',
                         help='binary: send only the steps that fit in the time the session '
                              'has left (at set transfer_speed)')
@@ -530,6 +530,10 @@ class CaseCommand(BaseCommand):
         time_window(upload_parser, when=_stepped,
                     t1_kwargs=dict(metavar='STEP', help='binary/rst: first timestep to upload (alone: only that step)'),
                     t2_kwargs=dict(metavar='STEP', help='binary/rst: last timestep to upload'))
+        freq_arg(upload_parser, metavar='N',
+                 resolve=lambda store, ns: (store.get('freq') if _mode(ns) in ('binary', 'rst')
+                                            and store.is_set('freq') else None),
+                 help='binary/rst: only the timesteps that are multiples of N')
         upload_parser.add_argument('--force', action='store_true',
                                   help='Create remote directories if they do not exist')
         upload_parser.add_argument('--resume', action='store_true',
@@ -561,9 +565,9 @@ class CaseCommand(BaseCommand):
                     t1_kwargs=dict(metavar='STEP', help='binary/rst: first timestep to download (alone: only that step)'),
                     t2_kwargs=dict(metavar='STEP', help='binary/rst: last timestep to download'))
         freq_arg(download_parser, metavar='N',
-                 resolve=lambda store, ns: (store.get('freq') if _mode(ns) == 'binary'
+                 resolve=lambda store, ns: (store.get('freq') if _mode(ns) in ('binary', 'rst')
                                             and store.is_set('freq') else None),
-                 help='binary: only the timesteps that are multiples of N')
+                 help='binary/rst: only the timesteps that are multiples of N')
         download_parser.add_argument('--force', action='store_true',
                                     help='Create the local case directory if it does not exist')
         download_parser.add_argument('--resume', action='store_true',

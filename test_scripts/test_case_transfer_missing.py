@@ -157,7 +157,8 @@ def test_missing_is_kept_for_resume(tmp_path):
     assert state['missing'] is True
 
 
-def test_missing_needs_binary(tmp_path, capsys):
-    ns = namespace(what='rst', case=str(tmp_path))
+def test_missing_needs_binary_or_rst(tmp_path, capsys):
+    ns = namespace(what='input', case=str(tmp_path))
     assert command(tmp_path).execute_download(ns) == 1
-    assert 'use `case download binary --missing`' in ' '.join(capsys.readouterr().out.split())
+    assert ('use `case download binary --missing` or `rst --missing`'
+            in ' '.join(capsys.readouterr().out.split()))
