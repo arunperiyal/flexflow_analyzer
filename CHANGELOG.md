@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### 🛟 `keep_newest_rst`: thinning keeps the two newest complete sets
+
+- A job killed while writing a restart set can leave the newest one cut
+  short with all its parts present; the set before it is the way back (50
+  steps lost instead of up to 500). Thinning now always keeps the N newest
+  complete sets (default 2) besides the `keep_rst` grid and the restart
+  point: `auto.keep_newest_rst` in `.cases.yml`, `auto init --keep-newest-rst
+  N`, and `case organise output --keep-newest N` (default 2; 1 keeps only
+  the newest). A set still being written does not count among the newest
+  complete ones. With a stop at 5020 and output every 50, sets 5000 and 4950
+  stay.
+- Restarting from the newest set causes no jump in the history (checked on
+  BR0SG0U4P0: after 6000 the recomputed steps match the earlier run exactly,
+  after 6950 to 4e-8); the second set is insurance against a cut-short one.
+
 ### 🔎 `auto show`: what the remote holds that this case does not
 
 - **History parts and restart sets only on the remote** are listed ("Only

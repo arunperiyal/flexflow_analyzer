@@ -448,8 +448,10 @@ class CaseOrganizer(HistoryMixin):
           resumes from -- `run main restart` writes it before submitting.
           Deleting its set makes that restart fail, and it is seldom on the
           keep grid (resume from 8250 with --keep-freq 500).
-        - the newest complete set (all nsg parts): the only way to resume if
-          the current run dies.
+        - the newest N complete sets (all nsg parts; --keep-newest, default 2):
+          the only way to resume if the current run dies, and the one before
+          the newest is the way back if the newest was cut short when the job
+          was killed while writing it.
         - the newest step, when it is not complete: the solver may still be
           writing it.
         Steps are kept even outside --t1/--t2.
@@ -471,9 +473,12 @@ class CaseOrganizer(HistoryMixin):
                 nsg = int(str(cfg.get('nsg', '')).strip())
             except ValueError:
                 nsg = None
-            complete = [t for t, n in parts.items() if nsg is None or n == nsg]
-            if complete:
-                keep.setdefault(max(complete), "newest complete restart set")
+            complete = sorted(t for t, n in parts.items() if nsg is None or n == nsg)
+            count = max(1, int(getattr(self.args, 'keep_newest', None) or 2))
+            for rank, step in enumerate(reversed(complete[-count:]), 1):
+                keep.setdefault(step, "newest complete restart set" if rank == 1 else
+                                f"{'2nd' if rank == 2 else f'{rank}th'} newest complete "
+                                f"restart set")
             newest = max(parts)
             if newest not in complete:
                 keep.setdefault(newest, f"newest step, {parts[newest]} of {nsg} parts "

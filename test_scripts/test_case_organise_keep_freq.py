@@ -99,14 +99,14 @@ def test_output_keep_freq_needs_no_outfreq(tmp_path, run_dir):
 
 def test_output_default_is_ten_times_freq(tmp_path, run_dir):
     organise(tmp_path, 'output', config={'dir': './RUN_1', 'outFreq': '50'})
-    assert steps(run_dir, '.rst') == [500, 1000, 1500, 2000]
+    assert steps(run_dir, '.rst') == [500, 1000, 1500, 1950, 2000]       # + the 2nd newest
 
 
 def test_output_deletes_out_once_its_binary_plt_is_there_keep_freq_steps_too(tmp_path, converted):
     organise(tmp_path, 'output', keep_freq=500)
     # 550..1000 have only an ASCII .plt, 1050.. none
     assert steps(converted, '.out') == list(range(550, 2001, 50))
-    assert steps(converted, '.rst') == [500, 1000, 1500, 2000]
+    assert steps(converted, '.rst') == [500, 1000, 1500, 1950, 2000]
 
 
 def test_output_without_any_plt_keeps_every_out(tmp_path, run_dir):
@@ -123,7 +123,7 @@ def test_output_all_out_deletes_unconverted_out_too(tmp_path, converted):
 def test_output_keep_out_deletes_no_out_and_still_thins_rst(tmp_path, converted):
     organise(tmp_path, 'output', keep_freq=500, keep_out=True)
     assert len(steps(converted, '.out')) == 40                     # converted ones too
-    assert steps(converted, '.rst') == [500, 1000, 1500, 2000]
+    assert steps(converted, '.rst') == [500, 1000, 1500, 1950, 2000]
 
 
 def test_output_out_respects_the_time_window(tmp_path, converted):

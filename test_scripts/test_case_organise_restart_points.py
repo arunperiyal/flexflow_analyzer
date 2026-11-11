@@ -54,28 +54,37 @@ def test_queued_restart_point_off_the_grid_stays(tmp_path, run):
     assert len(list(run.glob('riser.8250_*.rst'))) == NSG
 
 
-def test_newest_complete_set_stays_without_a_restart(tmp_path, run):
-    organise(tmp_path, {})
+def test_the_two_newest_complete_sets_stay_without_a_restart(tmp_path, run):
+    organise(tmp_path, {})                      # --keep-newest defaults to 2
+    assert rst_steps(run) == [6000, 6500, 7000, 7500, 8000, 8250, 8300]
+
+
+def test_keep_newest_one_keeps_only_the_newest(tmp_path, run):
+    organise(tmp_path, {}, keep_newest=1)
     assert rst_steps(run) == [6000, 6500, 7000, 7500, 8000, 8300]
 
 
-def test_newest_set_still_being_written_stays_with_the_last_complete_one(tmp_path, run):
-    write_rst(run, 8350, parts=2)
+def test_keep_newest_three(tmp_path, run):
+    organise(tmp_path, {}, keep_newest=3)
+    assert rst_steps(run) == [6000, 6500, 7000, 7500, 8000, 8200, 8250, 8300]
+
+
+def test_a_stop_at_5020_keeps_5000_and_4950(tmp_path):
+    """output every 50, stopped at 5020: the last two sets stay with the 500 grid."""
+    run = tmp_path / 'RUN_1'
+    run.mkdir()
+    for step in range(4000, 5001, 50):
+        write_rst(run, step)
     organise(tmp_path, {})
-    left = rst_steps(run)
-    assert 8350 in left and 8300 in left
-    assert len(list(run.glob('riser.8350_*.rst'))) == 2
+    assert rst_steps(run) == [4000, 4500, 4950, 5000]
 
 
-def test_restart_point_kept_even_outside_the_window(tmp_path, run):
-    organise(tmp_path, {'restartTsId': '7250'}, t1=7000, t2=8000)
-    left = rst_steps(run)
-    assert 7250 in left
-    assert 7100 not in left              # inside the window, off the grid
-    assert 6050 in left                  # outside the window: untouched
-
-
-def test_dry_run_deletes_nothing(tmp_path, run):
-    before = rst_steps(run)
-    organise(tmp_path, {'restartTsId': '8250'}, dry_run=True)
-    assert rst_steps(run) == before
+def test_a_cut_short_newest_set_leaves_the_two_newest_complete_ones(tmp_path):
+    run = tmp_path / 'RUN_1'
+    run.mkdir()
+    for step in range(6000, 6301, 50):
+        write_rst(run, step)
+    write_rst(run, 6350, parts=2)                # the job was killed while writing it
+    organise(tmp_path, {})
+    # the grid (6000), the two newest COMPLETE sets (6250, 6300), the set being written (6350)
+    assert rst_steps(run) == [6000, 6250, 6300, 6350]

@@ -26,7 +26,8 @@ from pathlib import Path
 from typing import Dict, List
 
 FILENAME = '.cases.yml'
-AUTO_KEYS = ('keep_rst', 'upload_rst', 'disk_alert', 'qos', 'account', 'partition')
+AUTO_KEYS = ('keep_rst', 'keep_newest_rst', 'upload_rst', 'disk_alert', 'qos', 'account',
+             'partition')
 
 HEADER = """\
 # flexflow: the cases of this folder, where they go on each remote, and auto's
@@ -38,6 +39,9 @@ HEADER = """\
 #   keep_rst    .rst thinning keeps the steps divisible by this on this machine, for
 #               resuming after a failure (unset: no thinning; a queued restart's set
 #               and the newest complete set are always kept)
+#   keep_newest_rst  thinning also keeps this many of the newest complete .rst sets
+#               (default 2: if the newest was cut short when a job was killed, the one
+#               before it restarts the run)
 #   upload_rst  the .rst of steps divisible by this are uploaded, to resume the run
 #               in the future (a multiple of keep_rst; unset: no restart sets are
 #               uploaded). A finished run's final set is uploaded too
