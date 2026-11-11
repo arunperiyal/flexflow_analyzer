@@ -494,3 +494,42 @@ def test_stale_local_plt_is_reported():
     s = restarted_snap(binary={350: PltCheck(Path('b/riser.350.plt'), True, '', 424)},
                        binary_time={350: START - 900})
     assert decide(s, CONF, True, True).ctx['stale_local_plt'] == [350]
+
+
+# --- the log of a job that ended badly ---------------------------------------------------
+
+def log_section(s):
+    from src.core.auto.report import build
+    plan = decide(s, CONF, True, True)
+    return [sec for sec in build(s, plan, CONF) if sec.key == 'log']
+
+
+def test_the_tail_of_a_failed_jobs_log_is_in_the_report():
+    failed = Job('7', 'maincase', 'TIMEOUT', '', '/c/case', '2026-11-08T10:00:00')
+    s = snap(ended=[failed], log_tails={'7': ['step 5', 'DUE TO TIME LIMIT']})
+    [sec] = log_section(s)
+    assert sec.rows[0] == ('Job', 'main 7 TIMEOUT, ended 11-08 10:00')
+    assert sec.rows[1] == ('File', 'slurm-7.out, last 2 lines')
+    assert sec.rows[2:] == [('', 'step 5'), ('', 'DUE TO TIME LIMIT')]
+
+
+def test_no_log_section_when_the_job_completed_or_a_newer_one_is_active():
+    ok = Job('7', 'maincase', 'COMPLETED', '', '/c/case', '2026-11-08T10:00:00')
+    assert not log_section(snap(ended=[ok]))
+    failed = Job('7', 'maincase', 'TIMEOUT', '', '/c/case', '2026-11-08T10:00:00')
+    s = snap(ended=[failed], log_tails={'7': ['x']}, jobs=[job('maincase', 'RUNNING', jobid='9')])
+    assert not log_section(s)
+
+
+def test_a_missing_log_file_is_said():
+    failed = Job('7', 'postcase', 'FAILED', '', '/c/case', '2026-11-08T10:00:00')
+    [sec] = log_section(snap(ended=[failed], log_tails={'7': None}))
+    assert sec.rows[1] == ('File', 'slurm-7.out is not in the case folder')
+
+
+def test_tail_reads_the_last_fifteen_lines(tmp_path):
+    from src.core.auto.observe import _tail
+    (tmp_path / 'slurm-5.out').write_text('\n'.join(f'line {i}' for i in range(40)) + '\n')
+    got = _tail(tmp_path, '5')
+    assert len(got) == 15 and got[0] == 'line 25' and got[-1] == 'line 39'
+    assert _tail(tmp_path, '6') is None

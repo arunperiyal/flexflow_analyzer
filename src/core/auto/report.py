@@ -19,7 +19,7 @@ from typing import List, Optional, Tuple
 from .decide import CasePlan, _size_text, runs_text, steps_phrase, steps_text
 from .observe import CaseSnapshot
 
-SECTIONS = ('state', 'needs', 'flags', 'history', 'plt', 'out', 'rst', 'inputs')
+SECTIONS = ('state', 'needs', 'flags', 'log', 'history', 'plt', 'out', 'rst', 'inputs')
 AUTO_ONLY = 'auto apply: '
 NOT_YET = ' [not built yet: delete by hand for now]'      # deleting is a later stage of apply
 
@@ -109,6 +109,23 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
 
     # -- history --------------------------------------------------------------------
     h = snap.history.get('othd')
+    for kind in ('main', 'post'):
+        job = snap.last_ended(kind)
+        if not job or job.jobid not in snap.log_tails or snap.active(kind):
+            continue
+        tail = snap.log_tails[job.jobid]
+        s = Section('log', 'Job log')
+        s.row('Job', f"{kind} {job.jobid} {job.state}, ended {_when(job.end) or '?'}")
+        if tail is None:
+            s.row('File', f"slurm-{job.jobid}.out is not in the case folder")
+        elif not tail:
+            s.row('File', f"slurm-{job.jobid}.out is empty")
+        else:
+            s.row('File', f"slurm-{job.jobid}.out, last {len(tail)} lines")
+            for line in tail:
+                s.row('', line)
+        sections.append(s)
+
     s = Section('history', 'History', '.othd / .oisd')
     if snap.live:
         stays = ' (stays while the main job is queued or running)' if c.get('main_now') else ''
