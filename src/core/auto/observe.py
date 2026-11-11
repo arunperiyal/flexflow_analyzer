@@ -55,6 +55,8 @@ class CaseSnapshot:
     out_size: Dict[int, int] = field(default_factory=dict)    # step -> bytes of its .out parts
     ascii_size: Dict[int, int] = field(default_factory=dict)  # step -> bytes of its ASCII .plt
     binary_time: Dict[int, float] = field(default_factory=dict)
+    main_start: Optional[float] = None          # when the newest main job started (sacct)
+    sent_at: Dict[str, float] = field(default_factory=dict)   # remote path -> when auto sent it
     live_time: Optional[float] = None                         # mtime of the run dir's .othd
     post_windows: Dict[str, Tuple[int, int]] = field(default_factory=dict)  # post job id -> steps
     settled: List[int] = field(default_factory=list)
@@ -141,8 +143,30 @@ def _size(path: Path) -> Optional[int]:
         return None
 
 
+def _parse_time(text) -> Optional[float]:
+    """sacct's 2026-11-09T03:31:00 or the ledger's 2026-11-09 03:31:00, as seconds; None
+    when it is not a time ('Unknown' for a job that has not started)."""
+    import time as _time
+    for fmt in ('%Y-%m-%dT%H:%M:%S', '%Y-%m-%d %H:%M:%S'):
+        try:
+            return _time.mktime(_time.strptime(str(text).strip(), fmt))
+        except ValueError:
+            continue
+    return None
+
+
+def _newest_main_start(ended) -> Optional[float]:
+    for job in reversed(ended):
+        if job.kind == 'main':
+            t = _parse_time(job.start)
+            if t is not None:
+                return t
+    return None
+
+
 def observe_case(case_dir, jobs: List[slurm.Job], ended: List[slurm.Job],
-                 cloud_files: Optional[Dict[str, int]]) -> CaseSnapshot:
+                 cloud_files: Optional[Dict[str, int]],
+                 sent: Optional[Dict[str, str]] = None) -> CaseSnapshot:
     from ..simflow_config import SimflowConfig
     from ..def_config import DefConfig
 
@@ -179,6 +203,11 @@ def observe_case(case_dir, jobs: List[slurm.Job], ended: List[slurm.Job],
 
     snap.jobs = slurm.jobs_for_case(case_dir, jobs)
     snap.ended = slurm.jobs_for_case(case_dir, ended)
+    snap.main_start = _newest_main_start(snap.ended)
+    for rel, when in (sent or {}).items():
+        t = _parse_time(when)
+        if t is not None:
+            snap.sent_at[rel] = t
 
     # history
     for ext in HISTORY:

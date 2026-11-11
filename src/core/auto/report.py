@@ -242,8 +242,10 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
              f"upload_rst {conf.upload_rst}" if conf.upload_rst else 'upload_rst not set']
     s = Section('rst', 'RST files', ' · '.join(grids))
     if snap.rst:
-        complete = sorted(t for t, n in snap.rst.items() if snap.nsg and n == snap.nsg)
-        partial = sorted(t for t, n in snap.rst.items() if t not in complete)
+        old = set(c.get('stale_rst') or [])
+        complete = sorted(t for t, n in snap.rst.items() if snap.nsg and n == snap.nsg
+                          and t not in old)
+        partial = sorted(t for t, n in snap.rst.items() if t not in complete and t not in old)
         s.row('Present', f"{len(snap.rst)} sets: {steps_text(sorted(snap.rst))}")
         newest_note = ''
         if complete and c.get('pending') and snap.restart_tsid is not None \
@@ -254,6 +256,9 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
               + (f" · incomplete: {steps_text(partial)}" if partial else ''))
         if snap.restart_tsid is not None:
             s.row('Restart', f"restartTsId {snap.restart_tsid} (kept)")
+        if old:
+            s.row('Earlier run', f"{steps_text(sorted(old))}: above the solver's step, written "
+                                 f"before the restart; not counted, sent or deleted")
         if c.get('rst_newest_kept'):
             sets = c['rst_newest_kept']
             s.row('Also kept', f"{', '.join(map(str, reversed(sets)))} "

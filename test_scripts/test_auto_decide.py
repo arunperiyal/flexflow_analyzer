@@ -392,3 +392,78 @@ def test_steps_of_an_earlier_run_on_the_cloud_are_listed_for_deletion():
              cloud=cloud_with(450, 475, 550, 600))
     plan = decide(s, CONF, True, True)
     assert {450, 475} <= set(plan.ctx['del_out'])
+
+
+# --- a restart: the earlier run's files above the restart point ----------------------
+
+import time as _time
+
+START = _time.mktime(_time.strptime('2026-11-09 03:31:00', '%Y-%m-%d %H:%M:%S'))
+
+
+def restarted_snap(**kw):
+    """Restarted from 300; the solver is at 450. The first run had reached 600, so PLTs
+    for 350-600 are on the cloud and restart sets 500, 550 are still here."""
+    base = dict(restart_tsid=300, live=(301, 450), archive_range=(1, 600), main_start=START,
+                jobs=[job('maincase', 'RUNNING')],
+                out={t: [] for t in (350, 400)}, settled=[350, 400],
+                rst={300: 4, 350: 4, 400: 4, 500: 4, 550: 4},
+                rst_files={t: {f"RUN_1/riser.{t}_{k}.rst": 100 for k in range(4)}
+                           for t in (300, 350, 400, 500, 550)},
+                cloud=cloud_with(*range(50, 601, 50)))
+    base.update(kw)
+    return snap(**base)
+
+
+def test_plts_on_the_cloud_from_before_the_restart_are_posted_again():
+    plan = decide(restarted_snap(), CONF, True, True)
+    assert plan.ctx['stale_plt'] == [350, 400, 450, 500, 550, 600]
+    assert plan.post == (350, 400, 'full')
+    assert any('Restarted from 300' in t for t in kinds(plan, 'flag'))
+
+
+def test_a_plt_sent_after_the_restart_is_the_new_runs():
+    s = restarted_snap(sent_at={'binary/riser.350.plt': START + 600})
+    plan = decide(s, CONF, True, True)
+    assert plan.post == (400, 400, 'full')
+    assert 350 not in plan.ctx['stale_plt']
+
+
+def test_a_new_plt_replaces_the_old_one_of_the_same_size():
+    from src.core.plt_valid import PltCheck
+    s = restarted_snap(binary={350: PltCheck(Path('b/riser.350.plt'), True, '', 424)}, binary_time={350: START + 900},
+                       sent_at={})
+    plan = decide(s, CONF, True, True)
+    assert 'binary/riser.350.plt' in plan.uploads
+
+
+def test_an_old_local_plt_from_before_the_restart_is_not_uploaded_or_trusted():
+    from src.core.plt_valid import PltCheck
+    s = restarted_snap(binary={350: PltCheck(Path('b/riser.350.plt'), True, '', 424)}, binary_time={350: START - 900})
+    plan = decide(s, CONF, True, True)
+    assert 'binary/riser.350.plt' not in plan.uploads
+    assert 350 in range(plan.post[0], plan.post[1] + 1)
+
+
+def test_sets_above_the_solver_are_the_earlier_runs_and_do_not_count():
+    plan = decide(restarted_snap(), CONF, True, True)
+    assert plan.ctx['stale_rst'] == [500, 550]
+    assert plan.ctx['rst_newest_kept'] == [350, 400]
+    assert not {500, 550} & set(plan.ctx['thin'])
+    assert not any(k.split('.')[1].split('_')[0] in ('500', '550') for k in plan.uploads)
+
+
+def test_without_a_restart_nothing_is_stale():
+    s = restarted_snap(restart_tsid=None, live=(1, 450))
+    plan = decide(s, CONF, True, True)
+    assert not plan.ctx.get('stale_plt') and not plan.ctx.get('stale_rst')
+
+
+# --- run main's note in .casestatus.md ----------------------------------------------------
+
+def test_run_main_notes_what_simflow_config_tells_the_solver(tmp_path):
+    from src.commands.run.main_impl.command import _restart_note
+    (tmp_path / 'simflow.config').write_text("dir = ./RUN_1\nrestartTsId = 2750\nrestartFlag = 1\n")
+    assert _restart_note(tmp_path) == 'restartTsId 2750'
+    (tmp_path / 'simflow.config').write_text("dir = ./RUN_1\nrestartTsId = 2750\nrestartFlag = 0\n")
+    assert _restart_note(tmp_path) == 'restartFlag off'
