@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### 📤 `case upload|download rst`: `--freq` and `--missing`
+
+- `case upload rst CASE --freq 1000 --missing --to cloud` sends the restart
+  sets of every 1000th step that the remote lacks (or holds at another size),
+  where it took one command per step. `--freq N` (binary and rst, both
+  directions) keeps the steps that are multiples of N; `--missing` (binary
+  and rst) the files the other side lacks, so a set only partly there sends
+  just its missing parts. Both go with `--t1/--t2`.
+
 ### 🗄️ `auto`: restart sets uploaded on their own grid (`upload_rst`)
 
 - Restart sets do two jobs. Those kept here (`auto.keep_rst`, e.g. 500) are
