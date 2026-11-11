@@ -57,6 +57,8 @@ class CaseSnapshot:
     binary_time: Dict[int, float] = field(default_factory=dict)
     log_tails: Dict[str, Optional[List[str]]] = field(default_factory=dict)  # job id -> last lines (None: no file)
     cloud_mtime: Dict[str, float] = field(default_factory=dict)  # remote path -> when written
+    restarts: List[Dict[str, str]] = field(default_factory=list)  # rows of .restarts
+    run_starts: List[int] = field(default_factory=list)     # first step of each othd part (archive/, cleaned/)
     main_start: Optional[float] = None          # when the newest main job started (sacct)
     sent_at: Dict[str, float] = field(default_factory=dict)   # remote path -> when auto sent it
     live_time: Optional[float] = None                         # mtime of the run dir's .othd
@@ -234,6 +236,23 @@ def observe_case(case_dir, jobs: List[slurm.Job], ended: List[slurm.Job],
         t = _parse_time(when)
         if t is not None:
             snap.sent_at[rel] = t
+
+    # .restarts, and where each history part starts, to check one against the other
+    try:
+        from ..restarts import read as read_restarts
+        snap.restarts = read_restarts(case_dir)
+    except Exception:
+        snap.restarts = []
+    starts = set()
+    for kind in ('archive', 'cleaned'):
+        folder = case_dir / 'othd_files' / kind
+        if folder.is_dir():
+            for part in folder.iterdir():
+                if re.match(rf'^{re.escape(snap.problem)}\d+\.othd$', part.name):
+                    got = tsid_range(part)
+                    if got:
+                        starts.add(got[0])
+    snap.run_starts = sorted(starts)
 
     # history
     for ext in HISTORY:

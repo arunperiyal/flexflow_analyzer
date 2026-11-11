@@ -195,6 +195,16 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
             broken_rule.append(f"{ext}_files/archive/ lacks run(s) {', '.join(map(str, missing))} "
                                f"that cleaned/ has")
     plan.ctx['broken_rule'] = broken_rule
+    # .restarts rows that no history part starts at
+    if snap.restarts and snap.run_starts:
+        odd = [r for r in snap.restarts if r.get('first', '').isdigit()
+               and int(r['first']) not in snap.run_starts]
+        for r in odd:
+            plan.add('flag', f".restarts records a restart after step {r['after']} (first step "
+                             f"{r['first']}, {r.get('part', '?')}) but no history part starts "
+                             f"there (they start at {', '.join(map(str, snap.run_starts))}). "
+                             f"Check with `case check history`; .restarts is only rewritten by "
+                             f"`case organise history --clean`.")
     # run numbers that skip: history of a run that is in neither archive/ nor cleaned/
     for ext, h in snap.history.items():
         have_runs = set(h.archive) | set(h.cleaned)

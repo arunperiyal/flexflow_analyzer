@@ -607,3 +607,38 @@ def test_a_local_cloud_listing_carries_mtimes(tmp_path):
     got = LocalCloud(tmp_path).listing('case')
     assert got == {'binary/riser.50.plt': 7}
     assert set(got.mtimes) == {'binary/riser.50.plt'} and got.mtimes['binary/riser.50.plt'] > 0
+
+
+# --- the by-hand commands next to a deletion that apply cannot do yet ---------------------
+
+def test_runs_apart_never_cover_a_file_that_is_not_in_the_list():
+    from src.core.auto.report import _runs_apart
+    assert _runs_apart([5, 10, 20, 25], [15]) == [(5, 10), (20, 25)]
+    assert _runs_apart([5, 10, 15], [3, 40]) == [(5, 15)]
+    assert _runs_apart([], [1]) == []
+
+
+def test_thinning_names_the_organise_command():
+    from src.core.auto.report import build
+    s = restarted_snap(restart_tsid=None, live=(1, 450), jobs=[])
+    s.rst = {t: 4 for t in (100, 200, 300, 400, 500, 550, 600)}
+    s.rst_files = {t: {f"RUN_1/riser.{t}_{k}.rst": 100 for k in range(4)} for t in s.rst}
+    plan = decide(s, CONF, True, True)
+    acts = [a for sec in build(s, plan, CONF) for a in sec.actions if 'delete .rst' in a]
+    assert acts and ('by hand: case organise output case --keep-out --keep-freq 200 '
+                     '--keep-newest 2 --t1 100 --t2') in acts[0]
+
+
+def test_a_restart_in_dot_restarts_that_no_history_part_starts_at_is_flagged():
+    s = snap(run_starts=[1, 4951],
+             restarts=[{'after': '900', 'first': '901', 'part': 'riser2.othd'},
+                       {'after': '4950', 'first': '4951', 'part': 'riser3.othd'}])
+    flags = kinds(decide(s, CONF, True, True), 'flag')
+    assert len([t for t in flags if t.startswith('.restarts records')]) == 1
+    [one] = [t for t in flags if t.startswith('.restarts records')]
+    assert 'after step 900 (first step 901, riser2.othd)' in one and 'start at 1, 4951' in one
+
+
+def test_dot_restarts_that_agrees_with_the_history_says_nothing():
+    s = snap(run_starts=[1, 4951], restarts=[{'after': '4950', 'first': '4951', 'part': 'x'}])
+    assert not [t for t in kinds(decide(s, CONF, True, True), 'flag') if t.startswith('.restarts')]

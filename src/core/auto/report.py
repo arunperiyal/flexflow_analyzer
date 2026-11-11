@@ -24,6 +24,30 @@ AUTO_ONLY = 'auto apply: '
 NOT_YET = ' [not built yet: delete by hand for now]'      # deleting is a later stage of apply
 
 
+def _by_hand(commands) -> str:
+    """The NOT_YET note with the commands that do the same by hand."""
+    if not commands:
+        return NOT_YET
+    return " [not built yet; by hand: " + '; '.join(commands) + "]"
+
+
+def _runs_apart(steps, others):
+    """`steps` split into runs (first, last) so that no step of `others` lies inside a run:
+    a range command cannot touch a file that is not in the list."""
+    steps, others = sorted(set(steps)), sorted(set(others) - set(steps))
+    runs, start, prev = [], None, None
+    for t in steps:
+        if start is not None and any(prev < o < t for o in others):
+            runs.append((start, prev))
+            start = None
+        if start is None:
+            start = t
+        prev = t
+    if start is not None:
+        runs.append((start, prev))
+    return runs
+
+
 @dataclass
 class Section:
     key: str
@@ -240,10 +264,15 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
                          f"--to {remote}")
     if c.get('del_ascii'):
         s.actions.append(AUTO_ONLY + f"delete ASCII PLTs, {steps_phrase(c['del_ascii']).lower()}, "
-                                     f"once the binary copy on {remote} is md5-checked" + NOT_YET)
+                                     f"once the binary copy on {remote} is md5-checked"
+                         + _by_hand([f"case organise plt {name} --delete-ascii --t1 {a} --t2 {b}"
+                                     for a, b in _runs_apart(c['del_ascii'], [])]))
     if c.get('del_binary'):
         s.actions.append(AUTO_ONLY + f"delete binary PLTs, {steps_phrase(c['del_binary']).lower()}, "
-                                     f"once their copy on {remote} is md5-checked" + NOT_YET)
+                                     f"once their copy on {remote} is md5-checked"
+                         + _by_hand([f"case organise plt {name} --delete-binary --t1 {a} --t2 {b}"
+                                     for a, b in _runs_apart(
+                                         c['del_binary'], set(snap.binary) - set(c['del_binary']))]))
     sections.append(s)
 
     # -- OUT files --------------------------------------------------------------------
@@ -262,7 +291,11 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
         freed = _size_text(sum(snap.out_size.get(t, 0) for t in outs))
         s.actions.append(AUTO_ONLY + f"delete .out of {steps_phrase(outs).lower()} ({freed}) once "
                                      f"{'its' if len(outs) == 1 else 'their'} PLT on {remote} is "
-                                     f"md5-checked" + NOT_YET)
+                                     f"md5-checked"
+                         + _by_hand([f"case organise output {name} --all-out --keep-freq "
+                                     f"{conf.keep_rst} --t1 {a} --t2 {b}"
+                                     for a, b in _runs_apart(outs, set(snap.out) - set(outs))]
+                                    if conf.keep_rst else []))
     sections.append(s)
 
     # -- RST files --------------------------------------------------------------------
@@ -338,7 +371,10 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
     thin = c.get('thin') or []
     if snap.rst and thin:                      # after the uploads: deleting follows from them
         s.actions.append(AUTO_ONLY + f"delete .rst of {steps_phrase(thin).lower()}: not "
-                                     f"multiples of {conf.keep_rst}" + NOT_YET)
+                                     f"multiples of {conf.keep_rst}"
+                         + _by_hand([f"case organise output {name} --keep-out --keep-freq "
+                                     f"{conf.keep_rst} --keep-newest {conf.keep_newest_rst} "
+                                     f"--t1 {min(thin)} --t2 {max(thin)}"] if conf.keep_rst else []))
     sections.append(s)
 
     # -- inputs and case files ----------------------------------------------------------

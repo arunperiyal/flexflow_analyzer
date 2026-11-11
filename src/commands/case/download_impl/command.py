@@ -2010,7 +2010,11 @@ class CaseUploadCommand(HistoryTransferMixin):
             return 'go'
         speed = rt.settings.get('transfer_speed') if 'transfer_speed' in rt.settings.specs \
             else budget.DEFAULT_MBPS
-        p = budget.plan(sizes, rt.time_left(), speed, step_of)
+        # an older shellkit has no session timeout: nothing to check against
+        left = rt.time_left() if hasattr(rt, 'time_left') else None
+        if left is None and not hasattr(rt, 'time_left'):
+            return 'go'
+        p = budget.plan(sizes, left, speed, step_of)
         if p is None or p.fits:
             return 'go'
 

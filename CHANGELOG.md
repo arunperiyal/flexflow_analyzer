@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### 🔎 `auto show`: fourth round of real cases
+
+- A restart recorded in `.restarts` that no `othd_files` part starts at
+  (e.g. after 900, first step 901, while the parts start at 1 and 4951) is
+  flagged under "Worth a look".
+- Deletions that `auto apply` cannot do yet now name the command that does
+  the same by hand: `case organise output --keep-out --keep-freq N
+  --keep-newest M --t1 .. --t2 ..` for the `.rst` thinning (no `.out`
+  touched), `--all-out` for `.out` whose PLT is on the remote (one command
+  per run of steps, so no other `.out` falls inside the range), `case
+  organise plt --delete-ascii / --delete-binary`.
+- `case upload` no longer stops with `'Runtime' object has no attribute
+  'time_left'` on a shellkit without the session timeout.
+
 ### 🔎 `auto show`: third round of real cases
 
 - After a restart, a PLT on the remote also counts as the new run's when the
