@@ -1,27 +1,30 @@
 # Next session
 
-Where the `auto` work stands (2026-11-10) and what comes next. The design is
-`docs/AUTO_PLAN.md`; **§13 is the current design** and §13.7–13.11 hold the
+Where the `auto` work stands (2026-11-11) and what comes next. The design is
+`docs/AUTO_PLAN.md`; **§13 is the current design** and §13.7–13.12 hold the
 decisions taken since. `docs/auto_flow.html` and Help -> Flowchart (web UI)
-draw it. Everything below is merged into `main` and pushed (7c15337).
+draw it. `main` is pushed at d2516ab; the "Job log" section (log tail of a
+failed job) is on branch `auto-job-log-tail`, not merged yet.
 
 ## Built
 
 | what | where |
 |---|---|
-| Queue reads fail loudly (stderr with exit 0 counts); jobs belong to cases by working directory, not name | `src/core/slurm.py` (`read_queue`, `jobs_for_case`, `read_ended` via sacct) |
-| `case organise output` keeps restart points (restartTsId, newest complete set, newest incomplete set) and deletes `.out` only for a whole binary PLT written after them | `organise_impl/organizer.py` |
-| PLT validity from the header (exact expected size; a test cuts at every byte); settled `.out` steps | `src/core/plt_valid.py`, `src/core/settled.py` |
-| `case check plt` reports broken PLTs | `check_impl/command.py` |
-| `.cases.yml` replaces `.cases` and `.auto.conf`: `cases`, `remotes` (folder per remote), `auto` (keep_rst, disk_alert, qos/account/partition). `case add` rewrites only `cases`. Old `.cases` is **not** read | `src/core/cases_file.py` |
-| upload/download/`run post --remote`: remote folder = `--remote-path`, else the case folder's `.cases.yml`, else `remote set-path` | `download_impl/command.py` |
-| `auto init --remote NAME [--path DIR] [--keep-rst N] [--disk-alert SIZE] [--force]` | `src/commands/auto/init.py` |
-| `auto show [case] --remote NAME` (or `use case:` / `use case:*`, `use remote:`); read-only; per-case blocks + summary table | `src/commands/auto/show.py`, `src/core/auto/{conf,cloud,observe,decide}.py` |
-| Dummy cases + fake SLURM + local "cloud" | `tools/make_dummy.py` (`dummy/`, git-ignored), `tools/fake_slurm.py` |
-| Cluster probe | `tools/hpc_probe.sh` (`ONLY=remotes`, `ONLY=node`, `ONLY=job`) |
+| Queue reads fail loudly; jobs belong to cases by working directory | `src/core/slurm.py` |
+| PLT validity from the header; settled `.out` steps | `src/core/plt_valid.py`, `src/core/settled.py` |
+| `.cases.yml` (cases, remotes with a folder each, `auto:` keep_rst, keep_newest_rst, upload_rst, disk_alert, qos/account/partition) | `src/core/cases_file.py`, `src/core/auto/conf.py` |
+| `auto init`, `auto show`, `auto commands`, `auto status`, `auto apply` (history, upload, post only; `--dry-run`, `--yes`, `--only`) | `src/commands/auto/` |
+| Observe (files, queue, sacct, remote listing, ledger) -> Decide (pure) -> Report -> Act | `src/core/auto/{observe,decide,report,executor}.py` |
+| Stretches of equal output spacing, lost steps, provisional steps after a queued restart | `src/core/auto/stretches.py`, `decide.py` |
+| md5-checked uploads (temp name + rename), ledger, run log in `<folder>/auto_logs/`, folder lock | `cloud.py`, `ledger.py`, `runlog.py` |
+| Restart sets: `keep_rst` kept here, `upload_rst` sent (plus the final set of a finished run), `keep_newest_rst` (default 2) | `decide.py`, `organise_impl/organizer.py` |
+| After a restart from T: PLTs/sets above T from before the restart are the earlier run's (not trusted, posted/sent again); a copy counts only if `auto` sent it after the restart job started (ledger) | `decide.py` (`restarted`, `stale_plt`, `stale_rst`) |
+| History larger on the remote than here is never offered for upload | `decide.py` (`hist_shrink`) |
+| `run main` notes `restartTsId N` / `restartFlag off` in `.casestatus.md` | `run/main_impl/command.py` |
+| "Job log": last 15 lines of `slurm-<id>.out` of a main/post job that ended badly (branch `auto-job-log-tail`) | `observe.py` (`_tail`), `report.py` |
+| 12 dummy cases, fake SLURM, local "cloud" | `tools/make_dummy.py`, `tools/fake_slurm.py` |
 
-Try it locally: `python3 tools/make_dummy.py && source dummy/env.sh && cd dummy/bare && flexflow auto show '*' --remote local`
-(each case should get what `dummy/README.md` says).
+Try it locally: `python3 tools/make_dummy.py && source dummy/env.sh && cd dummy/bare && flexflow auto show '*' --remote local`.
 
 Tests: `python3 -m pytest -q test_scripts` (miniconda base python has pytest;
 the flexflow_env one does not). Expected: all pass except two
@@ -29,35 +32,22 @@ the flexflow_env one does not). Expected: all pass except two
 
 ## Waiting on the user (cluster)
 
-After `git pull` in `~/install/pkgs/flexflow_analyzer`, in each folder of cases:
+- Run `auto apply BR0SG0U1P0 --remote cloud --only upload --dry-run`, then without `--dry-run`, and bring back `auto_logs/auto_<time>.log` plus `auto show` afterwards. First real run of the additive steps.
+- Decide the job-name flag on `fixed/bare` (jobs `mainBR0fixed`/`postBR0fixed` vs the `main<case>` convention): per-case setting in `.cases.yml`, or rename the jobs.
+- `BR0SG0U6P0`: `archive/` is empty locally (runs 1–8 only on cloud); restore with `case download history BR0SG0U6P0 --archive --from cloud`. Local `cleaned/riser1` differs from the cloud's.
 
-```
-flexflow case add                 # makes .cases.yml (old .cases is no longer read)
-flexflow auto init --remote cloud --path /shares/.../<folder> --keep-rst 500
-sacct -X -n -P -S now-3days --format=JobID,JobName%200,State,End,WorkDir | head
-flexflow auto show '*' --remote cloud 2>&1 | tee ~/auto_show_<folder>.txt
-```
+## Next to build
 
-Then go through the output case by case against what the user would do by hand.
-Not yet seen on the cluster:
-- whether sacct returns **WorkDir** (if not, `auto show` makes no post decisions);
-- the SFTP listing of the NAS (`cloud`, password from remotes.json);
-- the `post job N started: steps A..B` lines in `.casestatus.md` (written only by the current postFlex.sh template).
+1. **Delete stage** of `auto apply` behind one question (`--yes` skips): ASCII PLT and binary PLT only when the md5 on the cloud matches the ledger, `.out` of verified steps, `.rst` thinning to `keep_rst`/`keep_newest_rst`. Nothing above a restart point is deleted until its step has been posted again from the new run. Reports already list these as `[not built yet]`.
+2. **Steady check**: `data check steady` over the last N frames of OTHD/OISD, only for cases that reached `maxTimeSteps`; per-folder settings under `auto:` in `.cases.yml`. Not steady -> "Needs you" with `def time maxTimeSteps <N>` then `run main restart <last step>`. `auto` never queues main jobs.
+3. `auto log` (reads `auto_logs/`), polish of `auto status`.
+4. Display: with a queued restart, `Complete`/`Also kept` still count the earlier run's newer set (not deleted, only shown).
+5. Maybe: size-consistency check of `.rst` parts (a part cut short inside a complete set is not detected); md5 of files already on the remote on the first run.
 
-## Next to build (§13.6 order)
+## Open questions
 
-5. Upload with md5 + ledger (`.auto/ledger.jsonl` per case): `.part` then rename, md5 on the NAS (no sha256sum there), files already on the cloud md5-checked on the first run; `auto apply --only upload`.
-6. History stages: `organise history --update` refuses while a main job is running/pending/completing; re-read the queue right before the move.
-7. Post stages (submit through `run post`'s code, record job id + window).
-8. Delete stages behind one question at the start (`--yes` skips): ASCII PLT and binary PLT only when md5 on the cloud matches, `.out` of verified steps, `.rst` thinning to `auto.keep_rst`.
-9. `auto log` (journal `.auto/journal.jsonl`), maybe `auto status`.
-
-## Open questions / offers not yet answered
-
-- `auto show`: say the remote's status (connected, N case folders listed) and per case how much is on the remote; an option to md5-check files already there (~1.5 s per 155 MB PLT on the NAS).
-- Make `case organise history --prune` refuse (or warn): every case must keep `archive/` and `cleaned/` (§13.11).
-- A chained `auto` SLURM job (`--dependency=afterany:<main>`) only if the HPC team allows it (§12). cron, scrontab and `at` are disabled for the user.
-- Running commands on the cluster from here: only read-only, in a session the user opens (2FA), every action confirmed (see the end of the 2026-11-10 conversation).
+- A chained `auto` SLURM job only if the HPC team allows it (§12); cron, scrontab and `at` are disabled.
+- Running commands on the cluster from here: only read-only, in a session the user opens, every action confirmed.
 
 ## Rules the user set (also in memory / CLAUDE.md)
 
@@ -65,3 +55,4 @@ Not yet seen on the cluster:
 - One feature per branch; merge when the user says so; push only when asked.
 - Never Claude Artifacts: standalone HTML files in the repo instead.
 - Data safety first: fail closed, nothing deleted without a verified copy, ask once before deleting.
+- Every improvement from a real `auto show` becomes a dummy case plus a test.
