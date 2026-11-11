@@ -320,3 +320,19 @@ def test_apply_sends_the_grid_sets_and_not_the_newest(dummy):
     assert sent == ['400']                                      # not 700, not 750
     led = Ledger(dummy / 'bare').data['local']['case3']
     assert {k for k in led if k.endswith('.rst')} == {f'RUN_1/riser.400_{k}.rst' for k in range(4)}
+
+
+def test_dry_run_says_which_binary_plts_replace_old_run_files_on_the_remote():
+    from src.commands.auto.apply import _upload_breakdown
+    plan = SimpleNamespace(uploads={f'binary/riser.{t}.plt': 100 for t in (5745, 5750, 5760)},
+                           ctx={'stale_plt': [5745, 5750]})
+    text = ' '.join(_upload_breakdown(plan))
+    assert 'binary PLTs: 3 files' in text
+    assert 'replaces 2 on the remote (5745, 5750, from before the restart)' in text
+    plan.ctx = {}
+    assert 'replaces' not in ' '.join(_upload_breakdown(plan))
+
+
+def test_predate_agrees_with_the_number_of_steps():
+    from src.core.auto.report import _predate
+    assert _predate([8300]) == 'predates' and _predate([4950, 5000]) == 'predate'

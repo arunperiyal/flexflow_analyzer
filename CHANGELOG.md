@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### 🔎 `auto apply --dry-run`: says what it overwrites
+
+- The upload line for binary PLTs now says when some replace files on the
+  remote from before a restart ("replaces 3 on the remote (5745–5755, from
+  before the restart)"), as the restart-set line already did.
+- `auto show`: the local old-run row is labelled "Old here" (it was a second
+  "Old run"), and "predate" agrees with one step ("predates").
+
 ### 🔎 `auto show`: fourth round of real cases
 
 - A restart recorded in `.restarts` that no `othd_files` part starts at

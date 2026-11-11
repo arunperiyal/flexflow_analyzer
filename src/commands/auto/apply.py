@@ -72,8 +72,16 @@ def _upload_breakdown(plan):
                       f"files, {_size_text(sum(v[1] for v in sets.values()))}"
                       + (f"; set {', '.join(map(str, replaced))} replaces files on the remote that "
                          f"differ in size" if replaced else '')))
+    old = set(plan.ctx.get('stale_plt') or [])
+    replaced_plt = sorted({int(m.group(1)) for rel in plan.uploads
+                           if rel.startswith('binary/') and (m := re.search(r'\.(\d+)\.plt$', rel))
+                           and int(m.group(1)) in old})
     for label, (n, size) in groups.items():
-        lines.append((size, f"{label}: {n} files, {_size_text(size)}"))
+        extra = ''
+        if label == 'binary PLTs' and replaced_plt:
+            extra = (f"; replaces {len(replaced_plt)} on the remote "
+                     f"({steps_text(replaced_plt)}, from before the restart)")
+        lines.append((size, f"{label}: {n} files, {_size_text(size)}{extra}"))
     return [text for _, text in sorted(lines, key=lambda x: -x[0])]
 
 
