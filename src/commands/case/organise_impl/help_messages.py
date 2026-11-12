@@ -149,7 +149,7 @@ Organize and clean up case directories. Pick one subcommand.
 {Colors.BOLD}OTHER OPTIONS:{Colors.RESET}
     --dry-run                 Show what would be deleted without deleting anything
     --log                     Create log file of all deletions
-    --no-confirm              Skip confirmation prompts
+    --no-confirm              Skip confirmation prompts (history --clean/--compile/--prune included)
     -v, --verbose             Show detailed information
     -h, --help                Show this help message
     --examples                Show usage examples
@@ -163,9 +163,11 @@ Organize and clean up case directories. Pick one subcommand.
 
 {Colors.BOLD}SAFETY:{Colors.RESET}
     • history --update, --clean, --compile and --verify never delete a
-      job's data (--clean asks before cutting a run's only copy); --prune
-      asks once and only deletes archive/ when cleaned/ holds it; output
-      and plt show a summary and ask for confirmation
+      job's data. --clean asks before it writes or removes cleaned files
+      (with a stronger warning when one is the only copy of its run) and
+      --compile before it replaces the compiled file; --prune asks once and
+      only deletes archive/ when cleaned/ holds it; output and plt show a
+      summary and ask for confirmation
     • --delete-binary is unconditional: it does not check the run dir first
     • A t1/t2 context left over from something else never silently narrows
       history --clean — it always cleans the whole history
@@ -318,8 +320,9 @@ def print_organise_examples():
     • binary/riser.1550.plt      → Delete
 
 {Colors.BOLD}Notes:{Colors.RESET}
-    • history --update, --clean, --compile and --verify run immediately
-    • history --prune, output, plt and vtu --clean ask for confirmation unless --no-confirm
+    • history --update and --verify run immediately
+    • history --clean, --compile and --prune, and output, plt and vtu --clean, ask for
+      confirmation unless --no-confirm (auto apply passes it: it asks once itself)
     • --delete-ascii never touches binary/; --delete-binary never touches the run dir
     • --delete-binary with no --t1/--t2/--freq/--keep-freq deletes every PLT file in binary/
 """)

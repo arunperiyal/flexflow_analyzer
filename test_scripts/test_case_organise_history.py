@@ -43,7 +43,7 @@ class _Logger:
 
 def make_organizer(case_dir, **flags):
     args = Namespace(update=False, verify=False, clean=False, compile=False, prune=False,
-                     dry_run=False, no_confirm=False, log=False, verbose=False, t1=None, t2=None)
+                     dry_run=False, no_confirm=True, log=False, verbose=False, t1=None, t2=None)
     for key, value in flags.items():
         setattr(args, key, value)
     case = SimpleNamespace(case_directory=str(case_dir), problem_name='riser',
@@ -282,11 +282,11 @@ def test_after_a_prune_a_later_run_is_cleaned_against_cleaned(tmp_path, monkeypa
 
     # cleaned/riser2 is now the only copy of run 2: cutting it asks
     monkeypatch.setattr('builtins.input', lambda *a: 'n')
-    run(tmp_path, clean=True)
+    run(tmp_path, clean=True, no_confirm=False)
     assert max(values(tmp_path / 'othd_files' / 'cleaned' / 'riser2.othd')) == 10
 
     monkeypatch.setattr('builtins.input', lambda *a: 'y')
-    run(tmp_path, clean=True, compile=True)
+    run(tmp_path, clean=True, compile=True, no_confirm=False)
     joined = values(tmp_path / 'othd_files' / 'riser.othd')
     assert sorted(joined) == list(range(1, 13))
     assert [joined[4], joined[8], joined[9]] == [1.0, 2.0, 3.0]
@@ -309,3 +309,72 @@ def test_mainflex_archives_the_run_one_past_every_kept_number(tmp_path):
     assert 'Archived run 6' in r.stdout, r.stderr
     assert names(tmp_path / 'othd_files' / 'archive') == ['riser6.othd']
     assert names(tmp_path / 'oisd_files' / 'archive') == ['riser6.oisd']
+
+
+# --- --clean and --compile ask before they change or remove files ----------------------
+
+def _answers(monkeypatch, *given):
+    asked = []
+    answers = iter(given)
+
+    def fake(*a):
+        asked.append(1)
+        return next(answers)
+    monkeypatch.setattr('builtins.input', fake)
+    return asked
+
+
+def test_clean_asks_before_writing_and_a_no_changes_nothing(tmp_path, monkeypatch):
+    archive(tmp_path, RESTARTED)
+    asked = _answers(monkeypatch, 'n')
+    _, out = run(tmp_path, clean=True, no_confirm=False)
+    assert asked and 'nothing changed' in out
+    assert names(tmp_path / 'othd_files' / 'cleaned') == []
+    assert not (tmp_path / '.restarts').exists()       # not rewritten either
+
+
+def test_clean_with_yes_writes_and_with_no_confirm_does_not_ask(tmp_path, monkeypatch):
+    archive(tmp_path, RESTARTED)
+    _answers(monkeypatch, 'y', 'y')
+    run(tmp_path, clean=True, no_confirm=False)
+    assert names(tmp_path / 'othd_files' / 'cleaned') == ['riser1.othd', 'riser2.othd']
+
+    other = tmp_path / 'other'
+    other.mkdir()
+    archive(other, RESTARTED)
+    asked = _answers(monkeypatch)
+    run(other, clean=True)                              # no_confirm is the test default
+    assert not asked and names(other / 'othd_files' / 'cleaned') == ['riser1.othd', 'riser2.othd']
+
+
+def test_clean_with_nothing_to_change_does_not_ask(tmp_path, monkeypatch):
+    archive(tmp_path, RESTARTED)
+    run(tmp_path, clean=True)
+    asked = _answers(monkeypatch)
+    run(tmp_path, clean=True, no_confirm=False)
+    assert not asked
+
+
+def test_compile_asks_before_replacing_and_a_no_leaves_the_file(tmp_path, monkeypatch):
+    archive(tmp_path, RESTARTED)
+    run(tmp_path, clean=True, compile=True)
+    compiled = tmp_path / 'othd_files' / 'riser.othd'
+    before = compiled.read_bytes()
+    compiled.write_bytes(before + b'x')                 # no longer what --compile writes
+    asked = _answers(monkeypatch, 'n')
+    _, out = run(tmp_path, compile=True, no_confirm=False)
+    assert asked and 'not compiled' in out
+    assert compiled.read_bytes() == before + b'x'
+    _answers(monkeypatch, 'y')
+    run(tmp_path, compile=True, no_confirm=False)
+    assert compiled.read_bytes() == before
+
+
+def test_no_answer_at_all_is_a_no(tmp_path, monkeypatch):
+    archive(tmp_path, RESTARTED)
+
+    def eof(*a):
+        raise EOFError
+    monkeypatch.setattr('builtins.input', eof)
+    run(tmp_path, clean=True, no_confirm=False)
+    assert names(tmp_path / 'othd_files' / 'cleaned') == []

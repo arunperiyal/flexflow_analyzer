@@ -459,8 +459,9 @@ class HistoryMixin:
         Write cleaned/{problem}N for every run: its steps that no later run
         redid, without a cut-off last step. A run with nothing left has no
         cleaned file. Once archive/ is pruned the cleaned file is the run's
-        only copy: cutting it shorter (a new run restarted inside it) asks
-        first, unless --no-confirm. Returns False if nothing could be done.
+        only copy: changing or removing cleaned files asks first
+        (once per type), unless --no-confirm. Returns False if nothing could be done
+        or the answer was no.
         """
         problem = self.case.problem_name
         dry_run = getattr(self.args, 'dry_run', False)
@@ -481,9 +482,11 @@ class HistoryMixin:
                     f"starts right after {self._rel(later)} ends (tsId {later_last:,}) but is "
                     f"numbered before it, so all of it counts as redone. If it ran after, "
                     f"swap their numbers in archive/ and clean again.")
-            if not dry_run and not written:
-                self._record_restarts(plan)   # the same in OTHD and OISD: one record
-                written = True
+            def record(plan=plan):
+                nonlocal written
+                if not dry_run and not written:
+                    self._record_restarts(plan)   # the same in OTHD and OISD: one record
+                    written = True
 
             archived = history.archived(self.case_dir, ext, problem)
             out_dir = history.cleaned_dir(self.case_dir, ext)
@@ -504,6 +507,7 @@ class HistoryMixin:
             self.console.print(f"  {label}: {', '.join(notes)}")
             if not changes:
                 self.console.print(f"    [dim]cleaned/ is up to date[/dim]")
+                record()
                 continue
             for n, path, blocks, only in changes:
                 kept = [m[0] for m in merged if m[1] == n]
@@ -515,13 +519,20 @@ class HistoryMixin:
             if dry_run:
                 continue
             only = [c for c in changes if c[3]]
-            if only and not self.args.no_confirm:
-                self.console.print(
-                    f"[bold yellow]{len(only)} cleaned file(s) above are the only copy of their run "
-                    f"and lose steps a later run redid. Go on?[/bold yellow] \\[y/N]: ", end="")
+            if not self.args.no_confirm:
+                if only:
+                    self.console.print(
+                        f"[bold yellow]{len(only)} cleaned file(s) above are the only copy of their "
+                        f"run and lose steps a later run redid. Go on?[/bold yellow] \\[y/N]: ", end="")
+                else:
+                    removed = sum(1 for c in changes if not c[2])
+                    self.console.print(
+                        f"[bold yellow]Write {len(changes) - removed} and remove {removed} cleaned "
+                        f"file(s) of {label}? archive/ is not touched.[/bold yellow] \\[y/N]: ", end="")
                 if self._read_answer() not in ('y', 'yes'):
-                    self.console.print("[dim]  Clean stopped[/dim]")
+                    self.console.print("[dim]  Clean stopped, nothing changed[/dim]")
                     return False
+            record()
             for n, path, blocks, _ in changes:
                 if blocks:
                     self._write(path, self._chunks(plan['header'], blocks))
@@ -606,6 +617,13 @@ class HistoryMixin:
                                + (" [dim](dry run)[/dim]" if dry_run else ""))
             if dry_run:
                 continue
+            if not getattr(self.args, 'no_confirm', False):
+                self.console.print(f"[bold yellow]Write {self._rel(out)}"
+                                   f"{' (replaces the one there)' if out.exists() else ''}?"
+                                   f"[/bold yellow] \\[y/N]: ", end="")
+                if self._read_answer() not in ('y', 'yes'):
+                    self.console.print(f"[dim]  {label} not compiled[/dim]")
+                    continue
             self._write(out, self._chunks(header, blocks))
             self.stats['compiled'].append(f"{self._rel(out)} ({steps:,} steps, "
                                           f"{self._format_size(out.stat().st_size)})")
@@ -768,7 +786,7 @@ class HistoryMixin:
         """A line from the user, lower-cased; None at end of input."""
         try:
             return input().strip().lower()
-        except EOFError:
+        except (EOFError, OSError):
             return None
 
     def _history_summary(self, steps) -> List[str]:
