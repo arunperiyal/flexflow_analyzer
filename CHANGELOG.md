@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### 🔎 `auto show`: runs that a later run rewrites
+
+- An archive run that a later run rewrites from its first step on (BR0SG0U6P0:
+  run 2, steps 1401–2413, wiped out by run 3 from 1401) gets no cleaned file
+  from `case organise history --clean`, which also removes an old one. `auto`
+  no longer asks for `--clean` again and again for it ("not yet: 2"); the
+  Cleaned row says "none for 2 (rewritten by a later run)".
+- Flag when the OTHD and OISD archives hold different run numbers (othd runs
+  1–8 against oisd runs 1–7 there), because run N of one is then not run N of
+  the other. `auto` only reports it; renaming archive parts is yours to do.
+
 ### 🔁 `run main restart [case] --time TSID`
 
 - The step is now given with `--time`: `run main restart BR0SG0U5P0 --time 8150`

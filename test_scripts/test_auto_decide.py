@@ -684,3 +684,41 @@ def test_the_state_action_is_the_restart_command_with_the_case_name():
 def test_no_job_history_and_no_restart_set_means_no_prompt():
     s = snap(cloud=cloud_with(*range(50, 601, 50)))
     assert not any(t.startswith('Stopped at') for t in kinds(decide(s, CONF, True, True), 'needs'))
+
+
+# --- runs a later run rewrites from its first step on ---------------------------------
+
+def _hist(arch, clean):
+    return History(archive={n: Path(f'a/riser{n}.othd') for n in arch},
+                   cleaned={n: Path(f'c/riser{n}.othd') for n in clean})
+
+
+def test_a_run_rewritten_by_a_later_run_needs_no_cleaned_file():
+    # BR0SG0U6P0: run 2 (1401-2413) is wiped out by run 3 (1401-2749): --clean writes
+    # nothing for it, so "not yet: 2" is not a job for organise
+    s = snap(history={'othd': _hist((1, 2, 3), (1, 3)), 'oisd': _hist((1, 2, 3), (1, 2, 3))},
+             archive_firsts={1: 1, 2: 1401, 3: 1401})
+    plan = decide(s, CONF, True, True)
+    assert plan.ctx['redone_runs'] == [2]
+    assert not plan.ctx.get('organise')
+
+
+def test_an_uncleaned_run_that_nothing_rewrites_is_still_cleaned():
+    s = snap(history={'othd': _hist((1, 2, 3), (1, 3)), 'oisd': _hist((1, 2, 3), (1, 2, 3))},
+             archive_firsts={1: 1, 2: 1401, 3: 2701})
+    assert decide(s, CONF, True, True).ctx['organise'] == ('clean', [2])
+
+
+def test_othd_and_oisd_archives_with_different_run_numbers_are_flagged():
+    s = snap(history={'othd': _hist((1, 2, 3), (1, 3)), 'oisd': _hist((1, 2), (1, 2))},
+             archive_firsts={1: 1, 2: 1401, 3: 1401})
+    assert any('OTHD and OISD archive runs are not the same' in t
+               for t in kinds(decide(s, CONF, True, True), 'flag'))
+
+
+def test_the_cleaned_row_says_why_a_run_has_no_file():
+    from src.core.auto.report import build
+    s = snap(history={'othd': _hist((1, 2, 3), (1, 3)), 'oisd': _hist((1, 2, 3), (1, 2, 3))},
+             archive_firsts={1: 1, 2: 1401, 3: 1401})
+    hist = [sec for sec in build(s, decide(s, CONF, True, True), CONF) if sec.key == 'history'][0]
+    assert ('Cleaned', 'runs 1, 3 · none for 2 (rewritten by a later run)') in hist.rows

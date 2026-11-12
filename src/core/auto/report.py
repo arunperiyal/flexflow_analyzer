@@ -171,8 +171,11 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
     else:
         s.row('Archive', 'none')
     if h:
-        late = sorted(set(h.archive) - set(h.cleaned))
-        s.row('Cleaned', f"runs {_runs(h.cleaned)}" + (f" · not yet: {_runs(late)}" if late else ''))
+        redone = set(c.get('redone_runs') or []) & set(h.archive)
+        late = sorted(set(h.archive) - set(h.cleaned) - redone)
+        s.row('Cleaned', f"runs {_runs(h.cleaned)}" + (f" · not yet: {_runs(late)}" if late else '')
+              + (f" · none for {_runs(redone - set(h.cleaned))} (rewritten by a later run)"
+                 if redone - set(h.cleaned) else ''))
         s.row('Compiled', f"{p}.othd" if h.compiled else 'none')
     hist_here = {k: v for k, v in snap.files.items() if k.startswith(('othd_files/', 'oisd_files/'))}
     size = _size_text(sum(hist_here.values()) + sum(snap.live_files.values()))

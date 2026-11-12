@@ -58,6 +58,7 @@ class CaseSnapshot:
     log_tails: Dict[str, Optional[List[str]]] = field(default_factory=dict)  # job id -> last lines (None: no file)
     cloud_mtime: Dict[str, float] = field(default_factory=dict)  # remote path -> when written
     restarts: List[Dict[str, str]] = field(default_factory=list)  # rows of .restarts
+    archive_firsts: Dict[int, int] = field(default_factory=dict)   # run -> first step of its othd archive part
     run_starts: List[int] = field(default_factory=list)     # first step of each othd part (archive/, cleaned/)
     main_start: Optional[float] = None          # when the newest main job started (sacct)
     sent_at: Dict[str, float] = field(default_factory=dict)   # remote path -> when auto sent it
@@ -253,6 +254,13 @@ def observe_case(case_dir, jobs: List[slurm.Job], ended: List[slurm.Job],
                     if got:
                         starts.add(got[0])
     snap.run_starts = sorted(starts)
+    arch = case_dir / 'othd_files' / 'archive'
+    if arch.is_dir():
+        for part in arch.iterdir():
+            m = re.match(rf'^{re.escape(snap.problem)}(\d+)\.othd$', part.name)
+            got = tsid_range(part) if m else None
+            if got:
+                snap.archive_firsts[int(m.group(1))] = got[0]
 
     # history
     for ext in HISTORY:

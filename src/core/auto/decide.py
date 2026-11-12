@@ -196,6 +196,12 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
                                f"that cleaned/ has")
     plan.ctx['broken_rule'] = broken_rule
     # .restarts rows that no history part starts at
+    othd_runs, oisd_runs = set(snap.history['othd'].archive), set(snap.history['oisd'].archive)
+    if othd_runs and oisd_runs and othd_runs != oisd_runs:
+        plan.add('flag', f"OTHD and OISD archive runs are not the same: othd_files/archive has "
+                         f"runs {', '.join(map(str, sorted(othd_runs)))}, oisd_files/archive has "
+                         f"{', '.join(map(str, sorted(oisd_runs)))}. Run N of one is then not run N "
+                         f"of the other; check which file is missing and number them alike.")
     if snap.restarts and snap.run_starts:
         odd = [r for r in snap.restarts if r.get('first', '').isdigit()
                and int(r['first']) not in snap.run_starts]
@@ -291,7 +297,14 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
                                 f"(organise history --update --clean --compile)")
             organising = True
     if not organising and not broken_rule:
-        uncleaned = sorted(set(snap.history['othd'].archive) - set(snap.history['othd'].cleaned))
+        # a run that a later run rewrites from its first step on has nothing left to clean
+        # (--clean writes no file for it and removes an old one)
+        firsts = snap.archive_firsts
+        redone = {n for n in firsts
+                  if any(firsts[m] <= firsts[n] for m in firsts if m > n)}
+        plan.ctx['redone_runs'] = sorted(redone)
+        uncleaned = sorted(set(snap.history['othd'].archive) - set(snap.history['othd'].cleaned)
+                           - redone)
         if uncleaned:
             plan.ctx['organise'] = ('clean', uncleaned)
             plan.add('history', f"Clean and compile archive run(s) "
