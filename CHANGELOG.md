@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### ❓ `case organise history`: --clean and --compile ask first
+
+- `--clean` shows which cleaned files it will write or remove and asks once
+  per type (OTHD, OISD); `--compile` asks before it replaces the compiled
+  file. A "no" (or no answer) changes nothing, `.restarts` included.
+  `--no-confirm` skips the questions. Nothing is asked when everything is
+  already up to date. The stronger warning for a cleaned file that is the
+  only copy of its run stays.
+- `auto apply` passes `--no-confirm` (it asks once itself), as before.
+
 ### 🔎 `auto show`: runs that a later run rewrites
 
 - An archive run that a later run rewrites from its first step on (BR0SG0U6P0:
