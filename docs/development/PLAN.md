@@ -91,8 +91,8 @@ own `docs/PLAN.md` before writing code; they may have changed.
       `examples/BR0SG0U1P0` is needed for
 - [x] `docs/development/tools.md`: `make_dummy.py`, `fake_slurm.py`,
       `hpc_probe.sh`
-- [ ] Bring `.claude/context/NEXT_SESSION.md` up to date (only when the user
-      asks: it still names the old doc paths)
+- [x] Bring `.claude/context/NEXT_SESSION.md` up to date (the user asked;
+      references now use the current architecture document paths)
 
 ### Phase 11: web UI, close the old checklist (branch `webapp-checklist`)
 

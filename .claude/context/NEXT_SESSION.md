@@ -1,10 +1,10 @@
 # Next session
 
 Where the `auto` work stands (2026-11-11) and what comes next. The design is
-`docs/AUTO_PLAN.md`; **§13 is the current design** and §13.7–13.12 hold the
-decisions taken since. `docs/auto_flow.html` and Help -> Flowchart (web UI)
-draw it. `main` is pushed at d2516ab; the "Job log" section (log tail of a
-failed job) is on branch `auto-job-log-tail`, not merged yet.
+`docs/architecture/auto.md`; **§13 is the current design** and §13.7–13.12
+hold the decisions taken since. `docs/architecture/auto_flow.html` and Help ->
+Flowchart (web UI) draw it. `main` is pushed at d2516ab; the "Job log" section
+(log tail of a failed job) is on branch `auto-job-log-tail`, not merged yet.
 
 ## Built
 

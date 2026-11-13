@@ -11,6 +11,8 @@
 - The multi-case template no longer points at an ignored example file.
 - Added development notes for running tests and using the dummy-case, fake
   SLURM and HPC probe tools.
+- Updated the next-session notes to reference the current architecture
+  documentation paths.
 
 ### 🔗 `case organise plt` and `output`: deleting along the chain
 
