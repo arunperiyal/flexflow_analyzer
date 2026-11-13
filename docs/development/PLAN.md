@@ -154,7 +154,7 @@ Settled with the user on 2026-11-13:
   observation and action.
 - `case organise plt` always verifies. There is no `--unverified` flag.
 
-Order of work: 12 (done), 13, 14, 15, 16, 17, then Phase 6. Phases 12 to 14 change
+Order of work: 12 and 13 (done), 14, 15, 16, 17, then Phase 6. Phases 12 to 14 change
 hand commands and are useful on their own; 15 is a refactor with no change in
 behaviour; 16 and 17 are what the user sees.
 
@@ -179,23 +179,6 @@ What the code check found (why 12, 14 and 15 are needed):
 - **Parsing.** `auto` takes `what` and `[case]` as positionals. A target word
   after `apply` (`history`, `plt`, `output`, `all`) has to be told apart from
   a case name.
-
-### Phase 13: `case upload plt` and `case check plt --verify` (branch `plt-verify`)
-
-- [x] `case upload plt` and `case download plt`: the new name of the `binary`
-      mode. `binary` stays as an alias that still works; help, completion and
-      docs show `plt`
-- [x] `case check plt <case> --verify [--remote REMOTE] [--t1 --t2 --freq]`: for
-      every PLT in `binary/` that the remote also holds, compare size and md5
-      (local now, remote now); write the result to the ledger; list verified,
-      differing, not on the remote, only on the remote
-- [x] Exit code and a one-line summary that `auto` can read (all verified or
-      not): `verify_plts()` in `src/core/transfer/verify.py` returns it. A
-      local PLT that is not whole is never verified; a size-only match is
-      not counted as verified
-- [x] Tests: all match, one differs, one missing there, remote without
-      `md5sum`, a restart that made a local PLT newer than its remote copy
-- [x] Help text, completion, `docs/usage/`, `CHANGELOG.md`
 
 ### Phase 14: hand deletions that need a checked copy (branch `organise-verified`)
 
@@ -321,6 +304,7 @@ As noted on 2026-11-11; may be out of date.
 | 4 | `repo-cleanup` | Removed `module_backup/`, `main_old.py`, the shadowed command files, root `mainFlex.sh` and `sample.yaml`; `.gitignore` tidied. The `config` command was left (backlog). Still open, on the user's word: delete the local branches already merged |
 | 5 | `web-render-tests` | The two failing render tests: the route they fetched was removed on purpose in `70d5224`; the tests now go through `save` and `render-file/<token>` |
 | 12 | `checked-transfer` | `case upload` and `auto` send through one checked path (`src/core/transfer/`: temporary name, size and md5, rename) and one ledger, whose entries now hold the local `mtime` and the remote `path`; `--to` / `--from` became `--remote`; the crash of `case upload --help` fixed |
+| 13 | `plt-verify` | `case upload plt` / `case download plt` (the old word `binary` still works); `case check plt --verify --remote NAME` compares each binary PLT with its remote copy by size and md5, writes the ledger and exits 0 only when all are verified (`verify_plts()` in `src/core/transfer/verify.py`) |
 
 ---
 
