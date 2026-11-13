@@ -202,7 +202,7 @@ existing `auto` test must pass unchanged at each commit.
       waits for). The plan carries a list of them, in order
       (`PlanStep` in `decide.py`, `plan.steps`; the report's command lines
       for organise, post and the uploads now come from it)
-- [ ] Split `decide()` into one function per target, called in order by a
+- [x] Split `decide()` into one function per target, called in order by a
       short `decide()`
 - [ ] Split `report.build()` the same way; the Action lines come from the
       plan's steps

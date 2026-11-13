@@ -4,7 +4,19 @@ No I/O here: everything comes in through CaseSnapshot, so every rule can be
 tried on a made-up case.
 
     plan = decide(snap, conf, cloud_ok=True, sacct_ok=True)
-    plan.state, plan.items, plan.uploads, plan.post, plan.needs_you
+    plan.state, plan.items, plan.steps, plan.uploads, plan.post, plan.needs_you
+
+decide() works out the state and then calls its parts in order, each a
+function of its own (what they share for the case is a _Work):
+
+    _flags, _folder_rule      things to know, and archive/ against cleaned/
+    _history                  target history: organise, send
+    _restart_view, _post      target plt: what a restart left, the post jobs
+    _plt_upload               target plt: binary PLTs to send
+    _rst_upload               target rst: restart sets to send
+    _input_upload             target input: inputs and case files to send
+    _deletions                what may go once its copy is checked
+    _stopped_short            a run that stopped early with nothing queued
 
 Item kinds, in the order a case shows them:
     flag     something to know (a job named for another case, a big run dir)
@@ -155,50 +167,19 @@ def _post_jobs(todo: List[int], freq: int, ascii_steps) -> Tuple[List[Tuple[int,
     return out, off
 
 
-def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan:
-    if snap.error:
-        plan = CasePlan(snap.name, 'skipped')
-        plan.add('needs', f"Skipped: {snap.error}.")
-        return plan
+class _Work:
+    """What the parts of decide() share for one case: the snapshot, the settings,
+    the plan being written, and what earlier parts worked out for later ones."""
 
-    p, f, name = snap.problem, snap.out_freq, snap.name
-    main_now = snap.active('main')
-    post_now = snap.active('post')
-    running = any(j.state in RUNNING for j in main_now)
-    pending = bool(main_now) and not running
-    last_main, last_post = snap.last_ended('main'), snap.last_ended('post')
-    reached = max([r[1] for r in (snap.live, snap.archive_range) if r] or [0]) or None
-    if any(j.state in RUNNING for j in snap.active('main')) and snap.live:
-        reached = snap.live[1]          # a running job is at its own .othd, not at an earlier run's end
-    has_history = bool(snap.live) or any(h.any for h in snap.history.values())
+    def __init__(self, snap, conf, plan, sacct_ok):
+        self.snap, self.conf, self.plan, self.sacct_ok = snap, conf, plan, sacct_ok
+        self.covered: List[int] = []    # steps whose PLT is whole here or on the cloud
 
-    state = ('running' if running else 'queued' if pending else 'post running' if post_now
-             else 'done' if reached and snap.max_steps and reached >= snap.max_steps
-             else 'stopped' if has_history or last_main else 'new')
-    plan = CasePlan(name, state)
-    if reached:
-        of = (f" of {snap.max_steps} ({100 * reached // snap.max_steps}%)"
-              if snap.max_steps else '')
-        plan.facts.append(f"reached step {reached}{of}")
-    for job in main_now + post_now:
-        resume = (f", restarts from {snap.restart_tsid}"
-                  if job.kind == 'main' and job.pending and snap.restart_tsid is not None else '')
-        plan.facts.append(f"{job.kind} job {job.jobid} {job.state.lower()}{resume}")
-    cloud = snap.cloud if cloud_ok else None
-    rst_remote = {}                              # restart set step -> parts on the remote
-    if cloud is not None:
-        rst_pat = re.compile(rf'^{re.escape(snap.run_rel)}/{re.escape(snap.problem)}'
-                             rf'\.(\d+)_\d+\.rst$')
-        for key in cloud:
-            m = rst_pat.match(key)
-            if m:
-                rst_remote[int(m.group(1))] = rst_remote.get(int(m.group(1)), 0) + 1
-    plan.ctx['rst_remote'] = rst_remote
-    plan.ctx.update(running=running, pending=pending, main_now=main_now, post_now=post_now,
-                    last_main=last_main, last_post=last_post, reached=reached,
-                    cloud=cloud, remote=conf.remote)
 
-    # -- flags ------------------------------------------------------------------
+def _flags(w):
+    """Things to know: job and script names, a big run directory, a failed job."""
+    snap, conf, plan = w.snap, w.conf, w.plan
+    name, running, last_main, main_now = w.name, w.running, w.last_main, w.main_now
     for job in snap.jobs:
         if job.kind != 'other' and not job.named_for(name):
             plan.add('flag', f"Job {job.jobid} is named {job.name}; for this case it should be "
@@ -215,7 +196,11 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
         plan.add('needs', f"Main job {last_main.jobid} FAILED. Find the cause first "
                           f"(run list log, case check run).")
 
-    # -- the folder rule: archive/ and cleaned/ ---------------------------------
+
+def _folder_rule(w):
+    """archive/ and cleaned/ as they should be, here and on the remote."""
+    snap, conf, plan = w.snap, w.conf, w.plan
+    p, name, cloud = w.p, w.name, w.cloud
     broken_rule = []
     for ext, h in snap.history.items():
         if h.cleaned and not set(h.cleaned) <= set(h.archive):
@@ -302,7 +287,14 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
                          f"{'them' if len(gone_archive) > 1 else 'it'} back with "
                          f"`case download history {name} --archive --remote {conf.remote}`.")
 
-    # -- history ------------------------------------------------------------------
+    w.broken_rule = broken_rule
+
+
+def _history(w):
+    """Target history: organise the history, and send it."""
+    snap, conf, plan = w.snap, w.conf, w.plan
+    p, name, cloud, main_now, running, broken_rule = \
+        w.p, w.name, w.cloud, w.main_now, w.running, w.broken_rule
     organising = False
     if snap.live:
         if main_now:
@@ -373,9 +365,12 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
             plan.uploads.update(hist)
             plan.add('upload', f"History files: {len(hist)} ({_size_text(sum(hist.values()))})")
 
-    # -- the post decision --------------------------------------------------------
+
+def _restart_view(w):
+    """What a restart makes of the files: which belong to the earlier run."""
+    snap, conf, plan = w.snap, w.conf, w.plan
+    p, f, cloud, pending = w.p, w.f, w.cloud, w.pending
     provisional = (lambda t: pending and snap.restart_tsid is not None and t > snap.restart_tsid)
-    window = snap.live or snap.archive_range
     # A restart from T computes the steps above T again. Whatever of those steps is on the
     # remote from before the restart (PLTs, restart sets) is the earlier run's: it does not
     # count as the new run's, and the new files replace it. A copy is the new run's only if
@@ -419,6 +414,22 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
                             f"counted as the newest, not sent, not deleted)")
             plan.add('flag', f"Restarted from {T}: the earlier run's files above it are still "
                              f"around: " + '; '.join(what) + ".")
+    w.provisional = provisional
+    w.T = T
+    w.restarted = restarted
+    w.sent_new = sent_new
+    w.stale_plt = stale_plt
+    w.stale_rst = stale_rst
+    w.on_cloud = on_cloud
+    w.local_ok = local_ok
+
+
+def _post(w):
+    """Target plt: which steps have a PLT, and the post jobs for the rest."""
+    snap, conf, plan = w.snap, w.conf, w.plan
+    p, f, name, cloud, pending, running, post_now, broken_rule, has_history, last_main, last_post, sacct_ok, T, stale_plt, on_cloud, local_ok, provisional = \
+        w.p, w.f, w.name, w.cloud, w.pending, w.running, w.post_now, w.broken_rule, w.has_history, w.last_main, w.last_post, w.sacct_ok, w.T, w.stale_plt, w.on_cloud, w.local_ok, w.provisional
+    window = snap.live or snap.archive_range
     covered: List[int] = []                 # steps whose PLT is whole here or on the cloud
     if post_now:
         plan.add('wait', f"Post job {post_now[0].jobid} is {post_now[0].state.lower()}: nothing "
@@ -580,99 +591,135 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
                              f"{'it' if len(later) == 1 else 'them'} again.",
                      'post')
 
-    # -- uploads: binary PLTs, the newest restart set, inputs and program files ----
-    if cloud is not None and not post_now:
-        plts = {f"binary/{p}.{t}.plt": c.size for t, c in sorted(snap.binary.items())
-                if c.ok and not provisional(t) and local_ok(t)
-                and (cloud.get(f"binary/{p}.{t}.plt") != c.size or stale_plt(t))}
-        plan.ctx['plt_upload'] = sorted(int(k.split('.')[-2]) for k in plts)
-        if plts:
-            plan.uploads.update(plts)
-            up = plan.ctx['plt_upload']
-            # --missing skips a file the remote holds at the same size, which would leave
-            # an earlier run's PLT in place after a restart
-            flag = '' if set(up) & set(plan.ctx.get('stale_plt') or []) else ' --missing'
-            plan.step('plt', 'upload', 'upload-plt',
-                      f"case upload plt {name} --t1 {up[0]} --t2 {up[-1]}{flag} "
-                      f"--remote {conf.remote}", files=plts)
-            plan.add('upload', f"Binary PLTs, {steps_phrase([int(k.split('.')[1]) for k in plts], f).lower()}: "
-                               f"{_size_text(sum(plts.values()))}")
-        # Restart sets: the local ones (keep_rst) are insurance against a failed run; the
-        # ones uploaded (upload_rst) are to resume the run in the future, so they are the
-        # steps on that grid, plus the final set of a finished run. A set a queued
-        # restart will compute again, or one still being written, waits.
-        sets = [t for t, n in snap.rst.items() if snap.nsg and n == snap.nsg and not provisional(t)
-                and not stale_rst(t) and not (running and snap.live and t >= snap.live[1])]
-        due, final = [], None
-        if conf.upload_rst:
-            due = sorted(t for t in sets if t % conf.upload_rst == 0)
-            if state == 'done' and sets and max(sets) % conf.upload_rst:
-                final = max(sets)
-                due.append(final)
-        todo_rst, why = {}, {}
-        for t in due:
-            stale = {k: v for k, v in snap.rst_files.get(t, {}).items()
-                     if cloud.get(k) != v or (restarted and t > T and not sent_new(k))}
-            if stale:
-                todo_rst[t] = stale
-                total = len(snap.rst_files.get(t, {}))
-                absent = sum(1 for k in stale if k not in cloud)
-                why[t] = (absent, len(stale) - absent, total)       # not there, differ, of
-        plan.ctx.update(rst_due=due, rst_final=final, rst_todo=todo_rst, rst_why=why)
-        for t, (absent, differ, total) in sorted(why.items()):
-            if differ:
-                plan.add('flag', f"Restart set {t}: {differ} of {total} files on {conf.remote} differ "
-                                 f"in size from here, so they were probably written by an earlier "
-                                 f"run (before a restart computed this step again). Sending the set "
-                                 f"replaces them.")
-        if todo_rst:
-            files = {k: v for stale in todo_rst.values() for k, v in stale.items()}
-            plan.uploads.update(files)
-            grid_due = [t for t in sorted(todo_rst) if t != final]
-            if grid_due:
-                plan.step('rst', 'upload', 'upload-rst',
-                          f"case upload rst {name} --t1 {grid_due[0]} --t2 {grid_due[-1]} "
-                          f"--freq {conf.upload_rst} --missing --remote {conf.remote}",
-                          files={k: v for t in grid_due for k, v in todo_rst[t].items()})
-            if final in todo_rst:
-                plan.step('rst', 'upload', 'upload-rst-final',
-                          f"case upload rst {name} --t1 {final} --t2 {final} --missing "
-                          f"--remote {conf.remote}", files=dict(todo_rst[final]))
-            note = f", {'including' if len(todo_rst) > 1 else 'the'} final set of the finished run" \
-                if final in todo_rst else ''
-            plan.add('upload', f"Restart sets, {steps_phrase(sorted(todo_rst)).lower()}: "
-                               f"{len(files)} files, {_size_text(sum(files.values()))}{note}")
-        elif not conf.upload_rst and snap.rst:
-            plan.add('note', "Restart sets are not uploaded: auto.upload_rst is not set "
-                             "(auto init --upload-rst N).", 'upload')
-        # a set on the upload grid that exists neither here nor on the remote
-        if conf.upload_rst:
-            known = sorted(set(snap.rst) | set(rst_remote))
-            if len(known) >= 3:
-                lost_sets = [g for g in stretch_gaps(known, known[0], known[-1], conf.upload_rst)
-                             if g % conf.upload_rst == 0]
-                plan.ctx['rst_lost'] = lost_sets
-                if lost_sets:
-                    plan.add('flag', f"Restart {steps_phrase(lost_sets).lower()} "
-                                     f"{'is' if len(lost_sets) == 1 else 'are'} on the upload grid "
-                                     f"(every {conf.upload_rst}) but "
-                                     f"{'exists' if len(lost_sets) == 1 else 'exist'} neither here "
-                                     f"nor on {conf.remote}.")
-        inputs = {k: v for k, v in snap.files.items()
-                  if not k.startswith(('othd_files/', 'oisd_files/')) and cloud.get(k) != v}
-        plan.ctx['inputs_missing'] = inputs
-        if inputs:
-            plan.uploads.update(inputs)
-            plan.step('input', 'upload', 'upload-inputs',
-                      f"case upload {name} --files '{','.join(sorted(inputs))}' "
-                      f"--remote {conf.remote}", files=inputs)
-            plan.add('upload', f"Inputs and case files: {len(inputs)} files "
-                               f"({', '.join(sorted(inputs)[:4])}{', ...' if len(inputs) > 4 else ''})")
+    w.covered = covered
+
+
+def _plt_upload(w):
+    """Target plt: the binary PLTs to send."""
+    snap, conf, plan = w.snap, w.conf, w.plan
+    p, f, name, cloud, post_now, provisional, local_ok, stale_plt = \
+        w.p, w.f, w.name, w.cloud, w.post_now, w.provisional, w.local_ok, w.stale_plt
+    if cloud is None or post_now:
+        return
+    plts = {f"binary/{p}.{t}.plt": c.size for t, c in sorted(snap.binary.items())
+            if c.ok and not provisional(t) and local_ok(t)
+            and (cloud.get(f"binary/{p}.{t}.plt") != c.size or stale_plt(t))}
+    plan.ctx['plt_upload'] = sorted(int(k.split('.')[-2]) for k in plts)
+    if plts:
+        plan.uploads.update(plts)
+        up = plan.ctx['plt_upload']
+        # --missing skips a file the remote holds at the same size, which would leave
+        # an earlier run's PLT in place after a restart
+        flag = '' if set(up) & set(plan.ctx.get('stale_plt') or []) else ' --missing'
+        plan.step('plt', 'upload', 'upload-plt',
+                  f"case upload plt {name} --t1 {up[0]} --t2 {up[-1]}{flag} "
+                  f"--remote {conf.remote}", files=plts)
+        plan.add('upload', f"Binary PLTs, {steps_phrase([int(k.split('.')[1]) for k in plts], f).lower()}: "
+                           f"{_size_text(sum(plts.values()))}")
+
+
+def _rst_upload(w):
+    """Target rst: the restart sets to send."""
+    snap, conf, plan = w.snap, w.conf, w.plan
+    name, cloud, post_now, running, state, provisional, stale_rst, restarted, T, sent_new, rst_remote = \
+        w.name, w.cloud, w.post_now, w.running, w.state, w.provisional, w.stale_rst, w.restarted, w.T, w.sent_new, w.rst_remote
+    if cloud is None or post_now:
+        return
+    # Restart sets: the local ones (keep_rst) are insurance against a failed run; the
+    # ones uploaded (upload_rst) are to resume the run in the future, so they are the
+    # steps on that grid, plus the final set of a finished run. A set a queued
+    # restart will compute again, or one still being written, waits.
+    sets = [t for t, n in snap.rst.items() if snap.nsg and n == snap.nsg and not provisional(t)
+            and not stale_rst(t) and not (running and snap.live and t >= snap.live[1])]
+    due, final = [], None
+    if conf.upload_rst:
+        due = sorted(t for t in sets if t % conf.upload_rst == 0)
+        if state == 'done' and sets and max(sets) % conf.upload_rst:
+            final = max(sets)
+            due.append(final)
+    todo_rst, why = {}, {}
+    for t in due:
+        stale = {k: v for k, v in snap.rst_files.get(t, {}).items()
+                 if cloud.get(k) != v or (restarted and t > T and not sent_new(k))}
+        if stale:
+            todo_rst[t] = stale
+            total = len(snap.rst_files.get(t, {}))
+            absent = sum(1 for k in stale if k not in cloud)
+            why[t] = (absent, len(stale) - absent, total)       # not there, differ, of
+    plan.ctx.update(rst_due=due, rst_final=final, rst_todo=todo_rst, rst_why=why)
+    for t, (absent, differ, total) in sorted(why.items()):
+        if differ:
+            plan.add('flag', f"Restart set {t}: {differ} of {total} files on {conf.remote} differ "
+                             f"in size from here, so they were probably written by an earlier "
+                             f"run (before a restart computed this step again). Sending the set "
+                             f"replaces them.")
+    if todo_rst:
+        files = {k: v for stale in todo_rst.values() for k, v in stale.items()}
+        plan.uploads.update(files)
+        grid_due = [t for t in sorted(todo_rst) if t != final]
+        if grid_due:
+            plan.step('rst', 'upload', 'upload-rst',
+                      f"case upload rst {name} --t1 {grid_due[0]} --t2 {grid_due[-1]} "
+                      f"--freq {conf.upload_rst} --missing --remote {conf.remote}",
+                      files={k: v for t in grid_due for k, v in todo_rst[t].items()})
+        if final in todo_rst:
+            plan.step('rst', 'upload', 'upload-rst-final',
+                      f"case upload rst {name} --t1 {final} --t2 {final} --missing "
+                      f"--remote {conf.remote}", files=dict(todo_rst[final]))
+        note = f", {'including' if len(todo_rst) > 1 else 'the'} final set of the finished run" \
+            if final in todo_rst else ''
+        plan.add('upload', f"Restart sets, {steps_phrase(sorted(todo_rst)).lower()}: "
+                           f"{len(files)} files, {_size_text(sum(files.values()))}{note}")
+    elif not conf.upload_rst and snap.rst:
+        plan.add('note', "Restart sets are not uploaded: auto.upload_rst is not set "
+                         "(auto init --upload-rst N).", 'upload')
+    # a set on the upload grid that exists neither here nor on the remote
+    if conf.upload_rst:
+        known = sorted(set(snap.rst) | set(rst_remote))
+        if len(known) >= 3:
+            lost_sets = [g for g in stretch_gaps(known, known[0], known[-1], conf.upload_rst)
+                         if g % conf.upload_rst == 0]
+            plan.ctx['rst_lost'] = lost_sets
+            if lost_sets:
+                plan.add('flag', f"Restart {steps_phrase(lost_sets).lower()} "
+                                 f"{'is' if len(lost_sets) == 1 else 'are'} on the upload grid "
+                                 f"(every {conf.upload_rst}) but "
+                                 f"{'exists' if len(lost_sets) == 1 else 'exist'} neither here "
+                                 f"nor on {conf.remote}.")
+
+
+def _input_upload(w):
+    """Target input: the inputs and case files to send."""
+    snap, conf, plan = w.snap, w.conf, w.plan
+    name, cloud, post_now = w.name, w.cloud, w.post_now
+    if cloud is None or post_now:
+        return
+    inputs = {k: v for k, v in snap.files.items()
+              if not k.startswith(('othd_files/', 'oisd_files/')) and cloud.get(k) != v}
+    plan.ctx['inputs_missing'] = inputs
+    if inputs:
+        plan.uploads.update(inputs)
+        plan.step('input', 'upload', 'upload-inputs',
+                  f"case upload {name} --files '{','.join(sorted(inputs))}' "
+                  f"--remote {conf.remote}", files=inputs)
+        plan.add('upload', f"Inputs and case files: {len(inputs)} files "
+                           f"({', '.join(sorted(inputs)[:4])}{', ...' if len(inputs) > 4 else ''})")
+
+
+def _broken_plts(w):
+    """A binary PLT that is not whole is worth a look."""
+    snap, conf, plan = w.snap, w.conf, w.plan
+    p = w.p
     for t, c in sorted(snap.binary.items()):
         if not c.ok:
             plan.add('flag', f"binary/{p}.{t}.plt is broken: {c.reason}.")
 
-    # -- deletions, once the copies on the cloud are checked ----------------------
+
+def _deletions(w):
+    """What may go once its copy on the cloud is checked (not carried out yet)."""
+    snap, conf, plan = w.snap, w.conf, w.plan
+    f, cloud, post_now, running, covered, provisional, local_ok, stale_rst = \
+        w.f, w.cloud, w.post_now, w.running, w.covered, w.provisional, w.local_ok, w.stale_rst
     if cloud is not None and not post_now:
         gone = [t for t in covered if not provisional(t)]
         outs = [t for t in gone if t in snap.out and (not running or t in snap.settled)]
@@ -709,14 +756,18 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
             plan.add('note', "Not thinned: auto.keep_rst is not set (auto init --keep-rst N).",
                      'thin')
 
-    # -- stopped short --------------------------------------------------------------
+
+def _stopped_short(w):
+    """A run that stopped before its last step, with nothing queued."""
+    snap, conf, plan = w.snap, w.conf, w.plan
+    state, reached, last_main, stale_rst = w.state, w.reached, w.last_main, w.stale_rst
     if state == 'stopped' and reached and snap.max_steps and reached < snap.max_steps \
             and not (last_main and last_main.state == 'FAILED'):
         sets = sorted(t for t, n in snap.rst.items() if snap.nsg and n == snap.nsg
                       and t <= reached and not stale_rst(t))
         plan.ctx['restart_from'] = sets[-1] if sets else None
         if not last_main and not sets:
-            return plan                      # nothing known: no job history, no set to name
+            return                      # nothing known: no job history, no set to name
         ask = (f"run main restart {snap.name} --time {sets[-1]}" if sets
                else f"run main restart {snap.name} --time <tsId>")
         why = (f" (the newest complete restart set; a set cut short by the stop is not used)"
@@ -725,4 +776,58 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
                else "no main job in the job history")
         plan.add('needs', f"Stopped at step {reached} of {snap.max_steps} with nothing queued "
                           f"({how}). Queue a restart with `{ask}`?{why}")
+
+
+def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan:
+    if snap.error:
+        plan = CasePlan(snap.name, 'skipped')
+        plan.add('needs', f"Skipped: {snap.error}.")
+        return plan
+
+    p, f, name = snap.problem, snap.out_freq, snap.name
+    main_now = snap.active('main')
+    post_now = snap.active('post')
+    running = any(j.state in RUNNING for j in main_now)
+    pending = bool(main_now) and not running
+    last_main, last_post = snap.last_ended('main'), snap.last_ended('post')
+    reached = max([r[1] for r in (snap.live, snap.archive_range) if r] or [0]) or None
+    if any(j.state in RUNNING for j in snap.active('main')) and snap.live:
+        reached = snap.live[1]          # a running job is at its own .othd, not at an earlier run's end
+    has_history = bool(snap.live) or any(h.any for h in snap.history.values())
+
+    state = ('running' if running else 'queued' if pending else 'post running' if post_now
+             else 'done' if reached and snap.max_steps and reached >= snap.max_steps
+             else 'stopped' if has_history or last_main else 'new')
+    plan = CasePlan(name, state)
+    if reached:
+        of = (f" of {snap.max_steps} ({100 * reached // snap.max_steps}%)"
+              if snap.max_steps else '')
+        plan.facts.append(f"reached step {reached}{of}")
+    for job in main_now + post_now:
+        resume = (f", restarts from {snap.restart_tsid}"
+                  if job.kind == 'main' and job.pending and snap.restart_tsid is not None else '')
+        plan.facts.append(f"{job.kind} job {job.jobid} {job.state.lower()}{resume}")
+    cloud = snap.cloud if cloud_ok else None
+    rst_remote = {}                              # restart set step -> parts on the remote
+    if cloud is not None:
+        rst_pat = re.compile(rf'^{re.escape(snap.run_rel)}/{re.escape(snap.problem)}'
+                             rf'\.(\d+)_\d+\.rst$')
+        for key in cloud:
+            m = rst_pat.match(key)
+            if m:
+                rst_remote[int(m.group(1))] = rst_remote.get(int(m.group(1)), 0) + 1
+    plan.ctx['rst_remote'] = rst_remote
+    plan.ctx.update(running=running, pending=pending, main_now=main_now, post_now=post_now,
+                    last_main=last_main, last_post=last_post, reached=reached,
+                    cloud=cloud, remote=conf.remote)
+
+    w = _Work(snap, conf, plan, sacct_ok)
+    w.p, w.f, w.name, w.state, w.reached = p, f, name, state, reached
+    w.main_now, w.post_now, w.running, w.pending = main_now, post_now, running, pending
+    w.last_main, w.last_post, w.has_history = last_main, last_post, has_history
+    w.cloud, w.rst_remote = cloud, rst_remote
+    for part in (_flags, _folder_rule, _history, _restart_view, _post, _plt_upload,
+                 _rst_upload, _input_upload, _broken_plts, _deletions, _stopped_short):
+        part(w)
     return plan
+
