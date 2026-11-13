@@ -204,8 +204,11 @@ The commands always verify; there is no flag to skip it.
 - [x] Confirmed with the user (2026-11-13): when one step of the range has
       no next file in the chain, the others are deleted and that step is kept
       and reported
-- [ ] A check that an ASCII PLT is whole: its size, and the node and element
+- [x] A check that an ASCII PLT is whole: its size, and the node and element
       counts of its header against the file (beside `core/plt_valid.py`)
+      (`core/plt_ascii.py`. Written from the Tecplot ASCII format, with no
+      real simPlt file at hand: a file it cannot count is never called
+      whole. To be tried on a real ASCII PLT)
 - [ ] One function for "what stands in for this file": the next link in the
       chain, local or remote, falling through a missing link to the one after
 - [ ] `case organise plt --delete-binary`: deletes only the files with a

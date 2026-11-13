@@ -53,3 +53,14 @@ def write_plt(path, cut=None, **kw) -> Path:
     data = plt_bytes(**kw)
     path.write_bytes(data if cut is None else data[:cut])
     return path
+
+
+def write_ascii_plt(path, nodes=8, elements=1, title='riser') -> Path:
+    """An ASCII Tecplot PLT in point packing: `nodes` lines, then `elements`."""
+    path = Path(path)
+    lines = [f'TITLE = "{title}"', 'VARIABLES = "X" "Y" "Z" "U"',
+             f'ZONE T="fluid", N={nodes}, E={elements}, F=FEPOINT, ET=BRICK']
+    lines += [f'{i}.0 {i}.5 0.0 1.0E-03' for i in range(nodes)]
+    lines += [' '.join(str(1 + (e + k) % nodes) for k in range(8)) for e in range(elements)]
+    path.write_text('\n'.join(lines) + '\n')
+    return path
