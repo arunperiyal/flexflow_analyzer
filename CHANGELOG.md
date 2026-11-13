@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### 🎞️ FlowReel export
+
+- Added `field flowreel` to write a FlowReel `bodies:` block from `domain.yml`
+  while preserving other project settings.
+
 ### 🔗 `case organise plt` and `output`: deleting along the chain
 
 A file is now deleted only when the next form of the same data stands in for

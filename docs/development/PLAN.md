@@ -75,7 +75,7 @@ main jobs.
 Design: `docs/architecture/flowreel.md`. Check the key names against FlowReel's
 own `docs/PLAN.md` before writing code; they may have changed.
 
-- [ ] A `flowreel.yml` writer in the `field` command
+- [x] A `flowreel.yml` writer in the `field` command
 - [ ] All probes of a body in one CSV
 - [ ] The pendulum as CSV
 - [ ] VTU for FlowReel, with `field extract`

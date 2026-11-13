@@ -60,6 +60,18 @@ class FieldCommand(BaseCommand):
         info_parser.add_argument('--sample-file', type=int, metavar='STEP',
                                 help='Analyze specific timestep file')
 
+        flowreel_parser = field_subparsers.add_parser(
+            'flowreel', add_help=False, help='Write FlowReel body metadata')
+        case_arg(flowreel_parser, help='Case directory path')
+        flowreel_parser.add_argument('--output', type=str, metavar='FILE',
+                                     help='FlowReel project file (default: CASE/flowreel.yml)')
+        flowreel_parser.add_argument('--body', action='append', metavar='NAME',
+                                     help='Body name, geotag or PLT tag (repeatable)')
+        flowreel_parser.add_argument('--stdout', action='store_true',
+                                     help='Print the bodies block without writing a file')
+        flowreel_parser.add_argument('-v', '--verbose', action='store_true')
+        flowreel_parser.add_argument('-h', '--help', action='store_true')
+
         # field extract (was: tecplot extract)
         extract_parser = field_subparsers.add_parser('extract', add_help=False,
                                                     help='Extract data from PLT files')
@@ -297,6 +309,13 @@ class FieldCommand(BaseCommand):
         if args.field_subcommand == 'info':
             from .info_impl.command import execute_info
             execute_info(args)
+        elif args.field_subcommand == 'flowreel':
+            if getattr(args, 'help', False):
+                from .flowreel_impl.help_messages import print_flowreel_help
+                print_flowreel_help()
+            else:
+                from .flowreel_impl.command import execute_flowreel
+                execute_flowreel(args)
         elif args.field_subcommand == 'extract':
             from .extract_impl.command import execute_extract
             execute_extract(args)
@@ -340,6 +359,7 @@ class FieldCommand(BaseCommand):
         table.add_column("Description", style="white")
 
         table.add_row("info", "Show PLT file info (variables, zones, element-type audit)")
+        table.add_row("flowreel", "Write FlowReel body metadata")
         table.add_row("extract", "Extract variables to CSV/mesh (x/y/z box or point probes)")
         table.add_row("compute", "Per-element pressure force on a surface zone (areas + normals)")
         table.add_row("convert", "Convert PLT volume zone to VTK .vtu (optional box crop)")
