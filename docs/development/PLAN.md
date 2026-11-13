@@ -204,7 +204,7 @@ existing `auto` test must pass unchanged at each commit.
       for organise, post and the uploads now come from it)
 - [x] Split `decide()` into one function per target, called in order by a
       short `decide()`
-- [ ] Split `report.build()` the same way; the Action lines come from the
+- [x] Split `report.build()` the same way; the Action lines come from the
       plan's steps
 - [ ] `apply` runs the plan's steps (replacing `_intended()` and the
       `KINDS` loop), so show and apply cannot disagree
