@@ -80,20 +80,31 @@ Pick one subcommand.
         case folder's .cases.yml), reading both sides now:
           • {Colors.GREEN}verified{Colors.RESET}: same size and same md5, and the local file is whole.
             Written to auto_logs/ledger.json, the record of checked copies
-          • {Colors.YELLOW}size only{Colors.RESET}: same size, but the remote has no md5sum; not
-            counted as verified
+            (a remote without md5sum has the copy read back and hashed here)
+          • {Colors.YELLOW}size only{Colors.RESET}: same size, but the copy could not be read back
+            for its md5; not counted as verified
           • {Colors.RED}differs{Colors.RESET}: another size or another md5 (a restart that wrote
             the local file again, a damaged copy)
           • {Colors.RED}not on the remote{Colors.RESET}: no copy yet; send it with
             {Colors.DIM}case upload plt <case> --missing{Colors.RESET}
           • {Colors.RED}broken here{Colors.RESET}: the local file is empty or cut short; it is
-            never verified, whatever the remote holds
-          • only on the remote: the local file is gone
+            never verified, since its copy is the same broken file. The line
+            under it says how to make it again, going back along the chain:
+            {Colors.DIM}run post convert{Colors.RESET} from its ASCII PLT, else {Colors.DIM}run post full{Colors.RESET}
+            from its .out files
+          • only on the remote: binary/ no longer holds it (deleted here to
+            save space). Its size and md5 on the remote are compared with what
+            the ledger recorded when it was verified: {Colors.GREEN}as recorded{Colors.RESET}, {Colors.RED}changed{Colors.RESET},
+            or {Colors.YELLOW}no record{Colors.RESET} to compare with
+          • {Colors.RED}in neither place{Colors.RESET}: with --t1, --t2 and --freq together, the
+            steps of that series with no PLT here and none on the remote
         A file that is not verified is taken out of the ledger. {Colors.YELLOW}--t1{Colors.RESET}/{Colors.YELLOW}--t2{Colors.RESET}
         pick a range of steps, {Colors.YELLOW}--freq N{Colors.RESET} the multiples of N, {Colors.YELLOW}-v{Colors.RESET} prints a line
-        per file. The exit code is 0 only when every PLT looked at is
-        verified. It reads the whole of every file on both sides, so it
-        takes time on a large case.
+        per file. The exit code is 0 when nothing is wrong: every PLT here
+        is verified, none on the remote has changed, no step is in neither
+        place (an emptied binary/ with its PLTs on the remote is fine). It
+        reads the whole of every file on both sides, so it takes time on a
+        large case.
 
     {Colors.CYAN}def{Colors.RESET}
         Check that every file referenced via File( "..." ) in the .def file

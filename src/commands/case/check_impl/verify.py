@@ -58,7 +58,8 @@ def execute_verify(args) -> int:
                 continue
             case_dir = case_dir.resolve()
             folder = case_dir.parent
-            problem = SimflowConfig(str(case_dir / 'simflow.config')).problem
+            cfg = SimflowConfig(str(case_dir / 'simflow.config'))
+            problem = cfg.problem
             if not problem:
                 console.print(f"[red]Error:[/red] {case_dir.name}: 'problem' not set in "
                               f"simflow.config, so the PLT names are not known")
@@ -73,7 +74,8 @@ def execute_verify(args) -> int:
                               f"{escape(problem)}.<step>.plt against {escape(cloud.where)}[/dim]")
                 say = (lambda line: console.print(f"  [dim]{escape(line)}[/dim]")) if verbose else None
                 result = verify_plts(case_dir, problem, cloud, remote, ledgers[folder],
-                                     window=window, freq=freq, say=say)
+                                     window=window, freq=freq, say=say,
+                                     run_dir=cfg.run_dir(case_dir))
             except CloudError as e:
                 console.print(f"[red]Error:[/red] {escape(str(e))}")
                 return 1
@@ -101,9 +103,21 @@ def _print(console, result) -> None:
     if result.not_there:
         rows.add_row("[red]not on the remote[/red]", _steps(result.not_there))
     for name, why in result.broken.items():
-        rows.add_row("[red]broken here[/red]", f"{escape(name)}: {escape(why)}")
+        how = result.rebuild.get(name, '')
+        hint = f"\n[dim]make it again:[/dim] {escape(how)}" if how else ''
+        rows.add_row("[red]broken here[/red]", f"{escape(name)}: {escape(why)}{hint}")
+    if result.kept_there:
+        rows.add_row("[green]only on the remote[/green]",
+                     f"{_steps(result.kept_there)}  [dim]as recorded when verified[/dim]")
     if result.only_there:
-        rows.add_row("[dim]only on the remote[/dim]", _steps(result.only_there))
+        rows.add_row("[yellow]only on the remote[/yellow]",
+                     f"{_steps(result.only_there)}  [dim]no record of a verified copy "
+                     f"to compare with[/dim]")
+    for name, why in result.changed_there.items():
+        rows.add_row("[red]changed on the remote[/red]", f"{escape(name)}: {escape(why)}")
+    if result.nowhere:
+        rows.add_row("[red]in neither place[/red]",
+                     _steps([f"x.{s}.plt" for s in result.nowhere]))
     console.print(rows)
     mark = "[green]✓[/green]" if result.ok else "[red]✗[/red]"
     console.print(f"  {mark} {escape(result.summary())}")

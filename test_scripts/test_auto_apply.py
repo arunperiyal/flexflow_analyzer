@@ -280,8 +280,11 @@ def test_md5_of_a_named_remote_file(tmp_path):
     cloud = SftpCloud.__new__(SftpCloud)
     cloud.ssh, cloud.root, cloud.where = FakeSsh(), str(tmp_path), 'fake'
     assert cloud.md5('c1', 'binary/a.plt') == file_md5(there)
+    # no md5sum there: the file is read back and hashed here
     cloud.ssh = FakeSsh(md5sum=False)
-    assert cloud.md5('c1', 'binary/a.plt') is None
+    cloud.ssh.open = open
+    assert cloud.md5('c1', 'binary/a.plt') == file_md5(there)
+    assert cloud.md5('c1', 'binary/none.plt') is None
 
 
 def test_sftp_put_without_md5sum_says_it_only_compared_sizes(tmp_path):
