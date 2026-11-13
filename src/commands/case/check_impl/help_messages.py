@@ -74,6 +74,27 @@ Pick one subcommand.
             restart computed again, so it does not join up with the frames around
             it. Steps before the first .out/.rst left past R cannot be dated.
 
+    {Colors.CYAN}plt --verify{Colors.RESET}
+        Compare each binary PLT in binary/ with its copy on the remote
+        ({Colors.YELLOW}--remote NAME{Colors.RESET}, or {Colors.DIM}use remote:NAME{Colors.RESET}; its folder comes from the
+        case folder's .cases.yml), reading both sides now:
+          • {Colors.GREEN}verified{Colors.RESET}: same size and same md5, and the local file is whole.
+            Written to auto_logs/ledger.json, the record of checked copies
+          • {Colors.YELLOW}size only{Colors.RESET}: same size, but the remote has no md5sum; not
+            counted as verified
+          • {Colors.RED}differs{Colors.RESET}: another size or another md5 (a restart that wrote
+            the local file again, a damaged copy)
+          • {Colors.RED}not on the remote{Colors.RESET}: no copy yet; send it with
+            {Colors.DIM}case upload plt <case> --missing{Colors.RESET}
+          • {Colors.RED}broken here{Colors.RESET}: the local file is empty or cut short; it is
+            never verified, whatever the remote holds
+          • only on the remote: the local file is gone
+        A file that is not verified is taken out of the ledger. {Colors.YELLOW}--t1{Colors.RESET}/{Colors.YELLOW}--t2{Colors.RESET}
+        pick a range of steps, {Colors.YELLOW}--freq N{Colors.RESET} the multiples of N, {Colors.YELLOW}-v{Colors.RESET} prints a line
+        per file. The exit code is 0 only when every PLT looked at is
+        verified. It reads the whole of every file on both sides, so it
+        takes time on a large case.
+
     {Colors.CYAN}def{Colors.RESET}
         Check that every file referenced via File( "..." ) in the .def file
         exists in the case directory:
@@ -124,6 +145,10 @@ Pick one subcommand.
     case check plt CS4SG1U1
     case check plt CS4SG1U1 --freq 50
     case check plt CS4SG1U1 --t1 0 --t2 1000
+
+    # Compare the binary PLTs with their copies on the remote (size and md5)
+    case check plt CS4SG1U1 --verify --remote cloud
+    case check plt CS4SG1U1 --verify --remote cloud --t1 8950 --t2 9900 --freq 50
 
     # Check .def File() references exist
     case check def CS4SG1U1

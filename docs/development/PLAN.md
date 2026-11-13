@@ -195,7 +195,7 @@ What the code check found (why 12, 14 and 15 are needed):
       not counted as verified
 - [x] Tests: all match, one differs, one missing there, remote without
       `md5sum`, a restart that made a local PLT newer than its remote copy
-- [ ] Help text, completion, `docs/usage/`, `CHANGELOG.md`
+- [x] Help text, completion, `docs/usage/`, `CHANGELOG.md`
 
 ### Phase 14: hand deletions that need a checked copy (branch `organise-verified`)
 

@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### 🔍 `case check plt --verify` and `case upload plt`
+
+- **`case check plt <case> --verify --remote NAME`** compares each binary
+  PLT in `binary/` with its copy on the remote, by size and md5 read now on
+  both sides. It lists what is verified, what differs, what is not on the
+  remote, what is broken locally and what is only on the remote; `--t1`,
+  `--t2` and `--freq` pick the steps, `-v` prints a line per file. Verified
+  files go in `auto_logs/ledger.json`; a file that is not verified is taken
+  out of it. A local PLT that is empty or cut short is never verified, and a
+  remote without `md5sum` gives "size only", which is not verified. The exit
+  code is 0 only when every PLT looked at is verified.
+- **`case upload plt` and `case download plt`** are the new names of
+  `case upload binary` and `case download binary`. `binary` still works;
+  help, completion and the commands `auto show` prints use `plt`.
+
 ### ✅ `case upload`: every file checked, as `auto apply` does
 
 - `case upload` (`binary`, `rst`, `history`, `input`, `--files`, a whole
