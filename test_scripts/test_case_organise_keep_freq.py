@@ -128,9 +128,10 @@ def test_output_without_any_plt_keeps_every_out(tmp_path, run_dir):
     assert len(steps(run_dir, '.out')) == 40
 
 
-def test_output_all_out_deletes_unconverted_out_too(tmp_path, converted):
+def test_output_all_out_still_checks_each_out(tmp_path, converted):
     organise(tmp_path, 'output', keep_freq=500, all_out=True, t2=1500)
-    assert steps(converted, '.out') == list(range(1550, 2001, 50))     # outside --t2 only
+    # 50..500 have a whole binary PLT and go; 550.. have none that stands in
+    assert steps(converted, '.out') == list(range(550, 2001, 50))
     assert steps(converted, '.rst') == [500, 1000, 1500] + list(range(1550, 2001, 50))
 
 
@@ -158,6 +159,7 @@ def test_parse_and_check(parse):
     assert (args.freq, args.keep_freq) == (1, 5) and _check_keep_flags(args, 'plt') is None
     assert 'only applies with --delete-binary' in \
         _check_keep_flags(parse('plt', 'C1', '--delete-ascii', '--keep-freq', '5'), 'plt')
+    assert _check_keep_flags(parse('plt', 'C1', '--delete-ascii', '--freq', '50'), 'plt') is None
     assert 'must be 1 or more' in \
         _check_keep_flags(parse('plt', 'C1', '--delete-binary', '--freq', '0'), 'plt')
     with pytest.raises(SystemExit):

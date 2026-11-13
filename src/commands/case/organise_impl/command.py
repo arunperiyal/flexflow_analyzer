@@ -96,11 +96,10 @@ def _check_keep_flags(args, subcommand):
         if value is not None and value < 1:
             return f"--{flag.replace('_', '-')} must be 1 or more"
     if getattr(args, 'keep_out', False) and getattr(args, 'all_out', False):
-        return "--keep-out keeps every .out and --all-out deletes them all; give one"
+        return "--keep-out keeps every .out and --all-out takes them all; give one"
     if subcommand == 'plt' and not getattr(args, 'delete_binary', False):
-        for flag in ('freq', 'keep_freq'):
-            if getattr(args, flag, None) is not None:
-                return f"--{flag.replace('_', '-')} only applies with --delete-binary"
+        if getattr(args, 'keep_freq', None) is not None:
+            return "--keep-freq only applies with --delete-binary"
     return None
 
 

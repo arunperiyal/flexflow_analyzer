@@ -198,8 +198,11 @@ What the code check found (why 12, 14 and 15 are needed):
       by the user on 2026-11-13: `ZONE T=FIELD, STRANDID=1, SOLUTIONTIME=...,
       NODES = 1630573, ELEMENTS=1590192, DATAPACKING=POINT,
       ZONETYPE=FEBRICK`), and fast enough for files of millions of lines
-- [ ] `case organise output --all-out` stays, and checks: it no longer
-      deletes a `.out` with nothing to stand in for it
+- [x] `case organise output --all-out` stays, and checks: it no longer
+      deletes a `.out` with nothing to stand in for it (it now does what the
+      plain command does). Found on the way: `--freq` with `--delete-ascii`
+      was still refused by the command's flag check, so Phase 14's `--freq`
+      for `--delete-ascii` did not work from the command line; fixed
 - [ ] Help text, `docs/usage/case-organise.md`, `CHANGELOG.md`
 
 ### Phase 15: `auto` refactor, steps as data (branch `auto-steps`)
