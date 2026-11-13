@@ -203,6 +203,8 @@ way and leave the same record.
 - [x] Tests for `case upload` against a local "cloud": a copy that differs,
       a remote without `md5sum` (size only), a transfer cut short
 - [x] Help text, `docs/usage/`, `CHANGELOG.md`
+- [x] Found on the way: `case upload --help` and `case download --help`
+      crashed (`{NAME: DIR}` in an f-string); fixed, with a test
 
 ### Phase 13: `case upload plt` and `case check plt --verify` (branch `plt-verify`)
 

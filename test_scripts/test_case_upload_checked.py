@@ -169,3 +169,11 @@ def test_case_upload_files_end_to_end_writes_the_ledger(case, there, tmp_path, c
     entry = Ledger(case.parent).data['srv']['CS1']['simflow.config']
     assert entry['verified'] == 'md5' and entry['path'] == '/r/CS1/simflow.config'
     assert 'Checked on the remote: 1 by md5' in ' '.join(capsys.readouterr().out.split())
+
+
+def test_the_help_of_upload_and_download_prints(capsys):
+    transfer.show_upload_help()
+    transfer.show_download_help()
+    out = capsys.readouterr().out
+    assert 'CHECKED COPIES' in out and out.count('--remote REMOTE') >= 2
+    assert 'remotes: {NAME: DIR}' in out

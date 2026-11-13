@@ -17,6 +17,8 @@
   written (`mtime`) and where the copy is on the remote (`path`).
 - **`case upload --to` and `case download --from` are now `--remote`**, the
   name `run post` and `auto` already use. The old names are gone.
+- Fixed: `case upload --help` and `case download --help` stopped with
+  `name 'NAME' is not defined` instead of printing the help.
 - For developers: the remote access and the ledger moved from
   `src/core/auto/` to `src/core/transfer/` (`cloud.py`, `ledger.py`);
   `send_checked()` is the one way a file is sent.

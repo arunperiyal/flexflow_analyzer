@@ -192,7 +192,7 @@ the remote gets the restarts it lacks.
     {Colors.YELLOW}--compiled{Colors.RESET}             history: only the compiled file
     {Colors.YELLOW}--remote-path PATH{Colors.RESET}     The folder holding the cases on the remote; the case goes to
                          PATH/<case>. Default: the remote's folder in the case folder's
-                         .cases.yml (remotes: {NAME: DIR}), else `remote set-path`
+                         .cases.yml (remotes: {{NAME: DIR}}), else `remote set-path`
     {Colors.YELLOW}--force{Colors.RESET}                Create remote directories if they do not exist
     {Colors.YELLOW}--resume{Colors.RESET}               Resume the last interrupted upload
     {Colors.YELLOW}--examples{Colors.RESET}             Show usage examples
@@ -370,7 +370,7 @@ the restarts found only on the remote are added here.
     {Colors.YELLOW}--freq N{Colors.RESET}               binary/rst: only steps that are multiples of N
     {Colors.YELLOW}--remote-path PATH{Colors.RESET}     The folder holding the cases on the remote; the case goes to
                          PATH/<case>. Default: the remote's folder in the case folder's
-                         .cases.yml (remotes: {NAME: DIR}), else `remote set-path`
+                         .cases.yml (remotes: {{NAME: DIR}}), else `remote set-path`
     {Colors.YELLOW}--force{Colors.RESET}                Create the local case directory if it does not exist
     {Colors.YELLOW}--resume{Colors.RESET}               Resume the last interrupted download
     {Colors.YELLOW}--examples{Colors.RESET}             Show usage examples
