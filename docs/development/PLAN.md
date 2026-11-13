@@ -146,6 +146,18 @@ Settled with the user on 2026-11-13:
   the command confirms that the series from `--t1` to `--t2` has its next
   file in the chain, in the local or the remote directory.
 - `case upload --to` and `case download --from` are renamed `--remote`.
+- **Repair goes back along the chain** (2026-11-13). A broken binary PLT
+  means a broken remote copy too: it is made again from the ASCII PLT (`run
+  post convert`); if the ASCII PLT is broken as well, from the `.out` files
+  (`run post full`). `auto show` prints that command.
+- An ASCII PLT can only be checked by its size and header; a binary PLT is
+  always checked by md5, read back from the remote when it has no `md5sum`.
+  Time is not the concern; a safe copy on the remote is.
+- An empty local `binary/` with the PLTs on the remote is a normal state:
+  the local files were deleted to save space (and the ASCII PLTs and `.out`
+  may be gone too, or not).
+- A folder whose `.cases.yml` has no block for the remote says so: the
+  remote is not set and its path is not set.
 - `auto apply` has the targets `history`, `plt`, `output`, `input`, `rst`
   and `all`.
 - `auto apply` is not only for deleting: it organises, uploads and deletes
@@ -154,7 +166,7 @@ Settled with the user on 2026-11-13:
   observation and action.
 - `case organise plt` always verifies. There is no `--unverified` flag.
 
-Order of work: 12 and 13 (done), 14, 15, 16, 17, then Phase 6. Phases 12 to 14 change
+Order of work: 12 and 13 (done), 18, 14, 15, 16, 17, then Phase 6. Phases 12 to 14 change
 hand commands and are useful on their own; 15 is a refactor with no change in
 behaviour; 16 and 17 are what the user sees.
 
@@ -179,6 +191,23 @@ What the code check found (why 12, 14 and 15 are needed):
 - **Parsing.** `auto` takes `what` and `[case]` as positionals. A target word
   after `apply` (`history`, `plt`, `output`, `all`) has to be told apart from
   a case name.
+
+### Phase 18: `case check plt --verify`, after the user's review (branch `plt-verify-chain`)
+
+Asked for on 2026-11-13, on reading what Phase 13 built. Done before Phase
+14, which builds on it.
+
+- [ ] A remote without `md5sum`: `--verify` reads the copy back over SFTP and
+      takes its md5 here, so a binary PLT is always verified by md5
+- [ ] PLTs only on the remote are compared with the ledger's record of them
+      (size and md5); an empty `binary/` whose PLTs are safely there is not
+      a failure. With `--t1`, `--t2` and `--freq`, steps that are in neither
+      place are listed
+- [ ] A broken local PLT says how to make it again: `run post convert` when
+      its ASCII PLT is there, `run post full` when only the `.out` are
+- [ ] A folder with no `remotes:` entry for the remote says that the remote
+      and its path are not set, and how to set them
+- [ ] Tests, help text, `docs/usage/`, `CHANGELOG.md`
 
 ### Phase 14: hand deletions that need a checked copy (branch `organise-verified`)
 
