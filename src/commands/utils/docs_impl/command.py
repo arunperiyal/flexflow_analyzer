@@ -9,7 +9,9 @@ from src.utils.colors import Colors
 def find_docs_directory():
     """Find the docs directory in installation or source."""
     # Try current directory first (for development)
-    script_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    # this file is src/commands/utils/docs_impl/command.py: the root is 4 folders up
+    here = os.path.dirname(os.path.abspath(__file__))
+    script_dir = os.path.abspath(os.path.join(here, '..', '..', '..', '..'))
     docs_dir = os.path.join(script_dir, 'docs')
     
     if os.path.exists(docs_dir):
@@ -73,26 +75,33 @@ def open_file(filepath):
         return False
 
 
+# topic -> (file under docs/, without extension; what it is)
+TOPICS = {
+    'index':     ('README', 'Index of all documentation'),
+    'main':      ('usage/USAGE', 'Main usage guide'),
+    'usage':     ('usage/USAGE', "Same as 'main'"),
+    'reference': ('usage/REFERENCE', 'One-page command reference'),
+    'run':       ('usage/run', 'The run commands (pre, main, post, ...)'),
+    'create':    ('usage/case-create', 'case create: time parameters and global defaults'),
+    'organise':  ('usage/case-organise', 'case organise, step by step'),
+    'install':   ('installation/INSTALL', 'Installation guide'),
+    'structure': ('architecture/case-structure', 'Layout of a case directory'),
+    'auto':      ('architecture/auto', 'Design of the auto command'),
+    'webapp':    ('architecture/webapp', 'Design of the web UI'),
+}
+
+
 def list_available_docs(docs_dir):
     """List all available documentation files."""
     print(f"\n{Colors.BOLD}Available Documentation:{Colors.RESET}\n")
-    
-    docs = {
-        'main': 'Main usage guide',
-        'info': 'Info command documentation',
-        'plot': 'Plot command documentation',
-        'compare': 'Compare command documentation',
-        'template': 'Template command documentation',
-        'refactoring': 'Refactoring summary'
-    }
-    
-    for key, description in docs.items():
+
+    for key, (_, description) in TOPICS.items():
         print(f"  {Colors.CYAN}{key:12s}{Colors.RESET} - {description}")
-    
+
     print(f"\n{Colors.BOLD}Usage:{Colors.RESET}")
     print(f"  flexflow docs <name>")
     print(f"  flexflow docs main")
-    print(f"  flexflow docs plot")
+    print(f"  flexflow docs run")
 
 
 def docs_command(args):
@@ -111,25 +120,14 @@ def docs_command(args):
     
     topic = args.topic.lower()
     
-    # Map topics to files (prefer HTML, fallback to markdown)
-    doc_map = {
-        'main': 'USAGE',
-        'usage': 'USAGE',
-        'info': 'usage/commands/info',
-        'plot': 'usage/commands/plot',
-        'compare': 'usage/commands/compare',
-        'template': 'usage/commands/template',
-        'refactoring': 'REFACTORING_SUMMARY',
-    }
-    
-    if topic not in doc_map:
+    if topic not in TOPICS:
         print(f"{Colors.RED}Error:{Colors.RESET} Unknown documentation topic: {topic}", file=sys.stderr)
         print(f"\n{Colors.BOLD}Available topics:{Colors.RESET}")
-        for key in doc_map.keys():
+        for key in TOPICS:
             print(f"  • {key}")
         return 1
     
-    doc_path = doc_map[topic]
+    doc_path = TOPICS[topic][0]
     
     # Try HTML first (installed version), then markdown (source version)
     html_path = os.path.join(docs_dir, f"{doc_path}.html")
