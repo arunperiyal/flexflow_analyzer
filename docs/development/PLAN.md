@@ -166,7 +166,7 @@ Settled with the user on 2026-11-13:
   observation and action.
 - `case organise plt` always verifies. There is no `--unverified` flag.
 
-Order of work: 12, 13 and 18 (done), 14, 15, 16, 17, then Phase 6. Phases 12 to 14 change
+Order of work: 12, 13, 18 and 14 (done), 15, 16, 17, then Phase 6. Phases 12 to 14 change
 hand commands and are useful on their own; 15 is a refactor with no change in
 behaviour; 16 and 17 are what the user sees.
 
@@ -191,46 +191,6 @@ What the code check found (why 12, 14 and 15 are needed):
 - **Parsing.** `auto` takes `what` and `[case]` as positionals. A target word
   after `apply` (`history`, `plt`, `output`, `all`) has to be told apart from
   a case name.
-
-### Phase 14: hand deletions that need a checked copy (branch `organise-verified`)
-
-U-4 and U-5 of `auto.md` §13.5. After it, the delete commands are safe to
-print in `auto show` and safe for `auto apply` to run.
-
-The chain (settled 2026-11-13): `.out` needs a verified ASCII PLT, an ASCII
-PLT needs a verified binary PLT, a binary PLT needs its copy on the remote.
-The commands always verify; there is no flag to skip it.
-
-- [x] Confirmed with the user (2026-11-13): when one step of the range has
-      no next file in the chain, the others are deleted and that step is kept
-      and reported
-- [x] A check that an ASCII PLT is whole: its size, and the node and element
-      counts of its header against the file (beside `core/plt_valid.py`)
-      (`core/plt_ascii.py`. Written from the Tecplot ASCII format, with no
-      real simPlt file at hand: a file it cannot count is never called
-      whole. To be tried on a real ASCII PLT)
-- [x] One function for "what stands in for this file": the next link in the
-      chain, local or remote, falling through a missing link to the one after
-      (`core/chain.py`. A link that is there but not good does not stop a
-      later good one: a whole, newer binary PLT covers the `.out` whatever
-      the ASCII PLT is like, as it did before this phase)
-- [x] `case organise plt --delete-binary`: deletes only the files with a
-      verified copy on the remote; the others are listed and left. Built
-      stricter than first planned: the copy is compared by md5 at that
-      moment (`--remote`), not taken from the ledger; with no remote to ask,
-      nothing is deleted
-- [x] `case organise plt --delete-ascii`: deletes only where the binary PLT
-      of the step is verified: whole, and written after the ASCII file
-- [x] `--freq` applies to `--delete-ascii` as well as `--delete-binary`
-- [x] `case organise output`: a `.out` goes only when the ASCII PLT of its
-      step is verified and was written after the `.out` (or the link after
-      it, when there is no ASCII PLT). The rule about a queued restart is
-      not in the hand command, which does not read the queue: "written
-      after" already keeps the `.out` a restart has written again; `auto`
-      knows the queue and holds back there (Phase 6). `--all-out` still
-      deletes `.out` with nothing to stand in; to settle with the user
-- [x] Tests for each rule, including a restart that rewrote the `.out`
-- [x] Help text, `docs/usage/case-organise.md`, `CHANGELOG.md`
 
 ### Phase 15: `auto` refactor, steps as data (branch `auto-steps`)
 
@@ -329,6 +289,7 @@ As noted on 2026-11-11; may be out of date.
 | 12 | `checked-transfer` | `case upload` and `auto` send through one checked path (`src/core/transfer/`: temporary name, size and md5, rename) and one ledger, whose entries now hold the local `mtime` and the remote `path`; `--to` / `--from` became `--remote`; the crash of `case upload --help` fixed |
 | 13 | `plt-verify` | `case upload plt` / `case download plt` (the old word `binary` still works); `case check plt --verify --remote NAME` compares each binary PLT with its remote copy by size and md5, writes the ledger and exits 0 only when all are verified (`verify_plts()` in `src/core/transfer/verify.py`) |
 | 18 | `plt-verify-chain` | `case check plt --verify` after the user's review: md5 by reading the copy back when the remote has no `md5sum`; PLTs only on the remote compared with the ledger's record (an emptied `binary/` is fine); steps in neither place listed; a broken PLT says how to make it again (`run post convert`, else `run post full`); a remote that is not set says so |
+| 14 | `organise-verified` | Deleting along the chain (`core/chain.py`): `.out` on a verified ASCII PLT (`core/plt_ascii.py`), an ASCII PLT on a verified binary PLT, a binary PLT on a remote copy with the same md5 read at that moment (`--remote`); a missing link is passed over; a step with nothing to stand in is kept and reported, the others go. `--freq` for `--delete-ascii`. Left open: the ASCII check is untried on a real simPlt file; `--all-out` still deletes `.out` with nothing to stand in; the queued-restart rule is left to `auto` (Phase 6) |
 
 ---
 
