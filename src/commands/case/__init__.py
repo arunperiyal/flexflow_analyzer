@@ -525,7 +525,7 @@ class CaseCommand(BaseCommand):
                                        '(comma-separated globs; default: '
                                        'simflow.config,*.def,*.geo,*.map). Given without '
                                        '--dir it uploads only those files')
-        context_flag(upload_parser, 'remote', '--to', type=str, metavar='REMOTE',
+        context_flag(upload_parser, 'remote', '--remote', dest='to', type=str, metavar='REMOTE',
                      help='Remote machine name (or use context with "use remote:name")')
         upload_parser.add_argument('--remote-path', type=str, metavar='PATH',
                                   help="The folder holding the cases on the remote (default: the remote's folder in "
@@ -558,7 +558,7 @@ class CaseCommand(BaseCommand):
                                          '(comma-separated globs; default: '
                                          'simflow.config,*.def,*.geo,*.map). Given without '
                                          '--dir it downloads only those files')
-        context_flag(download_parser, 'remote', '--from', dest='from_remote', type=str,
+        context_flag(download_parser, 'remote', '--remote', dest='from_remote', type=str,
                      metavar='REMOTE',
                      help='Remote machine name (or use context with "use remote:name")')
         download_parser.add_argument('--remote-path', type=str, metavar='PATH',
@@ -696,14 +696,14 @@ class CaseCommand(BaseCommand):
         console.print("    flexflow case domain body --add --name cyl --type beam")
         console.print("    flexflow case add --dir /scratch/me/project")
         console.print("    flexflow case report")
-        console.print("    flexflow case upload ./myCase --to remote-server")
-        console.print("    flexflow case upload ./myCase --to remote-server --dir othd_files,oisd_files")
-        console.print("    flexflow case upload ./myCase --to remote-server --dir othd_files --force")
-        console.print("    flexflow case upload ./myCase --to remote-server --resume")
-        console.print("    flexflow case download ./myCase --from remote-server")
-        console.print("    flexflow case download ./myCase --from remote-server --dir othd_files,oisd_files")
-        console.print("    flexflow case download ./myCase --from remote-server --force")
-        console.print("    flexflow case download ./myCase --from remote-server --resume")
+        console.print("    flexflow case upload ./myCase --remote remote-server")
+        console.print("    flexflow case upload ./myCase --remote remote-server --dir othd_files,oisd_files")
+        console.print("    flexflow case upload ./myCase --remote remote-server --dir othd_files --force")
+        console.print("    flexflow case upload ./myCase --remote remote-server --resume")
+        console.print("    flexflow case download ./myCase --remote remote-server")
+        console.print("    flexflow case download ./myCase --remote remote-server --dir othd_files,oisd_files")
+        console.print("    flexflow case download ./myCase --remote remote-server --force")
+        console.print("    flexflow case download ./myCase --remote remote-server --resume")
         console.print()
 
 

@@ -150,7 +150,7 @@ def _run_case(case_dir, remote, only, clouds, ledgers, log, console):
 def execute_apply(args) -> int:
     from src.commands.auto.show import gather
     from src.core.auto.conf import AutoConfError
-    from src.core.auto.ledger import Ledger
+    from src.core.transfer.ledger import Ledger
     from src.core.auto.runlog import AutoLockError, FolderLock, RunLog
 
     console = Console()

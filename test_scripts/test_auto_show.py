@@ -213,7 +213,7 @@ def test_report_sections_of_a_queued_case(dummy):
     assert sec['plt'].actions == ['run post full case3 --t1 550 --t2 700 --no-remote']
     # uploads first (the grid set 400), then the deletion that follows
     assert sec['rst'].actions[0] == ('case upload rst case3 --t1 400 --t2 400 --freq 400 '
-                                     '--missing --to local')
+                                     '--missing --remote local')
     assert sec['rst'].actions[1].startswith('auto apply: delete .rst of steps 550, 650')
     assert dict(sec['history'].rows)['Run dir'].startswith('riser.othd steps 501–760')
 
@@ -222,7 +222,7 @@ def test_report_needs_and_flags_come_after_state(dummy):
     sec = report_of(dummy, 'case6')
     assert list(sec)[:3] == ['state', 'needs', 'flags']
     assert dict(sec['plt'].rows)['Binary'] == 'present 450, 500 · broken 550'
-    assert sec['plt'].actions[0] == 'case upload binary case6 --t1 450 --t2 500 --missing --to local'
+    assert sec['plt'].actions[0] == 'case upload binary case6 --t1 450 --t2 500 --missing --remote local'
 
 
 def test_auto_commands_is_plain_text_to_read_or_save(dummy, monkeypatch, capsys):
@@ -306,7 +306,7 @@ def test_the_rst_section_says_what_the_remote_holds_and_what_is_due(dummy):
     assert dict(sec.rows)['Remote'] == 'none'
     assert dict(sec.rows)['Upload'] == 'every 400: due 400 (not there)'
     assert sec.actions == ['case upload rst case12 --t1 400 --t2 400 --freq 400 --missing '
-                           '--to local']
+                           '--remote local']
 
 
 def plan_and_report(dummy, case):
@@ -344,7 +344,7 @@ def test_a_restore_message_checks_whether_the_remote_has_the_archive(dummy):
         put_remote(dummy, 'case8', f'{ext}_files/archive/riser1.{ext}')
     plan, _ = plan_and_report(dummy, 'case8')
     need = [i.text for i in plan.items if i.kind == 'needs'][0]
-    assert 'local has it: restore with `case download history case8 --archive --from local`' in need
+    assert 'local has it: restore with `case download history case8 --archive --remote local`' in need
 
 
 def test_history_parts_only_on_the_remote_are_flagged(dummy):
@@ -354,11 +354,11 @@ def test_history_parts_only_on_the_remote_are_flagged(dummy):
             put_remote(dummy, 'case8', f'{ext}_files/archive/riser{n}.{ext}')
     plan, sec = plan_and_report(dummy, 'case8')
     assert dict(sec['history'].rows)['Only there'] == 'archive runs 1–8 (on local, not here)'
-    assert sec['history'].actions == ['case download history case8 --archive --from local']
+    assert sec['history'].actions == ['case download history case8 --archive --remote local']
     flags = [i.text for i in plan.items if i.kind == 'flag']
     assert ('local holds archive runs 1–8 that this case does not have (archive/ here: empty), so '
             'they exist only on local. Bring them back with `case download history case8 '
-            '--archive --from local`.') in flags
+            '--archive --remote local`.') in flags
     assert plan.ctx['hist_only_remote'][('othd', 'archive')] == list(range(1, 9))
 
 

@@ -76,7 +76,7 @@ def gather(case_dirs, remote, clouds=None):
     """
     from src.core import slurm
     from src.core.auto import conf as auto_conf
-    from src.core.auto.cloud import CloudError, open_cloud
+    from src.core.transfer.cloud import CloudError, open_cloud
     from src.core.auto.decide import decide
     from src.core.auto.observe import observe_case
 
@@ -118,7 +118,7 @@ def gather(case_dirs, remote, clouds=None):
                     listing = cloud.listing(Path(case_dir).name)
                 except CloudError as e:
                     problems.append(f"{Path(case_dir).name}: {e}")
-            from src.core.auto.ledger import Ledger
+            from src.core.transfer.ledger import Ledger
             sent = {rel: e.get('when') for rel, e in
                     Ledger(Path(case_dir).parent).data.get(conf.remote, {})
                     .get(Path(case_dir).name, {}).items()}

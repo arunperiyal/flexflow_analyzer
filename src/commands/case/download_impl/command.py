@@ -158,7 +158,7 @@ So do the restarts ({Colors.CYAN}.restarts{Colors.RESET}, `case organise history
 the remote gets the restarts it lacks.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    flexflow case upload [{Colors.YELLOW}case{Colors.RESET}] --to {Colors.YELLOW}REMOTE{Colors.RESET} [options]
+    flexflow case upload [{Colors.YELLOW}case{Colors.RESET}] --remote {Colors.YELLOW}REMOTE{Colors.RESET} [options]
     flexflow case upload binary [{Colors.YELLOW}case{Colors.RESET}] [--t1 STEP] [--t2 STEP] [options]
     flexflow case upload rst [{Colors.YELLOW}case{Colors.RESET}] [--t1 STEP] [--t2 STEP] [options]
     flexflow case upload input [{Colors.YELLOW}case{Colors.RESET}] [options]
@@ -176,7 +176,7 @@ the remote gets the restarts it lacks.
     {Colors.YELLOW}case{Colors.RESET}                   Local case directory path (use * for all cases in .cases.yml)
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
-    {Colors.YELLOW}--to REMOTE{Colors.RESET}            Remote machine name (required)
+    {Colors.YELLOW}--remote REMOTE{Colors.RESET}        Remote machine name (required)
     {Colors.YELLOW}--dir DIRS{Colors.RESET}             Comma-separated directories to upload
                            (default: othd_files,oisd_files,binary)
     {Colors.YELLOW}--files [PATTERNS]{Colors.RESET}     Loose files from the case root, as comma-separated
@@ -192,7 +192,7 @@ the remote gets the restarts it lacks.
     {Colors.YELLOW}--compiled{Colors.RESET}             history: only the compiled file
     {Colors.YELLOW}--remote-path PATH{Colors.RESET}     The folder holding the cases on the remote; the case goes to
                          PATH/<case>. Default: the remote's folder in the case folder's
-                         .cases.yml (remotes: {NAME: DIR}), else `remote set-path`
+                         .cases.yml (remotes: {{NAME: DIR}}), else `remote set-path`
     {Colors.YELLOW}--force{Colors.RESET}                Create remote directories if they do not exist
     {Colors.YELLOW}--resume{Colors.RESET}               Resume the last interrupted upload
     {Colors.YELLOW}--examples{Colors.RESET}             Show usage examples
@@ -203,10 +203,22 @@ the remote gets the restarts it lacks.
     SFTP. The remote server must be registered with 'remote add'.
 
     Use 'use remote:<name>' in the interactive shell to set a default remote
-    so --to can be omitted.
+    so --remote can be omitted.
 
     Wildcard mode ('case upload *') uploads all cases listed in the .cases.yml
     file in the current directory.
+
+{Colors.BOLD}CHECKED COPIES:{Colors.RESET}
+    Every file is sent the way `auto apply` sends it: to a temporary name
+    (.<name>.part), compared with the local file by size and md5, and only
+    then renamed to its real name. A copy that differs or was cut short is
+    removed and the upload stops with an error; an older copy under the real
+    name is left as it was. A remote without md5sum is compared by size
+    only, and the last line of the upload says so.
+
+    Each checked file is written to <folder of cases>/auto_logs/ledger.json
+    (size, md5, when the local file was written, where the copy is), the
+    record `auto` keeps of what is safely on the remote.
 
 {Colors.BOLD}FILES:{Colors.RESET}
     --files carries the small things that describe a case rather than its data:
@@ -287,20 +299,20 @@ the remote gets the restarts it lacks.
     take the runs until the next `case organise history --compile`.
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
-    case upload history CS4SG1U1 --to server
-    case upload history CS4SG1U1 --to server --cleaned --compiled
-    case upload binary CS4SG1U1 --to server --t1 1000 --t2 5000
-    case upload binary CS4SG1U1 --to server --t1 5000
-    case upload binary CS4SG1U1 --to server --missing
-    case upload input CS4SG1U1 --to server
-    case upload rst CS4SG1U1 --to server --t1 4000
-    case upload rst CS4SG1U1 --to server --freq 1000 --missing   # every 1000 steps, what is not there
-    case upload rst CS4SG1U1 --to server --t1 3000 --t2 4000 --force
-    case upload rst CS4SG1U1 --to server
-    case upload CS4SG1U1 --to server --files
-    case upload CS4SG1U1 --to server --files "*.map"
-    case upload * --to server --files --force
-    case upload CS4SG1U1 --to server --dir binary --files
+    case upload history CS4SG1U1 --remote server
+    case upload history CS4SG1U1 --remote server --cleaned --compiled
+    case upload binary CS4SG1U1 --remote server --t1 1000 --t2 5000
+    case upload binary CS4SG1U1 --remote server --t1 5000
+    case upload binary CS4SG1U1 --remote server --missing
+    case upload input CS4SG1U1 --remote server
+    case upload rst CS4SG1U1 --remote server --t1 4000
+    case upload rst CS4SG1U1 --remote server --freq 1000 --missing   # every 1000 steps, what is not there
+    case upload rst CS4SG1U1 --remote server --t1 3000 --t2 4000 --force
+    case upload rst CS4SG1U1 --remote server
+    case upload CS4SG1U1 --remote server --files
+    case upload CS4SG1U1 --remote server --files "*.map"
+    case upload * --remote server --files --force
+    case upload CS4SG1U1 --remote server --dir binary --files
 
 {Colors.BOLD}CONTEXT:{Colors.RESET}
     Set remote context:    use remote:myserver
@@ -323,7 +335,7 @@ So do the restarts ({Colors.CYAN}.restarts{Colors.RESET}, `case organise history
 the restarts found only on the remote are added here.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    flexflow case download [{Colors.YELLOW}case{Colors.RESET}] --from {Colors.YELLOW}REMOTE{Colors.RESET} [options]
+    flexflow case download [{Colors.YELLOW}case{Colors.RESET}] --remote {Colors.YELLOW}REMOTE{Colors.RESET} [options]
     flexflow case download binary [{Colors.YELLOW}case{Colors.RESET}] [--t1 STEP] [--t2 STEP] [--freq N] [options]
     flexflow case download rst [{Colors.YELLOW}case{Colors.RESET}] [--t1 STEP] [--t2 STEP] [options]
     flexflow case download input [{Colors.YELLOW}case{Colors.RESET}] [options]
@@ -341,7 +353,7 @@ the restarts found only on the remote are added here.
     {Colors.YELLOW}case{Colors.RESET}                   Local case directory path (destination; use * for all cases in .cases.yml)
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
-    {Colors.YELLOW}--from REMOTE{Colors.RESET}          Remote machine name (required)
+    {Colors.YELLOW}--remote REMOTE{Colors.RESET}        Remote machine name (required)
     {Colors.YELLOW}--dir DIRS{Colors.RESET}             Comma-separated directories to download
                            (default: othd_files,oisd_files,binary)
     {Colors.YELLOW}--files [PATTERNS]{Colors.RESET}     Loose files from the remote case root, as
@@ -358,7 +370,7 @@ the restarts found only on the remote are added here.
     {Colors.YELLOW}--freq N{Colors.RESET}               binary/rst: only steps that are multiples of N
     {Colors.YELLOW}--remote-path PATH{Colors.RESET}     The folder holding the cases on the remote; the case goes to
                          PATH/<case>. Default: the remote's folder in the case folder's
-                         .cases.yml (remotes: {NAME: DIR}), else `remote set-path`
+                         .cases.yml (remotes: {{NAME: DIR}}), else `remote set-path`
     {Colors.YELLOW}--force{Colors.RESET}                Create the local case directory if it does not exist
     {Colors.YELLOW}--resume{Colors.RESET}               Resume the last interrupted download
     {Colors.YELLOW}--examples{Colors.RESET}             Show usage examples
@@ -370,7 +382,7 @@ the restarts found only on the remote are added here.
     with 'remote add'.
 
     Use 'use remote:<name>' in the interactive shell to set a default remote
-    so --from can be omitted.
+    so --remote can be omitted.
 
     Wildcard mode ('case download *') downloads all cases listed in the .cases.yml
     file in the current directory.
@@ -453,21 +465,21 @@ the restarts found only on the remote are added here.
     take the runs until the next `case organise history --compile`.
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
-    case download history CS4SG1U1 --from server
-    case download history CS4SG1U1 --from server --compiled
-    case download history * --from server --cleaned --compiled
-    case download binary CS4SG1U1 --from server --t1 1000 --t2 5000
-    case download binary CS4SG1U1 --from server --t1 1000 --t2 5000 --freq 500
-    case download binary CS4SG1U1 --from server --freq 1000
-    case download binary CS4SG1U1 --from server --t1 5000
-    case download binary CS4SG1U1 --from server --missing
-    case download binary CS4SG1U1 --from server --t1 3000 --t2 5000 --missing
-    case download input CS4SG1U1 --from server
-    case download rst CS4SG1U1 --from server --t1 4000
-    case download rst CS4SG1U1 --from server
-    case download CS4SG1U1 --from server --files
-    case download CS4SG1U1 --from server --files "*.map"
-    case download * --from server --files --force
+    case download history CS4SG1U1 --remote server
+    case download history CS4SG1U1 --remote server --compiled
+    case download history * --remote server --cleaned --compiled
+    case download binary CS4SG1U1 --remote server --t1 1000 --t2 5000
+    case download binary CS4SG1U1 --remote server --t1 1000 --t2 5000 --freq 500
+    case download binary CS4SG1U1 --remote server --freq 1000
+    case download binary CS4SG1U1 --remote server --t1 5000
+    case download binary CS4SG1U1 --remote server --missing
+    case download binary CS4SG1U1 --remote server --t1 3000 --t2 5000 --missing
+    case download input CS4SG1U1 --remote server
+    case download rst CS4SG1U1 --remote server --t1 4000
+    case download rst CS4SG1U1 --remote server
+    case download CS4SG1U1 --remote server --files
+    case download CS4SG1U1 --remote server --files "*.map"
+    case download * --remote server --files --force
 
 {Colors.BOLD}CONTEXT:{Colors.RESET}
     Set remote context:    use remote:myserver
@@ -481,6 +493,48 @@ class CaseUploadCommand(HistoryTransferMixin):
     def __init__(self):
         self.console = Console()
         self.remote_config = RemoteConfig()
+        self._sent = {}             # how the files sent were checked: {'md5': n, 'size': n}
+        self._sending = None        # (remote name, local case path) of the target in hand
+        self._ledgers = {}          # {folder of cases: Ledger}
+
+    def _send(self, ssh, local_file: str, remote_file: str, callback=None) -> None:
+        """One file to the remote, the way `auto` sends it (core/transfer):
+        to a temporary name, compared with the local file by size and md5,
+        then renamed. IOError when it fails; nothing is then left under the
+        real name. A file of the case in hand is written to the ledger of the
+        case's folder."""
+        from src.core.transfer.cloud import send_checked
+        mtime = os.stat(local_file).st_mtime
+        res = send_checked(ssh, local_file, remote_file, callback=callback, mkdir=False)
+        if not res.ok:
+            raise IOError(f"{os.path.basename(local_file)}: {res.detail}")
+        self._sent[res.verified] = self._sent.get(res.verified, 0) + 1
+        if not self._sending:
+            return
+        remote_name, case_path = self._sending
+        case_dir = Path(case_path).resolve()
+        try:
+            rel = Path(local_file).resolve().relative_to(case_dir).as_posix()
+        except ValueError:
+            return
+        if os.stat(local_file).st_mtime != mtime:
+            return                  # written again while it went: not a checked copy
+        from src.core.transfer.ledger import Ledger
+        ledger = self._ledgers.get(case_dir.parent)
+        if ledger is None:
+            ledger = self._ledgers[case_dir.parent] = Ledger(case_dir.parent)
+        ledger.record(remote_name, case_dir.name, rel, res.size, res.md5, res.verified,
+                      mtime=mtime, path=remote_file)
+
+    def _report_checks(self) -> None:
+        """How the files of this upload were checked."""
+        md5, size = self._sent.get('md5', 0), self._sent.get('size', 0)
+        if not md5 and not size:
+            return
+        parts = [f"{md5} by md5"] if md5 else []
+        if size:
+            parts.append(f"{size} by size only (no md5sum on the remote)")
+        self.console.print(f"[dim]Checked on the remote: {', '.join(parts)}[/dim]")
 
 
     def _get_transfer_state_file(self) -> Path:
@@ -654,7 +708,7 @@ class CaseUploadCommand(HistoryTransferMixin):
         is_upload = direction == 'upload'
         help_fn = show_upload_help if is_upload else show_download_help
         remote_arg_name = 'to' if is_upload else 'from_remote'
-        remote_prompt = '--to' if is_upload else '--from'
+        remote_prompt = '--remote'
         action_label = 'Upload' if is_upload else 'Download'
         target_label = 'upload' if is_upload else 'download'
 
@@ -927,9 +981,11 @@ class CaseUploadCommand(HistoryTransferMixin):
                         'key': self._target_key(entry_path, '__files__'),
                     })
 
+            self._sent = {}
             for idx, target in enumerate(all_targets, 1):
                 if target['key'] in completed_targets:
                     continue
+                self._sending = (remote_name, target['case_path']) if is_upload else None
 
                 if len(case_entries) > 1:
                     self.console.print(
@@ -1043,6 +1099,9 @@ class CaseUploadCommand(HistoryTransferMixin):
                                        target['case_path'], is_upload)
 
             ssh.disconnect()
+            self._sending = None
+            if is_upload:
+                self._report_checks()
             self.console.print()
 
             all_completed = success_count == total_targets and total_targets > 0
@@ -1407,7 +1466,7 @@ class CaseUploadCommand(HistoryTransferMixin):
             done = 0
             for name in names:
                 local_file = os.path.join(local_case_path, name)
-                ssh.upload_file(local_file, f"{remote_case_path}/{name}")
+                self._send(ssh, local_file, f"{remote_case_path}/{name}")
                 done += os.path.getsize(local_file)
                 progress.update(task, completed=done, description=f"Transferred {name}")
 
@@ -1514,11 +1573,16 @@ class CaseUploadCommand(HistoryTransferMixin):
                     state["last"] = transferred
                     progress.update(task, completed=state["done"] + transferred)
 
-                files_count = ssh.upload_directory(
-                    local_dir,
-                    remote_dir,
-                    callback=update_progress,
-                )
+                files_count = 0
+                for root, subdirs, files in os.walk(local_dir):
+                    sub = os.path.relpath(root, local_dir).replace(os.sep, '/')
+                    there = remote_dir if sub == '.' else f"{remote_dir}/{sub}"
+                    for name in subdirs:
+                        ssh.make_remote_dir(f"{there}/{name}")
+                    for name in sorted(files):
+                        self._send(ssh, os.path.join(root, name), f"{there}/{name}",
+                                   callback=update_progress)
+                        files_count += 1
 
                 progress.update(task, completed=total_bytes)
 
@@ -1631,7 +1695,7 @@ class CaseUploadCommand(HistoryTransferMixin):
                 started = time.monotonic()
                 for name in names:
                     local_file = os.path.join(local_dir, name)
-                    ssh.upload_file(local_file, f"{remote_dir}/{name}")
+                    self._send(ssh, local_file, f"{remote_dir}/{name}")
                     done += os.path.getsize(local_file)
                     progress.update(task, completed=done, description=f"Transferred {name}")
             self.console.print(
@@ -2226,198 +2290,6 @@ class CaseUploadCommand(HistoryTransferMixin):
         """
         return self._execute_transfer(args, 'upload')
 
-        if hasattr(args, "help") and args.help:
-            show_upload_help()
-            return 0
-
-        if hasattr(args, "examples") and args.examples:
-            show_upload_help()
-            return 0
-
-        # Validate case path
-        case_path = self.validate_case_path(args.case)
-        if not case_path:
-            return 1
-
-        if not args.to:
-            self.console.print(
-                "[red]Error:[/red] Remote machine not provided. Use --to or 'use remote:<name>' in interactive shell."
-            )
-            return 1
-
-        force_enabled = bool(getattr(args, "force", False))
-
-        # Validate remote
-        remote = self.validate_remote(args.to)
-        if not remote:
-            return 1
-
-        # Parse directories to upload
-        directories = self.parse_directories(args.dir)
-
-        # Get remote base path
-        remote_base = self.get_remote_base_path(
-            remote, args.remote_path,
-            self._get_cases_base_dir() if is_wildcard_case(case_path)
-            else Path(os.path.abspath(str(case_path).rstrip('/'))).parent)
-
-        # Wildcard mode: iterate all cases from .cases.yml
-        if is_wildcard_case(case_path):
-            base_dir = self._get_cases_base_dir()
-            cases = load_cases_from_directory(base_dir)
-            if not cases:
-                self.console.print(
-                    f"[red]Error:[/red] No cases found in .cases.yml at {base_dir}"
-                )
-                return 1
-
-            self.console.print()
-            self.console.print(
-                f"[bold cyan]Case Upload Summary[/bold cyan] [dim](wildcard mode: {len(cases)} cases)[/dim]"
-            )
-            self.console.print()
-
-            table = Table(box=box.SIMPLE, show_header=True, header_style="bold yellow")
-            table.add_column("Parameter", style="cyan")
-            table.add_column("Value", style="white")
-            table.add_row("Case Selection", "* (all cases from .cases.yml)")
-            table.add_row("Cases Base Dir", str(base_dir))
-            table.add_row("Remote Machine", args.to)
-            table.add_row("Remote Host", f"{remote['user']}@{remote['ip']}:{remote['port']}")
-            table.add_row("Remote Base Path", remote_base)
-            table.add_row("Directories", ", ".join(directories))
-            table.add_row("Force Create Missing Dir", "Yes" if force_enabled else "No")
-            self.console.print(table)
-            self.console.print()
-
-            try:
-                ssh = SSHClientWrapper(
-                    host=remote["ip"],
-                    username=remote["user"],
-                    password=remote["password"],
-                    port=remote.get("port", 22)
-                )
-
-                self.console.print("[cyan]Connecting to remote server...[/cyan]")
-                ssh.connect()
-                self.console.print("[green]✓[/green] Connected successfully")
-                self.console.print()
-
-                success_count = 0
-                total_targets = len(cases) * len(directories)
-
-                for idx, case_entry in enumerate(cases, 1):
-                    entry_path = case_entry.get("path")
-                    entry_name = case_entry.get("name", f"case-{idx}")
-
-                    self.console.print(
-                        f"[bold]Case {idx}/{len(cases)}:[/bold] [cyan]{entry_name}[/cyan]"
-                    )
-
-                    if not entry_path:
-                        self.console.print("[yellow]Warning:[/yellow] Missing case path in .cases.yml entry")
-                        self.console.print()
-                        continue
-
-                    if not os.path.exists(entry_path) or not os.path.isdir(entry_path):
-                        self.console.print(
-                            f"[yellow]Warning:[/yellow] Local case directory not found: {entry_path}"
-                        )
-                        self.console.print()
-                        continue
-
-                    remote_case_path = self.construct_remote_case_path(
-                        remote_base, entry_path, remote, args.remote_path)
-                    self.console.print(f"[dim]Remote case path: {remote_case_path}[/dim]")
-
-                    for directory in directories:
-                        if self.upload_directory(
-                            ssh,
-                            remote_case_path,
-                            entry_path,
-                            directory,
-                            force=force_enabled
-                        ):
-                            success_count += 1
-                    self.console.print()
-
-                ssh.disconnect()
-                self.console.print(
-                    f"[green]✓[/green] Upload complete: {success_count}/{total_targets} directories"
-                )
-                return 0 if success_count > 0 else 1
-
-            except Exception as e:
-                self.console.print(f"[red]Error:[/red] {e}")
-                return 1
-
-        if not os.path.exists(case_path):
-            self.console.print(f"[red]Error:[/red] Local case path not found: {case_path}")
-            return 1
-        if not os.path.isdir(case_path):
-            self.console.print(f"[red]Error:[/red] Local case path is not a directory: {case_path}")
-            return 1
-
-        # Construct remote case path
-        remote_case_path = self.construct_remote_case_path(
-            remote_base, case_path, remote, args.remote_path)
-
-        # Show summary
-        self.console.print()
-        self.console.print("[bold cyan]Case Upload Summary[/bold cyan]")
-        self.console.print()
-
-        table = Table(box=box.SIMPLE, show_header=True, header_style="bold yellow")
-        table.add_column("Parameter", style="cyan")
-        table.add_column("Value", style="white")
-
-        table.add_row("Local Case Path", case_path)
-        table.add_row("Remote Machine", args.to)
-        table.add_row("Remote Host", f"{remote['user']}@{remote['ip']}:{remote['port']}")
-        table.add_row("Remote Case Path", remote_case_path)
-        table.add_row("Directories", ", ".join(directories))
-        table.add_row("Force Create Missing Dir", "Yes" if force_enabled else "No")
-
-        self.console.print(table)
-        self.console.print()
-
-        # Connect to remote and upload
-        try:
-            ssh = SSHClientWrapper(
-                host=remote["ip"],
-                username=remote["user"],
-                password=remote["password"],
-                port=remote.get("port", 22)
-            )
-
-            self.console.print("[cyan]Connecting to remote server...[/cyan]")
-            ssh.connect()
-            self.console.print("[green]✓[/green] Connected successfully")
-            self.console.print()
-
-            # Upload each directory
-            success_count = 0
-            for directory in directories:
-                if self.upload_directory(
-                    ssh,
-                    remote_case_path,
-                    case_path,
-                    directory,
-                    force=force_enabled
-                ):
-                    success_count += 1
-
-            ssh.disconnect()
-            self.console.print()
-            self.console.print(
-                f"[green]✓[/green] Upload complete: {success_count}/{len(directories)} directories"
-            )
-            return 0 if success_count > 0 else 1
-
-        except Exception as e:
-            self.console.print(f"[red]Error:[/red] {e}")
-            return 1
-
     def execute_download(self, args) -> int:
         """
         Execute case download command (remote -> local).
@@ -2442,7 +2314,7 @@ class CaseUploadCommand(HistoryTransferMixin):
         remote_name = getattr(args, "from_remote", None)
         if not remote_name:
             self.console.print(
-                "[red]Error:[/red] Remote machine not provided. Use --from or 'use remote:<name>' in interactive shell."
+                "[red]Error:[/red] Remote machine not provided. Use --remote or 'use remote:<name>' in interactive shell."
             )
             return 1
 

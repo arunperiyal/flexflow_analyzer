@@ -6,6 +6,8 @@ unchanged, not the .sgd. Nothing is sent when one of them is missing."""
 import argparse
 from unittest.mock import MagicMock, patch
 
+from test_scripts.checked_remote import CheckedRemote, checked_mock, final
+
 import pytest
 
 from src.commands.case.download_impl import command as transfer
@@ -37,11 +39,11 @@ def test_def_inputs_skips_comments_and_repeats(case):
 
 
 def sent(ssh):
-    return sorted(c.args[1] for c in ssh.upload_file.call_args_list)
+    return sorted(final(c.args[1]) for c in ssh.upload_file.call_args_list)
 
 
 def test_upload_input_sends_the_def_and_its_files(case):
-    ssh = MagicMock()
+    ssh = checked_mock()
     ssh.remote_path_exists.return_value = True
     assert CaseDownloadCommand().upload_input(ssh, '/r/CS1', str(case))
     assert sent(ssh) == sorted(f'/r/CS1/{n}' for n in ['riser.def'] + INPUTS)
@@ -102,7 +104,7 @@ def test_case_upload_input_end_to_end(tmp_path, case):
                             t1=None, t2=None, force=False, resume=False, help=False,
                             examples=False, remote_path='/r', binary=False)
     with patch.object(transfer, 'SSHClientWrapper') as ssh_class:
-        ssh = ssh_class.return_value
+        ssh = checked_mock(ssh_class.return_value)
         ssh.remote_path_exists.return_value = True
         assert cmd.execute_upload(ns) == 0
     assert len(ssh.upload_file.call_args_list) == 5

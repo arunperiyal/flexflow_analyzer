@@ -12,9 +12,9 @@ from types import SimpleNamespace
 import pytest
 
 from src.commands.auto.apply import execute_apply
-from src.core.auto import cloud as cloud_mod
-from src.core.auto.cloud import LocalCloud, PutResult, SftpCloud, file_md5
-from src.core.auto.ledger import Ledger
+from src.core.transfer import cloud as cloud_mod
+from src.core.transfer.cloud import LocalCloud, PutResult, SftpCloud, file_md5
+from src.core.transfer.ledger import Ledger
 from src.core.auto.runlog import AutoLockError, FolderLock
 
 REPO = Path(__file__).resolve().parent.parent
@@ -74,8 +74,10 @@ def test_one_case_history_upload_and_post_in_that_order(dummy):
     ledger = Ledger(dummy / 'bare').data['local']['case5']
     assert 'othd_files/archive/riser2.othd' in ledger and 'RUN_1/riser.600_0.rst' not in ledger
     for rel, entry in ledger.items():
+        assert entry['mtime'] == (case / rel).stat().st_mtime or rel == '.casestatus.md'
         assert file_md5(remote / rel) == entry['md5'] == file_md5(case / rel) or rel == '.casestatus.md'
         assert entry['verified'] == 'md5'
+        assert entry['path'] == str(remote / rel)
     assert not list(remote.rglob('.*.part'))                    # no temporary file left
     # the post job went in with the window of the plan
     job = submitted(dummy)[-1]
@@ -120,6 +122,7 @@ def test_a_running_cases_live_history_is_a_snapshot_not_moved(dummy):
     assert (dummy / 'bare' / 'case2' / 'RUN_1' / 'riser.othd').exists()
     ledger = Ledger(dummy / 'bare').data['local']['case2']
     assert ledger['RUN_1/riser.othd']['verified'] == 'snapshot'
+    assert 'mtime' not in ledger['RUN_1/riser.othd']      # still being written
 
 
 # --- when something goes wrong ------------------------------------------------------------
@@ -265,6 +268,20 @@ def test_sftp_put_checks_the_md5_on_the_remote(tmp_path):
     res = sftp_cloud(tmp_path).put(src, 'c1', 'binary/a.plt')
     assert res.ok and res.verified == 'md5'
     assert (tmp_path / 'nas' / 'c1' / 'binary' / 'a.plt').read_bytes() == src.read_bytes()
+
+
+def test_md5_of_a_named_remote_file(tmp_path):
+    (tmp_path / 'c1' / 'binary').mkdir(parents=True)
+    there = tmp_path / 'c1' / 'binary' / 'a.plt'
+    there.write_bytes(b'abc')
+    local = LocalCloud(tmp_path)
+    assert local.md5('c1', 'binary/a.plt') == file_md5(there)
+    assert local.md5('c1', 'binary/none.plt') is None
+    cloud = SftpCloud.__new__(SftpCloud)
+    cloud.ssh, cloud.root, cloud.where = FakeSsh(), str(tmp_path), 'fake'
+    assert cloud.md5('c1', 'binary/a.plt') == file_md5(there)
+    cloud.ssh = FakeSsh(md5sum=False)
+    assert cloud.md5('c1', 'binary/a.plt') is None
 
 
 def test_sftp_put_without_md5sum_says_it_only_compared_sizes(tmp_path):

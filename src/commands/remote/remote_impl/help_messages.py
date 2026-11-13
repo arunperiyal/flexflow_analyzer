@@ -38,7 +38,7 @@ Record the machines a case can be sent to or fetched from, so
   - Remotes are stored in {Colors.YELLOW}~/.flexflow/remotes.json{Colors.RESET}, {Colors.BOLD}passwords in plain
     text{Colors.RESET}. Do not use an account whose password protects anything else.
   - {Colors.YELLOW}use remote:<name>{Colors.RESET} sets the remote for the session, so case
-    upload/download need no --to/--from.
+    upload/download need no --remote.
 """)
 
 
@@ -52,7 +52,7 @@ def print_add_help():
 
 {Colors.BOLD}ARGUMENTS:{Colors.RESET}
     {Colors.YELLOW}<name>{Colors.RESET}             What to call this machine here. It is the name given
-                       to {Colors.YELLOW}case upload --to{Colors.RESET}, {Colors.YELLOW}case download --from{Colors.RESET} and
+                       to {Colors.YELLOW}case upload --remote{Colors.RESET}, {Colors.YELLOW}case download --remote{Colors.RESET} and
                        {Colors.YELLOW}use remote:<name>{Colors.RESET}, not the machine's hostname.
 
 {Colors.BOLD}REQUIRED OPTIONS:{Colors.RESET}
@@ -152,7 +152,7 @@ def print_list_help():
 {Colors.BOLD}OUTPUT:{Colors.RESET}
 
     A table of {Colors.YELLOW}Name, User, IP, Port, Path{Colors.RESET} -- one row per machine. The Name
-    column is what {Colors.YELLOW}case upload --to{Colors.RESET} and {Colors.YELLOW}case download --from{Colors.RESET} take.
+    column is what {Colors.YELLOW}case upload --remote{Colors.RESET} and {Colors.YELLOW}case download --remote{Colors.RESET} take.
     Passwords are not shown.
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}

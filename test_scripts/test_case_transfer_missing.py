@@ -9,10 +9,11 @@ from unittest.mock import patch
 import pytest
 
 from src.commands.case.download_impl import command as transfer
+from test_scripts.checked_remote import CheckedRemote, checked_mock, final
 from src.commands.case.download_impl.command import CaseDownloadCommand, select_missing
 
 
-class FakeRemote:
+class FakeRemote(CheckedRemote):
     """An SSH stand-in over a local directory that plays the remote case /r/CS1."""
 
     def __init__(self, root):
@@ -45,7 +46,7 @@ class FakeRemote:
         return True
 
     def upload_file(self, local, path, callback=None):
-        self.sent.append(os.path.basename(path))
+        self.sent.append(os.path.basename(final(path)))
         shutil.copy(local, self._local(path))
 
     def download_file(self, path, local, callback=None):

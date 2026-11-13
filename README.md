@@ -60,8 +60,8 @@ case out <case> --map      # Write othd maps (row → node/point coordinates)
 case out <case> --list     # Table of the case's outputTimeHistory blocks
 case domain <case> --init  # Declare the field and bodies, in domain.yml
 case domain body --list    # What the domain is made of
-case upload <case> --to R  # Send case data/files to a remote
-case download <case> --from R
+case upload <case> --remote R  # Send case data/files to a remote
+case download <case> --remote R
 
 # Data inspection
 check <file>               # Inspect OTHD/OISD files

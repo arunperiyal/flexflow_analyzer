@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+### ✅ `case upload`: every file checked, as `auto apply` does
+
+- `case upload` (`binary`, `rst`, `history`, `input`, `--files`, a whole
+  folder) now sends each file to a temporary name (`.<name>.part`), compares
+  it with the local file by size and md5, and only then renames it. A copy
+  that differs or was cut short is removed and the upload stops with an
+  error; an older copy under the real name is left as it was. Before, a file
+  was written straight to its real name and not compared.
+- A remote without `md5sum` is compared by size only; the upload ends with
+  `Checked on the remote: N by md5, M by size only`.
+- Each checked file is written to `<folder of cases>/auto_logs/ledger.json`,
+  the record `auto` keeps. An entry now also holds when the local file was
+  written (`mtime`) and where the copy is on the remote (`path`).
+- **`case upload --to` and `case download --from` are now `--remote`**, the
+  name `run post` and `auto` already use. The old names are gone.
+- Fixed: `case upload --help` and `case download --help` stopped with
+  `name 'NAME' is not defined` instead of printing the help.
+- For developers: the remote access and the ledger moved from
+  `src/core/auto/` to `src/core/transfer/` (`cloud.py`, `ledger.py`);
+  `send_checked()` is the one way a file is sent.
+
 ### ❓ `case organise history`: --clean and --compile ask first
 
 - `--clean` shows which cleaned files it will write or remove and asks once

@@ -146,7 +146,7 @@ class HistoryTransferMixin:
                 if not ssh.make_remote_dir(f"{remote_case_path}/{parent}"):
                     raise IOError(f"could not create {remote_case_path}/{parent}")
                 made.add(parent)
-            ssh.upload_file(src.path(rel), dst.path(rel))
+            self._send(ssh, src.path(rel), dst.path(rel))
 
         src, dst = _Local(local_case_path), _Remote(ssh, remote_case_path)
         return self._carry_history(src, dst, send, sets, problem, 'Uploaded')

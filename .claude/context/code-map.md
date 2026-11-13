@@ -23,7 +23,8 @@ commands, contexts and builtins.
 | `cli/` | App declaration (`app.py`), shell contexts such as `case:` `node:` `t1:` (`context.py`), own builtins `web`, `quota`, `missing` (`builtins.py`), tab completion (`completers.py`), generated bash/zsh/fish completion (`completion.py`) |
 | `commands/` | One package per command. Parsing and help only; the logic is in `*_impl/` and `core/` |
 | `core/` | What a case is and how its files are read: no command-line code |
-| `core/auto/` | The `auto` workflow, in the order it runs: `observe` (read-only snapshot) → `decide` (pure rules) → `executor` (acts), with `ledger`, `runlog`, `report`, `cloud`, `conf`, `stretches` |
+| `core/auto/` | The `auto` workflow, in the order it runs: `observe` (read-only snapshot) → `decide` (pure rules) → `executor` (acts), with `runlog`, `report`, `conf`, `stretches` |
+| `core/transfer/` | The remote copy of the cases, shared by `case upload` and `auto`: `cloud` (what the remote holds; `send_checked()`, the one checked way to send a file), `ledger` (what was sent and checked) |
 | `core/readers/` | OTHD and OISD time-history readers; `series.py` reads them as named variables |
 | `core/parsers/` | `.def` parser |
 | `plt/` | Binary PLT without Tecplot: `fxplt.py` reader, `convert.py` to VTU, `render.py` PNGs via pyvista, `derive.py`, `surface.py`, `camera.py` |

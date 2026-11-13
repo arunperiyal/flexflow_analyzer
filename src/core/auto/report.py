@@ -201,14 +201,14 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
                 parts.append(f"{kind} runs {runs_text(runs)}")
         s.row('Only there', ' · '.join(parts) + f" (on {remote}, not here)")
     if only and (only.get(('othd', 'archive')) or only.get(('oisd', 'archive'))):
-        s.actions.append(f"case download history {name} --archive --from {remote}")
+        s.actions.append(f"case download history {name} --archive --remote {remote}")
     organise = c.get('organise')
     if organise and organise[0] == 'update':
         s.actions.append(f"case organise history {name} --update --clean --compile")
     elif organise:
         s.actions.append(f"case organise history {name} --clean --compile")
     if cloud is not None and (organise or c.get('hist_missing')):
-        s.actions.append(f"case upload history {name} --to {remote}")
+        s.actions.append(f"case upload history {name} --remote {remote}")
     if c.get('live_upload'):
         s.actions.append(AUTO_ONLY + f"copy the live {p}.othd/.oisd to {remote} "
                                      f"({_size_text(sum(c['live_upload'].values()))})")
@@ -270,7 +270,7 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
         # earlier run's PLT in place after a restart
         flag = '' if set(up) & set(c.get('stale_plt') or []) else ' --missing'
         s.actions.append(f"case upload binary {name} --t1 {up[0]} --t2 {up[-1]}{flag} "
-                         f"--to {remote}")
+                         f"--remote {remote}")
     if c.get('del_ascii'):
         s.actions.append(AUTO_ONLY + f"delete ASCII PLTs, {steps_phrase(c['del_ascii']).lower()}, "
                                      f"once the binary copy on {remote} is md5-checked"
@@ -373,10 +373,10 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
         grid_due = [t for t in sorted(todo) if t != c.get('rst_final')]
         if grid_due:
             s.actions.append(f"case upload rst {name} --t1 {grid_due[0]} --t2 {grid_due[-1]} "
-                             f"--freq {conf.upload_rst} --missing --to {remote}")
+                             f"--freq {conf.upload_rst} --missing --remote {remote}")
         if c.get('rst_final') in todo:
             n = c['rst_final']
-            s.actions.append(f"case upload rst {name} --t1 {n} --t2 {n} --missing --to {remote}")
+            s.actions.append(f"case upload rst {name} --t1 {n} --t2 {n} --missing --remote {remote}")
     thin = c.get('thin') or []
     if snap.rst and thin:                      # after the uploads: deleting follows from them
         s.actions.append(AUTO_ONLY + f"delete .rst of {steps_phrase(thin).lower()}: not "
@@ -397,7 +397,7 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
               + (f": {', '.join(sorted(missing))}" if missing else ''))
     s.row('Size', f"{_size_text(sum(inputs.values()))} here")
     if missing:
-        s.actions.append(f"case upload {name} --files '{','.join(sorted(missing))}' --to {remote}")
+        s.actions.append(f"case upload {name} --files '{','.join(sorted(missing))}' --remote {remote}")
     sections.append(s)
     return sections
 

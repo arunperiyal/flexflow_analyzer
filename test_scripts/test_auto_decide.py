@@ -564,7 +564,7 @@ def test_the_upload_command_drops_missing_when_an_old_plt_must_be_replaced():
                        binary_time={350: START + 900}, sent_at={})
     plan = decide(s, CONF, True, True)
     cmds = [c for c in commands(build(s, plan, CONF)) if c.startswith('case upload binary')]
-    assert cmds == ['case upload binary case --t1 350 --t2 350 --to local']
+    assert cmds == ['case upload binary case --t1 350 --t2 350 --remote local']
 
 
 # --- more real cases ---------------------------------------------------------------------
@@ -601,7 +601,7 @@ def test_stale_plts_whose_out_is_gone_are_the_users_to_decide_not_holes():
 
 
 def test_a_local_cloud_listing_carries_mtimes(tmp_path):
-    from src.core.auto.cloud import LocalCloud
+    from src.core.transfer.cloud import LocalCloud
     (tmp_path / 'case' / 'binary').mkdir(parents=True)
     (tmp_path / 'case' / 'binary' / 'riser.50.plt').write_bytes(b'x' * 7)
     got = LocalCloud(tmp_path).listing('case')

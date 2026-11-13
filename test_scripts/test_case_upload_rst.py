@@ -11,6 +11,8 @@ so `rst` leaves them (and `sgd` is no longer a target: `input` replaces it).
 import argparse
 from unittest.mock import MagicMock, patch
 
+from test_scripts.checked_remote import CheckedRemote, checked_mock, final
+
 import pytest
 
 from src.commands.case.download_impl import command as transfer
@@ -58,11 +60,11 @@ def case(tmp_path):
 
 
 def uploaded(ssh):
-    return [(c.args[0].rsplit('/', 1)[1], c.args[1]) for c in ssh.upload_file.call_args_list]
+    return [(c.args[0].rsplit('/', 1)[1], final(c.args[1])) for c in ssh.upload_file.call_args_list]
 
 
 def test_upload_restart_sends_the_complete_steps_into_the_remote_run_dir(case, capsys):
-    ssh = MagicMock()
+    ssh = checked_mock()
     ssh.remote_path_exists.return_value = True
     ok = CaseDownloadCommand().upload_restart(ssh, '/r/CS1', str(case), (4000.0, 5000.0))
     assert ok
@@ -72,13 +74,13 @@ def test_upload_restart_sends_the_complete_steps_into_the_remote_run_dir(case, c
 
 
 def test_upload_restart_with_nothing_complete_fails(case):
-    ssh = MagicMock()
+    ssh = checked_mock()
     assert not CaseDownloadCommand().upload_restart(ssh, '/r/CS1', str(case), (4500.0, 4500.0))
     ssh.upload_file.assert_not_called()
 
 
 def test_upload_restart_needs_force_for_a_missing_remote_dir(case):
-    ssh = MagicMock()
+    ssh = checked_mock()
     ssh.remote_path_exists.return_value = False
     assert not CaseDownloadCommand().upload_restart(ssh, '/r/CS1', str(case), (4000.0, 4000.0))
     ssh.make_remote_dir.return_value = True
@@ -108,7 +110,7 @@ def cmd(tmp_path):
 
 def test_case_upload_rst_end_to_end(cmd, case):
     with patch.object(transfer, 'SSHClientWrapper') as ssh_class:
-        ssh = ssh_class.return_value
+        ssh = checked_mock(ssh_class.return_value)
         ssh.remote_path_exists.return_value = True
         assert cmd.execute_upload(args(what='rst', case=str(case), t1=4000.0)) == 0
     assert [n for n, _ in uploaded(ssh)] == RST_4000
@@ -116,7 +118,7 @@ def test_case_upload_rst_end_to_end(cmd, case):
 
 def test_case_upload_rst_without_steps_sends_every_step(cmd, case):
     with patch.object(transfer, 'SSHClientWrapper') as ssh_class:
-        ssh = ssh_class.return_value
+        ssh = checked_mock(ssh_class.return_value)
         ssh.remote_path_exists.return_value = True
         assert cmd.execute_upload(args(what='rst', case=str(case))) == 0
     assert [n for n, _ in uploaded(ssh)] == RST_4000 + RST_5000
@@ -173,7 +175,7 @@ def test_in_the_shell_the_case_context_fills_only_a_mode(tmp_path, monkeypatch):
 
 # --- case download rst ---------------------------------------------------------
 
-class FakeRemote:
+class FakeRemote(CheckedRemote):
     """An SSH stand-in over a local directory that plays the remote case."""
 
     def __init__(self, root):
@@ -272,14 +274,14 @@ def steps_sent(ssh):
 
 
 def test_upload_rst_freq_sends_only_the_multiples(sets):
-    ssh = MagicMock()
+    ssh = checked_mock()
     ssh.remote_path_exists.return_value = True
     assert CaseDownloadCommand().upload_restart(ssh, '/r/CS2', str(sets), None, freq=1000)
     assert steps_sent(ssh) == [1000, 2000, 3000, 4000, 5000]         # not 5740, not 1500
 
 
 def test_upload_rst_freq_and_window_together(sets):
-    ssh = MagicMock()
+    ssh = checked_mock()
     ssh.remote_path_exists.return_value = True
     assert CaseDownloadCommand().upload_restart(ssh, '/r/CS2', str(sets), (1000.0, 3000.0),
                                                 freq=1000)
@@ -287,7 +289,7 @@ def test_upload_rst_freq_and_window_together(sets):
 
 
 def test_upload_rst_missing_sends_only_what_the_remote_lacks(sets):
-    ssh = MagicMock()
+    ssh = checked_mock()
     ssh.remote_path_exists.return_value = True
     there = {n: 10 for n in GRID[4000] + GRID[5000]}                  # both complete there
     there[GRID[2000][1]] = 10                                         # one part of 2000
@@ -303,7 +305,7 @@ def test_upload_rst_missing_sends_only_what_the_remote_lacks(sets):
 
 
 def test_upload_rst_missing_with_everything_there_sends_nothing(sets, capsys):
-    ssh = MagicMock()
+    ssh = checked_mock()
     ssh.remote_path_exists.return_value = True
     ssh.remote_file_sizes.return_value = {n: 10 for names in GRID.values() for n in names}
     assert CaseDownloadCommand().upload_restart(ssh, '/r/CS2', str(sets), None, freq=1000,

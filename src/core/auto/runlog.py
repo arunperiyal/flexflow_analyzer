@@ -12,7 +12,7 @@ import socket
 import time
 from pathlib import Path
 
-from .ledger import logs_dir
+from src.core.transfer.ledger import logs_dir
 
 STALE_SECS = 12 * 3600
 

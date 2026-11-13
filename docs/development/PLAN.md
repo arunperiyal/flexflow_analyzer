@@ -154,7 +154,7 @@ Settled with the user on 2026-11-13:
   observation and action.
 - `case organise plt` always verifies. There is no `--unverified` flag.
 
-Order of work: 12, 13, 14, 15, 16, 17, then Phase 6. Phases 12 to 14 change
+Order of work: 12 (done), 13, 14, 15, 16, 17, then Phase 6. Phases 12 to 14 change
 hand commands and are useful on their own; 15 is a refactor with no change in
 behaviour; 16 and 17 are what the user sees.
 
@@ -179,26 +179,6 @@ What the code check found (why 12, 14 and 15 are needed):
 - **Parsing.** `auto` takes `what` and `[case]` as positionals. A target word
   after `apply` (`history`, `plt`, `output`, `all`) has to be told apart from
   a case name.
-
-### Phase 12: one checked transfer for `case upload` and `auto` (branch `checked-transfer`)
-
-Refactor. After it, a file sent by hand and a file sent by `auto` go the same
-way and leave the same record.
-
-- [ ] Move the remote access of `core/auto/cloud.py` (listing, `put` with
-      temporary name, md5, rename) to a core module of its own, with a
-      function that returns the md5 of a named remote file
-- [ ] Move the ledger next to it; entries also record the local file's
-      `mtime`
-- [ ] `case upload binary`, `rst`, `history`, `input` and `--files` send
-      through it: md5-checked, temporary name then rename, written to the
-      ledger of the case folder
-- [ ] `case upload --to REMOTE` and `case download --from REMOTE` become
-      `--remote REMOTE`, the name `run post` and `auto` already use
-- [ ] `executor.do_upload` uses the same function; `auto` tests unchanged
-- [ ] Tests for `case upload` against a local "cloud": a copy that differs,
-      a remote without `md5sum` (size only), a transfer cut short
-- [ ] Help text, `docs/usage/`, `CHANGELOG.md`
 
 ### Phase 13: `case upload plt` and `case check plt --verify` (branch `plt-verify`)
 
@@ -338,6 +318,7 @@ As noted on 2026-11-11; may be out of date.
 | 3 | `plan-file` | This file; `problems.md` removed (its problem was fixed in `389ef30`); the `prompt.md` note (`run post --remote`, `--t1` / `--t2`) found already built |
 | 4 | `repo-cleanup` | Removed `module_backup/`, `main_old.py`, the shadowed command files, root `mainFlex.sh` and `sample.yaml`; `.gitignore` tidied. The `config` command was left (backlog). Still open, on the user's word: delete the local branches already merged |
 | 5 | `web-render-tests` | The two failing render tests: the route they fetched was removed on purpose in `70d5224`; the tests now go through `save` and `render-file/<token>` |
+| 12 | `checked-transfer` | `case upload` and `auto` send through one checked path (`src/core/transfer/`: temporary name, size and md5, rename) and one ledger, whose entries now hold the local `mtime` and the remote `path`; `--to` / `--from` became `--remote`; the crash of `case upload --help` fixed |
 
 ---
 

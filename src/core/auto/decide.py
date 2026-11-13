@@ -228,18 +228,18 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
         lacking = sorted({(ext, n) for ext, h in snap.history.items()
                           for n in set(h.cleaned) - set(h.archive)})
         if cloud is None:
-            how = (f"restore it with `case download history {name} --archive --from {conf.remote}` "
+            how = (f"restore it with `case download history {name} --archive --remote {conf.remote}` "
                    f"if {conf.remote} has it (it could not be listed)")
         else:
             there = [(ext, n) for ext, n in lacking
                      if f"{ext}_files/archive/{p}{n}.{ext}" in cloud]
             if len(there) == len(lacking):
                 how = (f"{conf.remote} has it: restore with "
-                       f"`case download history {name} --archive --from {conf.remote}`")
+                       f"`case download history {name} --archive --remote {conf.remote}`")
             elif there:
                 how = (f"{conf.remote} has only some of it ("
                        f"{', '.join(f'{e} run {n}' for e, n in there)}): restore those with "
-                       f"`case download history {name} --archive --from {conf.remote}`")
+                       f"`case download history {name} --archive --remote {conf.remote}`")
             else:
                 how = (f"{conf.remote} has no archive/ copy either, so it cannot be restored "
                        f"from there")
@@ -272,7 +272,7 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
                          f"{'they exist' if len(gone_archive) > 1 else 'it exists'} only on "
                          f"{conf.remote}. Bring "
                          f"{'them' if len(gone_archive) > 1 else 'it'} back with "
-                         f"`case download history {name} --archive --from {conf.remote}`.")
+                         f"`case download history {name} --archive --remote {conf.remote}`.")
 
     # -- history ------------------------------------------------------------------
     organising = False
