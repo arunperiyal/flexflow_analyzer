@@ -209,8 +209,11 @@ The commands always verify; there is no flag to skip it.
       (`core/plt_ascii.py`. Written from the Tecplot ASCII format, with no
       real simPlt file at hand: a file it cannot count is never called
       whole. To be tried on a real ASCII PLT)
-- [ ] One function for "what stands in for this file": the next link in the
+- [x] One function for "what stands in for this file": the next link in the
       chain, local or remote, falling through a missing link to the one after
+      (`core/chain.py`. A link that is there but not good does not stop a
+      later good one: a whole, newer binary PLT covers the `.out` whatever
+      the ASCII PLT is like, as it did before this phase)
 - [ ] `case organise plt --delete-binary`: deletes only the files with a
       verified copy on the remote (ledger entry whose size and `mtime` still
       match the local file); the others are listed and left
