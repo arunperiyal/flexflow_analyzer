@@ -202,7 +202,7 @@ way and leave the same record.
       (its ledger entries also say where on the remote the copy is)
 - [x] Tests for `case upload` against a local "cloud": a copy that differs,
       a remote without `md5sum` (size only), a transfer cut short
-- [ ] Help text, `docs/usage/`, `CHANGELOG.md`
+- [x] Help text, `docs/usage/`, `CHANGELOG.md`
 
 ### Phase 13: `case upload plt` and `case check plt --verify` (branch `plt-verify`)
 

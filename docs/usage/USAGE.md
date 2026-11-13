@@ -308,6 +308,13 @@ ff case upload mycase --remote myserver
 - Uses local case directory as source
 - Uploads only specified directories (default: othd_files, oisd_files, binary)
 - `--force` creates missing remote directories before uploading
+- Every file is checked: it is sent to a temporary name (`.<name>.part`),
+  compared with the local file by size and md5, and only then renamed. A copy
+  that differs or was cut short is removed and the upload stops with an
+  error. A remote without `md5sum` is compared by size only, and the upload
+  says so
+- Each checked file is written to `<folder of cases>/auto_logs/ledger.json`,
+  the same record `auto apply` keeps of what is on the remote
 - Shows transfer progress with file counts
 - Preserves local directory structure on remote
 

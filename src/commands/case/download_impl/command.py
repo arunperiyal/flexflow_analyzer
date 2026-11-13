@@ -208,6 +208,18 @@ the remote gets the restarts it lacks.
     Wildcard mode ('case upload *') uploads all cases listed in the .cases.yml
     file in the current directory.
 
+{Colors.BOLD}CHECKED COPIES:{Colors.RESET}
+    Every file is sent the way `auto apply` sends it: to a temporary name
+    (.<name>.part), compared with the local file by size and md5, and only
+    then renamed to its real name. A copy that differs or was cut short is
+    removed and the upload stops with an error; an older copy under the real
+    name is left as it was. A remote without md5sum is compared by size
+    only, and the last line of the upload says so.
+
+    Each checked file is written to <folder of cases>/auto_logs/ledger.json
+    (size, md5, when the local file was written, where the copy is), the
+    record `auto` keeps of what is safely on the remote.
+
 {Colors.BOLD}FILES:{Colors.RESET}
     --files carries the small things that describe a case rather than its data:
     what defines the run, its settings, and any othd maps. They are globs, so
