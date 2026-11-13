@@ -1,6 +1,7 @@
 """Installation utilities for FlexFlow."""
 
 import os
+import re
 import sys
 import subprocess
 import shutil
@@ -60,21 +61,28 @@ def check_dependencies():
 
 
 def convert_docs_to_html(docs_dir, install_docs_dir):
-    """Convert markdown documentation to HTML."""
+    """Convert markdown documentation to HTML and copy other documentation files."""
     print(f"{Colors.CYAN}[INFO]{Colors.RESET} Converting documentation to HTML...")
     
     if not os.path.exists(docs_dir):
         print(f"{Colors.YELLOW}[WARNING]{Colors.RESET} Documentation directory not found at {docs_dir}")
         return
     
+    # Create installation docs directory
+    os.makedirs(install_docs_dir, exist_ok=True)
+
+    docs_path = Path(docs_dir)
+    for source_file in docs_path.rglob("*"):
+        if source_file.is_file() and source_file.suffix.lower() != ".md":
+            destination = Path(install_docs_dir) / source_file.relative_to(docs_path)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source_file, destination)
+
     try:
         import markdown
     except ImportError:
         print(f"{Colors.YELLOW}[WARNING]{Colors.RESET} markdown package not available, skipping HTML conversion")
         return
-    
-    # Create installation docs directory
-    os.makedirs(install_docs_dir, exist_ok=True)
     
     # HTML template
     html_template = """<!DOCTYPE html>
@@ -125,7 +133,6 @@ def convert_docs_to_html(docs_dir, install_docs_dir):
 </html>"""
     
     # Find all markdown files
-    docs_path = Path(docs_dir)
     md_files = list(docs_path.rglob("*.md"))
     
     converted_count = 0
@@ -134,6 +141,17 @@ def convert_docs_to_html(docs_dir, install_docs_dir):
             # Read markdown content
             with open(md_file, 'r', encoding='utf-8') as f:
                 md_content = f.read()
+
+            md_content = re.sub(
+                r'(\]\(\s*[^)\s]+?)\.md(#[^)\s]*)?(\s*\))',
+                r'\1.html\2\3',
+                md_content,
+            )
+            md_content = re.sub(
+                r"((?:href|src)=[\"'][^\"']+?)\.md([\"'])",
+                r"\1.html\2",
+                md_content,
+            )
             
             # Convert to HTML
             html_content = markdown.markdown(md_content, extensions=['tables', 'fenced_code'])

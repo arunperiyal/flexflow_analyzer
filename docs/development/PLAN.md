@@ -83,9 +83,8 @@ own `docs/PLAN.md` before writing code; they may have changed.
 
 ### Phase 10: documentation that installs and development notes (branch `docs-install`)
 
-- [ ] Installer (`src/installer/install.py`): copy the non-markdown files of
+- [x] Installer (`src/installer/install.py`): copy the non-markdown files of
       `docs/` too (`auto_flow.html`, the SVGs)
-- [ ] Installer: turn `.md` links into `.html` links in the converted pages
 - [ ] `src/templates/example_case_multi.yaml` points at
       `examples/case_multi_with_globals.yaml`, which git ignores: track the
       example or drop the pointer

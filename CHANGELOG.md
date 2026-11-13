@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### 📚 Installed documentation
+
+- The installer now copies non-markdown documentation assets, including HTML
+  flowcharts and SVG diagrams.
+- Links to markdown pages in converted documentation now point to their
+  installed HTML equivalents.
+
 ### 🔗 `case organise plt` and `output`: deleting along the chain
 
 A file is now deleted only when the next form of the same data stands in for
