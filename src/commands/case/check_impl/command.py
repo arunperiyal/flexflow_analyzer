@@ -43,6 +43,11 @@ def execute_case_check(args):
         print_check_help()
         return
 
+    if subcommand == 'plt' and getattr(args, 'verify', False):
+        # binary/ against the remote copy; with --freq only the multiples of it
+        from .verify import execute_verify
+        return execute_verify(args)
+
     if subcommand == 'data':
         # the old `case status`: data file completeness
         from .data import execute_check_data

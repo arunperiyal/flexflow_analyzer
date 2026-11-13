@@ -222,7 +222,7 @@ def test_report_needs_and_flags_come_after_state(dummy):
     sec = report_of(dummy, 'case6')
     assert list(sec)[:3] == ['state', 'needs', 'flags']
     assert dict(sec['plt'].rows)['Binary'] == 'present 450, 500 · broken 550'
-    assert sec['plt'].actions[0] == 'case upload binary case6 --t1 450 --t2 500 --missing --remote local'
+    assert sec['plt'].actions[0] == 'case upload plt case6 --t1 450 --t2 500 --missing --remote local'
 
 
 def test_auto_commands_is_plain_text_to_read_or_save(dummy, monkeypatch, capsys):
@@ -388,7 +388,7 @@ def test_the_dry_run_says_what_the_files_are(dummy):
     items = _intended(results[0][1], {'upload'})
     assert items[0][1] == '14 files, 26.9 KB'
     assert [t for k, t in items if k == 'detail'] == [
-        'inputs and case files: 10 files, 26.8 KB', 'restart sets 400: 4 files, 112 B']
+        'inputs and case files: 10 files, 26.7 KB', 'restart sets 400: 4 files, 112 B']
     plan = results[0][1]
     plan.ctx['rst_why'] = {400: (0, 4, 4)}                  # a set that replaces remote files
     detail = [t for k, t in _intended(plan, {'upload'}) if k == 'detail']

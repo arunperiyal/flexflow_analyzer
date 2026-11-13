@@ -106,7 +106,7 @@ def create_app() -> App:
         help_header=HELP_HEADER,
         session_timeout=15,
         settings=[Setting('transfer_speed', 10.0, _positive_float,
-                          'Link speed in Mbps that case upload/download binary plans '
+                          'Link speed in Mbps that case upload/download plt plans '
                           'against the session timeout', choices=('10', '100', '1000')),
                   Setting('login_cpu_limit', 70, _percent,
                           'On a login node, keep transfers under this % of a core '

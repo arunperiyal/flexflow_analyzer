@@ -1,7 +1,7 @@
 # `auto` — plan
 
 One command that looks at every case in a directory, works out what is safe
-to do next (submit a post job, upload binary PLTs / history, later: tidy
+to do next (submit a post job, upload plt PLTs / history, later: tidy
 output), and does it — with checks strict enough that no data can be lost.
 It runs on the HPC login node with no agent: an algorithm, not judgment.
 
@@ -158,7 +158,7 @@ again just before acting.
 | D1 | **submit `run post convert`** | settled steps have a valid-looking ASCII `.plt` but no valid binary | cheaper than `full` |
 | D2 | **submit `run post full`** | settled steps have no valid binary PLT, and no post job is in flight | range = contiguous blocks of such steps: `--t1` first, `--t2` last *settled* step (never the step being written); at most `max_post_jobs` blocks per case (default 1) and `max_post_total` per sweep; with `--remote` if a remote is set, so files go out as they're made |
 | D3 | **re-post** | binary PLT invalid/suspect, or last post job ended FAILED/TIMEOUT and its last files fail §4.3 | same as D2, but only those steps; listed in the report so a person sees it |
-| D4 | **upload binary** | valid binary PLT, remote copy missing / different size / checksum mismatch / local file changed since the ledger | key auth; write to `.<name>.part`, check size + checksum, then rename (the `postFlex.sh` way) |
+| D4 | **upload plt** | valid binary PLT, remote copy missing / different size / checksum mismatch / local file changed since the ledger | key auth; write to `.<name>.part`, check size + checksum, then rename (the `postFlex.sh` way) |
 | D5 | **upload history** | archived/cleaned `.othd`/`.oisd` parts (which don't change) not on the remote | reuses `upload_history`; the live `.othd` is copied only as a snapshot, never treated as final |
 | D6 | **verify** | files uploaded by post jobs (`post_sent_*.log`) with no checksum in the ledger | checksum both sides, record in the ledger |
 | — | *later phase:* tidy | `.out` of steps whose binary PLT is valid **and** remote-verified; ASCII PLT whose binary is valid **and** verified; `.rst` thinning per `organise output` rules, but never the last two complete restart points | opt-in `--tidy`; asks to confirm unless `--yes` |
@@ -528,7 +528,7 @@ passes, and remembers between logins how far each case got.
     `.out`/`.rst`): `case report`.
 15. Running ⇒ no `organise history --update`.
 16. Take first/last step of the live `.othd` in the run dir; `run post`.
-17. Post done ⇒ delete ASCII PLT, upload binary PLT, check it's on cloud,
+17. Post done ⇒ delete ASCII PLT, upload plt PLT, check it's on cloud,
     delete binary PLT, delete `.out` up to the last converted step, thin
     `.rst`.
 18. Next case.
@@ -548,7 +548,7 @@ case as far as its checks allow and records the stage in
 | **P1 post** | submit post for steps `[t1, t2]` | no post job of the case in flight; **not running**: t1..t2 = first/last step of the newest `archive/` part, **running**: first step of the live `.othd`..last *settled* step; steps past a pending restart's `restartTsId` excluded; every step's `.out` complete (all `nsg` parts); quota headroom | `run post full` (or `convert` when ASCII PLT exist) |
 | **P2 post done** | check the result | sacct says the post job COMPLETED; every step in `[t1, t2]` has a **valid** binary PLT (§4.3). FAILED/TIMEOUT or a missing/invalid PLT ⇒ case stops here with *needs you* | — |
 | **C1 delete ASCII** | ASCII PLT in run dir | P2 ok for that step (binary valid and newer) | `case organise plt --delete-ascii` |
-| **U1 upload PLT** | binary PLTs `[t1, t2]` | P2 ok | upgraded `case upload binary` |
+| **U1 upload PLT** | binary PLTs `[t1, t2]` | P2 ok | upgraded `case upload plt` |
 | **V1 verify PLT** | md5 on cloud = local md5 | U1 done | new |
 | **C2 delete binary** | local binary PLTs | **V1 verified** for that file (ledger) | upgraded `case organise plt --delete-binary --verified` |
 | **C3 delete .out** | `.out` of steps ≤ t2 | that step's PLT is **V1 verified on cloud** (or valid in binary/); not the step being written; not past a pending restart | upgraded `case organise output --keep-freq K` |
@@ -694,7 +694,7 @@ results back and the same checks run whether you type the command or
 New stage order for a case whose post job has finished:
 
 ```
-P2 post done → U1 upload binary → V1 md5 on cloud
+P2 post done → U1 upload plt → V1 md5 on cloud
              → C1 delete ASCII PLT     (binary verified on cloud)
              → C2 delete binary PLT    (verified on cloud)
              → C3 delete .out          (PLT verified on cloud)

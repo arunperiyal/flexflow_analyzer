@@ -1,5 +1,5 @@
 """`case upload|download rst`: the restart files of some steps (every step
-without --t1/--t2), and the new spelling `case upload|download binary` that
+without --t1/--t2), and the new spelling `case upload|download plt` that
 replaces --binary.
 
 A restart from step T needs one <problem>.T_<k>.rst per subgrid (nsg in
@@ -127,7 +127,7 @@ def test_case_upload_rst_without_steps_sends_every_step(cmd, case):
 @pytest.mark.parametrize('kw, message', [
     (dict(what='rst', t1=4000.0, dir='binary'), 'carries the .rst files only'),
     (dict(what='input', files=True), 'carries the .def and its File(...) only'),
-    (dict(t1=4000.0), 'need `case upload binary` or `rst`'),
+    (dict(t1=4000.0), 'need `case upload plt` or `rst`'),
     (dict(what='input', t1=4000.0), 'not per step'),
     (dict(what='sgd'), "'sgd' is not binary, rst, input or history"),
     (dict(binary=True), '--binary is now a word'),

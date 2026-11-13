@@ -234,7 +234,7 @@ const FlowChart = (() => {
     {
       id: 'uploadPlt', kind: 'step', col: 1, row: 19, label: ['Upload the binary PLTs'],
       title: 'Upload the binary PLTs',
-      command: 'case upload binary\ncase upload binary --missing',
+      command: 'case upload plt\ncase upload plt --missing',
       detail: `Sends the window's binary PLTs (t1 and t2 from the contexts).
         Run it again with --missing: it sends only what the remote lacks or
         holds at another size, so when it finds nothing to send, every file

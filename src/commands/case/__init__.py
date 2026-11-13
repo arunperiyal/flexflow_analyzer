@@ -10,14 +10,14 @@ from src.cli.completers import described, file_flags
 from src.cli.context import case_arg, context_flag, freq_arg, time_window
 
 
-# `case upload|download [binary|rst|input] [case]`: what to carry. Nothing named is
+# `case upload|download [plt|rst|input|history] [case]`: what to carry. Nothing named is
 # the directories (--dir) and files (--files) as before.
 TRANSFER_MODES = {
-    'upload': [('binary', 'binary/: every timestep, or just --t1..--t2'),
+    'upload': [('plt', 'The binary PLTs in binary/: every timestep, or just --t1..--t2'),
                ('rst', 'Restart .rst files of every step (or --t1..--t2) in the run directory'),
                ('input', 'The <problem>.def and every File(...) it names (mesh, .nbc, .srf ...)'),
                ('history', 'OTHD/OISD history: archive/, cleaned/, the compiled file (or --archive/--cleaned/--compiled)')],
-    'download': [('binary', 'binary/: every timestep, or just --t1..--t2 (--freq)'),
+    'download': [('plt', 'The binary PLTs in binary/: every timestep, or just --t1..--t2 (--freq)'),
                  ('rst', 'Restart .rst files of every step (or --t1..--t2) from the remote run directory'),
                  ('input', 'The remote <problem>.def and every File(...) it names'),
                  ('history', 'The remote OTHD/OISD history (or --archive/--cleaned/--compiled)')],
@@ -27,6 +27,8 @@ TRANSFER_MODES = {
 def _mode(args):
     """binary/rst/input/history, or None when the first word is a case (or absent)."""
     what = getattr(args, 'what', None)
+    if what == 'plt':
+        return 'binary'             # `plt` is the word; `binary` is its old name and the folder
     return what if what in ('binary', 'rst', 'input', 'history') else None
 
 
@@ -335,6 +337,12 @@ class CaseCommand(BaseCommand):
         time_window(plt_check_parser, 
                     t1_kwargs=dict(metavar='STEP', help='Only check timesteps >= STEP'),
                     t2_kwargs=dict(metavar='STEP', help='Only check timesteps <= STEP'))
+        plt_check_parser.add_argument('--verify', action='store_true',
+                                    help='Compare each PLT in binary/ with its copy on the '
+                                         'remote, by size and md5')
+        context_flag(plt_check_parser, 'remote', '--remote', type=str, metavar='REMOTE',
+                     help='With --verify: the remote to compare with '
+                          '(or use context with "use remote:name")')
         plt_check_parser.add_argument('-v', '--verbose', action='store_true',
                                     help='Enable verbose output')
         plt_check_parser.add_argument('-h', '--help', action='store_true',
@@ -608,7 +616,9 @@ class CaseCommand(BaseCommand):
             organise_cmd.execute_organise(args)
         elif hasattr(args, 'case_subcommand') and args.case_subcommand == 'check':
             from .check_impl.command import execute_case_check
-            execute_case_check(args)
+            code = execute_case_check(args)
+            if code:
+                sys.exit(code)
         elif hasattr(args, 'case_subcommand') and args.case_subcommand == 'status':
             from .status_impl import execute_status
             code = execute_status(args)

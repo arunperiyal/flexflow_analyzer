@@ -329,9 +329,24 @@ The transfer is slower on a fast link and the same on a slow one.
 `FLEXFLOW_LOGIN_NODE=1` (or `0`) overrides the detection on a cluster whose
 login nodes are named otherwise.
 
+**Checking the binary PLTs against the remote:**
+
+```bash
+ff case check plt mycase --verify --remote myserver
+ff case check plt mycase --verify --remote myserver --t1 8950 --t2 9900 --freq 50
+```
+
+Each PLT in `binary/` is compared with its copy on the remote by size and
+md5, both read at that moment. The result lists what is verified, what
+differs, what is not on the remote yet, what is broken locally (empty or cut
+short) and what is only on the remote. Verified files are written to
+`auto_logs/ledger.json`; a file that is not verified is taken out of it. The
+exit code is 0 only when every PLT looked at is verified. The remote's folder
+comes from `remotes:` in the case folder's `.cases.yml`.
+
 **Binary transfers and the session timeout:**
 
-In the shell, `case upload|download binary` is set against the time the
+In the shell, `case upload|download plt` is set against the time the
 session has left (the `ttl` in the prompt), at `set transfer_speed` Mbps
 (default 10). When it will not finish, it says so and offers the steps that
 fit:
@@ -345,8 +360,8 @@ Session timeout: 412 file(s), 6.8 GB: about 1 h 37 min at 10 Mbps, and 5 min is 
 
 ```bash
 set transfer_speed 8                              # plan with the speed the link really gets
-ff case upload binary mycase --remote myserver --fit  # take the cut without asking
-ff case upload binary mycase --remote myserver --no-time-check
+ff case upload plt mycase --remote myserver --fit  # take the cut without asking
+ff case upload plt mycase --remote myserver --no-time-check
 ```
 
 A finished transfer of 50 MB or more prints the rate it reached, and the

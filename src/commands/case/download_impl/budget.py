@@ -2,7 +2,7 @@
 Will a binary transfer finish before the shell's session timeout?
 
 `set transfer_speed N` (Mbps, default 10) is the planned link speed. Before
-`case upload|download binary` sends anything, the selection's size is set
+`case upload|download plt` sends anything, the selection's size is set
 against the time the session has left (rt.time_left(); none in a one-shot
 command, so no check there). When it does not fit, the steps are added up
 in order from the first and the last step whose files all fit is offered as

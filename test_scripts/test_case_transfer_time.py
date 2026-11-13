@@ -1,4 +1,4 @@
-"""`case upload|download binary` against the session timeout: the selection's
+"""`case upload|download plt` against the session timeout: the selection's
 size at `set transfer_speed` (Mbps) is set against rt.time_left(), and when
 it does not fit the steps that do are offered as --t2."""
 
