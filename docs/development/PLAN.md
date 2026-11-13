@@ -166,7 +166,7 @@ Settled with the user on 2026-11-13:
   observation and action.
 - `case organise plt` always verifies. There is no `--unverified` flag.
 
-Order of work: 12, 13, 18 and 14 (done), 15, 16, 17, then Phase 6. Phases 12 to 14 change
+Order of work: 12, 13, 18 and 14 (done), 19, 15, 16, 17, then Phase 6. Phases 12 to 14 change
 hand commands and are useful on their own; 15 is a refactor with no change in
 behaviour; 16 and 17 are what the user sees.
 
@@ -191,6 +191,16 @@ What the code check found (why 12, 14 and 15 are needed):
 - **Parsing.** `auto` takes `what` and `[case]` as positionals. A target word
   after `apply` (`history`, `plt`, `output`, `all`) has to be told apart from
   a case name.
+
+### Phase 19: after the user's review of Phase 14 (branch `organise-review`)
+
+- [ ] The ASCII PLT check against the header a real simPlt file has (given
+      by the user on 2026-11-13: `ZONE T=FIELD, STRANDID=1, SOLUTIONTIME=...,
+      NODES = 1630573, ELEMENTS=1590192, DATAPACKING=POINT,
+      ZONETYPE=FEBRICK`), and fast enough for files of millions of lines
+- [ ] `case organise output --all-out` stays, and checks: it no longer
+      deletes a `.out` with nothing to stand in for it
+- [ ] Help text, `docs/usage/case-organise.md`, `CHANGELOG.md`
 
 ### Phase 15: `auto` refactor, steps as data (branch `auto-steps`)
 
