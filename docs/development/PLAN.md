@@ -194,7 +194,7 @@ What the code check found (why 12, 14 and 15 are needed):
 
 ### Phase 19: after the user's review of Phase 14 (branch `organise-review`)
 
-- [ ] The ASCII PLT check against the header a real simPlt file has (given
+- [x] The ASCII PLT check against the header a real simPlt file has (given
       by the user on 2026-11-13: `ZONE T=FIELD, STRANDID=1, SOLUTIONTIME=...,
       NODES = 1630573, ELEMENTS=1590192, DATAPACKING=POINT,
       ZONETYPE=FEBRICK`), and fast enough for files of millions of lines
