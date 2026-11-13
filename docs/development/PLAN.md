@@ -20,30 +20,30 @@ Status marks: `[ ]` to do, `[x]` done, `[~]` dropped (say why).
 
 ## Open phases
 
-### Phase 6: `auto apply`, the delete stage (branch `auto-delete`)
+### Phase 6: `auto apply`, deleting (branch `auto-delete`)
 
-Design: `docs/architecture/auto.md` §13.13. Rule above all: nothing is deleted
-without a copy checked by md5 at that moment (restart sets off the `keep_rst`
-grid are the one stated exception), and one question is asked before deleting.
+**On hold until Phases 12 to 17 are done**, then to be redone on top of them.
+The first design (`auto.md` §13.13, commit `1abbe95`) had `auto` delete files
+itself from an explicit list. The direction set on 2026-11-13 is different:
+`auto apply` runs the same commands `auto show` lists, so the md5 check
+belongs to `case check plt --verify` (Phase 13) and the refusal to delete an
+unchecked file belongs to `case organise plt` / `case organise output`
+(Phase 14).
 
 - [x] Write the design as §13.13 at the end of `auto.md`
-- [ ] **Review of §13.13 by the user.** Nothing below is built before it
-- [ ] Remote md5 of a named file (`cloud.py`: `LocalCloud`, `SftpCloud`);
-      ledger entries record the local `mtime` and `deleted`
-- [ ] Decide: the candidates of C1–C4 as explicit file lists in `plan.ctx`,
-      with the "written after" rule and the data-related *needs you* hold-back
-- [ ] Executor `do_delete`: per-file checks right before each unlink, run log
-      lines, the `.casestatus.md` line, the ledger
-- [ ] `auto apply --delete` and `--only delete`: order
-      `history → upload → delete → post`, the plan listing, the question with
-      totals, `--dry-run`
-- [ ] Reports (`auto show`, `auto commands`): replace the `[not built yet]`
-      text
+- [~] Review of §13.13 by the user: overtaken by the new direction
+- [ ] Rewrite §13.13 as a new section at the end of `auto.md`: deleting is
+      done by the hand commands; keep its rules (md5 at the time of deleting,
+      "written after", the restart guard, fail closed, restart-set keeps)
+- [ ] Still to settle with the user: is deleting part of `auto apply all`, or
+      only with a flag; cases that need you; the cost of the md5
+- [ ] `auto apply plt` and `auto apply output` run the delete commands, after
+      the question with totals
 - [ ] Dummy cases and a test for each rule: copy differs, size-only copy,
       `.out` newer than its PLT (restart), queued restart, post in flight,
       restart-set keeps, a case that needs you
-- [ ] Help text, completion, `docs/architecture/auto_flow.html`, the web
-      flowchart, `CHANGELOG.md`
+- [ ] Help text, `docs/architecture/auto_flow.html`, the web flowchart,
+      `CHANGELOG.md`
 
 ### Phase 7: `auto`, the steady check (branch `auto-steady`)
 
@@ -104,6 +104,158 @@ spatial plots).
 - [ ] Move what is left into this file as a new phase, and replace §11 with a
       pointer here
 - [ ] Rewrite §12 "Out of scope" to match what the web UI now does
+
+### Phases 12 to 17: `auto` as a sequence of visible commands
+
+Asked for on 2026-11-13. The aim: the user can read in `auto show` the exact
+commands `auto apply` will run, in order, and run any of them by hand.
+
+For the PLT section, the Action list becomes commands only, for example:
+
+```
+1: case check plt <case> --verify
+2: case upload plt <case> --t1 8950 --t2 9900 --freq 50 --to cloud
+3: case organise plt <case> --delete-binary --t1 8950 --t2 9900 --freq 50
+4: case organise plt <case> --delete-ascii --t1 8950 --t2 9900 --freq 50
+```
+
+- `case check plt --verify` does not exist yet. It verifies every PLT in
+  `binary/` against the remote directory.
+- When the binary PLTs are not made yet, the second command is
+  `run post convert` (or `run post full`).
+- `case upload binary` is renamed `case upload plt`, to be specific.
+- `--missing` is added only when the remote lacks some of the PLTs.
+- The same change for History, OUT files, RST files, and Inputs and case
+  files.
+
+Order of work: 12, 13, 14, 15, 16, 17, then Phase 6. Phases 12 to 14 change
+hand commands and are useful on their own; 15 is a refactor with no change in
+behaviour; 16 and 17 are what the user sees.
+
+What the code check found (why 12, 14 and 15 are needed):
+
+- **Two upload paths.** `case upload` (`case/download_impl/command.py`, 2660
+  lines) sends without an md5 check, a temporary name or the ledger. `auto
+  apply` does not call it: it has its own path (`core/auto/cloud.py` `put`,
+  `executor.do_upload`) with all three. So the `case upload ...` line that
+  `auto show` prints is not what `auto apply` runs, and running it by hand is
+  weaker.
+- **Hand deletions are not guarded.** `case organise plt --delete-binary` is
+  unconditional, and `--delete-ascii` only asks for a newer file in
+  `binary/`. Neither knows about the remote copy.
+- **Show and apply describe the work separately.** `report.build()` writes
+  the Action lines as text (some are commands, some start with
+  `auto apply: ` or `wait:`, and `commands()` filters by that prefix);
+  `apply._intended()` writes its own list. Nothing makes the two agree.
+- **`decide()` is one function of about 530 lines** and `report.build()` one
+  of about 310, each covering history, PLT, `.out`, `.rst` and inputs in a
+  row. `auto apply plt` needs the PLT part on its own.
+- **Parsing.** `auto` takes `what` and `[case]` as positionals. A target word
+  after `apply` (`history`, `plt`, `output`, `all`) has to be told apart from
+  a case name.
+
+### Phase 12: one checked transfer for `case upload` and `auto` (branch `checked-transfer`)
+
+Refactor. After it, a file sent by hand and a file sent by `auto` go the same
+way and leave the same record.
+
+- [ ] Move the remote access of `core/auto/cloud.py` (listing, `put` with
+      temporary name, md5, rename) to a core module of its own, with a
+      function that returns the md5 of a named remote file
+- [ ] Move the ledger next to it; entries also record the local file's
+      `mtime`
+- [ ] `case upload binary`, `rst`, `history`, `input` and `--files` send
+      through it: md5-checked, temporary name then rename, written to the
+      ledger of the case folder
+- [ ] `executor.do_upload` uses the same function; `auto` tests unchanged
+- [ ] Tests for `case upload` against a local "cloud": a copy that differs,
+      a remote without `md5sum` (size only), a transfer cut short
+- [ ] Help text, `docs/usage/`, `CHANGELOG.md`
+
+### Phase 13: `case upload plt` and `case check plt --verify` (branch `plt-verify`)
+
+- [ ] `case upload plt` and `case download plt`: the new name of the `binary`
+      mode. `binary` stays as an alias that still works; help, completion and
+      docs show `plt`
+- [ ] `case check plt <case> --verify [--to REMOTE] [--t1 --t2 --freq]`: for
+      every PLT in `binary/` that the remote also holds, compare size and md5
+      (local now, remote now); write the result to the ledger; list verified,
+      differing, not on the remote, only on the remote
+- [ ] Exit code and a one-line summary that `auto` can read (all verified or
+      not)
+- [ ] Tests: all match, one differs, one missing there, remote without
+      `md5sum`, a restart that made a local PLT newer than its remote copy
+- [ ] Help text, completion, `docs/usage/`, `CHANGELOG.md`
+
+### Phase 14: hand deletions that need a checked copy (branch `organise-verified`)
+
+U-4 and U-5 of `auto.md` §13.5. After it, the delete commands are safe to
+print in `auto show` and safe for `auto apply` to run.
+
+- [ ] `case organise plt --delete-binary`: by default deletes only the files
+      with a verified copy in the ledger whose size and `mtime` still match
+      the local file; the others are listed and left. `--unverified` (with
+      its own question) keeps today's behaviour
+- [ ] `case organise plt --delete-ascii`: accepts a verified remote copy of
+      the binary PLT when the binary is no longer in `binary/`, and requires
+      the binary PLT to have been written after the ASCII file. Needed if
+      `--delete-binary` runs before `--delete-ascii`, as in the example above
+- [ ] `--freq` applies to `--delete-ascii` as well as `--delete-binary`
+- [ ] `case organise output`: a `.out` goes only when its step's binary PLT
+      is verified (ledger) or whole in `binary/`, and was written after the
+      `.out`; never for a step above the restart point of a queued job
+- [ ] Tests for each rule, including a restart that rewrote the `.out`
+- [ ] Help text, `docs/usage/case-organise.md`, `CHANGELOG.md`
+
+### Phase 15: `auto` refactor, steps as data (branch `auto-steps`)
+
+Refactor, no change in what `auto show` prints or `auto apply` does. Every
+existing `auto` test must pass unchanged at each commit.
+
+- [ ] A `Step` record: target (`history`, `plt`, `output`, `inputs`), the
+      command as text, what to call to run it, and a note (why, or what it
+      waits for). The plan carries a list of them, in order
+- [ ] Split `decide()` into one function per target, called in order by a
+      short `decide()`
+- [ ] Split `report.build()` the same way; the Action lines come from the
+      plan's steps
+- [ ] `apply` runs the plan's steps (replacing `_intended()` and the
+      `KINDS` loop), so show and apply cannot disagree
+- [ ] A test that, for every dummy case, the commands `auto show` lists are
+      the commands `auto apply --dry-run` lists
+
+### Phase 16: `auto show`, Action lists only commands (branch `auto-show-commands`)
+
+- [ ] PLT files: `case check plt --verify`; `run post convert` / `run post
+      full` when binary PLTs are not made; `case upload plt ... --freq N
+      --to REMOTE` with `--missing` only when the remote lacks some; `case
+      organise plt --delete-binary ...`; `case organise plt --delete-ascii
+      ...`. No `auto apply: ...` sentences and no `[not built yet]`
+- [ ] History: `case organise history ...`, `case upload history ...`; the
+      copy of a live `.othd` / `.oisd` becomes a command too
+- [ ] OUT files: `case organise output ...`
+- [ ] RST files: `case upload rst ...`, `case organise output --keep-out
+      --keep-freq N --keep-newest N ...`
+- [ ] Inputs and case files: `case upload <case> --files ...`
+- [ ] What is not a command (waiting for a job, a reason) moves out of
+      Action into a row of its own (`Waiting`, `Why`)
+- [ ] `auto commands` prints the same list; tests on the dummy cases
+- [ ] `docs/architecture/auto_flow.html`, the web flowchart, `CHANGELOG.md`
+
+### Phase 17: `auto apply <target>` (branch `auto-apply-targets`)
+
+- [ ] `auto apply history [case]`, `auto apply plt [case]`,
+      `auto apply output [case]`, `auto apply all [case]`: each runs the
+      steps of its target, in the order `auto show` lists them
+- [ ] `auto apply` with no target does nothing and lists the targets
+- [ ] Safety flags: `--dry-run` (as in `auto apply all --dry-run`), `--yes`,
+      `--no-delete`
+- [ ] `--only` for `apply` goes (or stays as an alias for one release)
+- [ ] Parsing: a target word against a case of the same name; completion
+- [ ] To settle with the user: where inputs and restart-set uploads belong
+      (`output`, a target of their own, or only `all`)
+- [ ] Tests, help text, `docs/architecture/auto.md` (a new section at the
+      end), `CHANGELOG.md`
 
 ---
 

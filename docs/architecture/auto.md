@@ -823,6 +823,12 @@ upload_rst 1000, 1000/2000/3000 are due (5740 is not).
 
 ### 13.13 The delete stage of `auto apply` (2026-11-13, design; not built)
 
+> **To be rewritten** (same day): `auto apply` is to run the commands `auto
+> show` lists, so the md5 check moves to `case check plt --verify` and the
+> refusal to delete an unchecked file to `case organise plt` / `output`. The
+> rules below stay; who carries them out changes. See Phases 12 to 17 and
+> Phase 6 in `docs/development/PLAN.md`.
+
 Makes real the stages C1–C4 of 13.2, in the order of 13.7, with the rules
 below. Where this differs from 13.2, 13.4 or 13.7, this is the newer text.
 
