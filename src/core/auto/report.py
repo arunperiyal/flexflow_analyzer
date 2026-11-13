@@ -16,11 +16,10 @@ import time
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
-from .decide import CasePlan, _size_text, runs_text, steps_phrase, steps_text
+from .decide import AUTO_ONLY, CasePlan, _size_text, runs_text, steps_phrase, steps_text
 from .observe import CaseSnapshot
 
 SECTIONS = ('state', 'needs', 'flags', 'log', 'history', 'plt', 'out', 'rst', 'inputs')
-AUTO_ONLY = 'auto apply: '
 NOT_YET = ' [not built yet: delete by hand for now]'      # deleting is a later stage of apply
 
 
@@ -91,17 +90,19 @@ def _present_missing(present, missing, freq) -> str:
     return f"present {p} · missing {m}"
 
 
-def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None) -> List[Section]:
-    if snap.error:
-        s = Section('state', 'State')
-        s.row('Skipped', snap.error)
-        return [s]
-    c, p, f, name = plan.ctx, snap.problem, snap.out_freq, snap.name
-    remote = conf.remote
-    cloud = c.get('cloud')
-    sections = []
+class _View:
+    """What every section is written from, for one case."""
 
-    # -- state --------------------------------------------------------------------
+    def __init__(self, snap, plan, conf, now):
+        self.snap, self.plan, self.conf, self.now = snap, plan, conf, now
+        self.c, self.p, self.f, self.name = plan.ctx, snap.problem, snap.out_freq, snap.name
+        self.remote, self.cloud = conf.remote, plan.ctx.get('cloud')
+
+
+def _state(v):
+    """State: how far the run is, its jobs, the run directory."""
+    snap, plan, conf, now = v.snap, v.plan, v.conf, v.now
+    c, p, f, name, remote, cloud = v.c, v.p, v.f, v.name, v.remote, v.cloud
     s = Section('state', 'State')
     reached = c.get('reached')
     if reached:
@@ -127,8 +128,14 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
     s.row('Run dir', f"{snap.run_rel}/ {_size_text(snap.run_size)}{over}")
     if c.get('restart_from') is not None:
         s.actions.append(f"run main restart {name} --time {c['restart_from']}")
-    sections.append(s)
+    return [s]
 
+
+def _needs_and_flags(v):
+    """Needs you, and Worth a look: the plan's items of those kinds."""
+    snap, plan, conf, now = v.snap, v.plan, v.conf, v.now
+    c, p, f, name, remote, cloud = v.c, v.p, v.f, v.name, v.remote, v.cloud
+    sections = []
     for key, kind, title in (('needs', 'needs', 'Needs you'), ('flags', 'flag', 'Worth a look')):
         items = [i.text for i in plan.items if i.kind == kind]
         if items:
@@ -136,9 +143,14 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
             for n, text in enumerate(items, 1):
                 sec.row(f"{n}", text)
             sections.append(sec)
+    return sections
 
-    # -- history --------------------------------------------------------------------
-    h = snap.history.get('othd')
+
+def _job_logs(v):
+    """The end of the log of the last main and post job."""
+    snap, plan, conf, now = v.snap, v.plan, v.conf, v.now
+    c, p, f, name, remote, cloud = v.c, v.p, v.f, v.name, v.remote, v.cloud
+    sections = []
     for kind in ('main', 'post'):
         job = snap.last_ended(kind)
         if not job or job.jobid not in snap.log_tails or snap.active(kind):
@@ -155,7 +167,14 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
             for line in tail:
                 s.row('', line)
         sections.append(s)
+    return sections
 
+
+def _history(v):
+    """History: .othd / .oisd here and on the remote."""
+    snap, plan, conf, now = v.snap, v.plan, v.conf, v.now
+    c, p, f, name, remote, cloud = v.c, v.p, v.f, v.name, v.remote, v.cloud
+    h = snap.history.get('othd')
     s = Section('history', 'History', '.othd / .oisd')
     if snap.live:
         stays = ' (stays while the main job is queued or running)' if c.get('main_now') else ''
@@ -202,19 +221,15 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
         s.row('Only there', ' · '.join(parts) + f" (on {remote}, not here)")
     if only and (only.get(('othd', 'archive')) or only.get(('oisd', 'archive'))):
         s.actions.append(f"case download history {name} --archive --remote {remote}")
-    organise = c.get('organise')
-    if organise and organise[0] == 'update':
-        s.actions.append(f"case organise history {name} --update --clean --compile")
-    elif organise:
-        s.actions.append(f"case organise history {name} --clean --compile")
-    if cloud is not None and (organise or c.get('hist_missing')):
-        s.actions.append(f"case upload history {name} --remote {remote}")
-    if c.get('live_upload'):
-        s.actions.append(AUTO_ONLY + f"copy the live {p}.othd/.oisd to {remote} "
-                                     f"({_size_text(sum(c['live_upload'].values()))})")
-    sections.append(s)
+    for key in ('organise', 'upload-history', 'live'):
+        s.actions += [step.command for step in plan.steps_of(key)]
+    return [s]
 
-    # -- PLT files --------------------------------------------------------------------
+
+def _plt(v):
+    """PLT files: binary and ASCII here, binary on the remote."""
+    snap, plan, conf, now = v.snap, v.plan, v.conf, v.now
+    c, p, f, name, remote, cloud = v.c, v.p, v.f, v.name, v.remote, v.cloud
     grid = c.get('grid') or []
     lost = c.get('lost') or []
     s = Section('plt', 'PLT files')
@@ -258,19 +273,11 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
     if c.get('post_now'):
         s.actions.append(f"wait: post job {c['post_now'][0].jobid} is "
                          f"{c['post_now'][0].state.lower()}")
-    jobs = plan.post_jobs
-    for a, b, d, mode in jobs:
-        freq_part = f" --freq {d}" if (len(jobs) > 1 or d != f) else ''
-        s.actions.append(f"run post {mode} {name} --t1 {a} --t2 {b}{freq_part} --no-remote")
-    if len(jobs) > 1:
+    posts = plan.steps_of('post')
+    s.actions += [step.command for step in posts]
+    if len(posts) > 1:
         s.actions.append("wait: submit each post job after the previous one has ended")
-    if c.get('plt_upload'):
-        up = c['plt_upload']
-        # --missing skips a file the remote holds at the same size, which would leave an
-        # earlier run's PLT in place after a restart
-        flag = '' if set(up) & set(c.get('stale_plt') or []) else ' --missing'
-        s.actions.append(f"case upload plt {name} --t1 {up[0]} --t2 {up[-1]}{flag} "
-                         f"--remote {remote}")
+    s.actions += [step.command for step in plan.steps_of('upload-plt')]
     if c.get('del_ascii'):
         s.actions.append(AUTO_ONLY + f"delete ASCII PLTs, {steps_phrase(c['del_ascii']).lower()}, "
                                      f"once the binary copy on {remote} is md5-checked"
@@ -283,9 +290,13 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
                                      f"--remote {remote}"
                                      for a, b in _runs_apart(
                                          c['del_binary'], set(snap.binary) - set(c['del_binary']))]))
-    sections.append(s)
+    return [s]
 
-    # -- OUT files --------------------------------------------------------------------
+
+def _out(v):
+    """OUT files."""
+    snap, plan, conf, now = v.snap, v.plan, v.conf, v.now
+    c, p, f, name, remote, cloud = v.c, v.p, v.f, v.name, v.remote, v.cloud
     s = Section('out', 'OUT files')
     steps = sorted(snap.out)
     s.row('Present', steps_text(steps) if steps else 'none')
@@ -306,9 +317,13 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
                                      f"{conf.keep_rst} --t1 {a} --t2 {b}"
                                      for a, b in _runs_apart(outs, set(snap.out) - set(outs))]
                                     if conf.keep_rst else []))
-    sections.append(s)
+    return [s]
 
-    # -- RST files --------------------------------------------------------------------
+
+def _rst(v):
+    """RST files: the restart sets here and on the remote."""
+    snap, plan, conf, now = v.snap, v.plan, v.conf, v.now
+    c, p, f, name, remote, cloud = v.c, v.p, v.f, v.name, v.remote, v.cloud
     grids = [f"keep_rst {conf.keep_rst}" if conf.keep_rst else 'keep_rst not set',
              f"keep_newest_rst {conf.keep_newest_rst}",
              f"upload_rst {conf.upload_rst}" if conf.upload_rst else 'upload_rst not set']
@@ -371,13 +386,7 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
         if c.get('rst_lost'):
             s.row('Lost', f"{steps_text(c['rst_lost'])}: on the upload grid, but neither here "
                           f"nor on {remote}")
-        grid_due = [t for t in sorted(todo) if t != c.get('rst_final')]
-        if grid_due:
-            s.actions.append(f"case upload rst {name} --t1 {grid_due[0]} --t2 {grid_due[-1]} "
-                             f"--freq {conf.upload_rst} --missing --remote {remote}")
-        if c.get('rst_final') in todo:
-            n = c['rst_final']
-            s.actions.append(f"case upload rst {name} --t1 {n} --t2 {n} --missing --remote {remote}")
+        s.actions += [step.command for step in plan.steps_of('upload-rst', 'upload-rst-final')]
     thin = c.get('thin') or []
     if snap.rst and thin:                      # after the uploads: deleting follows from them
         s.actions.append(AUTO_ONLY + f"delete .rst of {steps_phrase(thin).lower()}: not "
@@ -385,9 +394,13 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
                          + _by_hand([f"case organise output {name} --keep-out --keep-freq "
                                      f"{conf.keep_rst} --keep-newest {conf.keep_newest_rst} "
                                      f"--t1 {min(thin)} --t2 {max(thin)}"] if conf.keep_rst else []))
-    sections.append(s)
+    return [s]
 
-    # -- inputs and case files ----------------------------------------------------------
+
+def _inputs(v):
+    """Inputs and case files."""
+    snap, plan, conf, now = v.snap, v.plan, v.conf, v.now
+    c, p, f, name, remote, cloud = v.c, v.p, v.f, v.name, v.remote, v.cloud
     s = Section('inputs', 'Inputs and case files')
     inputs = {k: v for k, v in snap.files.items() if not k.startswith(('othd_files/', 'oisd_files/'))}
     missing = c.get('inputs_missing', {})
@@ -397,10 +410,20 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
         s.row('Remote', f"present {len(inputs) - len(missing)} · missing {len(missing)}"
               + (f": {', '.join(sorted(missing))}" if missing else ''))
     s.row('Size', f"{_size_text(sum(inputs.values()))} here")
-    if missing:
-        s.actions.append(f"case upload {name} --files '{','.join(sorted(missing))}' --remote {remote}")
-    sections.append(s)
-    return sections
+    s.actions += [step.command for step in plan.steps_of('upload-inputs')]
+    return [s]
+
+
+def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None) -> List[Section]:
+    """The sections of a case, in the order SECTIONS names them; one function each."""
+    if snap.error:
+        s = Section('state', 'State')
+        s.row('Skipped', snap.error)
+        return [s]
+    v = _View(snap, plan, conf, now)
+    return [s for part in (_state, _needs_and_flags, _job_logs, _history, _plt, _out,
+                           _rst, _inputs) for s in part(v)]
+
 
 
 def commands(sections: List[Section]) -> List[str]:

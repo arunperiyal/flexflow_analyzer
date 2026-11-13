@@ -166,7 +166,7 @@ Settled with the user on 2026-11-13:
   observation and action.
 - `case organise plt` always verifies. There is no `--unverified` flag.
 
-Order of work: 12, 13, 18, 14 and 19 (done), 15, 16, 17, then Phase 6. Phases 12 to 14 change
+Order of work: 12, 13, 18, 14, 19 and 15 (done), 16, 17, then Phase 6. Phases 12 to 14 change
 hand commands and are useful on their own; 15 is a refactor with no change in
 behaviour; 16 and 17 are what the user sees.
 
@@ -185,29 +185,12 @@ What the code check found (why 12, 14 and 15 are needed):
   the Action lines as text (some are commands, some start with
   `auto apply: ` or `wait:`, and `commands()` filters by that prefix);
   `apply._intended()` writes its own list. Nothing makes the two agree.
-- **`decide()` is one function of about 530 lines** and `report.build()` one
+- **`decide()` was one function of about 530 lines** and `report.build()` one
   of about 310, each covering history, PLT, `.out`, `.rst` and inputs in a
-  row. `auto apply plt` needs the PLT part on its own.
+  row. `auto apply plt` needs the PLT part on its own. (Split in Phase 15.)
 - **Parsing.** `auto` takes `what` and `[case]` as positionals. A target word
   after `apply` (`history`, `plt`, `output`, `all`) has to be told apart from
   a case name.
-
-### Phase 15: `auto` refactor, steps as data (branch `auto-steps`)
-
-Refactor, no change in what `auto show` prints or `auto apply` does. Every
-existing `auto` test must pass unchanged at each commit.
-
-- [ ] A `Step` record: target (`history`, `plt`, `output`, `inputs`), the
-      command as text, what to call to run it, and a note (why, or what it
-      waits for). The plan carries a list of them, in order
-- [ ] Split `decide()` into one function per target, called in order by a
-      short `decide()`
-- [ ] Split `report.build()` the same way; the Action lines come from the
-      plan's steps
-- [ ] `apply` runs the plan's steps (replacing `_intended()` and the
-      `KINDS` loop), so show and apply cannot disagree
-- [ ] A test that, for every dummy case, the commands `auto show` lists are
-      the commands `auto apply --dry-run` lists
 
 ### Phase 16: `auto show`, Action lists only commands (branch `auto-show-commands`)
 
@@ -291,6 +274,7 @@ As noted on 2026-11-11; may be out of date.
 | 18 | `plt-verify-chain` | `case check plt --verify` after the user's review: md5 by reading the copy back when the remote has no `md5sum`; PLTs only on the remote compared with the ledger's record (an emptied `binary/` is fine); steps in neither place listed; a broken PLT says how to make it again (`run post convert`, else `run post full`); a remote that is not set says so |
 | 14 | `organise-verified` | Deleting along the chain (`core/chain.py`): `.out` on a verified ASCII PLT (`core/plt_ascii.py`), an ASCII PLT on a verified binary PLT, a binary PLT on a remote copy with the same md5 read at that moment (`--remote`); a missing link is passed over; a step with nothing to stand in is kept and reported, the others go. `--freq` for `--delete-ascii`. Left open: the queued-restart rule is left to `auto` (Phase 6) |
 | 19 | `organise-review` | After the user's review of Phase 14: the ASCII check reads the real simPlt header and counts in blocks; `--all-out` checks each `.out` (it now does what the plain command does); `--freq` is accepted with `--delete-ascii` (the flag check had still refused it) |
+| 15 | `auto-steps` | Refactor, no change in what `auto` prints or does: the plan carries `plan.steps` (`PlanStep`: target, kind, key, command, files); `decide()` and `report.build()` are split into one function per part; the report's command lines and `auto apply` both read the steps; `test_auto_steps.py` holds them together on every dummy case. `apply` still runs history, upload, post in that order with the uploads as one transfer; per-target order is Phase 17 |
 
 ---
 

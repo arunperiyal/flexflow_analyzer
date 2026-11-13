@@ -1,6 +1,7 @@
 """
 The three additive actions `auto apply` carries out for a case, each from the
-plan `decide` made a moment before (docs/architecture/auto.md §13):
+steps of the plan `decide` made a moment before (plan.steps; docs/architecture/
+auto.md §13):
 
     do_history   case organise history --update --clean --compile
     do_upload    send the files the plan lists, each checked, never deleting
@@ -86,10 +87,10 @@ def _upload_order(rel: str):
 
 def do_upload(snap, plan, conf, cloud, ledger, say: Callable[[str], None],
               big: int = 5 << 20) -> Step:
-    """Send plan.uploads. `say` gets progress lines. Every file is checked by the
+    """Send the files of the plan's upload steps. `say` gets progress lines. Every file is checked by the
     cloud's put(); one that fails is reported and the rest still go, except that
     three failures in a row stop the run (the remote has probably gone)."""
-    files = sorted(plan.uploads.items(), key=lambda kv: _upload_order(kv[0]))
+    files = sorted(plan.to_send().items(), key=lambda kv: _upload_order(kv[0]))
     sent = nbytes = md5_ok = size_only = snapshots = 0
     failed, streak = [], 0
     started = time.monotonic()
