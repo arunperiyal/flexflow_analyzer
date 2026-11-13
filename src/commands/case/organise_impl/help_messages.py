@@ -82,12 +82,19 @@ Organize and clean up case directories. Pick one subcommand.
             restartTsId in simflow.config (where a restart resumes), the
             newest --keep-newest complete sets (all nsg parts; default 2),
             and a newest set that is still incomplete
-          • .out: deletes a step's .out once binary/<problem>.<step>.plt
-            can stand in for them: whole (as long as its header says)
-            and written after every .out part. keep-freq steps too -- a
-            restart does not read .out. A step with no PLT, only an
-            ASCII one, or one cut short or older than its .out (made
-            before a restart) keeps its .out, and is listed.
+          • .out: deletes a step's .out once the next file in the chain
+            can stand in for them: its ASCII PLT, whole (each zone holds
+            the lines its header counts) and written after every .out
+            part; else its binary PLT, whole and written after them;
+            else, when binary/ no longer holds it, its verified copy on
+            the remote (--remote). keep-freq steps too -- a restart does
+            not read .out. A step with no PLT, or one cut short or older
+            than its .out (made before a restart), keeps its .out and is
+            listed; the other steps go.
+
+        {Colors.CYAN}--remote NAME{Colors.RESET}
+            The remote to ask about a binary PLT that binary/ no longer
+            holds. Without it such a step keeps its .out.
 
         {Colors.CYAN}--keep-freq N{Colors.RESET}
             Keep the .rst of the steps divisible by N
@@ -108,21 +115,34 @@ Organize and clean up case directories. Pick one subcommand.
     {Colors.CYAN}plt{Colors.RESET}
         Pass at least one of --delete-ascii / --delete-binary.
 
+        The chain: an ASCII PLT may go when its binary PLT is verified; a
+        binary PLT may go when its copy on the remote is. A file with
+        nothing to stand in for it is kept and listed; the others go.
+
         {Colors.CYAN}--delete-ascii{Colors.RESET}
-            Delete PLT files from the run directory where binary/ has a
-            corresponding file (exact filename match) with a newer mtime:
-              • Safe: only deletes if the binary copy is confirmed newer
-              • Skips files with no binary copy (prints with —)
-              • Skips files where the binary copy is same age or older (prints with ⚠)
+            Delete ASCII PLT files from the run directory whose binary PLT
+            stands in for them:
+              • binary/ holds it whole (as long as its header says) and
+                written after the ASCII file; or
+              • binary/ no longer holds it, and the remote holds its
+                verified copy (--remote), written after the ASCII file
+              • Keeps the others, with the reason (prints with ⚠ or —)
               • Shows a per-file table before asking confirmation
 
         {Colors.CYAN}--delete-binary{Colors.RESET}
-            Delete PLT files from binary/ within --t1/--t2.
-              • Unconditional — no check against the run directory
-              • Omitting both --t1 and --t2 deletes every PLT file in binary/
-              • Can leave no surviving copy of that timestep's PLT data
+            Delete PLT files from binary/ within --t1/--t2 that have a copy
+            on the remote with the same size and md5, both read at that
+            moment (as `case check plt --verify` does).
+              • Needs --remote NAME (or `use remote:NAME`)
+              • A file whose copy is missing or differs, or that is cut
+                short here, is kept and listed
+              • When the remote cannot be asked, nothing is deleted
+              • It reads every file in full on both sides: slow on purpose
 
-        {Colors.CYAN}--freq N{Colors.RESET}       (with --delete-binary)
+        {Colors.CYAN}--remote NAME{Colors.RESET}
+            The remote holding the copies; its folder comes from the case
+            folder's .cases.yml
+        {Colors.CYAN}--freq N{Colors.RESET}
             Only the steps divisible by N
         {Colors.CYAN}--keep-freq N{Colors.RESET}  (with --delete-binary)
             Keep the steps divisible by N
@@ -168,7 +188,8 @@ Organize and clean up case directories. Pick one subcommand.
       --compile before it replaces the compiled file; --prune asks once and
       only deletes archive/ when cleaned/ holds it; output and plt show a
       summary and ask for confirmation
-    • --delete-binary is unconditional: it does not check the run dir first
+    • --delete-binary only deletes a file whose copy on the remote has the
+      same md5; --delete-ascii and output only what a later file stands in for
     • A t1/t2 context left over from something else never silently narrows
       history --clean — it always cleans the whole history
     • Use --no-confirm to skip confirmation
@@ -302,16 +323,18 @@ def print_organise_examples():
 
     • riser.50_1.rst       → Delete (not multiple of 500)
     • riser.500_1.rst      → Keep   (500 % 500 == 0, a restart point)
-    • riser.500_1.out      → Delete (binary/riser.500.plt exists)
+    • riser.500_1.out      → Delete (riser.500.plt is whole and newer)
     • riser.550_1.out      → Keep   (no riser.550.plt yet -- convert it first)
 
 {Colors.BOLD}What plt --delete-ascii Does:{Colors.RESET}
 
-    • riser.500.plt (run dir)    → Delete (binary/riser.500.plt exists and is newer)
+    • riser.500.plt (run dir)    → Delete (binary/riser.500.plt is whole and newer)
+    • riser.550.plt (run dir)    → Keep   (binary/riser.550.plt is cut short)
 
 {Colors.BOLD}What plt --delete-binary Does (--t1 1000 --t2 2000):{Colors.RESET}
 
-    • binary/riser.1500.plt      → Delete (in range, regardless of run dir)
+    • binary/riser.1500.plt      → Delete (in range, same md5 on the remote)
+    • binary/riser.1550.plt      → Keep   (in range, not on the remote)
     • binary/riser.3000.plt      → Keep   (outside range)
 
 {Colors.BOLD}... with --keep-freq 500:{Colors.RESET}
@@ -324,5 +347,6 @@ def print_organise_examples():
     • history --clean, --compile and --prune, and output, plt and vtu --clean, ask for
       confirmation unless --no-confirm (auto apply passes it: it asks once itself)
     • --delete-ascii never touches binary/; --delete-binary never touches the run dir
-    • --delete-binary with no --t1/--t2/--freq/--keep-freq deletes every PLT file in binary/
+    • --delete-binary with no --t1/--t2/--freq/--keep-freq takes every PLT file in binary/
+      that has a verified copy on the remote
 """)

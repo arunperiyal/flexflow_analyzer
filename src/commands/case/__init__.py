@@ -209,7 +209,7 @@ class CaseCommand(BaseCommand):
                                     help='Remove intermediate .out/.rst files from run dir')
         case_arg(output_parser, help='Case directory path')
         output_parser.add_argument('--keep-freq', type=int, metavar='N',
-                                    help='Keep the .rst of steps divisible by N (default: 10 * freq); .out go once their step has a .plt')
+                                    help='Keep the .rst of steps divisible by N (default: 10 * freq); .out go once a whole, newer .plt of their step stands in for them')
         output_parser.add_argument('--keep-newest', type=int, metavar='N', default=2,
                                     help='Also keep the N newest complete .rst sets, whatever '
                                          '--keep-freq says (default: 2; 1 keeps only the newest)')
@@ -218,6 +218,9 @@ class CaseCommand(BaseCommand):
                                          '(their field data is then gone for good)')
         output_parser.add_argument('--keep-out', action='store_true',
                                     help='Delete no .out at all; only thin the .rst')
+        context_flag(output_parser, 'remote', '--remote', type=str, metavar='REMOTE',
+                     help='The remote to ask for a verified copy of a binary PLT that is '
+                          'no longer in binary/ (or use context with "use remote:name")')
         time_window(output_parser, 
                     t1_kwargs=dict(metavar='STEP', help='Only target timesteps >= STEP'),
                     t2_kwargs=dict(metavar='STEP', help='Only target timesteps <= STEP'))
@@ -239,13 +242,17 @@ class CaseCommand(BaseCommand):
                                     help='Delete PLT files in the run dir and/or binary/')
         case_arg(plt_parser, help='Case directory path')
         plt_parser.add_argument('--delete-ascii', action='store_true',
-                                    help='Delete PLT files from run dir where binary/ has a newer copy')
+                                    help='Delete ASCII PLT files from the run dir whose binary PLT '
+                                         'is whole and newer (or verified on the remote)')
         plt_parser.add_argument('--delete-binary', action='store_true',
-                                    help='Delete PLT files from binary/ within --t1/--t2 '
-                                         '(unconditional; omitting both deletes all)')
-        # Plain flags, not the `freq` context: they choose what --delete-binary removes.
+                                    help='Delete PLT files from binary/ within --t1/--t2 that have '
+                                         'a copy on the remote with the same md5')
+        context_flag(plt_parser, 'remote', '--remote', type=str, metavar='REMOTE',
+                     help='The remote holding the copies (needed by --delete-binary; '
+                          'or use context with "use remote:name")')
+        # Plain flags, not the `freq` context: they choose which steps are looked at.
         plt_parser.add_argument('--freq', type=int, metavar='N',
-                                    help='With --delete-binary: only the steps divisible by N')
+                                    help='Only the steps divisible by N')
         plt_parser.add_argument('--keep-freq', type=int, metavar='N',
                                     help='With --delete-binary: keep the steps divisible by N')
         time_window(plt_parser, 

@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+### 🔗 `case organise plt` and `output`: deleting along the chain
+
+A file is now deleted only when the next form of the same data stands in for
+it: `.out` → ASCII PLT → binary PLT → the copy on the remote.
+
+- **`case organise plt --delete-binary` is no longer unconditional.** It
+  deletes a PLT of `binary/` only when its copy on the remote has the same
+  size and md5, both read at that moment. It needs `--remote NAME` (or `use
+  remote:NAME`). A file with a missing or different copy, or cut short
+  locally, is kept and listed; when the remote cannot be asked, nothing is
+  deleted.
+- **`--delete-ascii`** deletes an ASCII PLT when its binary PLT is whole and
+  written after it (before: only "newer", not checked for being whole), or,
+  when `binary/` no longer holds it, when the remote holds its verified
+  copy. `--freq N` now applies to it too.
+- **`case organise output`** lets a `.out` go on a whole, newer ASCII PLT
+  (before: only on a binary PLT), else on the binary PLT, else on its
+  verified remote copy (`--remote`).
+- An ASCII PLT is checked by counting each zone's data lines against the
+  node and element counts in its header. A file that cannot be counted is
+  not called whole.
+- When one step of a range has nothing to stand in for it, that step is kept
+  and reported and the others are deleted.
+- `auto show` prints the `--delete-binary` command with `--remote`.
+
 ### 🔍 `case check plt --verify` and `case upload plt`
 
 - **`case check plt <case> --verify --remote NAME`** compares each binary
