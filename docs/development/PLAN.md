@@ -201,9 +201,9 @@ The chain (settled 2026-11-13): `.out` needs a verified ASCII PLT, an ASCII
 PLT needs a verified binary PLT, a binary PLT needs its copy on the remote.
 The commands always verify; there is no flag to skip it.
 
-- [ ] To confirm with the user before the first commit: when one step of
-      the series has no next file, is that step alone kept, or is nothing
-      deleted
+- [x] Confirmed with the user (2026-11-13): when one step of the range has
+      no next file in the chain, the others are deleted and that step is kept
+      and reported
 - [ ] A check that an ASCII PLT is whole: its size, and the node and element
       counts of its header against the file (beside `core/plt_valid.py`)
 - [ ] One function for "what stands in for this file": the next link in the
