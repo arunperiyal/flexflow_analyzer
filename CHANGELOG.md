@@ -10,9 +10,18 @@
   remote, what is broken locally and what is only on the remote; `--t1`,
   `--t2` and `--freq` pick the steps, `-v` prints a line per file. Verified
   files go in `auto_logs/ledger.json`; a file that is not verified is taken
-  out of it. A local PLT that is empty or cut short is never verified, and a
-  remote without `md5sum` gives "size only", which is not verified. The exit
-  code is 0 only when every PLT looked at is verified.
+  out of it.
+  - A remote without `md5sum` has each copy read back and hashed here, so a
+    binary PLT is always verified by md5.
+  - A local PLT that is empty or cut short is never verified (its copy is
+    the same broken file); the command says how to make it again: `run post
+    convert` from its ASCII PLT, else `run post full` from its `.out`.
+  - A PLT only on the remote (deleted here to save space) is compared with
+    the ledger's record of it. An emptied `binary/` is not a failure.
+  - With `--t1`, `--t2` and `--freq` together, the steps of the series in
+    neither place are listed.
+  - The exit code is 0 when nothing is wrong. A folder whose `.cases.yml`
+    has no entry for the remote is told the remote and its path are not set.
 - **`case upload plt` and `case download plt`** are the new names of
   `case upload binary` and `case download binary`. `binary` still works;
   help, completion and the commands `auto show` prints use `plt`.

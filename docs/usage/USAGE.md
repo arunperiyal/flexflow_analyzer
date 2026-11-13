@@ -340,9 +340,22 @@ Each PLT in `binary/` is compared with its copy on the remote by size and
 md5, both read at that moment. The result lists what is verified, what
 differs, what is not on the remote yet, what is broken locally (empty or cut
 short) and what is only on the remote. Verified files are written to
-`auto_logs/ledger.json`; a file that is not verified is taken out of it. The
-exit code is 0 only when every PLT looked at is verified. The remote's folder
-comes from `remotes:` in the case folder's `.cases.yml`.
+`auto_logs/ledger.json`; a file that is not verified is taken out of it.
+
+- A remote without `md5sum` has each copy read back and hashed locally, so
+  a binary PLT is always verified by md5. This takes as long as a download.
+- A broken local PLT is never verified: its copy is the same broken file.
+  The command says how to make it again, going back along the chain: `run
+  post convert` from its ASCII PLT, else `run post full` from its `.out`.
+- A PLT that is only on the remote (deleted locally to save space) is
+  compared with what the ledger recorded when it was verified. An emptied
+  `binary/` whose PLTs are on the remote as recorded is not a failure.
+- With `--t1`, `--t2` and `--freq` together, the steps of that series found
+  in neither place are listed.
+- The exit code is 0 when nothing is wrong.
+- The remote's folder comes from `remotes:` in the case folder's
+  `.cases.yml`. When it is not there, the command says the remote and its
+  path are not set; `auto init --remote NAME --path DIR` sets both.
 
 **Binary transfers and the session timeout:**
 
