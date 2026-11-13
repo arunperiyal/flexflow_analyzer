@@ -35,8 +35,11 @@ unchecked file belongs to `case organise plt` / `case organise output`
 - [ ] Rewrite §13.13 as a new section at the end of `auto.md`: deleting is
       done by the hand commands; keep its rules (md5 at the time of deleting,
       "written after", the restart guard, fail closed, restart-set keeps)
-- [ ] Still to settle with the user: is deleting part of `auto apply all`, or
-      only with a flag; cases that need you; the cost of the md5
+- [~] Is deleting part of `auto apply all`, or only with a flag: settled
+      2026-11-13. `auto apply` organises, uploads and deletes as one
+      conditional sequence; `--dry-run` shows it without uploading or
+      deleting
+- [ ] Still to settle with the user: cases that need you; the cost of the md5
 - [ ] `auto apply plt` and `auto apply output` run the delete commands, after
       the question with totals
 - [ ] Dummy cases and a test for each rule: copy differs, size-only copy,
@@ -114,9 +117,9 @@ For the PLT section, the Action list becomes commands only, for example:
 
 ```
 1: case check plt <case> --verify
-2: case upload plt <case> --t1 8950 --t2 9900 --freq 50 --to cloud
-3: case organise plt <case> --delete-binary --t1 8950 --t2 9900 --freq 50
-4: case organise plt <case> --delete-ascii --t1 8950 --t2 9900 --freq 50
+2: case upload plt <case> --t1 8950 --t2 9900 --freq 50 --remote cloud
+3: case organise plt <case> --delete-ascii --t1 8950 --t2 9900 --freq 50
+4: case organise plt <case> --delete-binary --t1 8950 --t2 9900 --freq 50
 ```
 
 - `case check plt --verify` does not exist yet. It verifies every PLT in
@@ -127,6 +130,22 @@ For the PLT section, the Action list becomes commands only, for example:
 - `--missing` is added only when the remote lacks some of the PLTs.
 - The same change for History, OUT files, RST files, and Inputs and case
   files.
+
+Settled with the user on 2026-11-13:
+
+- **The deletion chain.** A `.out` may be deleted when the ASCII PLT of its
+  step is verified. An ASCII PLT may be deleted when the binary PLT of its
+  step is verified. A binary PLT may be deleted when the remote directory
+  holds its copy. What "verified" means at each link is being confirmed
+  with the user (Phase 14).
+- `case upload --to` is renamed `--remote`.
+- `auto apply` has the targets `history`, `plt`, `output`, `input`, `rst`
+  and `all`.
+- `auto apply` is not only for deleting: it organises, uploads and deletes
+  in a conditional sequence. `--dry-run` uploads and deletes nothing and
+  prints the sequence in full. `auto show` stays as it is: state,
+  observation and action.
+- `case organise plt` always verifies. There is no `--unverified` flag.
 
 Order of work: 12, 13, 14, 15, 16, 17, then Phase 6. Phases 12 to 14 change
 hand commands and are useful on their own; 15 is a refactor with no change in
@@ -167,6 +186,8 @@ way and leave the same record.
 - [ ] `case upload binary`, `rst`, `history`, `input` and `--files` send
       through it: md5-checked, temporary name then rename, written to the
       ledger of the case folder
+- [ ] `case upload --to REMOTE` becomes `--remote REMOTE`, the name `run
+      post` and `auto` already use
 - [ ] `executor.do_upload` uses the same function; `auto` tests unchanged
 - [ ] Tests for `case upload` against a local "cloud": a copy that differs,
       a remote without `md5sum` (size only), a transfer cut short
@@ -177,7 +198,7 @@ way and leave the same record.
 - [ ] `case upload plt` and `case download plt`: the new name of the `binary`
       mode. `binary` stays as an alias that still works; help, completion and
       docs show `plt`
-- [ ] `case check plt <case> --verify [--to REMOTE] [--t1 --t2 --freq]`: for
+- [ ] `case check plt <case> --verify [--remote REMOTE] [--t1 --t2 --freq]`: for
       every PLT in `binary/` that the remote also holds, compare size and md5
       (local now, remote now); write the result to the ledger; list verified,
       differing, not on the remote, only on the remote
@@ -192,18 +213,24 @@ way and leave the same record.
 U-4 and U-5 of `auto.md` §13.5. After it, the delete commands are safe to
 print in `auto show` and safe for `auto apply` to run.
 
-- [ ] `case organise plt --delete-binary`: by default deletes only the files
-      with a verified copy in the ledger whose size and `mtime` still match
-      the local file; the others are listed and left. `--unverified` (with
-      its own question) keeps today's behaviour
-- [ ] `case organise plt --delete-ascii`: accepts a verified remote copy of
-      the binary PLT when the binary is no longer in `binary/`, and requires
-      the binary PLT to have been written after the ASCII file. Needed if
-      `--delete-binary` runs before `--delete-ascii`, as in the example above
+The chain (settled 2026-11-13): `.out` needs a verified ASCII PLT, an ASCII
+PLT needs a verified binary PLT, a binary PLT needs its copy on the remote.
+The commands always verify; there is no flag to skip it.
+
+- [ ] To confirm with the user before the first commit: what "verified"
+      means for an ASCII PLT (today `organise output` refuses an ASCII PLT
+      alone, because only a binary PLT can be checked for being whole);
+      whether a later link stands in for a deleted one; what happens to
+      binary PLTs off the upload frequency
+- [ ] `case organise plt --delete-binary`: deletes only the files with a
+      verified copy on the remote (ledger entry whose size and `mtime` still
+      match the local file); the others are listed and left
+- [ ] `case organise plt --delete-ascii`: deletes only where the binary PLT
+      of the step is verified: whole, and written after the ASCII file
 - [ ] `--freq` applies to `--delete-ascii` as well as `--delete-binary`
-- [ ] `case organise output`: a `.out` goes only when its step's binary PLT
-      is verified (ledger) or whole in `binary/`, and was written after the
-      `.out`; never for a step above the restart point of a queued job
+- [ ] `case organise output`: a `.out` goes only when the ASCII PLT of its
+      step is verified and was written after the `.out`; never for a step
+      above the restart point of a queued job
 - [ ] Tests for each rule, including a restart that rewrote the `.out`
 - [ ] Help text, `docs/usage/case-organise.md`, `CHANGELOG.md`
 
@@ -228,9 +255,9 @@ existing `auto` test must pass unchanged at each commit.
 
 - [ ] PLT files: `case check plt --verify`; `run post convert` / `run post
       full` when binary PLTs are not made; `case upload plt ... --freq N
-      --to REMOTE` with `--missing` only when the remote lacks some; `case
-      organise plt --delete-binary ...`; `case organise plt --delete-ascii
-      ...`. No `auto apply: ...` sentences and no `[not built yet]`
+      --remote REMOTE` with `--missing` only when the remote lacks some;
+      `case organise plt --delete-ascii ...`; `case organise plt
+      --delete-binary ...`. No `auto apply: ...` sentences and no `[not built yet]`
 - [ ] History: `case organise history ...`, `case upload history ...`; the
       copy of a live `.othd` / `.oisd` becomes a command too
 - [ ] OUT files: `case organise output ...`
@@ -244,16 +271,15 @@ existing `auto` test must pass unchanged at each commit.
 
 ### Phase 17: `auto apply <target>` (branch `auto-apply-targets`)
 
-- [ ] `auto apply history [case]`, `auto apply plt [case]`,
-      `auto apply output [case]`, `auto apply all [case]`: each runs the
-      steps of its target, in the order `auto show` lists them
+- [ ] `auto apply history [case]`, `plt`, `output`, `input`, `rst` and
+      `all`: each runs the steps of its target (organise, upload, delete),
+      in the order `auto show` lists them, each step only if the one before
+      it succeeded
 - [ ] `auto apply` with no target does nothing and lists the targets
-- [ ] Safety flags: `--dry-run` (as in `auto apply all --dry-run`), `--yes`,
-      `--no-delete`
+- [ ] `--dry-run` (as in `auto apply all --dry-run`): uploads and deletes
+      nothing, and prints every step with what it would send or delete
 - [ ] `--only` for `apply` goes (or stays as an alias for one release)
 - [ ] Parsing: a target word against a case of the same name; completion
-- [ ] To settle with the user: where inputs and restart-set uploads belong
-      (`output`, a target of their own, or only `all`)
 - [ ] Tests, help text, `docs/architecture/auto.md` (a new section at the
       end), `CHANGELOG.md`
 
