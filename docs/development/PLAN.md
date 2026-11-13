@@ -85,9 +85,8 @@ own `docs/PLAN.md` before writing code; they may have changed.
 
 - [x] Installer (`src/installer/install.py`): copy the non-markdown files of
       `docs/` too (`auto_flow.html`, the SVGs)
-- [ ] `src/templates/example_case_multi.yaml` points at
-      `examples/case_multi_with_globals.yaml`, which git ignores: track the
-      example or drop the pointer
+- [x] `src/templates/example_case_multi.yaml` no longer points at an ignored
+      example; its inline comments show the global-defaults form
 - [ ] `docs/development/testing.md`: how to run the tests, what
       `examples/BR0SG0U1P0` is needed for
 - [ ] `docs/development/tools.md`: `make_dummy.py`, `fake_slurm.py`,

@@ -4,8 +4,8 @@
 # OPTION 1: Without Global Defaults (repeat parameters for each case)
 # OPTION 2: With Global Defaults (define once, cases inherit and override)
 #
-# See examples/case_multi_with_globals.yaml for a complete example using global defaults.
-# Global defaults reduce YAML size by 40-50% for typical parametric studies!
+# The commented global-defaults section below shows the shorter form for
+# typical parametric studies.
 
 # ─────────────────────────────────────────────────────────────────────────────
 # OPTION 2: GLOBAL DEFAULTS APPROACH (recommended for batch studies)
@@ -122,8 +122,6 @@ cases:
 #   (above the 'cases:' line), all cases will inherit these values
 # - Case-specific values override global defaults
 # - Command-line flags (--np, --freq) override all config values
-# - See examples/case_multi_with_globals.yaml for a complete working example
-
 # Example Usage:
 # 1. Edit this file to define your parameter sweep
 # 2. Run: flexflow case create --from-config this_file.yaml --ref-case ./refCase

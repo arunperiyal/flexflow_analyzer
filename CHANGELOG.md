@@ -8,6 +8,7 @@
   flowcharts and SVG diagrams.
 - Links to markdown pages in converted documentation now point to their
   installed HTML equivalents.
+- The multi-case template no longer points at an ignored example file.
 
 ### 🔗 `case organise plt` and `output`: deleting along the chain
 
