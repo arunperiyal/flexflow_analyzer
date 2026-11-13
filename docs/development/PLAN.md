@@ -173,7 +173,7 @@ As noted on 2026-11-11; may be out of date.
 
 - [x] Write this file from the unfinished work in `auto.md`, `webapp.md`,
       `flowreel.md` and the session notes; add it to `docs/README.md`
-- [ ] Remove `problems.md`: its one problem (`case out --list` with `case:*`)
+- [x] Remove `problems.md`: its one problem (`case out --list` with `case:*`)
       was fixed in `389ef30`
 
 Checked and found already built, so not planned: `run post --remote` and the
