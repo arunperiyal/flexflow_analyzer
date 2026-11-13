@@ -87,9 +87,9 @@ own `docs/PLAN.md` before writing code; they may have changed.
       `docs/` too (`auto_flow.html`, the SVGs)
 - [x] `src/templates/example_case_multi.yaml` no longer points at an ignored
       example; its inline comments show the global-defaults form
-- [ ] `docs/development/testing.md`: how to run the tests, what
+- [x] `docs/development/testing.md`: how to run the tests, what
       `examples/BR0SG0U1P0` is needed for
-- [ ] `docs/development/tools.md`: `make_dummy.py`, `fake_slurm.py`,
+- [x] `docs/development/tools.md`: `make_dummy.py`, `fake_slurm.py`,
       `hpc_probe.sh`
 - [ ] Bring `.claude/context/NEXT_SESSION.md` up to date (only when the user
       asks: it still names the old doc paths)

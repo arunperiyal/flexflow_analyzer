@@ -9,6 +9,8 @@
 - Links to markdown pages in converted documentation now point to their
   installed HTML equivalents.
 - The multi-case template no longer points at an ignored example file.
+- Added development notes for running tests and using the dummy-case, fake
+  SLURM and HPC probe tools.
 
 ### 🔗 `case organise plt` and `output`: deleting along the chain
 

@@ -41,6 +41,8 @@ stay as they are.
 | Document | What it covers |
 |---|---|
 | [development/PLAN.md](development/PLAN.md) | The plan: phases and tasks, done and to do |
+| [development/testing.md](development/testing.md) | Running the test suite and its example-case fixture |
+| [development/tools.md](development/tools.md) | Dummy cases, fake SLURM and the HPC probe |
 | [../CHANGELOG.md](../CHANGELOG.md) | What changed, newest first |
 
 ## Adding a document
