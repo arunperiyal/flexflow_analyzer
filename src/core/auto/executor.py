@@ -125,7 +125,8 @@ def do_upload(snap, plan, conf, cloud, ledger, say: Callable[[str], None],
         else:
             snapshots += 1
         ledger.record(conf.remote, snap.name, rel, res.size, res.md5, res.verified,
-                      mtime=None if snapshot else mtime)
+                      mtime=None if snapshot else mtime,
+                      path=cloud.path_of(snap.name, rel))
         if res.size >= big:
             dt = max(time.monotonic() - t0, 1e-6)
             say(f"{rel}  {res.size / 1e6:.1f} MB in {dt:.0f} s ({res.size / 1e6 / dt:.1f} MB/s), "

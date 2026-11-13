@@ -77,6 +77,7 @@ def test_one_case_history_upload_and_post_in_that_order(dummy):
         assert entry['mtime'] == (case / rel).stat().st_mtime or rel == '.casestatus.md'
         assert file_md5(remote / rel) == entry['md5'] == file_md5(case / rel) or rel == '.casestatus.md'
         assert entry['verified'] == 'md5'
+        assert entry['path'] == str(remote / rel)
     assert not list(remote.rglob('.*.part'))                    # no temporary file left
     # the post job went in with the window of the plan
     job = submitted(dummy)[-1]

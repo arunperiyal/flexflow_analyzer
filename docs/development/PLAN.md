@@ -198,7 +198,8 @@ way and leave the same record.
       upload, still go by a plain send)
 - [ ] `case upload --to REMOTE` and `case download --from REMOTE` become
       `--remote REMOTE`, the name `run post` and `auto` already use
-- [ ] `executor.do_upload` uses the same function; `auto` tests unchanged
+- [x] `executor.do_upload` uses the same function; `auto` tests unchanged
+      (its ledger entries also say where on the remote the copy is)
 - [ ] Tests for `case upload` against a local "cloud": a copy that differs,
       a remote without `md5sum` (size only), a transfer cut short
 - [ ] Help text, `docs/usage/`, `CHANGELOG.md`
