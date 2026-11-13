@@ -40,10 +40,12 @@ flexflow → plot CS4SG1U1 --node 10
 
 ## Documentation
 
-- [Installation Guide](docs/INSTALL.md)
-- [Usage Guide](docs/USAGE.md)
-- [Command Reference](docs/REFERENCE.md)
-- [Case Creation with Time Parameters](CASE_CREATE_TIME_PARAMETERS.md)
+- [Documentation index](docs/README.md)
+- [Installation Guide](docs/installation/INSTALL.md)
+- [Usage Guide](docs/usage/USAGE.md)
+- [Command Reference](docs/usage/REFERENCE.md)
+- [Run commands](docs/usage/run.md)
+- [Case creation: time parameters and global defaults](docs/usage/case-create.md)
 - [Changelog](CHANGELOG.md)
 
 ## Main Commands

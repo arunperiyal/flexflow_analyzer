@@ -238,4 +238,4 @@ ff compare CS1 CS2 --node 10
 
 ---
 
-For more information, see FlexFlow documentation: `docs/INDEX.md`
+For more information, see FlexFlow documentation: `docs/README.md`

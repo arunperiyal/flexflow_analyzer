@@ -1362,7 +1362,7 @@ The `run` command integrates seamlessly with other FlexFlow Manager commands:
 
 ## See Also
 
-- [CASE_STRUCTURE.md](CASE_STRUCTURE.md) - Case directory structure details
+- [case-structure.md](../architecture/case-structure.md) - Case directory structure details
 - `case status` - Check case data completeness
 - `case clean` - Organize output files
 - `data show` - Preview simulation data

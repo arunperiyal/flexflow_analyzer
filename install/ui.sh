@@ -103,9 +103,9 @@ print_summary() {
     
     echo
     print_info "Documentation:"
-    echo "  Quick Start:  docs/guides/STANDALONE_SUCCESS.md"
-    echo "  Full Guide:   docs/INDEX.md"
-    echo "  Performance:  docs/technical/STARTUP_PERFORMANCE.md"
+    echo "  Index:        docs/README.md"
+    echo "  Usage:        docs/usage/USAGE.md"
+    echo "  Reference:    docs/usage/REFERENCE.md"
     echo
     
     print_success "Happy analyzing! 🎉"
