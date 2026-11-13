@@ -138,11 +138,57 @@ def test_window_and_freq_pick_the_steps(world):
     assert result.verified == names((200,))
 
 
-def test_nothing_in_binary_is_not_ok(world):
+def test_an_emptied_binary_is_fine_when_the_remote_is_as_recorded(world):
+    verify(world)                                               # verified, in the ledger
+    shutil.rmtree(world.case / 'binary')                        # deleted here to save space
+    result, ledger = verify(world)
+    assert result.ok and result.kept_there == names(STEPS) and not result.only_there
+    assert result.summary() == ('PLT verify: binary/ is empty here, '
+                                '3 only on the remote, as recorded')
+    assert ledger.get('local', 'CS1', 'binary/riser.100.plt')['verified'] == 'md5'   # kept
+
+
+def test_a_remote_only_copy_that_changed_since_it_was_verified(world):
+    verify(world)
     shutil.rmtree(world.case / 'binary')
+    copy = world.there / 'riser.200.plt'
+    copy.write_bytes(copy.read_bytes()[:-1] + b'?')             # same size, another md5
+    (world.there / 'riser.300.plt').write_bytes(b'short')
     result, _ = verify(world)
-    assert not result.ok and result.only_there == names(STEPS)
-    assert 'no binary PLT' in result.summary()
+    assert not result.ok and result.kept_there == names((100,))
+    assert result.changed_there == {'riser.200.plt': 'another md5 than when verified',
+                                    'riser.300.plt': '5 bytes there, '
+                                    f"{len(world_plt(2)):,} when verified"}
+
+
+def world_plt(i):
+    from test_scripts.plt_files import plt_bytes
+    return plt_bytes(npts=8 + i)
+
+
+def test_remote_only_with_no_record_is_listed_apart(world):
+    shutil.rmtree(world.case / 'binary')                        # never verified from here
+    result, _ = verify(world)
+    assert result.ok and result.only_there == names(STEPS) and not result.kept_there
+    assert 'not recorded' in result.summary()
+
+
+def test_nothing_here_and_nothing_there_is_not_ok(world):
+    shutil.rmtree(world.case / 'binary')
+    shutil.rmtree(world.there)
+    result, _ = verify(world)
+    assert not result.ok and result.summary() == 'PLT verify: no binary PLT here or on the remote'
+
+
+def test_steps_of_the_series_in_neither_place(world):
+    (world.case / 'binary' / 'riser.200.plt').unlink()          # 200: only on the remote
+    result, _ = verify(world, window=(100, 500), freq=100)
+    assert result.nowhere == [400, 500] and not result.ok
+    assert result.verified == names((100, 300)) and result.only_there == names((200,))
+    assert result.summary().endswith('2 in neither place')
+    # an open window names no series, so nothing is called lost
+    result, _ = verify(world, window=(100, None), freq=100)
+    assert result.nowhere == [] and result.ok
 
 
 # --- the command -----------------------------------------------------------------

@@ -199,7 +199,7 @@ Asked for on 2026-11-13, on reading what Phase 13 built. Done before Phase
 
 - [x] A remote without `md5sum`: `--verify` reads the copy back over SFTP and
       takes its md5 here, so a binary PLT is always verified by md5
-- [ ] PLTs only on the remote are compared with the ledger's record of them
+- [x] PLTs only on the remote are compared with the ledger's record of them
       (size and md5); an empty `binary/` whose PLTs are safely there is not
       a failure. With `--t1`, `--t2` and `--freq`, steps that are in neither
       place are listed

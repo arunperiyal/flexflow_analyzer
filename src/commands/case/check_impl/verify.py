@@ -102,8 +102,18 @@ def _print(console, result) -> None:
         rows.add_row("[red]not on the remote[/red]", _steps(result.not_there))
     for name, why in result.broken.items():
         rows.add_row("[red]broken here[/red]", f"{escape(name)}: {escape(why)}")
+    if result.kept_there:
+        rows.add_row("[green]only on the remote[/green]",
+                     f"{_steps(result.kept_there)}  [dim]as recorded when verified[/dim]")
     if result.only_there:
-        rows.add_row("[dim]only on the remote[/dim]", _steps(result.only_there))
+        rows.add_row("[yellow]only on the remote[/yellow]",
+                     f"{_steps(result.only_there)}  [dim]no record of a verified copy "
+                     f"to compare with[/dim]")
+    for name, why in result.changed_there.items():
+        rows.add_row("[red]changed on the remote[/red]", f"{escape(name)}: {escape(why)}")
+    if result.nowhere:
+        rows.add_row("[red]in neither place[/red]",
+                     _steps([f"x.{s}.plt" for s in result.nowhere]))
     console.print(rows)
     mark = "[green]✓[/green]" if result.ok else "[red]✗[/red]"
     console.print(f"  {mark} {escape(result.summary())}")
