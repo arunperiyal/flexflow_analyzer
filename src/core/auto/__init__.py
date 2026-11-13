@@ -1,5 +1,5 @@
 """
-`auto`: the per-case workflow (docs/AUTO_PLAN.md §13) run by one command.
+`auto`: the per-case workflow (docs/architecture/auto.md §13) run by one command.
 
     conf.py     the folder's .cases.yml: a remote's folder, auto's settings
     cloud.py    what is already on the remote (a folder, or over SFTP)

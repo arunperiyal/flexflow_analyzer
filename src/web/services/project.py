@@ -1,6 +1,6 @@
 """services/project.py — (probe, frame) -> the picker's views and projections.
 
-The map says what shape the points make (§6 of docs/WEBAPP_PLAN.md); a beam's
+The map says what shape the points make (§6 of docs/architecture/webapp.md); a beam's
 domain.yml frame says what axis they sit on (§7). This module turns that pair
 into the View selector's options and, given a chosen view, the 2-D points to
 plot -- largest-range pair when there is no frame, arc length / unrolled

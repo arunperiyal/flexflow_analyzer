@@ -1,7 +1,7 @@
 """Integration tests for the phase-2 web API against the real example case.
 
 examples/BR0SG0U1P0 already carries two written maps and real othd files, and
-is exactly the case docs/WEBAPP_PLAN.md §6 describes: `riser_probe.map`
+is exactly the case docs/architecture/webapp.md §6 describes: `riser_probe.map`
 predicts othId 1, but the othd only ever wrote othId 0 -- so the cross-check
 this endpoint exists for should actually catch something.
 

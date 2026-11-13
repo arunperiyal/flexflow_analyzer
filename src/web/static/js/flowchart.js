@@ -1,7 +1,7 @@
 // Help -> Flowchart: the end-to-end workflow as a branching diagram, from a
 // blank template to a plot in hand, with the selected step's detail on the
 // right. After the jobs are queued it splits: by hand down the middle, or
-// the `auto` command on the right (docs/AUTO_PLAN.md); steps not built yet
+// the `auto` command on the right (docs/architecture/auto.md); steps not built yet
 // are drawn dashed. NODES holds the steps (placed by hand on a col/row grid, so a new
 // step means choosing where it goes) and EDGES the connectors between them.
 // Commands lean on the shell's contexts: `use case:myCase` is set once and
