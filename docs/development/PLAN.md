@@ -26,9 +26,13 @@ Status marks: `[ ]` to do, `[x]` done, `[~]` dropped (say why).
 `test_render_slice_produces_a_real_png` in `test_scripts/test_web_field_render.py`
 fail on `main`: the job reports `iso/iso_100.png`, then serving it gives 404.
 
-- [ ] Find why the PNG the job lists is not served (path the job writes
-      against the path the route reads)
-- [ ] Fix it, with the two tests passing
+- [x] Find why the PNG the job lists is not served: the route
+      `GET .../field/render/<job_id>/<file>` was removed on purpose in
+      `70d5224` (a job's file is now kept with `POST .../save`, which gives a
+      token, and served by `GET .../field/render-file/<token>`). The tests were
+      not updated, and two "404" tests passed only because the route is gone
+- [ ] Bring the tests in line with the save-then-fetch flow; no change to
+      the server
 
 ### Phase 6: `auto apply`, the delete stage (branch `auto-delete`)
 
