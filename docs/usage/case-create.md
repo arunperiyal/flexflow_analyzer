@@ -1,4 +1,8 @@
-# How `case create` Replaces `maxTimeSteps` from YAML
+# `case create`: time parameters and global defaults
+
+Two things the YAML given to `case create --from-config` can do: set the time
+stepping of the `.def` file (the `time` section), and hold values shared by
+all cases of a batch (global defaults).
 
 ## Overview
 
@@ -35,7 +39,7 @@ The `case create` command maps YAML parameters to `.def` file parameters:
 
 The replacement happens in `src/commands/case/create_impl/command.py`:
 
-**Step 1: Extract time parameters from YAML** (lines 522-530)
+**Step 1: Extract time parameters from YAML**
 ```python
 time_params = case_config.get('time', {})
 
@@ -156,15 +160,11 @@ All of these correspond to fields in the `timeSteppingControl{}` block of the `.
 - The `.geo` file (uses `geo` section)
 - The `.config` file (uses different mechanism)
 
-## Template Files Updated
+## Templates
 
-The following template files now show the `time` section:
-
-1. **src/templates/example_case_config.yaml** - Default case config template
-2. **src/templates/example_case_single.yaml** - Single case template
-3. **src/templates/example_case_multi.yaml** - Batch case template
-
-Each template includes examples of using the `time` section with clear comments.
+The templates in `src/templates/` show the `time` section with comments:
+`example_case_config.yaml`, `example_case_single.yaml` and
+`example_case_multi.yaml` (which also shows global defaults).
 
 ## Common Use Cases
 
@@ -267,11 +267,17 @@ When both global and case-specific values exist:
    - Case-specific value completely overrides global value
    - If case doesn't specify, global value is used
 
-2. **Dict fields** (time, geo, def):
-   - Individual parameters within the dict merge intelligently
+2. **The `time` dict**:
+   - Its parameters merge one by one
    - Case-specific parameters override global parameters
    - Unspecified parameters inherit from global
    - Example: If global has `dt: 0.05` and case specifies `maxsteps: 32000`, case gets both values
+
+Only `problem_name`, `processors`, `output_frequency` and `time` can be global.
+`geo` and `def` are per case and are not inherited.
+
+The merge is in `src/commands/case/create_impl/command.py`: the root-level
+values are read once, then filled into every case that does not set them.
 
 ### Benefits
 
@@ -327,13 +333,10 @@ cases:
 
 **Savings: 58% reduction!**
 
-### Real-World Example
+### Template
 
-See `examples/case_multi_with_globals.yaml` for a complete working example showing:
-- Global defaults setup
-- Multiple cases with various overrides
-- Time parameter overriding
-- Detailed comments explaining each case
+`src/templates/example_case_multi.yaml` shows both ways (with and without
+global defaults) side by side, with comments.
 
 ## Verification
 
