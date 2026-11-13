@@ -136,9 +136,16 @@ Settled with the user on 2026-11-13:
 - **The deletion chain.** A `.out` may be deleted when the ASCII PLT of its
   step is verified. An ASCII PLT may be deleted when the binary PLT of its
   step is verified. A binary PLT may be deleted when the remote directory
-  holds its copy. What "verified" means at each link is being confirmed
-  with the user (Phase 14).
-- `case upload --to` is renamed `--remote`.
+  holds its copy.
+- An ASCII PLT is verified by its size and by the node and element counts in
+  its header.
+- A later link stands in for a missing one: with no ASCII PLT, the `.out`
+  goes on the verified binary PLT; with no binary PLT, on the remote copy.
+- Every step that has `.out` files gets its PLT made and uploaded; nothing
+  is thinned out. `--freq` is the spacing of the series. Before deleting,
+  the command confirms that the series from `--t1` to `--t2` has its next
+  file in the chain, in the local or the remote directory.
+- `case upload --to` and `case download --from` are renamed `--remote`.
 - `auto apply` has the targets `history`, `plt`, `output`, `input`, `rst`
   and `all`.
 - `auto apply` is not only for deleting: it organises, uploads and deletes
@@ -186,8 +193,8 @@ way and leave the same record.
 - [ ] `case upload binary`, `rst`, `history`, `input` and `--files` send
       through it: md5-checked, temporary name then rename, written to the
       ledger of the case folder
-- [ ] `case upload --to REMOTE` becomes `--remote REMOTE`, the name `run
-      post` and `auto` already use
+- [ ] `case upload --to REMOTE` and `case download --from REMOTE` become
+      `--remote REMOTE`, the name `run post` and `auto` already use
 - [ ] `executor.do_upload` uses the same function; `auto` tests unchanged
 - [ ] Tests for `case upload` against a local "cloud": a copy that differs,
       a remote without `md5sum` (size only), a transfer cut short
@@ -217,11 +224,13 @@ The chain (settled 2026-11-13): `.out` needs a verified ASCII PLT, an ASCII
 PLT needs a verified binary PLT, a binary PLT needs its copy on the remote.
 The commands always verify; there is no flag to skip it.
 
-- [ ] To confirm with the user before the first commit: what "verified"
-      means for an ASCII PLT (today `organise output` refuses an ASCII PLT
-      alone, because only a binary PLT can be checked for being whole);
-      whether a later link stands in for a deleted one; what happens to
-      binary PLTs off the upload frequency
+- [ ] To confirm with the user before the first commit: when one step of
+      the series has no next file, is that step alone kept, or is nothing
+      deleted
+- [ ] A check that an ASCII PLT is whole: its size, and the node and element
+      counts of its header against the file (beside `core/plt_valid.py`)
+- [ ] One function for "what stands in for this file": the next link in the
+      chain, local or remote, falling through a missing link to the one after
 - [ ] `case organise plt --delete-binary`: deletes only the files with a
       verified copy on the remote (ledger entry whose size and `mtime` still
       match the local file); the others are listed and left
@@ -229,7 +238,8 @@ The commands always verify; there is no flag to skip it.
       of the step is verified: whole, and written after the ASCII file
 - [ ] `--freq` applies to `--delete-ascii` as well as `--delete-binary`
 - [ ] `case organise output`: a `.out` goes only when the ASCII PLT of its
-      step is verified and was written after the `.out`; never for a step
+      step is verified and was written after the `.out` (or the link after
+      it, when there is no ASCII PLT); never for a step
       above the restart point of a queued job
 - [ ] Tests for each rule, including a restart that rewrote the `.out`
 - [ ] Help text, `docs/usage/case-organise.md`, `CHANGELOG.md`
