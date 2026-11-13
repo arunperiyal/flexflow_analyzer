@@ -20,24 +20,6 @@ Status marks: `[ ]` to do, `[x]` done, `[~]` dropped (say why).
 
 ## Open phases
 
-### Phase 4: repository clean-up (branch `repo-cleanup`)
-
-Remove what is no longer used, after checking by grep that nothing imports it.
-
-- [ ] Remove `module_backup/` and `main_old.py`
-- [ ] Remove the command files shadowed by packages of the same name:
-      `src/commands/case.py`, `data.py`, `config.py`, `docs.py`
-- [ ] `src/commands/config/` is not registered in `src/cli/app.py`: remove it,
-      or register it if `config` is still wanted (ask first)
-- [ ] Root `mainFlex.sh` and `sample.yaml`: remove if they only repeat
-      `src/templates/` (ask first)
-- [ ] `.gitignore`: drop the repeated blocks; stop ignoring `*.spec` while
-      `flexflow.spec` is tracked
-- [ ] Update `.claude/context/code-map.md` ("Not in use") to match
-
-Outside the commits, and only on the user's word: delete the local branches
-already merged into `main`.
-
 ### Phase 5: the two failing render tests (branch `web-render-tests`)
 
 `test_render_iso_produces_a_real_png` and
@@ -147,6 +129,11 @@ Not split into tasks yet. Each needs a decision before it becomes a phase.
 - **Web UI open questions** (`webapp.md` §13): OISD beside OTHD in the plot
   dialog; a `stride` for long histories; a `plate` body type; saved workspaces
   as `workspace.json`.
+- **The `config` command**: `src/commands/config/` (`config template`) is not
+  registered in `src/cli/app.py`, and `template` does the same job. Remove it
+  or register it.
+- **Stale shell completion**: `src/cli/completion.py` still offers commands
+  that no longer exist (`info`, `new`, `preview`, `statistics`, `config`).
 - **Project layout**: rename `test_scripts/` to `tests/`; a `pyproject.toml`
   with the pytest settings.
 
@@ -169,6 +156,7 @@ As noted on 2026-11-11; may be out of date.
 | 1 | `docs-reorganise` | Docs sorted into `installation/`, `usage/`, `architecture/`; case-create notes merged; dead links fixed; index added; `docs` command fixed |
 | 2 | `claude-context` | `.claude/rules/`, `.claude/context/code-map.md`, short `CLAUDE.md` |
 | 3 | `plan-file` | This file; `problems.md` removed (its problem was fixed in `389ef30`); the `prompt.md` note (`run post --remote`, `--t1` / `--t2`) found already built |
+| 4 | `repo-cleanup` | Removed `module_backup/`, `main_old.py`, the shadowed command files, root `mainFlex.sh` and `sample.yaml`; `.gitignore` tidied. The `config` command was left (backlog). Still open, on the user's word: delete the local branches already merged |
 
 ---
 
