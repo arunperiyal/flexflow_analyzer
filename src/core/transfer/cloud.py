@@ -280,14 +280,20 @@ def open_for_folder(folder, remote: Optional[str]):
         cf = cases_file.read(folder)
     except cases_file.CasesFileError as e:
         raise CloudError(str(e))
-    listed = ', '.join(cf.remotes) or 'none yet'
+    listed = ', '.join(cf.remotes)
+    if not remote and not cf.remotes:
+        raise CloudError(f"no remote is set for this folder, and so no path on one: "
+                         f"{cf.path} has nothing under `remotes:`. "
+                         f"Set both with `auto init --remote NAME --path DIR`")
     if not remote:
         raise CloudError(f"which remote? --remote NAME or `use remote:NAME` "
                          f"({cases_file.FILENAME} lists: {listed})")
     path = cf.remotes.get(remote)
     if not path:
-        raise CloudError(f"{cf.path} has no folder for remote '{remote}' (lists: {listed}); "
-                         f"`auto init --remote {remote} --path DIR` adds it")
+        others = f" (it lists: {listed})" if listed else " (it lists none)"
+        raise CloudError(f"the remote '{remote}' is not set for this folder, and its path is "
+                         f"not set: {cf.path} has no entry for it under `remotes:`{others}. "
+                         f"Set both with `auto init --remote {remote} --path DIR`")
     if path == 'EDIT_ME':
         raise CloudError(f"set the folder of remote '{remote}' in {cf.path} (it still says EDIT_ME)")
     return open_cloud(SimpleNamespace(remote=remote, path=path, is_local=remote == 'local'))

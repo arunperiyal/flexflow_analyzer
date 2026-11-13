@@ -205,7 +205,7 @@ Asked for on 2026-11-13, on reading what Phase 13 built. Done before Phase
       place are listed
 - [x] A broken local PLT says how to make it again: `run post convert` when
       its ASCII PLT is there, `run post full` when only the `.out` are
-- [ ] A folder with no `remotes:` entry for the remote says that the remote
+- [x] A folder with no `remotes:` entry for the remote says that the remote
       and its path are not set, and how to set them
 - [ ] Tests, help text, `docs/usage/`, `CHANGELOG.md`
 

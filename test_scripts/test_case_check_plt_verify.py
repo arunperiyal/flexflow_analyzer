@@ -234,7 +234,16 @@ def test_the_command_needs_a_remote_it_knows(world, capsys):
     assert run(world, remote=None) == 1
     assert 'which remote?' in capsys.readouterr().out
     assert run(world, remote='nowhere') == 1
-    assert "no folder for remote 'nowhere'" in ' '.join(capsys.readouterr().out.split())
+    out = ' '.join(capsys.readouterr().out.split())
+    assert "the remote 'nowhere' is not set for this folder, and its path is not set" in out
+    assert 'auto init --remote nowhere --path DIR' in out and 'it lists: local' in out
+    # a folder with no remote at all
+    (world.folder / '.cases.yml').write_text(yaml.safe_dump(
+        {'cases': [{'name': 'CS1', 'path': 'CS1'}], 'remotes': {}, 'auto': {}}))
+    assert run(world, remote=None) == 1
+    assert 'no remote is set for this folder' in ' '.join(capsys.readouterr().out.split())
+    assert run(world, remote='cloud') == 1
+    assert 'it lists none' in ' '.join(capsys.readouterr().out.split())
 
 
 def test_without_verify_the_plain_check_still_runs(world, capsys):
