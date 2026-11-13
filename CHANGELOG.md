@@ -26,6 +26,11 @@ it: `.out` → ASCII PLT → binary PLT → the copy on the remote.
 - When one step of a range has nothing to stand in for it, that step is kept
   and reported and the others are deleted.
 - `auto show` prints the `--delete-binary` command with `--remote`.
+- **`case organise output --all-out` checks too.** It no longer deletes a
+  `.out` with nothing to stand in for it; it now does what the plain command
+  does.
+- The ASCII check reads the header simPlt writes (`NODES = N, ELEMENTS=E,
+  DATAPACKING=POINT`) and counts in blocks: a 371 MB file in about a second.
 
 ### 🔍 `case check plt --verify` and `case upload plt`
 
