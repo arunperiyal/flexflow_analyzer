@@ -14,7 +14,7 @@ import pytest
 from src.commands.auto.apply import execute_apply
 from src.core.transfer import cloud as cloud_mod
 from src.core.transfer.cloud import LocalCloud, PutResult, SftpCloud, file_md5
-from src.core.auto.ledger import Ledger
+from src.core.transfer.ledger import Ledger
 from src.core.auto.runlog import AutoLockError, FolderLock
 
 REPO = Path(__file__).resolve().parent.parent
@@ -74,6 +74,7 @@ def test_one_case_history_upload_and_post_in_that_order(dummy):
     ledger = Ledger(dummy / 'bare').data['local']['case5']
     assert 'othd_files/archive/riser2.othd' in ledger and 'RUN_1/riser.600_0.rst' not in ledger
     for rel, entry in ledger.items():
+        assert entry['mtime'] == (case / rel).stat().st_mtime or rel == '.casestatus.md'
         assert file_md5(remote / rel) == entry['md5'] == file_md5(case / rel) or rel == '.casestatus.md'
         assert entry['verified'] == 'md5'
     assert not list(remote.rglob('.*.part'))                    # no temporary file left
@@ -120,6 +121,7 @@ def test_a_running_cases_live_history_is_a_snapshot_not_moved(dummy):
     assert (dummy / 'bare' / 'case2' / 'RUN_1' / 'riser.othd').exists()
     ledger = Ledger(dummy / 'bare').data['local']['case2']
     assert ledger['RUN_1/riser.othd']['verified'] == 'snapshot'
+    assert 'mtime' not in ledger['RUN_1/riser.othd']      # still being written
 
 
 # --- when something goes wrong ------------------------------------------------------------

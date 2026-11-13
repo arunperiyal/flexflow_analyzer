@@ -1,9 +1,14 @@
 """
-What `auto` has sent to a remote and checked, per folder of cases:
-<folder>/auto_logs/ledger.json
+What `auto` and `case upload` have sent to a remote and checked, per folder
+of cases: <folder>/auto_logs/ledger.json
 
     {"cloud": {"BR0SG0U1P0": {"binary/riser.5740.plt":
-        {"size": 155342168, "md5": "9e1f...", "verified": "md5", "when": "2026-11-12 09:31:05"}}}}
+        {"size": 155342168, "md5": "9e1f...", "verified": "md5",
+         "mtime": 1794475865.0, "when": "2026-11-12 09:31:05"}}}}
+
+`mtime` is when the local file was last written, as it was when sent: a local
+file written again since (a restart, a new conversion) no longer matches its
+entry.
 
 A later stage deletes a local file only when its entry is `verified: md5` and
 the size and md5 still match the file on the remote. Written after every file,
@@ -40,9 +45,11 @@ class Ledger:
         return self.data.get(remote, {}).get(case, {}).get(rel)
 
     def record(self, remote: str, case: str, rel: str, size: int, md5: Optional[str],
-               verified: str):
+               verified: str, mtime: Optional[float] = None):
         entry = {'size': size, 'md5': md5, 'verified': verified,
                  'when': time.strftime('%Y-%m-%d %H:%M:%S')}
+        if mtime is not None:
+            entry['mtime'] = mtime
         self.data.setdefault(remote, {}).setdefault(case, {})[rel] = entry
         self.save()
 

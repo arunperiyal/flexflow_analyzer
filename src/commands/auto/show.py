@@ -118,7 +118,7 @@ def gather(case_dirs, remote, clouds=None):
                     listing = cloud.listing(Path(case_dir).name)
                 except CloudError as e:
                     problems.append(f"{Path(case_dir).name}: {e}")
-            from src.core.auto.ledger import Ledger
+            from src.core.transfer.ledger import Ledger
             sent = {rel: e.get('when') for rel, e in
                     Ledger(Path(case_dir).parent).data.get(conf.remote, {})
                     .get(Path(case_dir).name, {}).items()}
