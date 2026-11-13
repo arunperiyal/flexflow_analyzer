@@ -57,6 +57,11 @@ class Ledger:
         self.data.setdefault(remote, {}).setdefault(case, {})[rel] = entry
         self.save()
 
+    def forget(self, remote: str, case: str, rel: str):
+        """Take a file out: its copy was found missing or different."""
+        if self.data.get(remote, {}).get(case, {}).pop(rel, None) is not None:
+            self.save()
+
     def save(self):
         self.path.parent.mkdir(parents=True, exist_ok=True)
         tmp = self.path.with_name(self.path.name + '.tmp')

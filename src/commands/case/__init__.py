@@ -337,6 +337,12 @@ class CaseCommand(BaseCommand):
         time_window(plt_check_parser, 
                     t1_kwargs=dict(metavar='STEP', help='Only check timesteps >= STEP'),
                     t2_kwargs=dict(metavar='STEP', help='Only check timesteps <= STEP'))
+        plt_check_parser.add_argument('--verify', action='store_true',
+                                    help='Compare each PLT in binary/ with its copy on the '
+                                         'remote, by size and md5')
+        context_flag(plt_check_parser, 'remote', '--remote', type=str, metavar='REMOTE',
+                     help='With --verify: the remote to compare with '
+                          '(or use context with "use remote:name")')
         plt_check_parser.add_argument('-v', '--verbose', action='store_true',
                                     help='Enable verbose output')
         plt_check_parser.add_argument('-h', '--help', action='store_true',
@@ -610,7 +616,9 @@ class CaseCommand(BaseCommand):
             organise_cmd.execute_organise(args)
         elif hasattr(args, 'case_subcommand') and args.case_subcommand == 'check':
             from .check_impl.command import execute_case_check
-            execute_case_check(args)
+            code = execute_case_check(args)
+            if code:
+                sys.exit(code)
         elif hasattr(args, 'case_subcommand') and args.case_subcommand == 'status':
             from .status_impl import execute_status
             code = execute_status(args)

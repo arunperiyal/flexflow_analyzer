@@ -185,13 +185,15 @@ What the code check found (why 12, 14 and 15 are needed):
 - [x] `case upload plt` and `case download plt`: the new name of the `binary`
       mode. `binary` stays as an alias that still works; help, completion and
       docs show `plt`
-- [ ] `case check plt <case> --verify [--remote REMOTE] [--t1 --t2 --freq]`: for
+- [x] `case check plt <case> --verify [--remote REMOTE] [--t1 --t2 --freq]`: for
       every PLT in `binary/` that the remote also holds, compare size and md5
       (local now, remote now); write the result to the ledger; list verified,
       differing, not on the remote, only on the remote
-- [ ] Exit code and a one-line summary that `auto` can read (all verified or
-      not)
-- [ ] Tests: all match, one differs, one missing there, remote without
+- [x] Exit code and a one-line summary that `auto` can read (all verified or
+      not): `verify_plts()` in `src/core/transfer/verify.py` returns it. A
+      local PLT that is not whole is never verified; a size-only match is
+      not counted as verified
+- [x] Tests: all match, one differs, one missing there, remote without
       `md5sum`, a restart that made a local PLT newer than its remote copy
 - [ ] Help text, completion, `docs/usage/`, `CHANGELOG.md`
 
