@@ -9,6 +9,8 @@ directories along with them.
 import argparse
 from unittest.mock import MagicMock
 
+from test_scripts.checked_remote import CheckedRemote, checked_mock, final
+
 import pytest
 
 from src.commands.case.download_impl.command import (CaseUploadCommand,
@@ -105,11 +107,11 @@ class TestUploadFiles:
     """The transfer itself, against a stubbed SSH connection."""
 
     def test_uploads_every_matched_file_into_the_case_root(self, uploader, case):
-        ssh = MagicMock()
+        ssh = checked_mock()
         ssh.remote_path_exists.return_value = True
         assert uploader.upload_files(ssh, "/remote/BR0", str(case),
                                      DEFAULT_UPLOAD_FILES) is True
-        sent = {call.args[1] for call in ssh.upload_file.call_args_list}
+        sent = {final(call.args[1]) for call in ssh.upload_file.call_args_list}
         assert sent == {
             "/remote/BR0/simflow.config", "/remote/BR0/riser.def",
             "/remote/BR0/riser.geo", "/remote/BR0/othd.cyl_nodes.map",
@@ -117,20 +119,20 @@ class TestUploadFiles:
         }
 
     def test_matching_nothing_is_not_a_failure(self, uploader, case):
-        ssh = MagicMock()
+        ssh = checked_mock()
         ssh.remote_path_exists.return_value = True
         assert uploader.upload_files(ssh, "/remote/BR0", str(case), ["*.nope"]) is True
         ssh.upload_file.assert_not_called()
 
     def test_missing_remote_directory_fails_without_force(self, uploader, case):
-        ssh = MagicMock()
+        ssh = checked_mock()
         ssh.remote_path_exists.return_value = False
         assert uploader.upload_files(ssh, "/remote/BR0", str(case),
                                      DEFAULT_UPLOAD_FILES) is False
         ssh.upload_file.assert_not_called()
 
     def test_force_creates_the_remote_directory(self, uploader, case):
-        ssh = MagicMock()
+        ssh = checked_mock()
         ssh.remote_path_exists.return_value = False
         ssh.make_remote_dir.return_value = True
         assert uploader.upload_files(ssh, "/remote/BR0", str(case),

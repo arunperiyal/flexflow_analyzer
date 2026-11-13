@@ -194,10 +194,12 @@ class TestCaseDownloadCommand:
         mock_ssh = Mock()
         mock_ssh.remote_path_exists.return_value = True
         mock_ssh.remote_is_dir.return_value = True
-        mock_ssh.upload_directory.side_effect = IOError("Transfer failed")
+        mock_ssh.upload_file.side_effect = IOError("Transfer failed")
 
         with tempfile.TemporaryDirectory() as tmpdir:
             os.makedirs(os.path.join(tmpdir, 'othd_files'), exist_ok=True)
+            with open(os.path.join(tmpdir, 'othd_files', 'riser1.othd'), 'w') as f:
+                f.write('x')
             result = download_cmd.download_directory(
                 mock_ssh,
                 '/remote/case',

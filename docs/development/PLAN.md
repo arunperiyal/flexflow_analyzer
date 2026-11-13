@@ -190,9 +190,12 @@ way and leave the same record.
       function that returns the md5 of a named remote file
 - [x] Move the ledger next to it; entries also record the local file's
       `mtime`
-- [ ] `case upload binary`, `rst`, `history`, `input` and `--files` send
+- [x] `case upload binary`, `rst`, `history`, `input` and `--files` send
       through it: md5-checked, temporary name then rename, written to the
       ledger of the case folder
+      (a whole folder too; the unreachable old body of `execute_upload` is
+      removed. The case's notes and restart list, written fresh at each
+      upload, still go by a plain send)
 - [ ] `case upload --to REMOTE` and `case download --from REMOTE` become
       `--remote REMOTE`, the name `run post` and `auto` already use
 - [ ] `executor.do_upload` uses the same function; `auto` tests unchanged

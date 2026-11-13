@@ -87,19 +87,20 @@ def _drop(ssh, path: str):
 
 
 def send_checked(ssh, local, dest: str, snapshot: bool = False, callback=None,
-                 where: str = 'the remote') -> PutResult:
+                 where: str = 'the remote', mkdir: bool = True) -> PutResult:
     """Send `local` to the remote path `dest` over SFTP: to a temporary name,
     compared with the local file (size, and md5 when the remote has md5sum),
     then renamed over the real name. A failure leaves no file under the real
     name and removes the temporary one. `snapshot` is for a file that is
-    still being written: it is sent and renamed, not checked."""
+    still being written: it is sent and renamed, not checked. `mkdir=False`
+    when the caller has already made sure the folder is there."""
     local = Path(local)
     parent = posixpath.dirname(dest)
     tmp = posixpath.join(parent, f".{posixpath.basename(dest)}.part")
     try:
         size = local.stat().st_size
         want = None if snapshot else file_md5(local)
-        if not ssh.make_remote_dir(parent):
+        if mkdir and not ssh.make_remote_dir(parent):
             return PutResult(False, size, want, '', f"cannot create {parent}")
         if callback is None:
             ssh.upload_file(str(local), tmp)
@@ -151,6 +152,9 @@ class LocalCloud:
                 found[(rel / name).as_posix()] = st.st_size
                 found.mtimes[(rel / name).as_posix()] = st.st_mtime
         return found
+
+    def path_of(self, case_name: str, rel: str) -> str:
+        return str(self.root / case_name / rel)
 
     def md5(self, case_name: str, rel: str) -> Optional[str]:
         """md5 of <root>/<case>/<rel> as it is now, or None when it is not there."""
@@ -232,6 +236,9 @@ class SftpCloud:
                         found.mtimes[child_rel] = float(a.st_mtime)
         walk(posixpath.join(self.root, case_name), '', 0)
         return found
+
+    def path_of(self, case_name: str, rel: str) -> str:
+        return posixpath.join(self.root, case_name, rel)
 
     def md5(self, case_name: str, rel: str) -> Optional[str]:
         """md5 of <root>/<case>/<rel> as it is now, or None when the remote
