@@ -51,14 +51,28 @@ def binary(tmp_path):
     return binary
 
 
-def test_delete_binary_keeps_every_fifth_step(tmp_path, binary):
+@pytest.fixture
+def on_the_remote(monkeypatch):
+    """Every binary PLT has a copy on the remote with the same md5 (the rule
+    itself is tested in test_case_organise_chain.py)."""
+    from src.core import chain
+
+    class All(dict):
+        def __contains__(self, step):
+            return True
+
+    monkeypatch.setattr(chain, 'remote_copies',
+                        lambda *a, **k: chain.RemoteCopies(lambda: ({}, All(), None)))
+
+
+def test_delete_binary_keeps_every_fifth_step(tmp_path, binary, on_the_remote):
     organise(tmp_path, 'plt', delete_binary=True, t1=4000, t2=5000, freq=1, keep_freq=5)
     left = steps(binary, '.plt')
     assert [t for t in left if 4000 <= t <= 5000] == list(range(4000, 5001, 5))
     assert 3990 in left and 5010 in left and 3999 in left          # outside the window
 
 
-def test_delete_binary_freq_only_touches_its_multiples(tmp_path, binary):
+def test_delete_binary_freq_only_touches_its_multiples(tmp_path, binary, on_the_remote):
     organise(tmp_path, 'plt', delete_binary=True, t1=4000, t2=4100, freq=10, keep_freq=50)
     gone = set(range(3990, 5011)) - set(steps(binary, '.plt'))
     assert gone == {4010, 4020, 4030, 4040, 4060, 4070, 4080, 4090}
