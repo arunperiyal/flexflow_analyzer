@@ -40,6 +40,7 @@ stay as they are.
 
 | Document | What it covers |
 |---|---|
+| [development/PLAN.md](development/PLAN.md) | The plan: phases and tasks, done and to do |
 | [../CHANGELOG.md](../CHANGELOG.md) | What changed, newest first |
 
 ## Adding a document
