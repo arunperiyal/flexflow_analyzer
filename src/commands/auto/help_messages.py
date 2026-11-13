@@ -37,7 +37,7 @@ def print_auto_help():
     The remote is --remote NAME or `use remote:NAME`: its login comes from
     `remote list`, its folder for these cases from .cases.yml.
 
-{b}WHAT IT LOOKS AT{r} (docs/AUTO_PLAN.md, Help -> Flowchart)
+{b}WHAT IT LOOKS AT{r} (docs/architecture/auto.md, Help -> Flowchart)
     The queue (squeue, sacct), each job matched to its case by the folder it
     was submitted from; the history, .out, .rst and PLT files; and what is
     already on the remote.

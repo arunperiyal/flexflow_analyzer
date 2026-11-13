@@ -1,6 +1,6 @@
 """App factory, route registration, and the loopback safety check.
 
-No authentication (§10 of docs/WEBAPP_PLAN.md) — binding to 127.0.0.1 and
+No authentication (§10 of docs/architecture/webapp.md) — binding to 127.0.0.1 and
 reaching it over `ssh -L` is the whole defence, so refusing a non-loopback
 host is the one check this module exists to make.
 """

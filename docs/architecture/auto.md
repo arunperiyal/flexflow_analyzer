@@ -5,8 +5,10 @@ to do next (submit a post job, upload binary PLTs / history, later: tidy
 output), and does it — with checks strict enough that no data can be lost.
 It runs on the HPC login node with no agent: an algorithm, not judgment.
 
-Status: plan only. Nothing here is built yet. **§13 is the current design**;
-it supersedes §5–§7 where they differ.
+Status: built (`auto init`, `auto show`, `auto apply`; `src/core/auto/`,
+`src/commands/auto/`). This file is the design the code cites by section
+number, so the numbers must not change. **§13 is the current design**; it
+supersedes §5–§7 where they differ. [auto_flow.html](auto_flow.html) draws it.
 
 ---
 

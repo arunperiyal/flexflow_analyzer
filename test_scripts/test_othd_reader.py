@@ -1,6 +1,6 @@
 """Tests for OTHDReader's `othId` group handling.
 
-docs/WEBAPP_PLAN.md §3 documented a real bug here: `othId` was not a
+docs/architecture/webapp.md §3 documented a real bug here: `othId` was not a
 recognised line, so the restart/overwrite check (`current_time in
 self.time_to_index`) re-fired for every group inside one timestep -- the
 second group in a timestep looked like a restart of the first and clobbered

@@ -1,5 +1,5 @@
 """
-auto - the per-case workflow for a folder of cases (docs/AUTO_PLAN.md §13)
+auto - the per-case workflow for a folder of cases (docs/architecture/auto.md §13)
 
     auto init [--remote NAME] [--path DIR] [--keep-rst N] [--keep-newest-rst N] [--upload-rst N] [--disk-alert SIZE]
                          set a remote's folder and auto's settings in .cases.yml

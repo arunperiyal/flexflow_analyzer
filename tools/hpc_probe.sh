@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# hpc_probe.sh -- answer the open questions of docs/AUTO_PLAN.md on the cluster
+# hpc_probe.sh -- answer the open questions of docs/architecture/auto.md on the cluster
 # =============================================================================
 # Read-only. It lists, counts and stats files; it reads at most the first
 # 8 bytes of a few PLT files, the tail of each live .othd, and checksums ONE

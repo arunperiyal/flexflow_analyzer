@@ -1,5 +1,5 @@
 """
-The plan for one case, from its snapshot alone (docs/AUTO_PLAN.md §13).
+The plan for one case, from its snapshot alone (docs/architecture/auto.md §13).
 No I/O here: everything comes in through CaseSnapshot, so every rule can be
 tried on a made-up case.
 

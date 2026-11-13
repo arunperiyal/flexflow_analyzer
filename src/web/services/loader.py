@@ -1,6 +1,6 @@
 """services/loader.py — scan()/load() cache: mtime-keyed, LRU-evicted, lock-guarded.
 
-Per §9 of docs/WEBAPP_PLAN.md: SeriesMeta and loaded arrays are cached per
+Per §9 of docs/architecture/webapp.md: SeriesMeta and loaded arrays are cached per
 case, keyed additionally by (group, columns) for the arrays, bounded to a
 handful of cases (panels pin two at once for a comparison), and re-read when
 the mtime moves. The lock is held across the whole scan/load so two tabs

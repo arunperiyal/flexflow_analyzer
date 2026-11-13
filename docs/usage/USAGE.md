@@ -784,7 +784,7 @@ chmod -R u+rw /path/to/case
 
 ## Further Reading
 
-- [Installation Guide](../INSTALL.md) - Setup and configuration
-- [Documentation Index](INDEX.md) - Complete reference
-- [Performance Guide](technical/STARTUP_PERFORMANCE.md) - Optimization tips
+- [Installation Guide](../installation/INSTALL.md) - Setup and configuration
+- [Documentation Index](../README.md) - Complete reference
+- [Quick Reference](REFERENCE.md) - One-page command list
 - [GitHub Repository](https://github.com/arunperiyal/flexflow_analyzer) - Source code and issues

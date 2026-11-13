@@ -1,6 +1,6 @@
 """
 The three additive actions `auto apply` carries out for a case, each from the
-plan `decide` made a moment before (docs/AUTO_PLAN.md §13):
+plan `decide` made a moment before (docs/architecture/auto.md §13):
 
     do_history   case organise history --update --clean --compile
     do_upload    send the files the plan lists, each checked, never deleting

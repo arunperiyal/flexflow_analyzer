@@ -19,13 +19,17 @@ def show_docs_help():
     TOPIC                Documentation topic to view
     
 {Colors.BOLD}AVAILABLE TOPICS{Colors.RESET}
+    index                Index of all documentation
     main                 Main usage guide (USAGE.md)
     usage                Same as 'main'
-    info                 Info command documentation
-    plot                 Plot command documentation
-    compare              Compare command documentation
-    template             Template command documentation
-    refactoring          Refactoring summary
+    reference            One-page command reference
+    run                  The run commands (pre, main, post, ...)
+    create               case create: time parameters and global defaults
+    organise             case organise, step by step
+    install              Installation guide
+    structure            Layout of a case directory
+    auto                 Design of the auto command
+    webapp               Design of the web UI
 
 {Colors.BOLD}EXAMPLES{Colors.RESET}
     # List all available documentation
@@ -34,11 +38,11 @@ def show_docs_help():
     # View main usage guide
     flexflow docs main
     
-    # View plot command documentation
-    flexflow docs plot
+    # View the run commands
+    flexflow docs run
     
-    # View compare command documentation
-    flexflow docs compare
+    # View the design of the auto command
+    flexflow docs auto
 
 {Colors.BOLD}NOTES{Colors.RESET}
     • Documentation is included when installing with --install flag

@@ -463,7 +463,7 @@ _flexflow_completions() {
             if [[ "$cur" == -* ]]; then
                 COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
             else
-                COMPREPLY=( $(compgen -W "main plot compare info template statistics preview tecplot" -- "$cur") )
+                COMPREPLY=( $(compgen -W "index main usage reference run create organise install structure auto webapp" -- "$cur") )
             fi
             ;;
                 tecplot)
@@ -684,7 +684,7 @@ _flexflow() {
                     ;;
                 docs)
                     _arguments \\
-                        '1:topic:(main plot compare info template statistics preview tecplot)' \\
+                        '1:topic:(index main usage reference run create organise install structure auto webapp)' \\
                         '(-h --help)'{-h,--help}'[Show help]'
                     ;;
                 tecplot)
@@ -859,7 +859,7 @@ complete -c flexflow -n "__fish_seen_subcommand_from template" -s h -l help -d "
 complete -c flexflow -n "__fish_seen_subcommand_from template" -l examples -d "Show examples"
 
 # Docs command
-complete -c flexflow -n "__fish_seen_subcommand_from docs" -xa "main plot compare info template statistics preview tecplot"
+complete -c flexflow -n "__fish_seen_subcommand_from docs" -xa "index main usage reference run create organise install structure auto webapp"
 complete -c flexflow -n "__fish_seen_subcommand_from docs" -s h -l help -d "Show help"
 
 # Tecplot command - subcommands

@@ -207,7 +207,7 @@ flexflow .../CS4SG1U1 [CS4SG1U1] → exit
 
 - **In FlexFlow**: Type `help` or `?`
 - **Command help**: `<command> --help`
-- **Documentation**: See `INTERACTIVE_MODE.md`, `BROWSING_GUIDE.md`
+- **Documentation**: See [USAGE.md](USAGE.md) and the [documentation index](../README.md)
 - **Issues**: https://github.com/arunperiyal/flexflow_analyzer/issues
 
 ---

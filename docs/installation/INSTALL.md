@@ -553,8 +553,7 @@ If installation fails:
 3. **Check logs:** Installation creates logs in `/tmp/flexflow_install.log`
 4. **Review documentation:**
    - This guide
-   - [INSTALL_QUICKREF.md](INSTALL_QUICKREF.md)
-   - [docs/setup/INSTALL_INTERACTIVE.md](docs/setup/INSTALL_INTERACTIVE.md)
+   - [install/README.md](../../install/README.md), on the install scripts
 
 5. **Report issues:**
    - GitHub: https://github.com/arunperiyal/flexflow_analyzer/issues
@@ -564,7 +563,7 @@ If installation fails:
 
 After successful installation:
 
-1. **Read the usage guide:** [docs/USAGE.md](docs/USAGE.md)
+1. **Read the usage guide:** [USAGE.md](../usage/USAGE.md)
 2. **Try examples:** `ff --examples`
 3. **Explore commands:** `ff --help`
 4. **Test with your data:** `ff case show YOUR_CASE`

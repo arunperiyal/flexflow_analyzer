@@ -47,7 +47,7 @@ main() {
         echo
         echo "  SHELLKIT_DIR=../shellkit ./install.sh   use a local shellkit checkout (editable)"
         echo
-        echo "For more information, see INSTALL.md"
+        echo "For more information, see docs/installation/INSTALL.md"
         exit 0
     fi
 
