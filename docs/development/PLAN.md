@@ -24,14 +24,14 @@ Status marks: `[ ]` to do, `[x]` done, `[~]` dropped (say why).
 
 Remove what is no longer used, after checking by grep that nothing imports it.
 
-- [ ] Remove `module_backup/` and `main_old.py`
-- [ ] Remove the command files shadowed by packages of the same name:
+- [x] Remove `module_backup/` and `main_old.py`
+- [x] Remove the command files shadowed by packages of the same name:
       `src/commands/case.py`, `data.py`, `config.py`, `docs.py`
 - [~] `src/commands/config/` is not registered in `src/cli/app.py`: left as it
       is, to decide later (moved to the backlog)
 - [x] Root `mainFlex.sh` and `sample.yaml`: remove if they only repeat
       `src/templates/` (ask first)
-- [ ] `.gitignore`: drop the repeated blocks; stop ignoring `*.spec` while
+- [x] `.gitignore`: drop the repeated blocks; stop ignoring `*.spec` while
       `flexflow.spec` is tracked
 - [x] Update `.claude/context/code-map.md` ("Not in use") to match
 
