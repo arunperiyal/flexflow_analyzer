@@ -442,7 +442,8 @@ class CaseOrganizer(HistoryMixin):
                                f"[bold]every .out stays[/bold] (--keep-out)")
         elif getattr(self.args, 'all_out', False):
             self.console.print(f"  Keeping .rst at steps divisible by {keep_interval}; "
-                               f"[bold]every .out goes[/bold] (--all-out)")
+                               f"[bold]every .out[/bold] in range is looked at, and goes once "
+                               f"a .plt stands in for it (--all-out)")
         else:
             self.console.print(f"  Keeping .rst at steps divisible by {keep_interval}; "
                                f".out go once converted to .plt")
@@ -544,7 +545,6 @@ class CaseOrganizer(HistoryMixin):
         self.logger.info(f"Found {len(out_files)} .out files, {len(rst_files)} .rst files "
                         f"in {output_dir.name}")
 
-        all_out = getattr(self.args, 'all_out', False)
         chain = self._chain()
 
         # Why each step's .out must stay (None: a later file stands in for them)
@@ -585,11 +585,11 @@ class CaseOrganizer(HistoryMixin):
 
             if file.suffix == '.out':
                 why = keep_out_because(step)
-                delete = why is None or all_out
+                # --all-out too: no .out goes with nothing to stand in for it
+                delete = why is None
                 if not delete:
                     kept_out.setdefault(why[0], {})[step] = why[1]
-                reason = (f"step {step}: {stood.get(step, '')}"
-                          if why is None else "--all-out")
+                reason = f"step {step}: {stood.get(step, '')}"
             elif step in protected:
                 delete = False
             else:
@@ -631,8 +631,8 @@ class CaseOrganizer(HistoryMixin):
             asked = chain.remote.problem
             if asked:
                 self.console.print(f"  [dim]The remote was not asked: {asked}[/dim]")
-            self.console.print("  [dim]Convert them first (run post), or add --all-out to "
-                               "delete them anyway.[/dim]")
+            self.console.print("  [dim]Convert them first (run post full --t1 .. --t2 ..), "
+                               "then run this again.[/dim]")
 
         # PLT files are handled exclusively by `plt --delete-ascii`/`--delete-binary`, not `output`
 

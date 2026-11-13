@@ -131,8 +131,8 @@ Removes intermediate output files from the run directory:
   restart reads only `.rst` (and the `.sgd` subgrid files); `.out` is read
   only by the conversion that writes the `.plt`. A step with nothing to stand
   in keeps its `.out` and is listed with the reason; the other steps go.
-  `--all-out` deletes every `.out` in range regardless; those steps can then
-  never be converted.
+  `--all-out` takes every `.out` in range and still checks each: it deletes
+  nothing the plain command would keep.
 
 With `--t1`/`--t2`, only files whose timestep falls in that window are
 considered; the rest are left untouched (either bound alone is a one-sided

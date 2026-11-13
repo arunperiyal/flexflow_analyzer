@@ -214,8 +214,8 @@ class CaseCommand(BaseCommand):
                                     help='Also keep the N newest complete .rst sets, whatever '
                                          '--keep-freq says (default: 2; 1 keeps only the newest)')
         output_parser.add_argument('--all-out', action='store_true',
-                                    help='Delete every .out in range, even steps with no .plt '
-                                         '(their field data is then gone for good)')
+                                    help='Every .out in range, each still checked: one with no '
+                                         'whole, newer .plt to stand in for it is kept')
         output_parser.add_argument('--keep-out', action='store_true',
                                     help='Delete no .out at all; only thin the .rst')
         context_flag(output_parser, 'remote', '--remote', type=str, metavar='REMOTE',

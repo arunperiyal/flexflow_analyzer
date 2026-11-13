@@ -2,9 +2,12 @@
 Whether an ASCII Tecplot PLT (what simPlt writes from the .out files) is
 whole: not empty, and each zone holds as many data lines as its header says.
 
-    ZONE T="fluid", N=1200, E=1000, F=FEPOINT, ET=BRICK
-    <1200 lines, one per node>
-    <1000 lines, one per element>
+    ZONE T=FIELD, STRANDID=1, SOLUTIONTIME=287.5, NODES = 1630573, ELEMENTS=1590192,
+         DATAPACKING=POINT, ZONETYPE=FEBRICK
+    <1630573 lines, one per node>
+    <1590192 lines, one per element>
+
+(the header simPlt writes; the older N=, E=, F=FEPOINT spelling is read too)
 
     check = check_ascii_plt(path)     # .ok, .reason
 
@@ -25,6 +28,25 @@ from typing import List, Optional
 _HEADER_WORDS = ('TITLE', 'VARIABLES', 'ZONE', 'TEXT', 'GEOMETRY', 'DATASETAUXDATA',
                  'VARAUXDATA', 'CUSTOMLABELS', 'FILETYPE')
 _NUMBER = re.compile(rb'^[+-]?(\d|\.\d)')
+_BLOCK = 8 << 20
+# what a data line is made of; anything else in the data means a header, a
+# NaN, or damage, and the file is then read line by line to say which
+_NOT_DATA = re.compile(rb'[^0-9eE+\-. \t\r\n]')
+
+
+def _fast_lines(f) -> Optional[tuple]:
+    """(data lines from here to the end, the last byte), counted block by
+    block; None when the rest is not plain data lines (another ZONE, a blank
+    line, a NaN), which the caller then reads line by line."""
+    lines, last, prev = 0, b'', b'\n'
+    while True:
+        block = f.read(_BLOCK)
+        if not block:
+            return lines, last
+        if _NOT_DATA.search(block) or b'\n\n' in block or (prev == b'\n' and block[:1] == b'\n'):
+            return None
+        lines += block.count(b'\n')
+        prev = last = block[-1:]
 
 
 @dataclass(frozen=True)
@@ -88,6 +110,17 @@ def check_ascii_plt(path) -> AsciiCheck:
                 if _NUMBER.match(line):
                     if not zones:
                         return AsciiCheck(path, False, "data before any ZONE header", size)
+                    if in_header:
+                        # the first data line of a zone: count the rest in blocks
+                        # when it is plain data to the end (the usual one-zone file)
+                        here = f.tell()
+                        fast = _fast_lines(f) if raw.endswith(b'\n') else None
+                        if fast is not None:
+                            more, end = fast
+                            zones[-1][1] += 1 + more + (1 if end not in (b'', b'\n') else 0)
+                            last = end or raw
+                            break
+                        f.seek(here)
                     zones[-1][1] += 1
                     in_header = False
                     continue

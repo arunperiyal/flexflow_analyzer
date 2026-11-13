@@ -105,8 +105,10 @@ Organize and clean up case directories. Pick one subcommand.
             one before it restarts the run. 1 keeps only the newest
 
         {Colors.CYAN}--all-out{Colors.RESET}
-            Delete every .out in range, even at steps with no .plt.
-            Those steps can then never be converted.
+            Every .out in range, each still checked: a step with no
+            whole, newer .plt to stand in for its .out keeps them. It
+            does what the plain command does; it is kept so that the
+            command `auto show` prints goes on working.
 
         {Colors.CYAN}--keep-out{Colors.RESET}
             Delete no .out at all, converted or not: only the .rst are

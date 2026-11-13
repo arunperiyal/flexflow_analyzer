@@ -166,7 +166,7 @@ Settled with the user on 2026-11-13:
   observation and action.
 - `case organise plt` always verifies. There is no `--unverified` flag.
 
-Order of work: 12, 13, 18 and 14 (done), 15, 16, 17, then Phase 6. Phases 12 to 14 change
+Order of work: 12, 13, 18, 14 and 19 (done), 15, 16, 17, then Phase 6. Phases 12 to 14 change
 hand commands and are useful on their own; 15 is a refactor with no change in
 behaviour; 16 and 17 are what the user sees.
 
@@ -289,7 +289,8 @@ As noted on 2026-11-11; may be out of date.
 | 12 | `checked-transfer` | `case upload` and `auto` send through one checked path (`src/core/transfer/`: temporary name, size and md5, rename) and one ledger, whose entries now hold the local `mtime` and the remote `path`; `--to` / `--from` became `--remote`; the crash of `case upload --help` fixed |
 | 13 | `plt-verify` | `case upload plt` / `case download plt` (the old word `binary` still works); `case check plt --verify --remote NAME` compares each binary PLT with its remote copy by size and md5, writes the ledger and exits 0 only when all are verified (`verify_plts()` in `src/core/transfer/verify.py`) |
 | 18 | `plt-verify-chain` | `case check plt --verify` after the user's review: md5 by reading the copy back when the remote has no `md5sum`; PLTs only on the remote compared with the ledger's record (an emptied `binary/` is fine); steps in neither place listed; a broken PLT says how to make it again (`run post convert`, else `run post full`); a remote that is not set says so |
-| 14 | `organise-verified` | Deleting along the chain (`core/chain.py`): `.out` on a verified ASCII PLT (`core/plt_ascii.py`), an ASCII PLT on a verified binary PLT, a binary PLT on a remote copy with the same md5 read at that moment (`--remote`); a missing link is passed over; a step with nothing to stand in is kept and reported, the others go. `--freq` for `--delete-ascii`. Left open: the ASCII check is untried on a real simPlt file; `--all-out` still deletes `.out` with nothing to stand in; the queued-restart rule is left to `auto` (Phase 6) |
+| 14 | `organise-verified` | Deleting along the chain (`core/chain.py`): `.out` on a verified ASCII PLT (`core/plt_ascii.py`), an ASCII PLT on a verified binary PLT, a binary PLT on a remote copy with the same md5 read at that moment (`--remote`); a missing link is passed over; a step with nothing to stand in is kept and reported, the others go. `--freq` for `--delete-ascii`. Left open: the queued-restart rule is left to `auto` (Phase 6) |
+| 19 | `organise-review` | After the user's review of Phase 14: the ASCII check reads the real simPlt header and counts in blocks; `--all-out` checks each `.out` (it now does what the plain command does); `--freq` is accepted with `--delete-ascii` (the flag check had still refused it) |
 
 ---
 
