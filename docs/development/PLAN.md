@@ -20,16 +20,6 @@ Status marks: `[ ]` to do, `[x]` done, `[~]` dropped (say why).
 
 ## Open phases
 
-### Phase 5: the two failing render tests (branch `web-render-tests`)
-
-`test_render_iso_produces_a_real_png` and
-`test_render_slice_produces_a_real_png` in `test_scripts/test_web_field_render.py`
-fail on `main`: the job reports `iso/iso_100.png`, then serving it gives 404.
-
-- [ ] Find why the PNG the job lists is not served (path the job writes
-      against the path the route reads)
-- [ ] Fix it, with the two tests passing
-
 ### Phase 6: `auto apply`, the delete stage (branch `auto-delete`)
 
 Design: `docs/architecture/auto.md` §13 (§13.3 traps, §13.12 restart sets).
@@ -157,6 +147,7 @@ As noted on 2026-11-11; may be out of date.
 | 2 | `claude-context` | `.claude/rules/`, `.claude/context/code-map.md`, short `CLAUDE.md` |
 | 3 | `plan-file` | This file; `problems.md` removed (its problem was fixed in `389ef30`); the `prompt.md` note (`run post --remote`, `--t1` / `--t2`) found already built |
 | 4 | `repo-cleanup` | Removed `module_backup/`, `main_old.py`, the shadowed command files, root `mainFlex.sh` and `sample.yaml`; `.gitignore` tidied. The `config` command was left (backlog). Still open, on the user's word: delete the local branches already merged |
+| 5 | `web-render-tests` | The two failing render tests: the route they fetched was removed on purpose in `70d5224`; the tests now go through `save` and `render-file/<token>` |
 
 ---
 
