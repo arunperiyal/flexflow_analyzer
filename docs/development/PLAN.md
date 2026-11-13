@@ -197,7 +197,7 @@ What the code check found (why 12, 14 and 15 are needed):
 Asked for on 2026-11-13, on reading what Phase 13 built. Done before Phase
 14, which builds on it.
 
-- [ ] A remote without `md5sum`: `--verify` reads the copy back over SFTP and
+- [x] A remote without `md5sum`: `--verify` reads the copy back over SFTP and
       takes its md5 here, so a binary PLT is always verified by md5
 - [ ] PLTs only on the remote are compared with the ledger's record of them
       (size and md5); an empty `binary/` whose PLTs are safely there is not

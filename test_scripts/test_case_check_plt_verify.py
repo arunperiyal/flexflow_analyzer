@@ -102,12 +102,30 @@ def test_a_restart_that_wrote_the_local_plt_again(world):
     assert ledger.get('local', 'CS1', 'binary/riser.300.plt') is None
 
 
-def test_a_remote_without_md5sum_is_size_only_and_not_ok(world, tmp_path):
+def nas(world, tmp_path, **kw):
     cloud = object.__new__(SftpCloud)
     cloud.root, cloud.where, cloud.ssh = str(tmp_path / 'r'), 'nas', FakeSsh(md5sum=False)
     cloud.listing = world.cloud.listing
+    for k, v in kw.items():
+        setattr(cloud.ssh, k, v)
+    return cloud
+
+
+def test_a_remote_without_md5sum_is_read_back_and_verified_by_md5(world, tmp_path):
     ledger = Ledger(world.folder)
-    result = verify_plts(world.case, 'riser', cloud, 'nas', ledger)
+    result = verify_plts(world.case, 'riser', nas(world, tmp_path, open=open), 'nas', ledger)
+    assert result.ok and result.verified == names(STEPS)
+    assert ledger.get('nas', 'CS1', 'binary/riser.100.plt')['verified'] == 'md5'
+    # and a copy that differs is caught the same way
+    copy = world.there / 'riser.200.plt'
+    copy.write_bytes(copy.read_bytes()[:-1] + b'?')
+    result = verify_plts(world.case, 'riser', nas(world, tmp_path, open=open), 'nas', ledger)
+    assert list(result.differs) == ['riser.200.plt']
+
+
+def test_a_copy_that_cannot_be_read_back_is_size_only_and_not_ok(world, tmp_path):
+    ledger = Ledger(world.folder)
+    result = verify_plts(world.case, 'riser', nas(world, tmp_path), 'nas', ledger)
     assert not result.ok and result.size_only == names(STEPS)
     assert ledger.get('nas', 'CS1', 'binary/riser.100.plt')['verified'] == 'size'
     assert result.summary() == 'PLT verify: 0 of 3 verified, 3 by size only'

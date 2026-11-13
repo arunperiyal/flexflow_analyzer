@@ -65,16 +65,29 @@ class CloudError(RuntimeError):
     pass
 
 
-def remote_md5(ssh, path: str) -> Optional[str]:
-    """md5 of a file on the remote `ssh` is connected to, or None when the
-    remote cannot compute one (no md5sum, no such file)."""
+def remote_md5(ssh, path: str, read_back: bool = False) -> Optional[str]:
+    """md5 of a file on the remote `ssh` is connected to, or None when there
+    is none to be had (no md5sum there, no such file).
+
+    With read_back, a remote that cannot compute it has the file read back
+    over SFTP and hashed here: as slow as a download, and always an md5."""
     try:
         _, out, _ = ssh.ssh_client.exec_command(f"md5sum {shlex.quote(path)}", timeout=600)
         text = out.read().decode(errors='replace').strip()
-        if out.channel.recv_exit_status() != 0 or not text:
-            return None
-        word = text.split()[0]
-        return word if len(word) == 32 else None
+        if out.channel.recv_exit_status() == 0 and text:
+            word = text.split()[0]
+            if len(word) == 32:
+                return word
+    except Exception:
+        pass
+    if not read_back:
+        return None
+    try:
+        h = hashlib.md5()
+        with ssh.sftp_client.open(path, 'rb') as f:
+            for block in iter(lambda: f.read(CHUNK), b''):
+                h.update(block)
+        return h.hexdigest()
     except Exception:
         return None
 
@@ -241,9 +254,10 @@ class SftpCloud:
         return posixpath.join(self.root, case_name, rel)
 
     def md5(self, case_name: str, rel: str) -> Optional[str]:
-        """md5 of <root>/<case>/<rel> as it is now, or None when the remote
-        cannot compute one (no md5sum there, or no such file)."""
-        return remote_md5(self.ssh, posixpath.join(self.root, case_name, rel))
+        """md5 of <root>/<case>/<rel> as it is now: from md5sum there, or by
+        reading the file back when the remote has none. None when the file
+        cannot be read."""
+        return remote_md5(self.ssh, posixpath.join(self.root, case_name, rel), read_back=True)
 
     def put(self, local, case_name: str, rel: str, snapshot: bool = False) -> PutResult:
         """Send `local` to <root>/<case>/<rel>, checked (send_checked)."""
