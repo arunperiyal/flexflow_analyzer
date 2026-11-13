@@ -16,11 +16,10 @@ import time
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
-from .decide import CasePlan, _size_text, runs_text, steps_phrase, steps_text
+from .decide import AUTO_ONLY, CasePlan, _size_text, runs_text, steps_phrase, steps_text
 from .observe import CaseSnapshot
 
 SECTIONS = ('state', 'needs', 'flags', 'log', 'history', 'plt', 'out', 'rst', 'inputs')
-AUTO_ONLY = 'auto apply: '
 NOT_YET = ' [not built yet: delete by hand for now]'      # deleting is a later stage of apply
 
 
@@ -202,16 +201,8 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
         s.row('Only there', ' · '.join(parts) + f" (on {remote}, not here)")
     if only and (only.get(('othd', 'archive')) or only.get(('oisd', 'archive'))):
         s.actions.append(f"case download history {name} --archive --remote {remote}")
-    organise = c.get('organise')
-    if organise and organise[0] == 'update':
-        s.actions.append(f"case organise history {name} --update --clean --compile")
-    elif organise:
-        s.actions.append(f"case organise history {name} --clean --compile")
-    if cloud is not None and (organise or c.get('hist_missing')):
-        s.actions.append(f"case upload history {name} --remote {remote}")
-    if c.get('live_upload'):
-        s.actions.append(AUTO_ONLY + f"copy the live {p}.othd/.oisd to {remote} "
-                                     f"({_size_text(sum(c['live_upload'].values()))})")
+    for key in ('organise', 'upload-history', 'live'):
+        s.actions += [step.command for step in plan.steps_of(key)]
     sections.append(s)
 
     # -- PLT files --------------------------------------------------------------------
@@ -258,19 +249,11 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
     if c.get('post_now'):
         s.actions.append(f"wait: post job {c['post_now'][0].jobid} is "
                          f"{c['post_now'][0].state.lower()}")
-    jobs = plan.post_jobs
-    for a, b, d, mode in jobs:
-        freq_part = f" --freq {d}" if (len(jobs) > 1 or d != f) else ''
-        s.actions.append(f"run post {mode} {name} --t1 {a} --t2 {b}{freq_part} --no-remote")
-    if len(jobs) > 1:
+    posts = plan.steps_of('post')
+    s.actions += [step.command for step in posts]
+    if len(posts) > 1:
         s.actions.append("wait: submit each post job after the previous one has ended")
-    if c.get('plt_upload'):
-        up = c['plt_upload']
-        # --missing skips a file the remote holds at the same size, which would leave an
-        # earlier run's PLT in place after a restart
-        flag = '' if set(up) & set(c.get('stale_plt') or []) else ' --missing'
-        s.actions.append(f"case upload plt {name} --t1 {up[0]} --t2 {up[-1]}{flag} "
-                         f"--remote {remote}")
+    s.actions += [step.command for step in plan.steps_of('upload-plt')]
     if c.get('del_ascii'):
         s.actions.append(AUTO_ONLY + f"delete ASCII PLTs, {steps_phrase(c['del_ascii']).lower()}, "
                                      f"once the binary copy on {remote} is md5-checked"
@@ -371,13 +354,7 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
         if c.get('rst_lost'):
             s.row('Lost', f"{steps_text(c['rst_lost'])}: on the upload grid, but neither here "
                           f"nor on {remote}")
-        grid_due = [t for t in sorted(todo) if t != c.get('rst_final')]
-        if grid_due:
-            s.actions.append(f"case upload rst {name} --t1 {grid_due[0]} --t2 {grid_due[-1]} "
-                             f"--freq {conf.upload_rst} --missing --remote {remote}")
-        if c.get('rst_final') in todo:
-            n = c['rst_final']
-            s.actions.append(f"case upload rst {name} --t1 {n} --t2 {n} --missing --remote {remote}")
+        s.actions += [step.command for step in plan.steps_of('upload-rst', 'upload-rst-final')]
     thin = c.get('thin') or []
     if snap.rst and thin:                      # after the uploads: deleting follows from them
         s.actions.append(AUTO_ONLY + f"delete .rst of {steps_phrase(thin).lower()}: not "
@@ -397,8 +374,7 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
         s.row('Remote', f"present {len(inputs) - len(missing)} · missing {len(missing)}"
               + (f": {', '.join(sorted(missing))}" if missing else ''))
     s.row('Size', f"{_size_text(sum(inputs.values()))} here")
-    if missing:
-        s.actions.append(f"case upload {name} --files '{','.join(sorted(missing))}' --remote {remote}")
+    s.actions += [step.command for step in plan.steps_of('upload-inputs')]
     sections.append(s)
     return sections
 

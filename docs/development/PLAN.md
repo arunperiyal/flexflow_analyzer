@@ -197,9 +197,11 @@ What the code check found (why 12, 14 and 15 are needed):
 Refactor, no change in what `auto show` prints or `auto apply` does. Every
 existing `auto` test must pass unchanged at each commit.
 
-- [ ] A `Step` record: target (`history`, `plt`, `output`, `inputs`), the
+- [x] A `Step` record: target (`history`, `plt`, `output`, `inputs`), the
       command as text, what to call to run it, and a note (why, or what it
       waits for). The plan carries a list of them, in order
+      (`PlanStep` in `decide.py`, `plan.steps`; the report's command lines
+      for organise, post and the uploads now come from it)
 - [ ] Split `decide()` into one function per target, called in order by a
       short `decide()`
 - [ ] Split `report.build()` the same way; the Action lines come from the

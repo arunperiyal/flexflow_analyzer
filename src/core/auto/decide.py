@@ -42,10 +42,30 @@ class Item:
     topic: str = 'other'        # the heading it is shown under: TOPIC_OF[kind] unless given
 
 
+AUTO_ONLY = 'auto apply: '      # an action only `auto apply` carries out, not a command to type
+
+TARGETS = ('history', 'plt', 'output', 'rst', 'input')
+
+
+@dataclass
+class PlanStep:
+    """One thing the plan has done for a case, as `auto show` lists it and
+    `auto apply` runs it: show and apply both read plan.steps."""
+    target: str                 # history | plt | output | rst | input
+    kind: str                   # what carries it out: history | upload | post
+    key: str                    # which step of its target: organise, upload-history, live,
+    #                             post, upload-plt, upload-rst, upload-rst-final, upload-inputs
+    command: str                # the command, as the user would type it
+    files: Dict[str, int] = field(default_factory=dict)     # upload: relative path -> bytes
+    note: str = ''              # why, or what it waits for
+    now: bool = True            # False: only after the step before it has ended
+
+
 @dataclass
 class CasePlan:
     name: str
     state: str
+    steps: List[PlanStep] = field(default_factory=list)
     facts: List[str] = field(default_factory=list)
     items: List[Item] = field(default_factory=list)
     uploads: Dict[str, int] = field(default_factory=dict)    # relative path -> bytes
@@ -55,6 +75,14 @@ class CasePlan:
 
     def add(self, kind, text, topic=None):
         self.items.append(Item(kind, text, topic or TOPIC_OF[kind]))
+
+    def step(self, target, kind, key, command, **kw) -> PlanStep:
+        self.steps.append(PlanStep(target, kind, key, command, **kw))
+        return self.steps[-1]
+
+    def steps_of(self, *keys, target=None, kind=None) -> List[PlanStep]:
+        return [s for s in self.steps if (not keys or s.key in keys)
+                and (target is None or s.target == target) and (kind is None or s.kind == kind)]
 
     @property
     def needs_you(self) -> bool:
@@ -286,12 +314,17 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
                 plan.ctx['live_upload'] = stale
                 if stale:
                     plan.uploads.update(stale)
+                    plan.step('history', 'upload', 'live',
+                              AUTO_ONLY + f"copy the live {p}.othd/.oisd to {conf.remote} "
+                                          f"({_size_text(sum(stale.values()))})", files=stale)
                     plan.add('upload', f"A copy of the live {p}.othd and {p}.oisd "
                                        f"({_size_text(sum(stale.values()))}), refreshed each run")
         elif not broken_rule:
             numbers = [n for h in snap.history.values() for n in (*h.archive, *h.cleaned)]
             n = max(numbers, default=0) + 1
             plan.ctx['organise'] = ('update', n)
+            plan.step('history', 'history', 'organise',
+                      f"case organise history {name} --update --clean --compile")
             plan.add('history', f"Move {snap.run_rel}/{p}.othd and .oisd into archive/ as run "
                                 f"{n}, then clean and compile "
                                 f"(organise history --update --clean --compile)")
@@ -307,6 +340,8 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
                            - redone)
         if uncleaned:
             plan.ctx['organise'] = ('clean', uncleaned)
+            plan.step('history', 'history', 'organise',
+                      f"case organise history {name} --clean --compile")
             plan.add('history', f"Clean and compile archive run(s) "
                                 f"{', '.join(map(str, uncleaned))}, not yet in cleaned/ "
                                 f"(organise history --clean --compile)")
@@ -326,6 +361,12 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
                               ', '.join(f"{k} ({_size_text(a)} here, {_size_text(b)} there)"
                                         for k, (a, b) in sorted(shrink.items())) +
                               ". Compare them (and restore archive/ if it is empty) first.")
+        if organising or hist:
+            # once organised, the plan made again lists the files to send
+            plan.step('history', 'upload', 'upload-history',
+                      f"case upload history {name} --remote {conf.remote}",
+                      files={} if organising else hist,
+                      note='once the history is organised' if organising else '')
         if organising:
             plan.add('upload', "The history files, once organised")
         elif hist:
@@ -516,6 +557,10 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
                                      'convert' if all(j[3] == 'convert' for j in jobs) else 'full')
                     for n, (a, b, d, mode) in enumerate(jobs):
                         freq_part = f" --freq {d}" if (len(jobs) > 1 or d != f) else ''
+                        plan.step('plt', 'post', 'post',
+                                  f"run post {mode} {name} --t1 {a} --t2 {b}{freq_part} "
+                                  f"--no-remote", now=(n == 0),
+                                  note='' if n == 0 else 'after the post job before it has ended')
                         count = len(range(a, b + 1, d))
                         already = (f"; the {len(have)} before {todo[0]} have one ({where})"
                                    if have and n == 0 else '')
@@ -543,6 +588,13 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
         plan.ctx['plt_upload'] = sorted(int(k.split('.')[-2]) for k in plts)
         if plts:
             plan.uploads.update(plts)
+            up = plan.ctx['plt_upload']
+            # --missing skips a file the remote holds at the same size, which would leave
+            # an earlier run's PLT in place after a restart
+            flag = '' if set(up) & set(plan.ctx.get('stale_plt') or []) else ' --missing'
+            plan.step('plt', 'upload', 'upload-plt',
+                      f"case upload plt {name} --t1 {up[0]} --t2 {up[-1]}{flag} "
+                      f"--remote {conf.remote}", files=plts)
             plan.add('upload', f"Binary PLTs, {steps_phrase([int(k.split('.')[1]) for k in plts], f).lower()}: "
                                f"{_size_text(sum(plts.values()))}")
         # Restart sets: the local ones (keep_rst) are insurance against a failed run; the
@@ -576,6 +628,16 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
         if todo_rst:
             files = {k: v for stale in todo_rst.values() for k, v in stale.items()}
             plan.uploads.update(files)
+            grid_due = [t for t in sorted(todo_rst) if t != final]
+            if grid_due:
+                plan.step('rst', 'upload', 'upload-rst',
+                          f"case upload rst {name} --t1 {grid_due[0]} --t2 {grid_due[-1]} "
+                          f"--freq {conf.upload_rst} --missing --remote {conf.remote}",
+                          files={k: v for t in grid_due for k, v in todo_rst[t].items()})
+            if final in todo_rst:
+                plan.step('rst', 'upload', 'upload-rst-final',
+                          f"case upload rst {name} --t1 {final} --t2 {final} --missing "
+                          f"--remote {conf.remote}", files=dict(todo_rst[final]))
             note = f", {'including' if len(todo_rst) > 1 else 'the'} final set of the finished run" \
                 if final in todo_rst else ''
             plan.add('upload', f"Restart sets, {steps_phrase(sorted(todo_rst)).lower()}: "
@@ -601,6 +663,9 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
         plan.ctx['inputs_missing'] = inputs
         if inputs:
             plan.uploads.update(inputs)
+            plan.step('input', 'upload', 'upload-inputs',
+                      f"case upload {name} --files '{','.join(sorted(inputs))}' "
+                      f"--remote {conf.remote}", files=inputs)
             plan.add('upload', f"Inputs and case files: {len(inputs)} files "
                                f"({', '.join(sorted(inputs)[:4])}{', ...' if len(inputs) > 4 else ''})")
     for t, c in sorted(snap.binary.items()):
