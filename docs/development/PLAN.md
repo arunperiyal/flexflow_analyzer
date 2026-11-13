@@ -196,7 +196,7 @@ way and leave the same record.
       (a whole folder too; the unreachable old body of `execute_upload` is
       removed. The case's notes and restart list, written fresh at each
       upload, still go by a plain send)
-- [ ] `case upload --to REMOTE` and `case download --from REMOTE` become
+- [x] `case upload --to REMOTE` and `case download --from REMOTE` become
       `--remote REMOTE`, the name `run post` and `auto` already use
 - [x] `executor.do_upload` uses the same function; `auto` tests unchanged
       (its ledger entries also say where on the remote the copy is)

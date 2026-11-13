@@ -284,24 +284,24 @@ Transfer case directories from your local machine to remote servers:
 
 ```bash
 # Basic upload (uploads othd_files, oisd_files, binary by default)
-ff case upload ./mycase --to myserver
+ff case upload ./mycase --remote myserver
 
 # Upload specific directories only
-ff case upload ./mycase --to myserver --dir othd_files,oisd_files
+ff case upload ./mycase --remote myserver --dir othd_files,oisd_files
 
 # Override the remote path for this upload
-ff case upload ./mycase --to myserver --remote-path /scratch/simulations
+ff case upload ./mycase --remote myserver --remote-path /scratch/simulations
 
 # Create missing remote directories before upload
-ff case upload ./mycase --to myserver --dir othd_files --force
+ff case upload ./mycase --remote myserver --dir othd_files --force
 
 # Only the OTHD/OISD history (`case organise history`): archive/, cleaned/,
 # the compiled file -- or the sets named with --archive/--cleaned/--compiled
-ff case upload history ./mycase --to myserver
-ff case download history ./mycase --from myserver --cleaned --compiled
+ff case upload history ./mycase --remote myserver
+ff case download history ./mycase --remote myserver --cleaned --compiled
 
 # Specify relative path
-ff case upload mycase --to myserver
+ff case upload mycase --remote myserver
 ```
 
 **Upload behavior:**
@@ -338,8 +338,8 @@ Session timeout: 412 file(s), 6.8 GB: about 1 h 37 min at 10 Mbps, and 5 min is 
 
 ```bash
 set transfer_speed 8                              # plan with the speed the link really gets
-ff case upload binary mycase --to myserver --fit  # take the cut without asking
-ff case upload binary mycase --to myserver --no-time-check
+ff case upload binary mycase --remote myserver --fit  # take the cut without asking
+ff case upload binary mycase --remote myserver --no-time-check
 ```
 
 A finished transfer of 50 MB or more prints the rate it reached, and the
@@ -355,14 +355,14 @@ ff remote add hpc-cluster --user jane --ip 192.168.10.50 --password xyz
 ff remote set-path hpc-cluster /home/jane/projects
 
 # Later: Upload completed simulation
-ff case upload mySimulation --to hpc-cluster
+ff case upload mySimulation --remote hpc-cluster
 
 # Upload specific output files only
-ff case upload mySimulation --to hpc-cluster --dir othd_files
+ff case upload mySimulation --remote hpc-cluster --dir othd_files
 
 # Upload to different remote base location
 cd /local/storage
-ff case upload ../mySimulation --to hpc-cluster --remote-path /alternate/path
+ff case upload ../mySimulation --remote hpc-cluster --remote-path /alternate/path
 ```
 
 ## Data Inspection

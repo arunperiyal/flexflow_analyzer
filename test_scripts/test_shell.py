@@ -327,7 +327,7 @@ def test_completion_of_commands_and_subcommands(rt):
 
 def test_completion_of_flags(rt):
     got = texts(rt, 'case upload --')
-    assert {'--to', '--t1', '--resume'} <= set(got) and '--binary' not in got
+    assert {'--remote', '--t1', '--resume'} <= set(got) and '--binary' not in got
     assert texts(rt, 'case upload ') == ['binary', 'rst', 'input', 'history']
     assert texts(rt, 'case download ') == ['binary', 'rst', 'input', 'history']
 
@@ -355,7 +355,7 @@ def test_remote_completion(rt, monkeypatch):
     from src.utils import remote_config
     monkeypatch.setattr(remote_config.RemoteConfig, 'get_all_remotes',
                         lambda self: [{'name': 'cluster', 'user': 'me', 'ip': '1.2.3.4'}])
-    assert texts(rt, 'case upload --to ') == ['cluster']
+    assert texts(rt, 'case upload --remote ') == ['cluster']
     assert texts(rt, 'use remote:') == ['remote:cluster']
 
 

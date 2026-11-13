@@ -158,7 +158,7 @@ So do the restarts ({Colors.CYAN}.restarts{Colors.RESET}, `case organise history
 the remote gets the restarts it lacks.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    flexflow case upload [{Colors.YELLOW}case{Colors.RESET}] --to {Colors.YELLOW}REMOTE{Colors.RESET} [options]
+    flexflow case upload [{Colors.YELLOW}case{Colors.RESET}] --remote {Colors.YELLOW}REMOTE{Colors.RESET} [options]
     flexflow case upload binary [{Colors.YELLOW}case{Colors.RESET}] [--t1 STEP] [--t2 STEP] [options]
     flexflow case upload rst [{Colors.YELLOW}case{Colors.RESET}] [--t1 STEP] [--t2 STEP] [options]
     flexflow case upload input [{Colors.YELLOW}case{Colors.RESET}] [options]
@@ -176,7 +176,7 @@ the remote gets the restarts it lacks.
     {Colors.YELLOW}case{Colors.RESET}                   Local case directory path (use * for all cases in .cases.yml)
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
-    {Colors.YELLOW}--to REMOTE{Colors.RESET}            Remote machine name (required)
+    {Colors.YELLOW}--remote REMOTE{Colors.RESET}        Remote machine name (required)
     {Colors.YELLOW}--dir DIRS{Colors.RESET}             Comma-separated directories to upload
                            (default: othd_files,oisd_files,binary)
     {Colors.YELLOW}--files [PATTERNS]{Colors.RESET}     Loose files from the case root, as comma-separated
@@ -203,7 +203,7 @@ the remote gets the restarts it lacks.
     SFTP. The remote server must be registered with 'remote add'.
 
     Use 'use remote:<name>' in the interactive shell to set a default remote
-    so --to can be omitted.
+    so --remote can be omitted.
 
     Wildcard mode ('case upload *') uploads all cases listed in the .cases.yml
     file in the current directory.
@@ -287,20 +287,20 @@ the remote gets the restarts it lacks.
     take the runs until the next `case organise history --compile`.
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
-    case upload history CS4SG1U1 --to server
-    case upload history CS4SG1U1 --to server --cleaned --compiled
-    case upload binary CS4SG1U1 --to server --t1 1000 --t2 5000
-    case upload binary CS4SG1U1 --to server --t1 5000
-    case upload binary CS4SG1U1 --to server --missing
-    case upload input CS4SG1U1 --to server
-    case upload rst CS4SG1U1 --to server --t1 4000
-    case upload rst CS4SG1U1 --to server --freq 1000 --missing   # every 1000 steps, what is not there
-    case upload rst CS4SG1U1 --to server --t1 3000 --t2 4000 --force
-    case upload rst CS4SG1U1 --to server
-    case upload CS4SG1U1 --to server --files
-    case upload CS4SG1U1 --to server --files "*.map"
-    case upload * --to server --files --force
-    case upload CS4SG1U1 --to server --dir binary --files
+    case upload history CS4SG1U1 --remote server
+    case upload history CS4SG1U1 --remote server --cleaned --compiled
+    case upload binary CS4SG1U1 --remote server --t1 1000 --t2 5000
+    case upload binary CS4SG1U1 --remote server --t1 5000
+    case upload binary CS4SG1U1 --remote server --missing
+    case upload input CS4SG1U1 --remote server
+    case upload rst CS4SG1U1 --remote server --t1 4000
+    case upload rst CS4SG1U1 --remote server --freq 1000 --missing   # every 1000 steps, what is not there
+    case upload rst CS4SG1U1 --remote server --t1 3000 --t2 4000 --force
+    case upload rst CS4SG1U1 --remote server
+    case upload CS4SG1U1 --remote server --files
+    case upload CS4SG1U1 --remote server --files "*.map"
+    case upload * --remote server --files --force
+    case upload CS4SG1U1 --remote server --dir binary --files
 
 {Colors.BOLD}CONTEXT:{Colors.RESET}
     Set remote context:    use remote:myserver
@@ -323,7 +323,7 @@ So do the restarts ({Colors.CYAN}.restarts{Colors.RESET}, `case organise history
 the restarts found only on the remote are added here.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    flexflow case download [{Colors.YELLOW}case{Colors.RESET}] --from {Colors.YELLOW}REMOTE{Colors.RESET} [options]
+    flexflow case download [{Colors.YELLOW}case{Colors.RESET}] --remote {Colors.YELLOW}REMOTE{Colors.RESET} [options]
     flexflow case download binary [{Colors.YELLOW}case{Colors.RESET}] [--t1 STEP] [--t2 STEP] [--freq N] [options]
     flexflow case download rst [{Colors.YELLOW}case{Colors.RESET}] [--t1 STEP] [--t2 STEP] [options]
     flexflow case download input [{Colors.YELLOW}case{Colors.RESET}] [options]
@@ -341,7 +341,7 @@ the restarts found only on the remote are added here.
     {Colors.YELLOW}case{Colors.RESET}                   Local case directory path (destination; use * for all cases in .cases.yml)
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
-    {Colors.YELLOW}--from REMOTE{Colors.RESET}          Remote machine name (required)
+    {Colors.YELLOW}--remote REMOTE{Colors.RESET}        Remote machine name (required)
     {Colors.YELLOW}--dir DIRS{Colors.RESET}             Comma-separated directories to download
                            (default: othd_files,oisd_files,binary)
     {Colors.YELLOW}--files [PATTERNS]{Colors.RESET}     Loose files from the remote case root, as
@@ -370,7 +370,7 @@ the restarts found only on the remote are added here.
     with 'remote add'.
 
     Use 'use remote:<name>' in the interactive shell to set a default remote
-    so --from can be omitted.
+    so --remote can be omitted.
 
     Wildcard mode ('case download *') downloads all cases listed in the .cases.yml
     file in the current directory.
@@ -453,21 +453,21 @@ the restarts found only on the remote are added here.
     take the runs until the next `case organise history --compile`.
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
-    case download history CS4SG1U1 --from server
-    case download history CS4SG1U1 --from server --compiled
-    case download history * --from server --cleaned --compiled
-    case download binary CS4SG1U1 --from server --t1 1000 --t2 5000
-    case download binary CS4SG1U1 --from server --t1 1000 --t2 5000 --freq 500
-    case download binary CS4SG1U1 --from server --freq 1000
-    case download binary CS4SG1U1 --from server --t1 5000
-    case download binary CS4SG1U1 --from server --missing
-    case download binary CS4SG1U1 --from server --t1 3000 --t2 5000 --missing
-    case download input CS4SG1U1 --from server
-    case download rst CS4SG1U1 --from server --t1 4000
-    case download rst CS4SG1U1 --from server
-    case download CS4SG1U1 --from server --files
-    case download CS4SG1U1 --from server --files "*.map"
-    case download * --from server --files --force
+    case download history CS4SG1U1 --remote server
+    case download history CS4SG1U1 --remote server --compiled
+    case download history * --remote server --cleaned --compiled
+    case download binary CS4SG1U1 --remote server --t1 1000 --t2 5000
+    case download binary CS4SG1U1 --remote server --t1 1000 --t2 5000 --freq 500
+    case download binary CS4SG1U1 --remote server --freq 1000
+    case download binary CS4SG1U1 --remote server --t1 5000
+    case download binary CS4SG1U1 --remote server --missing
+    case download binary CS4SG1U1 --remote server --t1 3000 --t2 5000 --missing
+    case download input CS4SG1U1 --remote server
+    case download rst CS4SG1U1 --remote server --t1 4000
+    case download rst CS4SG1U1 --remote server
+    case download CS4SG1U1 --remote server --files
+    case download CS4SG1U1 --remote server --files "*.map"
+    case download * --remote server --files --force
 
 {Colors.BOLD}CONTEXT:{Colors.RESET}
     Set remote context:    use remote:myserver
@@ -696,7 +696,7 @@ class CaseUploadCommand(HistoryTransferMixin):
         is_upload = direction == 'upload'
         help_fn = show_upload_help if is_upload else show_download_help
         remote_arg_name = 'to' if is_upload else 'from_remote'
-        remote_prompt = '--to' if is_upload else '--from'
+        remote_prompt = '--remote'
         action_label = 'Upload' if is_upload else 'Download'
         target_label = 'upload' if is_upload else 'download'
 
@@ -2302,7 +2302,7 @@ class CaseUploadCommand(HistoryTransferMixin):
         remote_name = getattr(args, "from_remote", None)
         if not remote_name:
             self.console.print(
-                "[red]Error:[/red] Remote machine not provided. Use --from or 'use remote:<name>' in interactive shell."
+                "[red]Error:[/red] Remote machine not provided. Use --remote or 'use remote:<name>' in interactive shell."
             )
             return 1
 
