@@ -200,7 +200,7 @@ way and leave the same record.
       `--remote REMOTE`, the name `run post` and `auto` already use
 - [x] `executor.do_upload` uses the same function; `auto` tests unchanged
       (its ledger entries also say where on the remote the copy is)
-- [ ] Tests for `case upload` against a local "cloud": a copy that differs,
+- [x] Tests for `case upload` against a local "cloud": a copy that differs,
       a remote without `md5sum` (size only), a transfer cut short
 - [ ] Help text, `docs/usage/`, `CHANGELOG.md`
 
