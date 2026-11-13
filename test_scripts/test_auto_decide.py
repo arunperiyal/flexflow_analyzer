@@ -601,7 +601,7 @@ def test_stale_plts_whose_out_is_gone_are_the_users_to_decide_not_holes():
 
 
 def test_a_local_cloud_listing_carries_mtimes(tmp_path):
-    from src.core.auto.cloud import LocalCloud
+    from src.core.transfer.cloud import LocalCloud
     (tmp_path / 'case' / 'binary').mkdir(parents=True)
     (tmp_path / 'case' / 'binary' / 'riser.50.plt').write_bytes(b'x' * 7)
     got = LocalCloud(tmp_path).listing('case')

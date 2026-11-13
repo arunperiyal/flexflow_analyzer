@@ -12,8 +12,8 @@ from types import SimpleNamespace
 import pytest
 
 from src.commands.auto.apply import execute_apply
-from src.core.auto import cloud as cloud_mod
-from src.core.auto.cloud import LocalCloud, PutResult, SftpCloud, file_md5
+from src.core.transfer import cloud as cloud_mod
+from src.core.transfer.cloud import LocalCloud, PutResult, SftpCloud, file_md5
 from src.core.auto.ledger import Ledger
 from src.core.auto.runlog import AutoLockError, FolderLock
 
@@ -265,6 +265,20 @@ def test_sftp_put_checks_the_md5_on_the_remote(tmp_path):
     res = sftp_cloud(tmp_path).put(src, 'c1', 'binary/a.plt')
     assert res.ok and res.verified == 'md5'
     assert (tmp_path / 'nas' / 'c1' / 'binary' / 'a.plt').read_bytes() == src.read_bytes()
+
+
+def test_md5_of_a_named_remote_file(tmp_path):
+    (tmp_path / 'c1' / 'binary').mkdir(parents=True)
+    there = tmp_path / 'c1' / 'binary' / 'a.plt'
+    there.write_bytes(b'abc')
+    local = LocalCloud(tmp_path)
+    assert local.md5('c1', 'binary/a.plt') == file_md5(there)
+    assert local.md5('c1', 'binary/none.plt') is None
+    cloud = SftpCloud.__new__(SftpCloud)
+    cloud.ssh, cloud.root, cloud.where = FakeSsh(), str(tmp_path), 'fake'
+    assert cloud.md5('c1', 'binary/a.plt') == file_md5(there)
+    cloud.ssh = FakeSsh(md5sum=False)
+    assert cloud.md5('c1', 'binary/a.plt') is None
 
 
 def test_sftp_put_without_md5sum_says_it_only_compared_sizes(tmp_path):

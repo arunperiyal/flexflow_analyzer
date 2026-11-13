@@ -185,7 +185,7 @@ What the code check found (why 12, 14 and 15 are needed):
 Refactor. After it, a file sent by hand and a file sent by `auto` go the same
 way and leave the same record.
 
-- [ ] Move the remote access of `core/auto/cloud.py` (listing, `put` with
+- [x] Move the remote access of `core/auto/cloud.py` (listing, `put` with
       temporary name, md5, rename) to a core module of its own, with a
       function that returns the md5 of a named remote file
 - [ ] Move the ledger next to it; entries also record the local file's

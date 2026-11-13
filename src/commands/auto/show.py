@@ -76,7 +76,7 @@ def gather(case_dirs, remote, clouds=None):
     """
     from src.core import slurm
     from src.core.auto import conf as auto_conf
-    from src.core.auto.cloud import CloudError, open_cloud
+    from src.core.transfer.cloud import CloudError, open_cloud
     from src.core.auto.decide import decide
     from src.core.auto.observe import observe_case
 
