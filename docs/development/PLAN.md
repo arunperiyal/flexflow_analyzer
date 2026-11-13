@@ -214,17 +214,22 @@ The commands always verify; there is no flag to skip it.
       (`core/chain.py`. A link that is there but not good does not stop a
       later good one: a whole, newer binary PLT covers the `.out` whatever
       the ASCII PLT is like, as it did before this phase)
-- [ ] `case organise plt --delete-binary`: deletes only the files with a
-      verified copy on the remote (ledger entry whose size and `mtime` still
-      match the local file); the others are listed and left
-- [ ] `case organise plt --delete-ascii`: deletes only where the binary PLT
+- [x] `case organise plt --delete-binary`: deletes only the files with a
+      verified copy on the remote; the others are listed and left. Built
+      stricter than first planned: the copy is compared by md5 at that
+      moment (`--remote`), not taken from the ledger; with no remote to ask,
+      nothing is deleted
+- [x] `case organise plt --delete-ascii`: deletes only where the binary PLT
       of the step is verified: whole, and written after the ASCII file
-- [ ] `--freq` applies to `--delete-ascii` as well as `--delete-binary`
-- [ ] `case organise output`: a `.out` goes only when the ASCII PLT of its
+- [x] `--freq` applies to `--delete-ascii` as well as `--delete-binary`
+- [x] `case organise output`: a `.out` goes only when the ASCII PLT of its
       step is verified and was written after the `.out` (or the link after
-      it, when there is no ASCII PLT); never for a step
-      above the restart point of a queued job
-- [ ] Tests for each rule, including a restart that rewrote the `.out`
+      it, when there is no ASCII PLT). The rule about a queued restart is
+      not in the hand command, which does not read the queue: "written
+      after" already keeps the `.out` a restart has written again; `auto`
+      knows the queue and holds back there (Phase 6). `--all-out` still
+      deletes `.out` with nothing to stand in; to settle with the user
+- [x] Tests for each rule, including a restart that rewrote the `.out`
 - [ ] Help text, `docs/usage/case-organise.md`, `CHANGELOG.md`
 
 ### Phase 15: `auto` refactor, steps as data (branch `auto-steps`)

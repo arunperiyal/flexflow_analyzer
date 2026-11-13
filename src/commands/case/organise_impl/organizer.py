@@ -86,6 +86,21 @@ class CaseOrganizer(HistoryMixin):
             output_dir_path = Path(output_dir_str)
         return output_dir_path if output_dir_path.exists() else None
 
+    def _chain(self, freq: Optional[int] = None):
+        """core/chain.py for this case: what stands in for a file, so that it
+        may go. The remote (--remote) is asked only when a file needs it."""
+        if getattr(self, '_chain_obj', None) is None:
+            from ....core.chain import Chain, remote_copies
+            t1, t2 = self._t1_t2()
+            window = None if t1 is None and t2 is None else (t1, t2)
+            run_dir = self._get_run_dir_path()
+            problem = self.case.problem_name
+            self._chain_obj = Chain(
+                self.case_dir, problem, run_dir,
+                remote=remote_copies(self.case_dir, problem, getattr(self.args, 'remote', None),
+                                     window=window, freq=freq, run_dir=run_dir))
+        return self._chain_obj
+
     def _t1_t2(self) -> Tuple[Optional[float], Optional[float]]:
         """Read --t1/--t2 from args."""
         return getattr(self.args, 't1', None), getattr(self.args, 't2', None)
@@ -215,11 +230,10 @@ class CaseOrganizer(HistoryMixin):
 
     def _analyze_delete_binary_plt(self, t1: Optional[float] = None, t2: Optional[float] = None):
         """
-        plt --delete-binary: Unconditionally delete PLT files from binary/
-        within the --t1/--t2 window. There is no check against the run
-        directory — if the ASCII copy is already gone, this removes the last
-        surviving copy of that timestep's PLT data. Omitting both --t1 and
-        --t2 deletes every PLT file in binary/.
+        plt --delete-binary: delete the PLT files of binary/ within --t1/--t2
+        (--freq: the steps divisible by N) that have a copy on the remote with
+        the same size and md5, both read now. A file with no such copy is
+        listed and left; when the remote cannot be asked, nothing is deleted.
         """
         binary_dir = self.case_dir / 'binary'
         if not binary_dir.exists():
@@ -236,7 +250,7 @@ class CaseOrganizer(HistoryMixin):
         freq = getattr(self.args, 'freq', None)
         keep_freq = getattr(self.args, 'keep_freq', None)
 
-        to_delete = []
+        picked = []
         kept = 0
         for binary_plt in sorted(binary_dir.glob(f'{problem}.*.plt'),
                                  key=lambda p: self._extract_plt_step(p.name, problem) or 0):
@@ -251,33 +265,48 @@ class CaseOrganizer(HistoryMixin):
             if keep_freq and step % keep_freq == 0:
                 kept += 1
                 continue
-            to_delete.append(binary_plt)
+            picked.append((step, binary_plt))
 
         if keep_freq:
             self.console.print(f"  [green]✓[/green]  Keeping {kept} file(s) at steps divisible by {keep_freq}")
 
-        if not to_delete:
+        if not picked:
             self.console.print(f"  [dim]No {problem}.*.plt files to delete in binary/ for the given range[/dim]")
             return
 
-        if t1 is None and t2 is None and not freq and not keep_freq:
-            self.console.print(
-                "  [yellow]⚠[/yellow]  No --t1/--t2 given — this deletes ALL PLT files in binary/"
-            )
+        self.console.print(f"  Comparing {len(picked)} file(s) with their copies on the remote "
+                           f"(size and md5) ...")
+        chain = self._chain(freq)
+        verdicts = [(step, f, chain.for_binary(step)) for step, f in picked]
+        if chain.remote.problem:
+            self.console.print(f"  [red]✗[/red]  The remote could not be asked, so nothing in "
+                               f"binary/ is deleted: {chain.remote.problem}")
+            return
 
         from rich.table import Table as _Table
         tbl = _Table(box=box.SIMPLE, show_header=True, header_style="bold")
         tbl.add_column("", width=2)
         tbl.add_column("File", style="cyan")
         tbl.add_column("Action")
-        for f in to_delete:
-            tbl.add_row("[red]✗[/red]", f.name, "[red]will delete (binary/, unconditional)[/red]")
+        left = 0
+        for step, f, verdict in verdicts:
+            if verdict.ok:
+                tbl.add_row("[green]✓[/green]", f.name, f"will delete  ({verdict.why})")
+            else:
+                left += 1
+                tbl.add_row("[yellow]⚠[/yellow]", f.name, f"[yellow]keep — {verdict.why}[/yellow]")
         self.console.print(tbl)
+        if left:
+            self.console.print(f"  [yellow]Keeping {left} file(s) with no verified copy on the "
+                               f"remote.[/yellow] [dim]`case check plt --verify` says what is "
+                               f"wrong with each; `case upload plt --missing` sends what is "
+                               f"not there.[/dim]")
 
-        for f in to_delete:
-            self.files_to_delete.append(f)
-            self.stats['plt_binary_deleted'] += 1
-            self.stats['plt_binary_space_freed'] += f.stat().st_size
+        for step, f, verdict in verdicts:
+            if verdict.ok:
+                self.files_to_delete.append(f)
+                self.stats['plt_binary_deleted'] += 1
+                self.stats['plt_binary_space_freed'] += f.stat().st_size
 
     def _analyze_vtu(self, t1: Optional[float] = None, t2: Optional[float] = None):
         """
@@ -333,20 +362,15 @@ class CaseOrganizer(HistoryMixin):
 
     def _analyze_clean_plt(self, t1: Optional[float] = None, t2: Optional[float] = None):
         """
-        plt --delete-ascii: Mark PLT files in the run directory for deletion where
-        binary/ has a corresponding file (same name) with a newer mtime.
-        Skips files with no binary copy or where the binary copy is older.
-        With --t1/--t2, only PLT files whose timestep falls in that window
-        are considered; the rest are left untouched.
+        plt --delete-ascii: delete the ASCII PLT files of the run directory
+        within --t1/--t2 (--freq: the steps divisible by N) whose binary PLT
+        stands in for them (core/chain.py): binary/ holds it whole and
+        written after the ASCII file or, when binary/ no longer holds it, the
+        remote holds its verified copy. The others are listed and left.
         """
         run_dir = self._get_run_dir_path()
         if not run_dir:
             self.console.print("  [yellow]⚠[/yellow]  No run directory found in simflow.config")
-            return
-
-        binary_dir = self.case_dir / 'binary'
-        if not binary_dir.exists():
-            self.console.print("  [dim]—[/dim]  binary/ directory not found — no archived PLT files to compare against")
             return
 
         problem = self.case.problem_name
@@ -355,52 +379,50 @@ class CaseOrganizer(HistoryMixin):
             return
 
         pattern = re.compile(rf'^{re.escape(problem)}\.(\d+)\.plt$')
+        freq = getattr(self.args, 'freq', None)
+        chain = self._chain(freq)
 
-        safe_to_delete = []    # run PLT files with a newer binary copy
-        skip_no_binary  = []   # run PLT files with no corresponding binary copy
-        skip_older      = []   # run PLT files where binary copy is same age or older
-
-        for run_plt in sorted(run_dir.glob(f'{problem}.*.plt')):
+        verdicts = []
+        for run_plt in sorted(run_dir.glob(f'{problem}.*.plt'),
+                              key=lambda p: self._extract_plt_step(p.name, problem) or 0):
             match = pattern.match(run_plt.name)
             if not match:
                 continue
             step = int(match.group(1))
             if not self._step_in_bounds(step, t1, t2):
                 continue
-            binary_plt = binary_dir / run_plt.name
-            if not binary_plt.exists():
-                skip_no_binary.append(run_plt)
-            elif binary_plt.stat().st_mtime <= run_plt.stat().st_mtime:
-                skip_older.append(run_plt)
-            else:
-                safe_to_delete.append(run_plt)
+            if freq and step % freq:
+                continue
+            verdicts.append((run_plt, chain.for_ascii(step)))
 
-        if not safe_to_delete and not skip_no_binary and not skip_older:
+        if not verdicts:
             self.console.print(f"  [dim]No {problem}.*.plt files found in {run_dir.name}/[/dim]")
             return
 
-        # Show what will happen
         from rich.table import Table as _Table
         tbl = _Table(box=box.SIMPLE, show_header=True, header_style="bold")
         tbl.add_column("", width=2)
         tbl.add_column("File", style="cyan")
         tbl.add_column("Action")
-
-        for f in safe_to_delete:
-            tbl.add_row("[green]✓[/green]", f.name, "will delete  (binary copy is newer)")
-        for f in skip_no_binary:
-            tbl.add_row("[dim]—[/dim]", f.name, "[dim]skip — no binary copy[/dim]")
-        for f in skip_older:
-            tbl.add_row("[yellow]⚠[/yellow]", f.name,
-                        "[yellow]skip — binary copy is same age or older[/yellow]")
-
+        left = 0
+        for f, verdict in verdicts:
+            if verdict.ok:
+                tbl.add_row("[green]✓[/green]", f.name, f"will delete  ({verdict.why})")
+            else:
+                left += 1
+                mark = "[yellow]⚠[/yellow]" if verdict.found else "[dim]—[/dim]"
+                tbl.add_row(mark, f.name, f"[yellow]keep — {verdict.why}[/yellow]")
         self.console.print(tbl)
+        if left:
+            self.console.print(f"  [yellow]Keeping {left} ASCII PLT file(s) with no verified "
+                               f"binary PLT.[/yellow] [dim]Convert them first "
+                               f"(run post convert --t1 .. --t2 ..).[/dim]")
 
-        # Add safe files to deletion list
-        for f in safe_to_delete:
-            self.files_to_delete.append(f)
-            self.stats['plt_clean_deleted'] += 1
-            self.stats['plt_clean_space_freed'] += f.stat().st_size
+        for f, verdict in verdicts:
+            if verdict.ok:
+                self.files_to_delete.append(f)
+                self.stats['plt_clean_deleted'] += 1
+                self.stats['plt_clean_space_freed'] += f.stat().st_size
 
     def _analyze_output_directory(self, t1: Optional[float] = None, t2: Optional[float] = None):
         """Analyze output directory and find files to delete."""
@@ -500,13 +522,15 @@ class CaseOrganizer(HistoryMixin):
         .rst files are restart points, so the steps divisible by keep_interval
         stay. .out files are not read by a restart -- only by the conversion
         that writes {problem}.T.plt -- so any step's .out can go, but only
-        once binary/{problem}.T.plt can stand in for them: the file is whole
-        (as long as its header says, src/core/plt_valid.py) and was written
-        after every .out part of the step. Without that the step's field data
-        would be gone for good: an empty or cut-short PLT is left by a post
-        job killed at the walltime, and a PLT older than the .out was made
-        from a run that a restart has since computed again. An ASCII .plt
-        alone does not count; convert it first.
+        once the next file in the chain can stand in for them
+        (src/core/chain.py): the step's ASCII PLT, whole and written after
+        every .out part of the step; else its binary PLT, whole and written
+        after them; else, when binary/ no longer holds it, its verified copy
+        on the remote. Without that the step's field data would be gone for
+        good: an empty or cut-short PLT is left by a post job killed at the
+        walltime, and a PLT older than the .out was made from a run that a
+        restart has since computed again. A step with nothing to stand in is
+        kept and reported; the others go.
         """
         # Find out and rst files (plt files are handled by `plt --delete-ascii`/`--delete-binary`, not `output`)
         out_pattern = f'{problem}.*_*.out'
@@ -520,10 +544,10 @@ class CaseOrganizer(HistoryMixin):
         self.logger.info(f"Found {len(out_files)} .out files, {len(rst_files)} .rst files "
                         f"in {output_dir.name}")
 
-        binary_dir = self.case_dir / 'binary'
         all_out = getattr(self.args, 'all_out', False)
+        chain = self._chain()
 
-        # Why each step's .out must stay (None: its binary PLT stands in for them)
+        # Why each step's .out must stay (None: a later file stands in for them)
         out_by_step: Dict[int, List[Path]] = {}
         for f in out_files:
             s = self._extract_step_from_filename(f.name, problem)
@@ -532,21 +556,18 @@ class CaseOrganizer(HistoryMixin):
         verdict: Dict[int, Optional[Tuple[str, str]]] = {}
 
         def keep_out_because(step: int) -> Optional[Tuple[str, str]]:
-            """(kind, detail) when the step's .out must stay; kind is
-            'none', 'ascii' or 'bad'."""
+            """(kind, detail) when the step's .out must stay; kind is 'none'
+            (no PLT of the step anywhere) or 'bad' (one is there, not good)."""
             if step not in verdict:
-                from ....core.plt_valid import plt_covers
-                plt = f'{problem}.{step}.plt'
-                binary = binary_dir / plt
-                if binary.exists():
-                    why = plt_covers(binary, out_by_step.get(step, []))
-                    verdict[step] = None if why is None else ('bad', why)
-                elif (output_dir / plt).exists():
-                    verdict[step] = ('ascii', '')
+                stand_in = chain.for_out(step, out_by_step.get(step, []))
+                if stand_in.ok:
+                    verdict[step] = None
+                    stood[step] = stand_in.why
                 else:
-                    verdict[step] = ('none', '')
+                    verdict[step] = ('bad' if stand_in.found else 'none', stand_in.why)
             return verdict[step]
 
+        stood: Dict[int, str] = {}
         kept_out: Dict[str, Dict[int, str]] = {}   # kind -> {step: detail}
         protected = self._restart_points(rst_files, problem)
         for step, why in sorted(protected.items()):
@@ -567,7 +588,7 @@ class CaseOrganizer(HistoryMixin):
                 delete = why is None or all_out
                 if not delete:
                     kept_out.setdefault(why[0], {})[step] = why[1]
-                reason = (f"step {step}: binary/{problem}.{step}.plt is whole and newer"
+                reason = (f"step {step}: {stood.get(step, '')}"
                           if why is None else "--all-out")
             elif step in protected:
                 delete = False
@@ -595,22 +616,21 @@ class CaseOrganizer(HistoryMixin):
 
         if 'bad' in kept_out:
             bad = kept_out['bad']
-            self.console.print(f"  [red]Keeping .out of {len(bad)} step(s) whose binary PLT "
+            self.console.print(f"  [red]Keeping .out of {len(bad)} step(s) whose PLT "
                                f"cannot stand in for them:[/red]")
             for step in sorted(bad)[:10]:
-                self.console.print(f"    {step}: binary/{problem}.{step}.plt {bad[step]}")
+                self.console.print(f"    {step}: {bad[step]}")
             if len(bad) > 10:
                 self.console.print(f"    ... and {len(bad) - 10} more")
             self.console.print("  [dim]Post those steps again (run post full --t1 .. --t2 ..), "
                                "then run this again.[/dim]")
-        if 'ascii' in kept_out:
-            self.console.print(f"  [yellow]Keeping .out of {len(kept_out['ascii'])} step(s) with "
-                               f"only an ASCII .plt:[/yellow] {listed(kept_out['ascii'])}")
-            self.console.print("  [dim]Convert them first (run post convert).[/dim]")
         if 'none' in kept_out:
             steps = kept_out['none']
             self.console.print(f"  [yellow]Keeping .out of {len(steps)} step(s) with no "
                                f"{problem}.<step>.plt yet:[/yellow] {listed(steps)}")
+            asked = chain.remote.problem
+            if asked:
+                self.console.print(f"  [dim]The remote was not asked: {asked}[/dim]")
             self.console.print("  [dim]Convert them first (run post), or add --all-out to "
                                "delete them anyway.[/dim]")
 
