@@ -31,7 +31,7 @@ fail on `main`: the job reports `iso/iso_100.png`, then serving it gives 404.
       `70d5224` (a job's file is now kept with `POST .../save`, which gives a
       token, and served by `GET .../field/render-file/<token>`). The tests were
       not updated, and two "404" tests passed only because the route is gone
-- [ ] Bring the tests in line with the save-then-fetch flow; no change to
+- [x] Bring the tests in line with the save-then-fetch flow; no change to
       the server
 
 ### Phase 6: `auto apply`, the delete stage (branch `auto-delete`)

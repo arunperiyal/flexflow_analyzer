@@ -1,5 +1,9 @@
 """Tests for POST /api/cases/<name>/field/render (iso/slice PNG rendering,
-run as a background job) and GET .../field/render/<job_id>/<file>.
+run as a background job), POST .../field/render/<job_id>/save (keep one of
+the job's files) and GET .../field/render-file/<token> (serve a kept file).
+
+A job's files are not served straight from the job: the only way to a PNG is
+to save it, which gives a token, and to fetch that token.
 
 Copies exactly one PLT file into the fixture, same as test_web_field_info.py
 and test_web_field_extract.py. Rendering is real (pyvista, off-screen) and
@@ -48,6 +52,19 @@ def _run_job(client, res):
     raise AssertionError('render job did not finish in time')
 
 
+def _save(client, job_id, filename):
+    return client.post(f'/api/cases/BR0SG0U1P0/field/render/{job_id}/save',
+                       json={'filename': filename})
+
+
+def _saved_image(client, job_id, filename):
+    """Save one file of a finished job and fetch it back by its token."""
+    saved = _save(client, job_id, filename)
+    assert saved.status_code == 200
+    token = saved.get_json()['token']
+    return client.get(f'/api/cases/BR0SG0U1P0/field/render-file/{token}')
+
+
 def test_render_iso_produces_a_real_png(client):
     res = client.post('/api/cases/BR0SG0U1P0/field/render', json={
         'mode': 'iso', 'timestep': 100, 'views': ['iso'],
@@ -56,7 +73,7 @@ def test_render_iso_produces_a_real_png(client):
     assert job['status'] == 'done'
     assert job['result']['files'] == ['iso/iso_100.png']
 
-    img = client.get(f'/api/cases/BR0SG0U1P0/field/render/{job_id}/iso/iso_100.png')
+    img = _saved_image(client, job_id, 'iso/iso_100.png')
     assert img.status_code == 200
     assert img.mimetype == 'image/png'
     assert img.data[:8] == _PNG_MAGIC
@@ -70,7 +87,7 @@ def test_render_slice_produces_a_real_png(client):
     assert job['status'] == 'done'
     assert job['result']['files'] == ['plane/slice_100.png']
 
-    img = client.get(f'/api/cases/BR0SG0U1P0/field/render/{job_id}/plane/slice_100.png')
+    img = _saved_image(client, job_id, 'plane/slice_100.png')
     assert img.status_code == 200
     assert img.data[:8] == _PNG_MAGIC
 
@@ -127,21 +144,28 @@ def test_404_for_unregistered_case(client):
     assert res.status_code == 404
 
 
-# -- image serving --------------------------------------------------------
+# -- saving a job's file ----------------------------------------------------
 
-def test_image_404_for_an_unknown_job(client):
-    res = client.get('/api/cases/BR0SG0U1P0/field/render/nope/foo.png')
+def test_save_404_for_an_unknown_job(client):
+    res = _save(client, 'nope', 'foo.png')
     assert res.status_code == 404
+    assert res.get_json()['error'] == 'no such completed render job'
 
 
-def test_image_404_for_a_filename_not_in_the_job(client):
+def test_save_404_for_a_filename_not_in_the_job(client):
     res = client.post('/api/cases/BR0SG0U1P0/field/render', json={
         'mode': 'iso', 'timestep': 100, 'views': ['iso'],
     })
     job_id, job = _run_job(client, res)
     assert job['status'] == 'done'
-    res2 = client.get(f'/api/cases/BR0SG0U1P0/field/render/{job_id}/not_a_real_file.png')
+    res2 = _save(client, job_id, 'not_a_real_file.png')
     assert res2.status_code == 404
+    assert res2.get_json()['error'] == 'no such file in this render job'
+
+
+def test_served_file_404_for_an_unknown_token(client):
+    res = client.get('/api/cases/BR0SG0U1P0/field/render-file/nope.png')
+    assert res.status_code == 404
 
 
 # A 1x1 white PNG -- the exact bytes don't matter, only that field_snapshot_save
