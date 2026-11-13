@@ -22,26 +22,28 @@ Status marks: `[ ]` to do, `[x]` done, `[~]` dropped (say why).
 
 ### Phase 6: `auto apply`, the delete stage (branch `auto-delete`)
 
-Design: `docs/architecture/auto.md` §13 (§13.3 traps, §13.12 restart sets).
-Reports already list these actions as `[not built yet]`. Rule above all:
-nothing is deleted without a verified copy, and one question is asked before
-deleting (`--yes` skips it).
+Design: `docs/architecture/auto.md` §13.13. Rule above all: nothing is deleted
+without a copy checked by md5 at that moment (restart sets off the `keep_rst`
+grid are the one stated exception), and one question is asked before deleting.
 
-- [ ] Add the design of the delete stage as a new section at the end of
-      `auto.md`
-- [ ] Decide: ASCII PLT and binary PLT deletable only when the md5 on the
-      remote matches the ledger
-- [ ] Decide: `.out` of verified steps
-- [ ] Decide: `.rst` thinning to `keep_rst` / `keep_newest_rst`
-- [ ] Guard: nothing above a restart point is deleted until its step has been
-      posted again from the new run
-- [ ] Executor: carry out the deletions, behind one question, written to the
-      run log and `.casestatus.md`
-- [ ] `auto apply --only delete` and `--dry-run` for it; replace the
-      `[not built yet]` text in the reports
-- [ ] A dummy case and a test for each rule (`tools/make_dummy.py`)
-- [ ] Help text, `docs/architecture/auto_flow.html`, the web flowchart,
-      `CHANGELOG.md`
+- [x] Write the design as §13.13 at the end of `auto.md`
+- [ ] **Review of §13.13 by the user.** Nothing below is built before it
+- [ ] Remote md5 of a named file (`cloud.py`: `LocalCloud`, `SftpCloud`);
+      ledger entries record the local `mtime` and `deleted`
+- [ ] Decide: the candidates of C1–C4 as explicit file lists in `plan.ctx`,
+      with the "written after" rule and the data-related *needs you* hold-back
+- [ ] Executor `do_delete`: per-file checks right before each unlink, run log
+      lines, the `.casestatus.md` line, the ledger
+- [ ] `auto apply --delete` and `--only delete`: order
+      `history → upload → delete → post`, the plan listing, the question with
+      totals, `--dry-run`
+- [ ] Reports (`auto show`, `auto commands`): replace the `[not built yet]`
+      text
+- [ ] Dummy cases and a test for each rule: copy differs, size-only copy,
+      `.out` newer than its PLT (restart), queued restart, post in flight,
+      restart-set keeps, a case that needs you
+- [ ] Help text, completion, `docs/architecture/auto_flow.html`, the web
+      flowchart, `CHANGELOG.md`
 
 ### Phase 7: `auto`, the steady check (branch `auto-steady`)
 
