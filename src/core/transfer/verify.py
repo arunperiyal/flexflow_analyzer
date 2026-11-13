@@ -30,6 +30,7 @@ class PltVerify:
     differs: Dict[str, str] = field(default_factory=dict)  # name -> how the copy differs
     not_there: List[str] = field(default_factory=list)     # no copy on the remote
     broken: Dict[str, str] = field(default_factory=dict)   # name -> why the local file is not whole
+    rebuild: Dict[str, str] = field(default_factory=dict)  # broken name -> how to make it again
     # on the remote and not in binary/ (deleted here to save space, as a rule):
     kept_there: List[str] = field(default_factory=list)    # ... as the ledger recorded it
     only_there: List[str] = field(default_factory=list)    # ... with no record to compare with
@@ -78,9 +79,23 @@ def _picked(step: int, window: Optional[Tuple], freq: Optional[int]) -> bool:
     return not freq or step % freq == 0
 
 
+def how_to_rebuild(case_dir: Path, problem: str, step: int, run_dir: Optional[Path]) -> str:
+    """What makes a broken binary PLT again, going back along the chain: its
+    ASCII PLT (`run post convert`), else its .out files (`run post full`)."""
+    span = f"{case_dir.name} --t1 {step} --t2 {step}"
+    if run_dir is not None and run_dir.is_dir():
+        ascii_plt = run_dir / f"{problem}.{step}.plt"
+        if ascii_plt.is_file() and ascii_plt.stat().st_size > 0:
+            return f"run post convert {span}"
+        if any(run_dir.glob(f"{problem}.{step}_*.out")):
+            return f"run post full {span}"
+    return "no ASCII PLT and no .out of this step are left to make it from"
+
+
 def verify_plts(case_dir, problem: str, cloud, remote_name: str, ledger=None,
                 window: Optional[Tuple] = None, freq: Optional[int] = None,
-                say: Optional[Callable[[str], None]] = None) -> PltVerify:
+                say: Optional[Callable[[str], None]] = None,
+                run_dir: Optional[Path] = None) -> PltVerify:
     """Compare binary/<problem>.<step>.plt with <case>/binary/ on the remote.
 
     window is (first step, last step), either None for open; freq keeps the
@@ -92,6 +107,9 @@ def verify_plts(case_dir, problem: str, cloud, remote_name: str, ledger=None,
     compared with what the ledger recorded when it was last verified: its
     size and md5 now against those. With both ends of the window and freq,
     the steps of that series found in neither place are listed.
+
+    run_dir is where the ASCII PLTs and .out files are: a broken binary PLT
+    gets the command that makes it again from them (result.rebuild).
     """
     case_dir = Path(case_dir)
     case = case_dir.name
@@ -131,7 +149,10 @@ def verify_plts(case_dir, problem: str, cloud, remote_name: str, ledger=None,
         name, rel = local.name, f"binary/{local.name}"
         whole = check_plt(local)
         if not whole.ok:
+            # the copy on the remote is the same broken file, or an older one:
+            # the way back is the chain (ASCII PLT, then .out), not the remote
             result.broken[name] = whole.reason
+            result.rebuild[name] = how_to_rebuild(case_dir, problem, step, run_dir)
             done(name, rel, f"broken here: {whole.reason}")
             continue
         if step not in there:

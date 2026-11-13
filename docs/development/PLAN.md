@@ -203,7 +203,7 @@ Asked for on 2026-11-13, on reading what Phase 13 built. Done before Phase
       (size and md5); an empty `binary/` whose PLTs are safely there is not
       a failure. With `--t1`, `--t2` and `--freq`, steps that are in neither
       place are listed
-- [ ] A broken local PLT says how to make it again: `run post convert` when
+- [x] A broken local PLT says how to make it again: `run post convert` when
       its ASCII PLT is there, `run post full` when only the `.out` are
 - [ ] A folder with no `remotes:` entry for the remote says that the remote
       and its path are not set, and how to set them

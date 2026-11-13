@@ -94,6 +94,21 @@ def test_a_local_plt_cut_short_is_never_verified_even_with_the_same_copy(world):
     assert ledger.get('local', 'CS1', 'binary/riser.200.plt') is None
 
 
+def test_a_broken_plt_says_how_to_make_it_again(world):
+    run = world.case / 'RUN_1'
+    run.mkdir()
+    for step in (100, 200, 300):
+        local = world.case / 'binary' / f'riser.{step}.plt'
+        local.write_bytes(local.read_bytes()[:-10])
+    (run / 'riser.100.plt').write_text('ascii')                 # 100: its ASCII PLT is there
+    (run / 'riser.200_0.out').write_text('out')                 # 200: only its .out
+    result = verify_plts(world.case, 'riser', world.cloud, 'local', run_dir=run)
+    assert result.rebuild == {
+        'riser.100.plt': 'run post convert CS1 --t1 100 --t2 100',
+        'riser.200.plt': 'run post full CS1 --t1 200 --t2 200',
+        'riser.300.plt': 'no ASCII PLT and no .out of this step are left to make it from'}
+
+
 def test_a_restart_that_wrote_the_local_plt_again(world):
     verify(world)
     write_plt(world.case / 'binary' / 'riser.300.plt', npts=20)  # computed again, another size
