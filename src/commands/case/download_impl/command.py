@@ -159,14 +159,15 @@ the remote gets the restarts it lacks.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
     flexflow case upload [{Colors.YELLOW}case{Colors.RESET}] --remote {Colors.YELLOW}REMOTE{Colors.RESET} [options]
-    flexflow case upload binary [{Colors.YELLOW}case{Colors.RESET}] [--t1 STEP] [--t2 STEP] [options]
+    flexflow case upload plt [{Colors.YELLOW}case{Colors.RESET}] [--t1 STEP] [--t2 STEP] [options]
     flexflow case upload rst [{Colors.YELLOW}case{Colors.RESET}] [--t1 STEP] [--t2 STEP] [options]
     flexflow case upload input [{Colors.YELLOW}case{Colors.RESET}] [options]
     flexflow case upload history [{Colors.YELLOW}case{Colors.RESET}] [--archive] [--cleaned] [--compiled] [options]
 
 {Colors.BOLD}ARGUMENTS:{Colors.RESET}
-    {Colors.YELLOW}binary{Colors.RESET}                 binary/ only -- with --t1/--t2, only the timesteps
-                           in that range
+    {Colors.YELLOW}plt{Colors.RESET}                    The binary PLTs in binary/ only -- with --t1/--t2,
+                           only the timesteps in that range (`binary`, the
+                           old word for it, still works)
     {Colors.YELLOW}rst{Colors.RESET}                    The nsg <problem>.<step>_<k>.rst of every step (or
                            --t1..--t2) in the run directory
     {Colors.YELLOW}input{Colors.RESET}                  <problem>.def and every file it names with File(...):
@@ -181,12 +182,12 @@ the remote gets the restarts it lacks.
                            (default: othd_files,oisd_files,binary)
     {Colors.YELLOW}--files [PATTERNS]{Colors.RESET}     Loose files from the case root, as comma-separated
                            globs (default: simflow.config,*.def,*.geo,*.map)
-    {Colors.YELLOW}--t1 STEP{Colors.RESET}              binary/rst: first timestep (alone: only that step)
-    {Colors.YELLOW}--t2 STEP{Colors.RESET}              binary/rst: last timestep
-    {Colors.YELLOW}--freq N{Colors.RESET}               binary/rst: only steps that are multiples of N
-    {Colors.YELLOW}--missing{Colors.RESET}              binary/rst: only the files the remote lacks (or holds at another size)
-    {Colors.YELLOW}--fit{Colors.RESET}                  binary: only the steps that fit in the session's time left
-    {Colors.YELLOW}--no-time-check{Colors.RESET}        binary: do not check against the session timeout
+    {Colors.YELLOW}--t1 STEP{Colors.RESET}              plt/rst: first timestep (alone: only that step)
+    {Colors.YELLOW}--t2 STEP{Colors.RESET}              plt/rst: last timestep
+    {Colors.YELLOW}--freq N{Colors.RESET}               plt/rst: only steps that are multiples of N
+    {Colors.YELLOW}--missing{Colors.RESET}              plt/rst: only the files the remote lacks (or holds at another size)
+    {Colors.YELLOW}--fit{Colors.RESET}                  plt: only the steps that fit in the session's time left
+    {Colors.YELLOW}--no-time-check{Colors.RESET}        plt: do not check against the session timeout
     {Colors.YELLOW}--archive{Colors.RESET}              history: only archive/ (combinable; none: all three)
     {Colors.YELLOW}--cleaned{Colors.RESET}              history: only cleaned/
     {Colors.YELLOW}--compiled{Colors.RESET}             history: only the compiled file
@@ -234,16 +235,16 @@ the remote gets the restarts it lacks.
 
 {Colors.BOLD}TIMESTEPS:{Colors.RESET}
     A case's binary/ is nearly all of its size, and most of it is timesteps you
-    already have. {Colors.YELLOW}case upload binary{Colors.RESET} carries that directory alone; with
+    already have. {Colors.YELLOW}case upload plt{Colors.RESET} carries that directory alone; with
     {Colors.YELLOW}--t1{Colors.RESET}/{Colors.YELLOW}--t2{Colors.RESET} it carries only the steps in the range, matching them
     on the number in the filename (riser.5000.plt, and the .vtu sidecars beside
     it). A file with no step in its name -- a script, a summary table -- is left
     where it is, and the count of those is reported.
 
     The two flags read as they do everywhere else in FlexFlow: both bounds make
-    a range, one alone names that single step. They need {Colors.YELLOW}binary{Colors.RESET} or {Colors.YELLOW}rst{Colors.RESET},
+    a range, one alone names that single step. They need {Colors.YELLOW}plt{Colors.RESET} or {Colors.YELLOW}rst{Colors.RESET},
     since nothing else in a case is written per step. The t1/t2 context
-    supplies them: {Colors.DIM}use t1:1000 t2:5000{Colors.RESET}, then {Colors.DIM}case upload binary CS4SG1U1{Colors.RESET}.
+    supplies them: {Colors.DIM}use t1:1000 t2:5000{Colors.RESET}, then {Colors.DIM}case upload plt CS4SG1U1{Colors.RESET}.
 
     {Colors.YELLOW}--missing{Colors.RESET} carries only the selected files the remote binary/ lacks,
     or holds at another size (a copy an interrupted transfer cut short), and
@@ -266,7 +267,7 @@ the remote gets the restarts it lacks.
     restart settings stay as they are (--files carries it).
 
 {Colors.BOLD}SESSION TIMEOUT:{Colors.RESET}
-    In the shell, binary is set against the time the session has left, at
+    In the shell, plt is set against the time the session has left, at
     {Colors.YELLOW}set transfer_speed{Colors.RESET} Mbps (default 10). When it will not finish, the
     steps that fit are offered as --t2: send all anyway, only those, or stop.
     The rest goes later with the next --t1, or --missing. {Colors.YELLOW}--fit{Colors.RESET} takes
@@ -301,9 +302,9 @@ the remote gets the restarts it lacks.
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
     case upload history CS4SG1U1 --remote server
     case upload history CS4SG1U1 --remote server --cleaned --compiled
-    case upload binary CS4SG1U1 --remote server --t1 1000 --t2 5000
-    case upload binary CS4SG1U1 --remote server --t1 5000
-    case upload binary CS4SG1U1 --remote server --missing
+    case upload plt CS4SG1U1 --remote server --t1 1000 --t2 5000
+    case upload plt CS4SG1U1 --remote server --t1 5000
+    case upload plt CS4SG1U1 --remote server --missing
     case upload input CS4SG1U1 --remote server
     case upload rst CS4SG1U1 --remote server --t1 4000
     case upload rst CS4SG1U1 --remote server --freq 1000 --missing   # every 1000 steps, what is not there
@@ -336,13 +337,13 @@ the restarts found only on the remote are added here.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
     flexflow case download [{Colors.YELLOW}case{Colors.RESET}] --remote {Colors.YELLOW}REMOTE{Colors.RESET} [options]
-    flexflow case download binary [{Colors.YELLOW}case{Colors.RESET}] [--t1 STEP] [--t2 STEP] [--freq N] [options]
+    flexflow case download plt [{Colors.YELLOW}case{Colors.RESET}] [--t1 STEP] [--t2 STEP] [--freq N] [options]
     flexflow case download rst [{Colors.YELLOW}case{Colors.RESET}] [--t1 STEP] [--t2 STEP] [options]
     flexflow case download input [{Colors.YELLOW}case{Colors.RESET}] [options]
     flexflow case download history [{Colors.YELLOW}case{Colors.RESET}] [--archive] [--cleaned] [--compiled] [options]
 
 {Colors.BOLD}ARGUMENTS:{Colors.RESET}
-    {Colors.YELLOW}binary{Colors.RESET}                 binary/ only -- with --t1/--t2, only the timesteps
+    {Colors.YELLOW}plt{Colors.RESET}                    binary/ only -- with --t1/--t2, only the timesteps
                            in that range
     {Colors.YELLOW}rst{Colors.RESET}                    The nsg <problem>.<step>_<k>.rst of every step (or
                            --t1..--t2) in the remote run directory
@@ -359,15 +360,15 @@ the restarts found only on the remote are added here.
     {Colors.YELLOW}--files [PATTERNS]{Colors.RESET}     Loose files from the remote case root, as
                            comma-separated globs
                            (default: simflow.config,*.def,*.geo,*.map)
-    {Colors.YELLOW}--t1 STEP{Colors.RESET}              binary/rst: first timestep (alone: only that step)
-    {Colors.YELLOW}--t2 STEP{Colors.RESET}              binary/rst: last timestep
-    {Colors.YELLOW}--missing{Colors.RESET}              binary/rst: only the files missing here (or at another size)
-    {Colors.YELLOW}--fit{Colors.RESET}                  binary: only the steps that fit in the session's time left
-    {Colors.YELLOW}--no-time-check{Colors.RESET}        binary: do not check against the session timeout
+    {Colors.YELLOW}--t1 STEP{Colors.RESET}              plt/rst: first timestep (alone: only that step)
+    {Colors.YELLOW}--t2 STEP{Colors.RESET}              plt/rst: last timestep
+    {Colors.YELLOW}--missing{Colors.RESET}              plt/rst: only the files missing here (or at another size)
+    {Colors.YELLOW}--fit{Colors.RESET}                  plt: only the steps that fit in the session's time left
+    {Colors.YELLOW}--no-time-check{Colors.RESET}        plt: do not check against the session timeout
     {Colors.YELLOW}--archive{Colors.RESET}              history: only archive/ (combinable; none: all three)
     {Colors.YELLOW}--cleaned{Colors.RESET}              history: only cleaned/
     {Colors.YELLOW}--compiled{Colors.RESET}             history: only the compiled file
-    {Colors.YELLOW}--freq N{Colors.RESET}               binary/rst: only steps that are multiples of N
+    {Colors.YELLOW}--freq N{Colors.RESET}               plt/rst: only steps that are multiples of N
     {Colors.YELLOW}--remote-path PATH{Colors.RESET}     The folder holding the cases on the remote; the case goes to
                          PATH/<case>. Default: the remote's folder in the case folder's
                          .cases.yml (remotes: {{NAME: DIR}}), else `remote set-path`
@@ -397,20 +398,20 @@ the restarts found only on the remote are added here.
 
 {Colors.BOLD}TIMESTEPS:{Colors.RESET}
     A case's binary/ is nearly all of its size, and most of it is timesteps you
-    already have. {Colors.YELLOW}case download binary{Colors.RESET} carries that directory alone;
+    already have. {Colors.YELLOW}case download plt{Colors.RESET} carries that directory alone;
     with {Colors.YELLOW}--t1{Colors.RESET}/{Colors.YELLOW}--t2{Colors.RESET} it carries only the steps in the range, matching
     them on the number in the filename (riser.5000.plt, and the .vtu sidecars
     beside it). A file with no step in its name -- a script, a summary table --
     is left where it is, and the count of those is reported.
 
     The two flags read as they do everywhere else in FlexFlow: both bounds make
-    a range, one alone names that single step. They need {Colors.YELLOW}binary{Colors.RESET} or {Colors.YELLOW}rst{Colors.RESET},
+    a range, one alone names that single step. They need {Colors.YELLOW}plt{Colors.RESET} or {Colors.YELLOW}rst{Colors.RESET},
     since nothing else in a case is written per step. The t1/t2 context
-    supplies them: {Colors.DIM}use t1:1000 t2:5000{Colors.RESET}, then {Colors.DIM}case download binary CS4SG1U1{Colors.RESET}.
+    supplies them: {Colors.DIM}use t1:1000 t2:5000{Colors.RESET}, then {Colors.DIM}case download plt CS4SG1U1{Colors.RESET}.
 
     {Colors.YELLOW}--freq N{Colors.RESET} thins what is left to the steps that are multiples of N,
     as it does for `field` sweeps -- with or without a range. It also comes
-    from the freq context, but only with binary.
+    from the freq context, but only with plt.
 
     {Colors.YELLOW}--missing{Colors.RESET} carries only the selected files the local binary/ lacks,
     or holds at another size (a copy an interrupted transfer cut short), and
@@ -431,7 +432,7 @@ the restarts found only on the remote are added here.
     nothing is fetched.
 
 {Colors.BOLD}SESSION TIMEOUT:{Colors.RESET}
-    In the shell, binary is set against the time the session has left, at
+    In the shell, plt is set against the time the session has left, at
     {Colors.YELLOW}set transfer_speed{Colors.RESET} Mbps (default 10). When it will not finish, the
     steps that fit are offered as --t2: send all anyway, only those, or stop.
     The rest goes later with the next --t1, or --missing. {Colors.YELLOW}--fit{Colors.RESET} takes
@@ -468,12 +469,12 @@ the restarts found only on the remote are added here.
     case download history CS4SG1U1 --remote server
     case download history CS4SG1U1 --remote server --compiled
     case download history * --remote server --cleaned --compiled
-    case download binary CS4SG1U1 --remote server --t1 1000 --t2 5000
-    case download binary CS4SG1U1 --remote server --t1 1000 --t2 5000 --freq 500
-    case download binary CS4SG1U1 --remote server --freq 1000
-    case download binary CS4SG1U1 --remote server --t1 5000
-    case download binary CS4SG1U1 --remote server --missing
-    case download binary CS4SG1U1 --remote server --t1 3000 --t2 5000 --missing
+    case download plt CS4SG1U1 --remote server --t1 1000 --t2 5000
+    case download plt CS4SG1U1 --remote server --t1 1000 --t2 5000 --freq 500
+    case download plt CS4SG1U1 --remote server --freq 1000
+    case download plt CS4SG1U1 --remote server --t1 5000
+    case download plt CS4SG1U1 --remote server --missing
+    case download plt CS4SG1U1 --remote server --t1 3000 --t2 5000 --missing
     case download input CS4SG1U1 --remote server
     case download rst CS4SG1U1 --remote server --t1 4000
     case download rst CS4SG1U1 --remote server
@@ -690,9 +691,11 @@ class CaseUploadCommand(HistoryTransferMixin):
         `case` (the parser does not fill the case context in that situation).
         """
         if self._get_arg(args, 'binary', False):
-            return None, (f"--binary is now a word: `case {direction} binary` "
+            return None, (f"--binary is now a word: `case {direction} plt` "
                           f"(with --t1/--t2 as before).")
         what = self._get_arg(args, 'what')
+        if what == 'plt':
+            what = 'binary'         # the mode is named after the folder; `binary` still works
         if what in ('binary', 'rst', 'input', 'history'):
             return what, None
         if what is not None:
@@ -778,25 +781,25 @@ class CaseUploadCommand(HistoryTransferMixin):
             if self._time_policy != 'ask' and mode != 'binary':
                 self.console.print(
                     f"[red]Error:[/red] --fit/--no-time-check plan binary/ against the "
-                    f"session timeout; use `case {direction} binary`."
+                    f"session timeout; use `case {direction} plt`."
                 )
                 return 1
             if missing and mode not in ('binary', 'rst'):
                 self.console.print(
                     f"[red]Error:[/red] --missing compares binary/ or the .rst files on both "
-                    f"sides; use `case {direction} binary --missing` or `rst --missing`."
+                    f"sides; use `case {direction} plt --missing` or `rst --missing`."
                 )
                 return 1
             if step_window and not mode:
                 self.console.print(
                     f"[red]Error:[/red] --t1/--t2 select timesteps, so they need "
-                    f"`case {direction} binary` or `rst`. "
+                    f"`case {direction} plt` or `rst`. "
                     f"Nothing else in a case is written per step."
                 )
                 return 1
             if step_freq is not None and not mode:
                 self.console.print(
-                    f"[red]Error:[/red] --freq needs `case {direction} binary` or `rst` "
+                    f"[red]Error:[/red] --freq needs `case {direction} plt` or `rst` "
                     f"(it thins the steps)."
                 )
                 return 1

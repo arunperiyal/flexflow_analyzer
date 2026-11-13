@@ -1,4 +1,4 @@
-"""`case upload|download binary --missing`: only the binary/ files the other
+"""`case upload|download plt --missing`: only the binary/ files the other
 side lacks, or holds at another size (a copy cut short)."""
 
 import argparse
@@ -161,5 +161,5 @@ def test_missing_is_kept_for_resume(tmp_path):
 def test_missing_needs_binary_or_rst(tmp_path, capsys):
     ns = namespace(what='input', case=str(tmp_path))
     assert command(tmp_path).execute_download(ns) == 1
-    assert ('use `case download binary --missing` or `rst --missing`'
+    assert ('use `case download plt --missing` or `rst --missing`'
             in ' '.join(capsys.readouterr().out.split()))

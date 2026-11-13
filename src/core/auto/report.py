@@ -269,7 +269,7 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
         # --missing skips a file the remote holds at the same size, which would leave an
         # earlier run's PLT in place after a restart
         flag = '' if set(up) & set(c.get('stale_plt') or []) else ' --missing'
-        s.actions.append(f"case upload binary {name} --t1 {up[0]} --t2 {up[-1]}{flag} "
+        s.actions.append(f"case upload plt {name} --t1 {up[0]} --t2 {up[-1]}{flag} "
                          f"--remote {remote}")
     if c.get('del_ascii'):
         s.actions.append(AUTO_ONLY + f"delete ASCII PLTs, {steps_phrase(c['del_ascii']).lower()}, "

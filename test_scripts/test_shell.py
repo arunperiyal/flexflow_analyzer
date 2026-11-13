@@ -283,10 +283,10 @@ def test_transfer_times_only_with_binary(rt):
     use(rt, 't1:10 remote:cluster')
     up = parsed(rt, 'case upload')
     assert (up.t1, up.to) == (None, 'cluster')
-    assert parsed(rt, 'case upload binary').t1 == 10.0
+    assert parsed(rt, 'case upload plt').t1 == 10.0
     assert parsed(rt, 'case upload rst').t1 == 10.0
     assert parsed(rt, 'case download rst').t1 == 10.0
-    down = parsed(rt, 'case download binary')
+    down = parsed(rt, 'case download plt')
     assert (down.t1, down.from_remote) == (10.0, 'cluster')
 
 
@@ -328,8 +328,10 @@ def test_completion_of_commands_and_subcommands(rt):
 def test_completion_of_flags(rt):
     got = texts(rt, 'case upload --')
     assert {'--remote', '--t1', '--resume'} <= set(got) and '--binary' not in got
-    assert texts(rt, 'case upload ') == ['binary', 'rst', 'input', 'history']
-    assert texts(rt, 'case download ') == ['binary', 'rst', 'input', 'history']
+    assert texts(rt, 'case upload ') == ['plt', 'rst', 'input', 'history']
+    assert texts(rt, 'case download ') == ['plt', 'rst', 'input', 'history']
+    # the old word for `plt` is still taken
+    assert parsed(rt, 'case upload binary --fit').what == 'binary'
 
 
 def test_described_positionals(rt):
@@ -513,9 +515,9 @@ def test_transfer_speed_setting(rt):
 
 
 def test_fit_flags_parse_and_need_binary(rt, capsys):
-    a = parsed(rt, 'case upload binary --fit')
+    a = parsed(rt, 'case upload plt --fit')
     assert (a.fit, a.no_time_check) == (True, False)
-    assert parsed(rt, 'case download binary --no-time-check').no_time_check
+    assert parsed(rt, 'case download plt --no-time-check').no_time_check
     use(rt, 'case:. remote:cluster')
     assert rt.execute_line('case upload rst --fit') == 1
     assert '--fit/--no-time-check plan binary/' in ' '.join(capsys.readouterr().out.split())

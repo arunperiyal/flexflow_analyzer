@@ -563,8 +563,8 @@ def test_the_upload_command_drops_missing_when_an_old_plt_must_be_replaced():
     s = restarted_snap(binary={350: PltCheck(Path('b/riser.350.plt'), True, '', 424)},
                        binary_time={350: START + 900}, sent_at={})
     plan = decide(s, CONF, True, True)
-    cmds = [c for c in commands(build(s, plan, CONF)) if c.startswith('case upload binary')]
-    assert cmds == ['case upload binary case --t1 350 --t2 350 --remote local']
+    cmds = [c for c in commands(build(s, plan, CONF)) if c.startswith('case upload plt')]
+    assert cmds == ['case upload plt case --t1 350 --t2 350 --remote local']
 
 
 # --- more real cases ---------------------------------------------------------------------

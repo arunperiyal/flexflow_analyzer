@@ -331,7 +331,7 @@ login nodes are named otherwise.
 
 **Binary transfers and the session timeout:**
 
-In the shell, `case upload|download binary` is set against the time the
+In the shell, `case upload|download plt` is set against the time the
 session has left (the `ttl` in the prompt), at `set transfer_speed` Mbps
 (default 10). When it will not finish, it says so and offers the steps that
 fit:
@@ -345,8 +345,8 @@ Session timeout: 412 file(s), 6.8 GB: about 1 h 37 min at 10 Mbps, and 5 min is 
 
 ```bash
 set transfer_speed 8                              # plan with the speed the link really gets
-ff case upload binary mycase --remote myserver --fit  # take the cut without asking
-ff case upload binary mycase --remote myserver --no-time-check
+ff case upload plt mycase --remote myserver --fit  # take the cut without asking
+ff case upload plt mycase --remote myserver --no-time-check
 ```
 
 A finished transfer of 50 MB or more prints the rate it reached, and the

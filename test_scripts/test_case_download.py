@@ -587,9 +587,9 @@ class TestBinaryFreq:
         assert fetched == ["riser.1000.plt", "riser.1000.z1.vtu", "riser.2000.plt"]
 
     @pytest.mark.parametrize("extra, message", [
-        ({}, "--freq needs `case download binary`"),
+        ({}, "--freq needs `case download plt`"),
         ({"what": "binary", "freq": 0}, "positive integer"),
-        ({"binary": True}, "--binary is now a word: `case download binary`"),
+        ({"binary": True}, "--binary is now a word: `case download plt`"),
     ])
     def test_bad_freq_is_rejected(self, extra, message, capsys, tmp_path):
         import argparse

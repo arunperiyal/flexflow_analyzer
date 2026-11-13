@@ -182,7 +182,7 @@ What the code check found (why 12, 14 and 15 are needed):
 
 ### Phase 13: `case upload plt` and `case check plt --verify` (branch `plt-verify`)
 
-- [ ] `case upload plt` and `case download plt`: the new name of the `binary`
+- [x] `case upload plt` and `case download plt`: the new name of the `binary`
       mode. `binary` stays as an alias that still works; help, completion and
       docs show `plt`
 - [ ] `case check plt <case> --verify [--remote REMOTE] [--t1 --t2 --freq]`: for
