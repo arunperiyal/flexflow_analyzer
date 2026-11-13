@@ -168,16 +168,7 @@ As noted on 2026-11-11; may be out of date.
 |---|---|---|
 | 1 | `docs-reorganise` | Docs sorted into `installation/`, `usage/`, `architecture/`; case-create notes merged; dead links fixed; index added; `docs` command fixed |
 | 2 | `claude-context` | `.claude/rules/`, `.claude/context/code-map.md`, short `CLAUDE.md` |
-
-### Phase 3: the plan file (branch `plan-file`)
-
-- [x] Write this file from the unfinished work in `auto.md`, `webapp.md`,
-      `flowreel.md` and the session notes; add it to `docs/README.md`
-- [x] Remove `problems.md`: its one problem (`case out --list` with `case:*`)
-      was fixed in `389ef30`
-
-Checked and found already built, so not planned: `run post --remote` and the
-`--t1` / `--t2` flags (the note in `prompt.md`).
+| 3 | `plan-file` | This file; `problems.md` removed (its problem was fixed in `389ef30`); the `prompt.md` note (`run post --remote`, `--t1` / `--t2`) found already built |
 
 ---
 
