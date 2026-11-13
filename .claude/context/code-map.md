@@ -81,10 +81,6 @@ src/commands/<group>/
 
 ## Not in use
 
-Left over from earlier refactors. Do not edit or copy from them:
-
-- `module_backup/`, `main_old.py`
-- `src/commands/case.py`, `data.py`, `config.py`, `docs.py`: shadowed by the
-  packages of the same name
-- `src/commands/config/`: a `config` command that is not registered in
-  `src/cli/app.py`
+- `src/commands/config/`: a `config` command (`config template`) that is not
+  registered in `src/cli/app.py`. Whether to remove or register it is open
+  (see the backlog in `docs/development/PLAN.md`). Do not build on it.

@@ -27,13 +27,13 @@ Remove what is no longer used, after checking by grep that nothing imports it.
 - [ ] Remove `module_backup/` and `main_old.py`
 - [ ] Remove the command files shadowed by packages of the same name:
       `src/commands/case.py`, `data.py`, `config.py`, `docs.py`
-- [ ] `src/commands/config/` is not registered in `src/cli/app.py`: remove it,
-      or register it if `config` is still wanted (ask first)
+- [~] `src/commands/config/` is not registered in `src/cli/app.py`: left as it
+      is, to decide later (moved to the backlog)
 - [x] Root `mainFlex.sh` and `sample.yaml`: remove if they only repeat
       `src/templates/` (ask first)
 - [ ] `.gitignore`: drop the repeated blocks; stop ignoring `*.spec` while
       `flexflow.spec` is tracked
-- [ ] Update `.claude/context/code-map.md` ("Not in use") to match
+- [x] Update `.claude/context/code-map.md` ("Not in use") to match
 
 Outside the commits, and only on the user's word: delete the local branches
 already merged into `main`.
@@ -147,6 +147,11 @@ Not split into tasks yet. Each needs a decision before it becomes a phase.
 - **Web UI open questions** (`webapp.md` §13): OISD beside OTHD in the plot
   dialog; a `stride` for long histories; a `plate` body type; saved workspaces
   as `workspace.json`.
+- **The `config` command**: `src/commands/config/` (`config template`) is not
+  registered in `src/cli/app.py`, and `template` does the same job. Remove it
+  or register it.
+- **Stale shell completion**: `src/cli/completion.py` still offers commands
+  that no longer exist (`info`, `new`, `preview`, `statistics`, `config`).
 - **Project layout**: rename `test_scripts/` to `tests/`; a `pyproject.toml`
   with the pytest settings.
 
