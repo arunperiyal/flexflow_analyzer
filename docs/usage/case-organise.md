@@ -123,18 +123,47 @@ Removes intermediate output files from the run directory:
   - Without `--keep-freq` it keeps the multiples of `freq * 10`, where freq is
     read from `simflow.config` (`outFreq` field) or auto-detected from the
     existing output files
-- **`.out` files**: deleted at any step, keep-freq steps included, once
-  `{problem}.{step}.plt` exists in `binary/` or the run directory. A restart
-  reads only `.rst` (and the `.sgd` subgrid files); `.out` is read only by the
-  conversion that writes the `.plt`. Steps without a `.plt` keep their `.out`
-  and are listed, so convert them first -- or pass `--all-out` to delete
-  every `.out` in range regardless; those steps can then never be converted.
+- **`.out` files**: deleted at any step, keep-freq steps included, once the
+  next file in the chain can stand in for them (see "The deletion chain"
+  below): the step's ASCII PLT, whole and written after every `.out` part;
+  else its binary PLT, whole and written after them; else, when `binary/` no
+  longer holds it, its verified copy on the remote (`--remote NAME`). A
+  restart reads only `.rst` (and the `.sgd` subgrid files); `.out` is read
+  only by the conversion that writes the `.plt`. A step with nothing to stand
+  in keeps its `.out` and is listed with the reason; the other steps go.
+  `--all-out` deletes every `.out` in range regardless; those steps can then
+  never be converted.
 
 With `--t1`/`--t2`, only files whose timestep falls in that window are
 considered; the rest are left untouched (either bound alone is a one-sided
 limit — `--t2` alone behaves like the old `--upto`).
 
 PLT files are not touched by `output` — see `plt` below.
+
+### The deletion chain
+
+Field data of a step exists in up to four forms, each made from the one
+before. A file may be deleted only when the next one stands in for it:
+
+| File | May be deleted when |
+|---|---|
+| `.out` of a step | its ASCII PLT is whole and was written after every `.out` part |
+| ASCII PLT (run directory) | its binary PLT is whole and was written after the ASCII PLT |
+| binary PLT (`binary/`) | its copy on the remote has the same size and md5, read at that moment |
+
+- A missing link is passed over: with no ASCII PLT the `.out` stand on the
+  binary PLT, and with no binary PLT in `binary/` on its verified copy on the
+  remote.
+- "Written after" guards against a restart: the resumed run writes its steps
+  again, and a PLT older than them was made from the earlier run's output.
+- When one step of a range has nothing to stand in for it, that step is kept
+  and reported; the others are deleted.
+- Repair goes the other way: a broken binary PLT is made again from its
+  ASCII PLT (`run post convert`), a broken ASCII PLT from the `.out` (`run
+  post full`). `case check plt --verify` says which.
+
+The natural order is therefore `case organise output`, then `plt
+--delete-ascii`, then `plt --delete-binary`.
 
 ### `plt`
 
@@ -143,28 +172,33 @@ neither prints a "nothing to do" message.
 
 #### `plt --delete-ascii`
 
-Deletes PLT files from the run directory where `binary/` has a corresponding
-file (exact filename match) with a newer mtime:
+Deletes the ASCII PLT files of the run directory whose binary PLT stands in
+for them:
 
-- Safe: only deletes if the binary copy is confirmed newer
-- Skips files with no binary copy
-- Skips files where the binary copy is the same age or older
+- `binary/` holds the binary PLT whole (as long as its header says) and
+  written after the ASCII file; or
+- `binary/` no longer holds it, and the remote (`--remote NAME`) holds its
+  verified copy, written after the ASCII file
+- The others are kept and listed with the reason
 - Shows a per-file table before asking confirmation
 
 With `--t1`/`--t2`, only PLT files whose timestep falls in that window are
-considered.
+considered; with `--freq N`, only the steps divisible by N.
 
 #### `plt --delete-binary`
 
-Deletes PLT files from `binary/` within `--t1`/`--t2`:
+Deletes the PLT files of `binary/` within `--t1`/`--t2` that have a copy on
+the remote with the same size and md5, both read at that moment (the check
+`case check plt --verify` makes):
 
-- **Unconditional** — no check against the run directory
-- Omitting both `--t1` and `--t2` deletes every PLT file in `binary/`
-- Can leave no surviving copy of that timestep's PLT data — this is the most
-  destructive of the three subcommands
+- Needs `--remote NAME` (or `use remote:NAME`); the remote's folder comes
+  from the case folder's `.cases.yml`
+- A file whose copy is missing or differs, or that is cut short locally, is
+  kept and listed
+- When the remote cannot be asked, nothing is deleted
+- It reads every file in full on both sides, so it takes time
 
-Two flags narrow it (both only with `--delete-binary`, and plain flags — the
-`freq` context does not fill them):
+Two plain flags narrow it (the `freq` context does not fill them):
 
 - `--freq N`: only the steps divisible by N are candidates
 - `--keep-freq N`: the steps divisible by N are kept
@@ -210,10 +244,11 @@ runs as its own step with its own entry in the confirmation summary.
 ### Running `plt`
 
 1. For `--delete-ascii`: find run-dir PLT files, skip those outside
-   `--t1`/`--t2`, mark for deletion only if `binary/` has a newer copy
+   `--t1`/`--t2`/`--freq`, mark for deletion only those whose binary PLT (or
+   its verified remote copy) stands in for them
 2. For `--delete-binary`: find `binary/` PLT files, skip those outside
-   `--t1`/`--t2` (or take all of them if neither bound is given), mark all of
-   them for deletion unconditionally
+   `--t1`/`--t2`/`--freq` (or take all of them if no bound is given), compare
+   each with its copy on the remote, mark for deletion only those that match
 3. Show summary (both steps' file counts, if both ran) and ask for
    confirmation (unless `--no-confirm`)
 4. Delete marked files
@@ -282,8 +317,8 @@ case organise plt CS4SG1U1       # → "Nothing to do — pass --delete-ascii an
   that counts, and asks first
 - `output` and `plt` show a summary before acting and ask for confirmation —
   all unless `--no-confirm` is given
-- `--delete-binary` is unconditional: it does not check the run directory
-  first, and can remove the last surviving copy of a timestep's PLT data
+- `--delete-binary` deletes a file only when its copy on the remote has the
+  same md5; with no remote to ask it deletes nothing
 - A `t1`/`t2` context left over from something else never silently narrows
   `history --clean` — it always cleans the whole history
 - If an OTHD/OISD file has a problem other than a cut-off last step,

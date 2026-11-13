@@ -279,7 +279,8 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
     if c.get('del_binary'):
         s.actions.append(AUTO_ONLY + f"delete binary PLTs, {steps_phrase(c['del_binary']).lower()}, "
                                      f"once their copy on {remote} is md5-checked"
-                         + _by_hand([f"case organise plt {name} --delete-binary --t1 {a} --t2 {b}"
+                         + _by_hand([f"case organise plt {name} --delete-binary --t1 {a} --t2 {b} "
+                                     f"--remote {remote}"
                                      for a, b in _runs_apart(
                                          c['del_binary'], set(snap.binary) - set(c['del_binary']))]))
     sections.append(s)

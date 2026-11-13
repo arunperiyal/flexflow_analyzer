@@ -230,7 +230,7 @@ The commands always verify; there is no flag to skip it.
       knows the queue and holds back there (Phase 6). `--all-out` still
       deletes `.out` with nothing to stand in; to settle with the user
 - [x] Tests for each rule, including a restart that rewrote the `.out`
-- [ ] Help text, `docs/usage/case-organise.md`, `CHANGELOG.md`
+- [x] Help text, `docs/usage/case-organise.md`, `CHANGELOG.md`
 
 ### Phase 15: `auto` refactor, steps as data (branch `auto-steps`)
 
