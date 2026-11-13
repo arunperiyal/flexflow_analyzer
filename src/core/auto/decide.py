@@ -96,6 +96,14 @@ class CasePlan:
         return [s for s in self.steps if (not keys or s.key in keys)
                 and (target is None or s.target == target) and (kind is None or s.kind == kind)]
 
+    def due(self, kind: str) -> List[PlanStep]:
+        """The steps of this kind that `auto apply` carries out now."""
+        return [s for s in self.steps if s.kind == kind and s.now]
+
+    def to_send(self) -> Dict[str, int]:
+        """The files of every upload step: relative path -> bytes."""
+        return {rel: size for s in self.due('upload') for rel, size in s.files.items()}
+
     @property
     def needs_you(self) -> bool:
         return any(i.kind == 'needs' for i in self.items)

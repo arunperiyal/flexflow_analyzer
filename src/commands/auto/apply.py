@@ -41,13 +41,14 @@ def _kinds(args):
 
 
 def _upload_breakdown(plan):
-    """The files of plan.uploads by what they are: [text], largest groups first."""
+    """The files of the plan's upload steps by what they are: [text], largest groups first."""
     import re
     from src.core.auto.decide import _size_text, steps_text
     groups = {}                                  # label -> [files, bytes]
     sets = {}                                    # restart step -> [files, bytes]
-    live = set(plan.ctx.get('live_upload') or {})
-    for rel, size in plan.uploads.items():
+    live = {rel for step in plan.steps_of('live') for rel in step.files}
+    sending = plan.to_send()
+    for rel, size in sending.items():
         m = re.search(r'\.(\d+)_\d+\.rst$', rel)
         if m:
             entry = sets.setdefault(int(m.group(1)), [0, 0])
@@ -73,7 +74,7 @@ def _upload_breakdown(plan):
                       + (f"; set {', '.join(map(str, replaced))} replaces files on the remote that "
                          f"differ in size" if replaced else '')))
     old = set(plan.ctx.get('stale_plt') or [])
-    replaced_plt = sorted({int(m.group(1)) for rel in plan.uploads
+    replaced_plt = sorted({int(m.group(1)) for rel in sending
                            if rel.startswith('binary/') and (m := re.search(r'\.(\d+)\.plt$', rel))
                            and int(m.group(1)) in old})
     for label, (n, size) in groups.items():
@@ -86,19 +87,23 @@ def _upload_breakdown(plan):
 
 
 def _intended(plan, only):
-    """What the plan has apply do, in order: [(kind, text)]; a 'detail' line
-    belongs to the one before it."""
+    """What the plan's steps have apply do, in order: [(kind, text)]; a 'detail'
+    line belongs to the one before it. The same steps `auto show` lists
+    (plan.steps): the history step, the upload steps as one transfer, the
+    first post step."""
     out = []
-    organise = plan.ctx.get('organise')
-    if 'history' in only and organise:
-        out.append(('history', "organise history --update --clean --compile"
-                    if organise[0] == 'update' else "organise history --clean --compile"))
-    if 'upload' in only and plan.uploads:
-        out.append(('upload', f"{len(plan.uploads)} files, {_size_text_of(plan.uploads)}"))
+    if 'history' in only:
+        for step in plan.due('history'):
+            out.append(('history', step.command.replace(f"case organise history {plan.name} ",
+                                                        "organise history ", 1)))
+    sending = plan.to_send()
+    if 'upload' in only and sending:
+        out.append(('upload', f"{len(sending)} files, {_size_text_of(sending)}"))
         out += [('detail', line) for line in _upload_breakdown(plan)]
-    if 'post' in only and plan.post_jobs:
+    if 'post' in only and plan.due('post'):
         a, b, d, mode = plan.post_jobs[0]
-        more = f" (+{len(plan.post_jobs) - 1} more after it)" if len(plan.post_jobs) > 1 else ''
+        waiting = len(plan.steps_of('post')) - 1
+        more = f" (+{waiting} more after it)" if waiting else ''
         out.append(('post', f"run post {mode} --t1 {a} --t2 {b} --freq {d}{more}"))
     return out
 
@@ -120,16 +125,16 @@ def _run_case(case_dir, remote, only, clouds, ledgers, log, console):
             break
         snap, plan = results[0]
         conf = confs[Path(case_dir).parent]
-        if kind == 'history' and plan.ctx.get('organise'):
+        if kind == 'history' and plan.due('history'):
             step = executor.do_history(snap, plan)
-        elif kind == 'upload' and plan.uploads:
+        elif kind == 'upload' and plan.to_send():
             cloud = clouds.get((conf.remote, conf.path))
             if cloud is None:
                 continue
             step = executor.do_upload(snap, plan, conf, cloud, ledgers[Path(case_dir).parent],
                                       lambda text: (log.line(name, 'upload', text),
                                                     console.print(f"    [dim]{escape(text)}[/dim]")))
-        elif kind == 'post' and plan.post_jobs:
+        elif kind == 'post' and plan.due('post'):
             step = executor.do_post(snap, plan, conf)
         else:
             continue

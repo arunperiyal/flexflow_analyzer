@@ -344,8 +344,10 @@ def test_apply_sends_the_grid_sets_and_not_the_newest(dummy):
 
 def test_dry_run_says_which_binary_plts_replace_old_run_files_on_the_remote():
     from src.commands.auto.apply import _upload_breakdown
-    plan = SimpleNamespace(uploads={f'binary/riser.{t}.plt': 100 for t in (5745, 5750, 5760)},
-                           ctx={'stale_plt': [5745, 5750]})
+    from src.core.auto.decide import CasePlan
+    plan = CasePlan('c1', 'running', ctx={'stale_plt': [5745, 5750]})
+    plan.step('plt', 'upload', 'upload-plt', 'case upload plt c1',
+              files={f'binary/riser.{t}.plt': 100 for t in (5745, 5750, 5760)})
     text = ' '.join(_upload_breakdown(plan))
     assert 'binary PLTs: 3 files' in text
     assert 'replaces 2 on the remote (5745, 5750, from before the restart)' in text

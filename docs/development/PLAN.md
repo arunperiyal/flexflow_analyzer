@@ -206,8 +206,13 @@ existing `auto` test must pass unchanged at each commit.
       short `decide()`
 - [x] Split `report.build()` the same way; the Action lines come from the
       plan's steps
-- [ ] `apply` runs the plan's steps (replacing `_intended()` and the
+- [x] `apply` runs the plan's steps (replacing `_intended()` and the
       `KINDS` loop), so show and apply cannot disagree
+      (`_intended()`, `_run_case()` and `do_upload` now read `plan.steps`.
+      The order history, upload, post is kept, with the uploads as one
+      transfer: running step by step, per target, is Phase 17, since it
+      changes what `auto apply` prints. One white-box test that built a plan
+      by hand had to build its upload step)
 - [ ] A test that, for every dummy case, the commands `auto show` lists are
       the commands `auto apply --dry-run` lists
 
