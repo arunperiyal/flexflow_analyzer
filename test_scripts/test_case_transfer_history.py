@@ -168,6 +168,24 @@ def test_upload_history(tmp_path):
     assert history.compiled_is_fresh(there, 'oisd', 'riser')
 
 
+def test_upload_live_sends_the_run_directory_files_as_a_snapshot(tmp_path, capsys):
+    here = make_case(tmp_path / 'local')
+    (here / 'simflow.config').write_text('problem = riser\ndir = ./RUN_1\n')
+    (here / 'RUN_1').mkdir()
+    (here / 'RUN_1' / 'riser.othd').write_text('live othd')
+    there = tmp_path / 'remote'
+    there.mkdir()
+    cmd = CaseDownloadCommand()
+    assert cmd.upload_history(FakeRemote(there), '/r/CS1', str(here), ['live'])
+    assert files(there) == ['RUN_1/riser.othd']                 # only the live file
+    assert (there / 'RUN_1' / 'riser.othd').read_text() == 'live othd'
+    assert cmd._sent == {'snapshot': 1}
+    # with no live file there is nothing to send
+    (here / 'RUN_1' / 'riser.othd').unlink()
+    assert not cmd.upload_history(FakeRemote(there), '/r/CS1', str(here), ['live'])
+    assert 'No live riser.othd/.oisd' in ' '.join(capsys.readouterr().out.split())
+
+
 def test_nothing_to_send(tmp_path, local, capsys):
     bare = tmp_path / 'remote'
     bare.mkdir()

@@ -24,6 +24,9 @@ from src.core import history
 # the colon: __history__:archive,cleaned,compiled.
 HISTORY_TARGET = '__history__'
 HISTORY_SETS = ('archive', 'cleaned', 'compiled')
+# upload only, and only when asked for (--live): the run directory's .othd/.oisd
+# while a job is still writing them
+LIVE = 'live'
 
 
 def history_target(sets) -> str:
@@ -34,7 +37,7 @@ def history_sets(target: str) -> Optional[List[str]]:
     """The sets a history target carries, or None for another target."""
     if not target.startswith(HISTORY_TARGET + ':'):
         return None
-    return [s for s in target.split(':', 1)[1].split(',') if s in HISTORY_SETS]
+    return [s for s in target.split(':', 1)[1].split(',') if s in HISTORY_SETS or s == LIVE]
 
 
 def history_label(target: str) -> Optional[str]:
@@ -149,7 +152,45 @@ class HistoryTransferMixin:
             self._send(ssh, src.path(rel), dst.path(rel))
 
         src, dst = _Local(local_case_path), _Remote(ssh, remote_case_path)
-        return self._carry_history(src, dst, send, sets, problem, 'Uploaded')
+        ok = True
+        if LIVE in sets:
+            ok = self._upload_live(ssh, remote_case_path, local_case_path, problem, made)
+            sets = [s for s in sets if s != LIVE]
+            if not sets:
+                return ok
+        return self._carry_history(src, dst, send, sets, problem, 'Uploaded') and ok
+
+    def _upload_live(self, ssh, remote_case_path, local_case_path, problem, made) -> bool:
+        """The run directory's <problem>.othd/.oisd as they are now, to the
+        same place on the remote: a snapshot of files a job is still writing,
+        so not compared after it is sent. Each upload replaces the last."""
+        from src.core.simflow_config import SimflowConfig
+        cfg = SimflowConfig(os.path.join(local_case_path, 'simflow.config'))
+        run = (cfg.run_dir_str or '').strip('./').strip('/')
+        if not run:
+            self.console.print("[red]Error:[/red] simflow.config needs 'dir' to find the "
+                               "run directory")
+            return False
+        names = [f"{problem}.{ext}" for ext in history.TYPES
+                 if os.path.isfile(os.path.join(local_case_path, run, f"{problem}.{ext}"))]
+        if not names:
+            self.console.print(f"[yellow]Warning:[/yellow] No live {problem}.othd/.oisd in "
+                               f"{run}/ (they are archived once the job has ended)")
+            return False
+        try:
+            if run not in made:
+                if not ssh.make_remote_dir(f"{remote_case_path}/{run}"):
+                    raise IOError(f"could not create {remote_case_path}/{run}")
+                made.add(run)
+            for name in names:
+                self._send(ssh, os.path.join(local_case_path, run, name),
+                           f"{remote_case_path}/{run}/{name}", snapshot=True)
+        except Exception as exc:
+            self.console.print(f"[red]Error:[/red] Failed to send the live history: {exc}")
+            return False
+        self.console.print(f"[green]✓[/green] Uploaded a snapshot of {', '.join(names)} to "
+                           f"{remote_case_path}/{run}")
+        return True
 
     def download_history(self, ssh, remote_case_path: str, local_case_path: str,
                          sets: List[str]) -> bool:
