@@ -166,7 +166,7 @@ Settled with the user on 2026-11-13:
   observation and action.
 - `case organise plt` always verifies. There is no `--unverified` flag.
 
-Order of work: 12, 13, 18, 14, 19, 15 and 16 (done), 17, then Phase 6. Phases 12 to 14 change
+Order of work: 12, 13, 18, 14, 19, 15 and 16 (done), 17, 20, then Phase 6. Phases 12 to 14 change
 hand commands and are useful on their own; 15 is a refactor with no change in
 behaviour; 16 and 17 are what the user sees.
 
@@ -205,6 +205,29 @@ What the code check found (why 12, 14 and 15 are needed):
 - [ ] Parsing: a target word against a case of the same name; completion
 - [ ] Tests, help text, `docs/architecture/auto.md` (a new section at the
       end), `CHANGELOG.md`
+
+### Phase 20: `case organise out` and `case organise rst` (branch `organise-out-rst`)
+
+Asked for on 2026-11-14, after reading an `auto show` whose `.out` and `.rst`
+actions were both `case organise output ...` with opposite flags (`--all-out`
+for the `.out` files, `--keep-out` for the `.rst`). Two words say what each
+command touches. To be built after Phase 17, before Phase 6, so that Phase 6
+deletes with the final command names.
+
+- [ ] `case organise out`: what `case organise output` does to the `.out`
+      files (the `--all-out` path, the chain rules of Phase 14, `--keep-freq`,
+      `--t1` / `--t2`)
+- [ ] `case organise rst`: what it does to the `.rst` files (the `--keep-out`
+      path: `--keep-freq`, `--keep-newest`, `--t1` / `--t2`); no `--keep-out`
+      flag is left
+- [ ] The `output` subcommand is removed, with its flags `--all-out` and
+      `--keep-out`; the old word gives a one-line error that names the new
+      ones
+- [ ] `auto show`, `auto commands` and `auto apply` print and run the new
+      commands (`decide.py` steps `delete-out` and `thin-rst`; the `apply`
+      targets `output` and `rst` stay as they are); the dummy cases, tests,
+      completion, help text, `docs/usage/`, `docs/architecture/auto_flow.html`,
+      the web flowchart and `CHANGELOG.md` follow
 
 ---
 
