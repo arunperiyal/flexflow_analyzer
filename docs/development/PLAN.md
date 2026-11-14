@@ -194,16 +194,16 @@ What the code check found (why 12, 14 and 15 are needed):
 
 ### Phase 17: `auto apply <target>` (branch `auto-apply-targets`)
 
-- [ ] `auto apply history [case]`, `plt`, `output`, `input`, `rst` and
+- [x] `auto apply history [case]`, `plt`, `output`, `input`, `rst` and
       `all`: each runs the steps of its target (organise, upload, delete),
       in the order `auto show` lists them, each step only if the one before
       it succeeded
-- [ ] `auto apply` with no target does nothing and lists the targets
-- [ ] `--dry-run` (as in `auto apply all --dry-run`): uploads and deletes
+- [x] `auto apply` with no target does nothing and lists the targets
+- [x] `--dry-run` (as in `auto apply all --dry-run`): uploads and deletes
       nothing, and prints every step with what it would send or delete
-- [ ] `--only` for `apply` goes (or stays as an alias for one release)
-- [ ] Parsing: a target word against a case of the same name; completion
-- [ ] Tests, help text, `docs/architecture/auto.md` (a new section at the
+- [x] `--only` for `apply` goes (or stays as an alias for one release)
+- [x] Parsing: a target word against a case of the same name (shell completion of the targets not done)
+- [x] Tests, help text, `docs/architecture/auto.md` (a new section at the
       end), `CHANGELOG.md`
 
 ### Phase 20: `case organise out` and `case organise rst` (branch `organise-out-rst`)

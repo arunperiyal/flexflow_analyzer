@@ -32,7 +32,8 @@ def dummy(tmp_path, monkeypatch):
 
 
 def apply(case, **kw):
-    args = SimpleNamespace(case=case, remote='local', only=None, dry_run=False, yes=True)
+    args = SimpleNamespace(case=case, extra=None, target='all', remote='local', only=None,
+                           dry_run=False, yes=True)
     for k, v in kw.items():
         setattr(args, k, v)
     return execute_apply(args)
@@ -358,3 +359,38 @@ def test_dry_run_says_which_binary_plts_replace_old_run_files_on_the_remote():
 def test_predate_agrees_with_the_number_of_steps():
     from src.core.auto.report import _predate
     assert _predate([8300]) == 'predates' and _predate([4950, 5000]) == 'predate'
+
+
+# -- Phase 17: the target word ------------------------------------------------
+
+def test_no_target_does_nothing_and_lists_the_targets(dummy, capsys):
+    assert apply('case5', target=None) == 0
+    out = capsys.readouterr().out
+    assert 'needs a target' in out and 'history' in out and 'rst' in out
+    assert not (dummy / 'bare' / 'auto_logs').exists()
+    assert not any(j['name'] == 'postcase5' for j in submitted(dummy))
+
+
+def test_the_target_word_is_told_from_the_case(dummy):
+    from src.commands.auto.apply import split_target
+    ns = lambda **kw: SimpleNamespace(**{'case': None, 'extra': None, 'only': None, **kw})
+    assert split_target(ns(case='plt', extra='case5')) == ('plt', 'case5')
+    assert split_target(ns(case='case5')) == (None, 'case5')
+    assert split_target(ns(case='case5', only='upload')) == ('all', 'case5')
+    with pytest.raises(ValueError):
+        split_target(ns(case='case5', extra='plt'))
+
+
+def test_a_target_runs_only_its_own_steps(dummy):
+    assert apply('case5', target='history') == 0
+    assert not any(j['name'] == 'postcase5' for j in submitted(dummy))     # plt not touched
+    assert not (dummy / 'bare' / 'case5' / 'binary').exists() or \
+        not Ledger(dummy / 'bare').data.get('local', {}).get('case5', {}).get('binary')
+    assert apply('case5', target='plt') == 0
+    assert any(j['name'] == 'postcase5' for j in submitted(dummy))
+
+
+def test_dry_run_of_a_target_lists_what_apply_does_not_run_yet(dummy, capsys):
+    assert apply('case5', target='all', dry_run=True) == 0
+    out = capsys.readouterr().out
+    assert 'auto apply all' in out and 'nothing was done' in out

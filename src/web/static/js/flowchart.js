@@ -344,7 +344,7 @@ const FlowChart = (() => {
     {
       id: 'autoApply', kind: 'step', col: 3, row: 13, label: ['Carry it out'],
       title: 'Carry it out (auto)',
-      command: 'auto apply --dry-run\nauto apply\nauto apply --only upload',
+      command: 'auto apply all --dry-run\nauto apply all\nauto apply plt CASE',
       detail: `Does the additive steps for each case, in this order, planned
         again from the files and the queue right before each: organise the
         history (when no main job is active), upload what the remote lacks
