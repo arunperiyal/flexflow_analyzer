@@ -34,7 +34,7 @@ grid are the one stated exception), and one question is asked before deleting.
       with the "written after" rule and the data-related *needs you* hold-back
 - [x] Executor `do_delete`: per-file checks right before each unlink, run log
       lines, the `.casestatus.md` line, the ledger
-- [ ] `auto apply --delete` and `--only delete`: order
+- [x] `auto apply --delete` and `--only delete`: order
       `history → upload → delete → post`, the plan listing, the question with
       totals, `--dry-run`
 - [ ] Reports (`auto show`, `auto commands`): replace the `[not built yet]`

@@ -60,7 +60,10 @@ class AutoCommand(BaseCommand):
         parser.add_argument('--only', metavar='SECTIONS',
                             help='show: only these sections (state, needs, flags, history, '
                                  'plt, out, rst, inputs); apply: only these steps '
-                                 '(history, upload, post); comma-separated')
+                                 '(history, upload, delete, post); comma-separated')
+        parser.add_argument('--delete', action='store_true',
+                            help='apply: also delete what has an md5-checked copy on the remote '
+                                 '(or use --only delete)')
         parser.add_argument('--dry-run', action='store_true',
                             help='apply: list what would be done, do nothing')
         parser.add_argument('--yes', action='store_true',

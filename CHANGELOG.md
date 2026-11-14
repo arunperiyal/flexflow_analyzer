@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### 🗑 `auto apply --delete`: the delete stage
+
+- `auto apply --delete` (or `--only delete`) deletes local files whose copy on
+  the remote passes an md5 check made at that moment: the ASCII PLT, the binary
+  PLT and the `.out` of a step, in the order `history → upload → delete → post`.
+  A plain `auto apply` still deletes nothing.
+- Restart sets off the `auto.keep_rst` grid are deleted without a copy; the
+  question says so, with the number of sets and their size.
+- Each file is checked again right before it goes; one that fails is left and
+  reported. A case that needs you, has a post job in the queue, or whose queue
+  or remote could not be read gets no deletion. A copy whose md5 differs puts
+  the case under *needs you*. Every file is a line in the run log, and the case
+  gets one line in `.casestatus.md`.
+- The reports (`auto show`, `auto commands`) still say "not built yet"; they
+  are updated next.
+
 ### ❓ `case organise history`: --clean and --compile ask first
 
 - `--clean` shows which cleaned files it will write or remove and asks once

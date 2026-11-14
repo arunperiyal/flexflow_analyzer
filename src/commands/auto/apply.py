@@ -1,7 +1,8 @@
-"""auto apply: carry out what `auto show` lists, the additive steps only --
-organise the history, upload (checked, never deleting), submit a post job.
+"""auto apply: carry out what `auto show` lists -- organise the history, upload
+(checked), delete what has a checked copy (only when asked), submit a post job.
 
-    auto apply [case] --remote NAME [--only history,upload,post] [--dry-run] [--yes]
+    auto apply [case] --remote NAME [--only history,upload,delete,post] [--delete]
+                                    [--dry-run] [--yes]
 
 For each case, in this order, with the plan made again from the files and the
 queue right before each step (so a step runs on what is there now, not on what
@@ -9,6 +10,9 @@ was there when the run started):
 
     history   case organise history --update --clean --compile
     upload    the files the plan lists, to <remote>/<case>/..., each checked
+    delete    --delete or --only delete: the local files whose copy on the remote passes
+              an md5 check made at that moment, and the restart sets off the keep_rst
+              grid (auto.md 13.13)
     post      `run post` for the first stretch of steps with no PLT yet
 
 A step that fails stops that case (the steps after it depend on it); the other
@@ -23,21 +27,68 @@ from rich.markup import escape
 
 from .show import _collect, _size_text_of
 
-KINDS = ('history', 'upload', 'post')
-MARK = {'history': '↻', 'upload': '↑', 'post': '▶'}
+KINDS = ('history', 'upload', 'delete', 'post')
+MARK = {'history': '↻', 'upload': '↑', 'delete': '✗', 'post': '▶'}
 
 
 def _kinds(args):
     from src.core.auto.conf import AutoConfError
     raw = getattr(args, 'only', None)
     if not raw:
-        return set(KINDS)
+        # deleting is never part of a plain apply: it is asked for
+        return set(KINDS) if getattr(args, 'delete', False) else set(KINDS) - {'delete'}
     wanted = {w.strip().lower() for w in raw.split(',') if w.strip()}
     unknown = wanted - set(KINDS)
     if unknown:
         raise AutoConfError(f"--only for apply: unknown {', '.join(sorted(unknown))} "
-                            f"(history, upload, post)")
+                            f"(history, upload, delete, post)")
+    if getattr(args, 'delete', False):
+        wanted.add('delete')
     return wanted
+
+
+def _delete_words(files, size, sets, rst_size, remote):
+    """'up to 12 files (1.2 GB) with a checked copy and 3 restart sets (2 KB) with none'."""
+    parts = []
+    if files:
+        parts.append(f"{files} file{'s' if files != 1 else ''} ({_size_text_of({'x': size})}) "
+                     f"whose copies{' on ' + remote if remote else ''} pass the md5 check")
+    if sets:
+        parts.append(f"{sets} restart set{'s' if sets != 1 else ''} "
+                     f"({_size_text_of({'x': rst_size})}) that "
+                     f"{'has' if sets == 1 else 'have'} no copy (off the keep_rst grid)")
+    return 'up to ' + ' and '.join(parts) if files else ' and '.join(parts)
+
+
+def delete_totals(plan):
+    """What the plan would delete: (files with a copy, their bytes, restart sets, their bytes)."""
+    import re
+    d = plan.ctx.get('delete') or {}
+    copy = {**d.get('ascii', {}), **d.get('binary', {}), **d.get('out', {})}
+    sets = {re.search(r'\.(\d+)_\d+\.rst$', r).group(1) for r in d.get('rst', {})}
+    return len(copy), sum(copy.values()), len(sets), sum(d.get('rst', {}).values())
+
+
+RULE = {'ascii': 'C1', 'binary': 'C2', 'out': 'C3'}
+
+
+def _delete_breakdown(plan):
+    from src.core.auto.decide import _size_text, steps_phrase
+    d, c = plan.ctx.get('delete') or {}, plan.ctx
+    lines = []
+    for key, label, steps in (('ascii', 'ASCII PLTs', c.get('del_ascii')),
+                              ('binary', 'binary PLTs', c.get('del_binary')),
+                              ('out', '.out files', c.get('del_out'))):
+        if d.get(key):
+            lines.append(f"{RULE[key]} "
+                         f"{label}, {steps_phrase(steps or []).lower()}: {len(d[key])} files, "
+                         f"{_size_text(sum(d[key].values()))}")
+    if d.get('rst'):
+        lines.append(f"C4 restart sets {steps_phrase(c.get('thin') or []).lower()}: no copy, off the "
+                     f"keep_rst grid ({_size_text(sum(d['rst'].values()))})")
+    if c.get('delete_hold'):
+        lines.append("nothing is deleted while the case needs you (auto show)")
+    return lines
 
 
 def _upload_breakdown(plan):
@@ -96,6 +147,13 @@ def _intended(plan, only):
     if 'upload' in only and plan.uploads:
         out.append(('upload', f"{len(plan.uploads)} files, {_size_text_of(plan.uploads)}"))
         out += [('detail', line) for line in _upload_breakdown(plan)]
+    if 'delete' in only:
+        n, size, sets, rst_size = delete_totals(plan)
+        if n or sets:
+            out.append(('delete', _delete_words(n, size, sets, rst_size, '')))
+            out += [('detail', line) for line in _delete_breakdown(plan)]
+        elif plan.ctx.get('delete_hold'):
+            out.append(('detail', "delete: held back, the case needs you (auto show)"))
     if 'post' in only and plan.post_jobs:
         a, b, d, mode = plan.post_jobs[0]
         more = f" (+{len(plan.post_jobs) - 1} more after it)" if len(plan.post_jobs) > 1 else ''
@@ -128,6 +186,13 @@ def _run_case(case_dir, remote, only, clouds, ledgers, log, console):
                 continue
             step = executor.do_upload(snap, plan, conf, cloud, ledgers[Path(case_dir).parent],
                                       lambda text: (log.line(name, 'upload', text),
+                                                    console.print(f"    [dim]{escape(text)}[/dim]")))
+        elif kind == 'delete' and any((plan.ctx.get('delete') or {}).values()):
+            cloud = clouds.get((conf.remote, conf.path))
+            if cloud is None:
+                continue
+            step = executor.do_delete(snap, plan, conf, cloud, ledgers[Path(case_dir).parent],
+                                      lambda text: (log.line(name, 'delete', text),
                                                     console.print(f"    [dim]{escape(text)}[/dim]")))
         elif kind == 'post' and plan.post_jobs:
             step = executor.do_post(snap, plan, conf)
@@ -190,12 +255,23 @@ def execute_apply(args) -> int:
             else:
                 console.print(f"    {MARK[kind]} {escape(text)}")
     if getattr(args, 'dry_run', False):
-        console.print("[dim]--dry-run: nothing was done.[/dim]")
+        console.print("[dim]--dry-run: nothing was done."
+                      + (" The md5 of each copy is only computed in a real run, so some of "
+                         "these may be left." if 'delete' in only else '') + "[/dim]")
         console.rule(style='cyan')
         return 0
     if not getattr(args, 'yes', False):
+        question = f"Do this for {len(todo)} case(s)? Nothing is deleted. [y/N] "
+        if 'delete' in only:
+            files = size = sets = rst_size = 0
+            for _, plan, _ in todo:
+                a, b, c, d = delete_totals(plan)
+                files, size, sets, rst_size = files + a, size + b, sets + c, rst_size + d
+            if files or sets:
+                question = (f"Do this for {len(todo)} case(s)? This DELETES "
+                            f"{_delete_words(files, size, sets, rst_size, remote)}. [y/N] ")
         try:
-            answer = input(f"Do this for {len(todo)} case(s)? Nothing is deleted. [y/N] ")
+            answer = input(question)
         except EOFError:
             answer = ''
         if answer.strip().lower() not in ('y', 'yes'):
