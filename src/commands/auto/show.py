@@ -119,10 +119,10 @@ def gather(case_dirs, remote, clouds=None):
                 except CloudError as e:
                     problems.append(f"{Path(case_dir).name}: {e}")
             from src.core.auto.ledger import Ledger
-            sent = {rel: e.get('when') for rel, e in
-                    Ledger(Path(case_dir).parent).data.get(conf.remote, {})
-                    .get(Path(case_dir).name, {}).items()}
-            snap = observe_case(case_dir, queue, ended, listing, sent)
+            entries = (Ledger(Path(case_dir).parent).data.get(conf.remote, {})
+                       .get(Path(case_dir).name, {}))
+            sent = {rel: e.get('when') for rel, e in entries.items()}
+            snap = observe_case(case_dir, queue, ended, listing, sent, entries)
             results.append((snap, decide(snap, conf, cloud_ok=listing is not None,
                                          sacct_ok=sacct_ok)))
     finally:

@@ -30,7 +30,7 @@ grid are the one stated exception), and one question is asked before deleting.
 - [x] **Review of §13.13 by the user.** Nothing below is built before it
 - [x] Remote md5 of a named file (`cloud.py`: `LocalCloud`, `SftpCloud`);
       ledger entries record the local `mtime` and `deleted`
-- [ ] Decide: the candidates of C1–C4 as explicit file lists in `plan.ctx`,
+- [x] Decide: the candidates of C1–C4 as explicit file lists in `plan.ctx`,
       with the "written after" rule and the data-related *needs you* hold-back
 - [ ] Executor `do_delete`: per-file checks right before each unlink, run log
       lines, the `.casestatus.md` line, the ledger

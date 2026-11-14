@@ -260,14 +260,12 @@ def test_a_change_of_output_frequency_is_not_a_hole(dummy):
     assert sec['plt'].actions == ['run post full case12 --t1 565 --t2 600 --no-remote']
 
 
-def test_deletions_say_they_are_not_built_and_agree_with_the_count(dummy):
-    sec = report_of(dummy, 'case6')
-    deletes = [a for s in sec.values() for a in s.actions if 'delete' in a]
-    assert deletes and all('[not built yet' in a for a in deletes)
-    one = [a for a in deletes if 'delete binary PLTs' in a]
-    assert one == ['auto apply: delete binary PLTs, steps 450, 500, once their copy on local is '
-                   'md5-checked [not built yet; by hand: case organise plt case6 '
-                   '--delete-binary --t1 450 --t2 500]']
+def test_a_case_that_needs_you_has_no_deletion_candidates(dummy):
+    sec = report_of(dummy, 'case6')                  # a cut-short binary PLT and a bad post job
+    assert not [a for s in sec.values() for a in s.actions if 'delete' in a]
+    results, _, _ = gather(resolve_cases('case6', dummy / 'bare'), 'local')
+    ctx = results[0][1].ctx
+    assert ctx['delete_hold'] and not any(ctx['delete'].values())
     # the live-snapshot copy IS done by apply, so it carries no such label
     live = [a for a in report_of(dummy, 'case2')['history'].actions if a.startswith('auto apply: copy')]
     assert live and 'not built yet' not in live[0]

@@ -62,6 +62,8 @@ class CaseSnapshot:
     run_starts: List[int] = field(default_factory=list)     # first step of each othd part (archive/, cleaned/)
     main_start: Optional[float] = None          # when the newest main job started (sacct)
     sent_at: Dict[str, float] = field(default_factory=dict)   # remote path -> when auto sent it
+    ledger: Dict[str, dict] = field(default_factory=dict)     # remote path -> the ledger's entry
+    ascii_time: Dict[int, float] = field(default_factory=dict)  # step -> mtime of its ASCII .plt
     live_time: Optional[float] = None                         # mtime of the run dir's .othd
     post_windows: Dict[str, Tuple[int, int]] = field(default_factory=dict)  # post job id -> steps
     settled: List[int] = field(default_factory=list)
@@ -190,7 +192,8 @@ def _newest_main_start(ended) -> Optional[float]:
 
 def observe_case(case_dir, jobs: List[slurm.Job], ended: List[slurm.Job],
                  cloud_files: Optional[Dict[str, int]],
-                 sent: Optional[Dict[str, str]] = None) -> CaseSnapshot:
+                 sent: Optional[Dict[str, str]] = None,
+                 ledger: Optional[Dict[str, dict]] = None) -> CaseSnapshot:
     from ..simflow_config import SimflowConfig
     from ..def_config import DefConfig
 
@@ -233,6 +236,7 @@ def observe_case(case_dir, jobs: List[slurm.Job], ended: List[slurm.Job],
         job = snap.last_ended(kind)
         if job and job.state.split()[0] not in ('COMPLETED', 'TIMEOUT', 'CANCELLED'):
             snap.log_tails[job.jobid] = _tail(case_dir, job.jobid)
+    snap.ledger = dict(ledger or {})
     for rel, when in (sent or {}).items():
         t = _parse_time(when)
         if t is not None:
@@ -309,6 +313,7 @@ def observe_case(case_dir, jobs: List[slurm.Job], ended: List[slurm.Job],
             if m:
                 snap.ascii.add(int(m.group(1)))
                 snap.ascii_size[int(m.group(1))] = size
+                snap.ascii_time[int(m.group(1))] = _mtime(f) or 0.0
 
     # binary PLTs, each checked from its header
     binary = case_dir / 'binary'

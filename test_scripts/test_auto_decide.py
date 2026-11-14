@@ -348,8 +348,10 @@ def test_a_grid_set_that_exists_nowhere_is_flagged():
 # --- thinning keeps the newest N complete sets ----------------------------------------
 
 def thin_of(local, **kw):
+    # no history window: nothing for the post decision to flag (a case that needs you
+    # is held back from every deletion)
     conf = AutoConf(source=Path('.auto.conf'), remote='local', path='/cloud', keep_rst=500, **kw)
-    s = rst_snap(local, remote=[], max_steps=7000, archive_range=(1, 5020))
+    s = rst_snap(local, remote=[], max_steps=7000, archive_range=None)
     s.out_freq = 50
     return decide(s, conf, True, True)
 
@@ -387,9 +389,11 @@ def test_a_running_case_reports_its_own_position_not_an_earlier_runs_end():
 
 def test_steps_of_an_earlier_run_on_the_cloud_are_listed_for_deletion():
     # the running window is 500-600; steps 450 and 475 come from the run before
-    s = snap(live=(500, 600), archive_range=(1, 600), settled=[550, 600],
+    s = snap(live=(500, 600), archive_range=(1, 600), settled=[450, 475, 550, 600],
              out={t: [] for t in (450, 475, 550, 600)},
-             cloud=cloud_with(450, 475, 550, 600))
+             cloud=cloud_with(*range(50, 601, 50), 475))
+    s.ledger = {f"binary/riser.{t}.plt": dict(size=424, md5='x', verified='md5', mtime=1e9)
+                for t in (450, 475, 550, 600)}
     plan = decide(s, CONF, True, True)
     assert {450, 475} <= set(plan.ctx['del_out'])
 
@@ -722,3 +726,73 @@ def test_the_cleaned_row_says_why_a_run_has_no_file():
              archive_firsts={1: 1, 2: 1401, 3: 1401})
     hist = [sec for sec in build(s, decide(s, CONF, True, True), CONF) if sec.key == 'history'][0]
     assert ('Cleaned', 'runs 1, 3 · none for 2 (rewritten by a later run)') in hist.rows
+
+
+# --- the candidates of the delete stage (auto.md 13.13) ---------------------------------
+
+def deletable(binary_time=1000.0, out_time=900.0, ascii_time=900.0, remote_size=424, **kw):
+    """case 'case': steps 450-600 settled, binary PLTs whole here and on the cloud."""
+    steps = (450, 500, 550, 600)
+    base = dict(archive_range=(450, 600),
+                binary={t: PltCheck(Path(f'b/riser.{t}.plt'), True, '', 424, 424) for t in steps},
+                binary_time={t: binary_time for t in steps},
+                out_time={t: out_time for t in steps},
+                ascii={450, 500}, ascii_time={450: ascii_time, 500: ascii_time},
+                ascii_size={450: 10, 500: 10},
+                cloud={f"binary/riser.{t}.plt": remote_size for t in steps})
+    base.update(kw)
+    return snap(**base)
+
+
+def test_a_checked_copy_makes_all_three_candidates():
+    plan = decide(deletable(), CONF, True, True)
+    assert plan.ctx['del_binary'] == [450, 500, 550, 600]
+    assert plan.ctx['del_ascii'] == [450, 500] and plan.ctx['del_out'] == [450, 500, 550, 600]
+    assert plan.ctx['delete']['ascii'] == {'RUN_1/riser.450.plt': 10, 'RUN_1/riser.500.plt': 10}
+
+
+def test_a_copy_of_another_size_clears_nothing():
+    plan = decide(deletable(remote_size=400), CONF, True, True)
+    assert not plan.ctx['del_binary'] and not plan.ctx['del_ascii'] and not plan.ctx['del_out']
+
+
+def test_an_out_newer_than_its_plt_stays_after_a_restart():
+    plan = decide(deletable(binary_time=1000.0, out_time=2000.0, ascii_time=2000.0), CONF, True, True)
+    assert plan.ctx['del_binary'] == [450, 500, 550, 600]      # the PLT itself has its copy
+    assert not plan.ctx['del_ascii'] and not plan.ctx['del_out']
+
+
+def test_a_plt_gone_here_clears_only_with_the_ledgers_time():
+    s = deletable(binary={}, binary_time={})
+    s.ledger = {f"binary/riser.{t}.plt": dict(size=424, md5='x', verified='md5', mtime=1000.0)
+                for t in (450, 500)}                           # 550, 600: sent before mtime was kept
+    s.ledger.update({f"binary/riser.{t}.plt": dict(size=424, md5='x', verified='md5')
+                     for t in (550, 600)})
+    plan = decide(s, CONF, True, True)
+    assert plan.ctx['del_ascii'] == [450, 500] and plan.ctx['del_out'] == [450, 500]
+    assert plan.ctx['delete_no_mtime'] == [550, 600]
+    assert not plan.ctx['del_binary']                          # nothing of it is left here
+
+
+def test_a_size_only_ledger_entry_clears_nothing_without_the_binary_here():
+    s = deletable(binary={}, binary_time={})
+    s.ledger = {f"binary/riser.{t}.plt": dict(size=424, md5=None, verified='size', mtime=1000.0)
+                for t in (450, 500, 550, 600)}
+    plan = decide(s, CONF, True, True)
+    assert not plan.ctx['del_ascii'] and not plan.ctx['del_out']
+
+
+def test_a_case_that_needs_you_over_its_data_deletes_nothing():
+    s = deletable(binary={**deletable().binary, 550: PltCheck(Path('b/550'), False, 'cut short', 200)})
+    plan = decide(s, CONF, True, True)
+    assert plan.ctx['delete_hold'] and not any(plan.ctx['delete'].values())
+
+
+def test_nothing_is_a_candidate_when_the_queue_or_the_remote_is_unknown():
+    assert 'delete' not in decide(deletable(), CONF, True, False).ctx
+    assert 'delete' not in decide(deletable(), CONF, False, True).ctx
+
+
+def test_a_running_post_job_blocks_every_candidate():
+    plan = decide(deletable(jobs=[job('postcase', 'RUNNING')]), CONF, True, True)
+    assert 'delete' not in plan.ctx

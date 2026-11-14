@@ -607,12 +607,63 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
         if not c.ok:
             plan.add('flag', f"binary/{p}.{t}.plt is broken: {c.reason}.")
 
-    # -- deletions, once the copies on the cloud are checked ----------------------
-    if cloud is not None and not post_now:
-        gone = [t for t in covered if not provisional(t)]
-        outs = [t for t in gone if t in snap.out and (not running or t in snap.settled)]
-        ascii = [t for t in gone if t in snap.ascii]
-        binary = [t for t in gone if local_ok(t)]
+    # -- deletions, once the copies on the cloud are checked (auto.md 13.13) ---------
+    # Candidates only: explicit file lists. The executor checks every file again (size, md5
+    # on both sides, the "written after" times) right before it goes.
+    if cloud is not None and not post_now and sacct_ok:
+        # a case whose data is in question gets no deletion at all
+        hold = [i.text for i in plan.items if i.kind == 'needs'
+                and not i.text.startswith('Main job')]
+        hold += [f"binary/{p}.{t}.plt is broken: {c.reason}" for t, c in sorted(snap.binary.items())
+                 if not c.ok]
+        plan.ctx['delete_hold'] = hold
+
+        def plt_rel(t):
+            return f"binary/{p}.{t}.plt"
+
+        def entry(t):
+            e = snap.ledger.get(plt_rel(t))
+            return e if e and e.get('verified') == 'md5' and e.get('md5') else None
+
+        def written(t):
+            """When the binary PLT of step t was written: its mtime here, or the one the
+            ledger kept when it was sent (None: unknown)."""
+            if t in snap.binary:
+                return snap.binary_time.get(t)
+            e = entry(t)
+            return e.get('mtime') if e else None
+
+        def has_copy(t):
+            """The remote holds a file of that name and size (md5 is the executor's)."""
+            there = cloud.get(plt_rel(t), 0)
+            if t in snap.binary:
+                return snap.binary[t].ok and there == snap.binary[t].size and there > 0
+            e = entry(t)
+            return bool(e and there and there == e.get('size')
+                        and not stale_plt(t))
+
+        steps = sorted(t for t in set(snap.binary) | set(snap.out) | snap.ascii
+                       | {int(m.group(1)) for k in cloud
+                          for m in [re.match(rf'binary/{re.escape(p)}\.(\d+)\.plt$', k)] if m}
+                       if not provisional(t))
+        binary, ascii, outs, no_mtime = [], [], [], []
+        if not hold:
+            for t in steps:
+                if not has_copy(t):
+                    continue
+                if t in snap.binary:
+                    binary.append(t)
+                w = written(t)
+                if t in snap.ascii or t in snap.out:
+                    if w is None:
+                        no_mtime.append(t)
+                        continue
+                    if t in snap.ascii and w > snap.ascii_time.get(t, 0):
+                        ascii.append(t)
+                    if (t in snap.out and t in snap.settled
+                            and w > snap.out_time.get(t, 0)):
+                        outs.append(t)
+        plan.ctx['delete_no_mtime'] = no_mtime
         parts = []
         if ascii:
             parts.append(f"ASCII PLTs, {steps_phrase(ascii, f).lower()}")
@@ -631,12 +682,28 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
             keep.update(newest_sets)
             plan.ctx['rst_newest_kept'] = newest_sets
             keep.add(max(snap.rst))
+            if state == 'stopped' and reached:       # the set a restart would start from
+                back = [t for t in complete if t <= reached]
+                if back:
+                    keep.add(back[-1])
             thin = [t for t in snap.rst if t % conf.keep_rst and t not in keep
                     and not provisional(t) and not stale_rst(t) and not (running and snap.live and t >= snap.live[1])]
+            if hold:
+                thin = []
         plan.ctx.update(del_ascii=ascii, del_binary=binary, del_out=outs, thin=thin)
-        if parts:
-            for part in parts:
-                plan.add('delete', part)
+        plan.ctx['delete'] = {
+            'ascii': {f"{snap.run_rel}/{p}.{t}.plt": snap.ascii_size.get(t, 0) for t in ascii},
+            'binary': {plt_rel(t): snap.binary[t].size for t in binary},
+            'out': {x.relative_to(snap.dir).as_posix(): x.stat().st_size
+                    for t in outs for x in snap.out[t] if x.exists()},
+            'rst': {k: v for t in thin for k, v in snap.rst_files.get(t, {}).items()},
+        }
+        if no_mtime:
+            plan.add('note', f"{steps_phrase(no_mtime, f)}: the ASCII PLT and .out stay; the ledger "
+                             f"has no time for the binary PLT that is gone here (sent before the "
+                             f"delete stage existed).", 'delete')
+        for part in parts:
+            plan.add('delete', part)
         if conf.keep_rst and snap.rst and thin:
             plan.add('delete', f"{steps_phrase(thin, f)}: not a multiple of {conf.keep_rst}. "
                                f"The restart point and the newest set stay.", 'thin')
