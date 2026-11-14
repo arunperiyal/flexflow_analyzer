@@ -17,8 +17,9 @@ python3 -m pytest test_scripts -q
 
 Loaded from `.claude/rules/`:
 
-- `git-workflow.md`: plan first; one branch per phase, one commit per task;
-  plain commit messages; `prompt.md` stays untracked.
+- `git-workflow.md`: plan first; the user makes branches, merges, pushes and
+  PRs, Claude commits one task at a time and resolves conflicts; the user
+  tests and reports in `bug-report.md`; plain commit messages.
 - `output.md`: no Claude Artifacts; where documents go.
 
 ## Where to look
@@ -29,4 +30,5 @@ Loaded from `.claude/rules/`:
 | The plan: phases and tasks | `docs/development/PLAN.md` |
 | Documentation index | `docs/README.md` |
 | Design of `auto` and the web UI | `docs/architecture/auto.md`, `docs/architecture/webapp.md` |
+| Bugs the user found testing (untracked) | `bug-report.md` |
 | Notes handed over from the last session | `.claude/context/NEXT_SESSION.md` |
