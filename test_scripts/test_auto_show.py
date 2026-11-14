@@ -179,11 +179,11 @@ def test_the_case_context(dummy, monkeypatch, capsys):
     assert rt.execute_line('use case:*') == 0
     assert rt.execute_line('auto show --remote local') == 1      # some cases need you
     out = capsys.readouterr().out
-    assert '12 cases' in out and 'summary' in out
+    assert '15 cases' in out and 'summary' in out
     assert 'PLT files' not in out                                # table only for several
     assert rt.execute_line('auto show --remote local --detail --only plt') == 1
     out = capsys.readouterr().out
-    assert out.count('PLT files') == 11 and 'RST files' not in out   # case9 has none
+    assert out.count('PLT files') == 14 and 'RST files' not in out   # case9 has none
     assert rt.execute_line('auto show --remote local --only nonsense') == 2
 
 

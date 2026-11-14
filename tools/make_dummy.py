@@ -150,6 +150,10 @@ class Case:
             for k in range(parts):
                 write(self.run / f'riser.{t}_{k}.rst', f"restart of step {t}, part {k}\n", when + i)
 
+    def asciis(self, steps, when):
+        for i, t in enumerate(steps):
+            write(self.run / f'riser.{t}.plt', f"ASCII PLT of step {t}\n", when + i)
+
     def plts(self, steps, when, folder='binary', cut=None):
         for i, t in enumerate(steps):
             data = plt_bytes()
@@ -379,6 +383,45 @@ def build(root: Path):
                   '.out 565-600',
                   'post 565-600 (--freq 5 as outFreq says); no hole at the change of frequency; '
                   'needs you: stopped at 600 of 1000'))
+
+    # case13 -- finished; the PLTs are here and on the cloud, identical: every delete rule applies
+    def finished_with_files(name, out_when, plt_when):
+        c = Case(bare, name, state='done')
+        c.archive(1, range(1, 1001), week)
+        c.organise('clean', 'compile')
+        late = c.steps(800, 1000)
+        c.outs(late, out_when)
+        c.asciis(late, out_when)
+        c.plts(late, plt_when)
+        c.rsts([200, 400, 600, 800, 1000], week)
+        c.rsts([750], week)                                # off the keep_rst grid, not the newest
+        cloud_copy(c, cloud, c.steps(50, 1000), everything=True)
+        job(c, 'main', 'COMPLETED', ended_days=7)
+        job(c, 'post', 'COMPLETED', ended_days=6, ran=3600)
+        return c
+
+    finished_with_files('case13', week, day2)
+    cases.append(('case13', 'finished; binary PLTs 800-1000 here and on the cloud (same bytes), '
+                  'their ASCII PLTs and .out older; .rst 750 off the keep_rst grid',
+                  'delete (--delete): ASCII PLT, binary PLT and .out of 800-1000, restart set 750'))
+
+    # case14 -- as case13, but the cloud's copy of 900 and 950 has the same size and other bytes
+    c = finished_with_files('case14', week, day2)
+    for t in (900, 950):
+        path = cloud / 'case14' / 'binary' / f'riser.{t}.plt'
+        data = bytearray(path.read_bytes())
+        data[-1] ^= 0xFF
+        path.write_bytes(bytes(data))
+    cases.append(('case14', 'as case13, but the cloud\'s binary PLTs of 900 and 950 differ from '
+                  'the local ones in one byte (same size)',
+                  'delete: everything of 900 and 950 stays, the md5 check says why; the case '
+                  'then needs you'))
+
+    # case15 -- as case13, but a restart wrote the .out and ASCII PLTs again after the PLTs were made
+    finished_with_files('case15', day1, day2 - DAY)
+    cases.append(('case15', 'as case13, but the .out and ASCII PLTs are newer than the binary '
+                  'PLTs (a restart computed those steps again)',
+                  'delete: only the binary PLTs and restart set 750; ASCII PLTs and .out stay'))
 
     # the folder
     from src.core import cases_file

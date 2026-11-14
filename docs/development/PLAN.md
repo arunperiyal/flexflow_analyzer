@@ -39,7 +39,7 @@ grid are the one stated exception), and one question is asked before deleting.
       totals, `--dry-run`
 - [x] Reports (`auto show`, `auto commands`): replace the `[not built yet]`
       text
-- [ ] Dummy cases and a test for each rule: copy differs, size-only copy,
+- [x] Dummy cases and a test for each rule: copy differs, size-only copy,
       `.out` newer than its PLT (restart), queued restart, post in flight,
       restart-set keeps, a case that needs you
 - [ ] Help text, completion, `docs/architecture/auto_flow.html`, the web
