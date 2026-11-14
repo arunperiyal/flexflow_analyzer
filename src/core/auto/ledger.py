@@ -3,11 +3,14 @@ What `auto` has sent to a remote and checked, per folder of cases:
 <folder>/auto_logs/ledger.json
 
     {"cloud": {"BR0SG0U1P0": {"binary/riser.5740.plt":
-        {"size": 155342168, "md5": "9e1f...", "verified": "md5", "when": "2026-11-12 09:31:05"}}}}
+        {"size": 155342168, "md5": "9e1f...", "verified": "md5", "when": "2026-11-12 09:31:05",
+         "mtime": 1762940000.5, "deleted": "2026-11-14 10:02:11"}}}}
 
-A later stage deletes a local file only when its entry is `verified: md5` and
-the size and md5 still match the file on the remote. Written after every file,
-so a run cut short keeps what it had finished.
+`mtime` is the local file's modification time when it was sent (the delete stage
+compares it once the local file is gone); `deleted` is set when the delete stage
+removed the local file. The delete stage clears a file only when its md5 is
+computed on both sides at that moment; the ledger alone never clears one.
+Written after every file, so a run cut short keeps what it had finished.
 """
 
 import json
@@ -40,11 +43,20 @@ class Ledger:
         return self.data.get(remote, {}).get(case, {}).get(rel)
 
     def record(self, remote: str, case: str, rel: str, size: int, md5: Optional[str],
-               verified: str):
+               verified: str, mtime: Optional[float] = None):
         entry = {'size': size, 'md5': md5, 'verified': verified,
                  'when': time.strftime('%Y-%m-%d %H:%M:%S')}
+        if mtime is not None:
+            entry['mtime'] = mtime
         self.data.setdefault(remote, {}).setdefault(case, {})[rel] = entry
         self.save()
+
+    def mark_deleted(self, remote: str, case: str, rel: str):
+        """The local file is gone: say when, and keep what the entry knew."""
+        entry = self.get(remote, case, rel)
+        if entry is not None:
+            entry['deleted'] = time.strftime('%Y-%m-%d %H:%M:%S')
+            self.save()
 
     def save(self):
         self.path.parent.mkdir(parents=True, exist_ok=True)

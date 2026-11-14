@@ -336,3 +336,34 @@ def test_dry_run_says_which_binary_plts_replace_old_run_files_on_the_remote():
 def test_predate_agrees_with_the_number_of_steps():
     from src.core.auto.report import _predate
     assert _predate([8300]) == 'predates' and _predate([4950, 5000]) == 'predate'
+
+
+# --- the md5 of a named remote file, and what the ledger keeps for the delete stage ------------
+
+def test_local_cloud_remote_md5_is_computed_now_and_none_when_absent(tmp_path):
+    (tmp_path / 'remote' / 'c1' / 'binary').mkdir(parents=True)
+    f = tmp_path / 'remote' / 'c1' / 'binary' / 'a.plt'
+    f.write_bytes(b'one')
+    cloud = LocalCloud(tmp_path / 'remote')
+    first = cloud.remote_md5('c1', 'binary/a.plt')
+    f.write_bytes(b'two')
+    assert first != cloud.remote_md5('c1', 'binary/a.plt')      # read again each time
+    assert cloud.remote_md5('c1', 'binary/a.plt') == file_md5(f)
+    assert cloud.remote_md5('c1', 'binary/none.plt') is None
+
+
+def test_sftp_remote_md5_and_none_without_md5sum_or_file(tmp_path):
+    f = tmp_path / 'nas' / 'c1' / 'a.plt'
+    f.parent.mkdir(parents=True)
+    f.write_bytes(b'abc' * 50)
+    assert sftp_cloud(tmp_path).remote_md5('c1', 'a.plt') == file_md5(f)
+    assert sftp_cloud(tmp_path, md5sum=False).remote_md5('c1', 'a.plt') is None
+
+
+def test_ledger_records_the_local_mtime_and_when_it_was_deleted(tmp_path):
+    led = Ledger(tmp_path)
+    led.record('cloud', 'c1', 'binary/a.plt', 10, 'abc', 'md5', mtime=1234.5)
+    assert 'deleted' not in Ledger(tmp_path).get('cloud', 'c1', 'binary/a.plt')
+    led.mark_deleted('cloud', 'c1', 'binary/a.plt')
+    entry = Ledger(tmp_path).get('cloud', 'c1', 'binary/a.plt')
+    assert entry['mtime'] == 1234.5 and entry['deleted'] and entry['md5'] == 'abc'

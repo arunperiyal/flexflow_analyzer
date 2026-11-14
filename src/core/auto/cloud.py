@@ -83,6 +83,13 @@ class LocalCloud:
                 found.mtimes[(rel / name).as_posix()] = st.st_mtime
         return found
 
+    def remote_md5(self, case_name: str, rel: str) -> Optional[str]:
+        """md5 of <root>/<case>/<rel>, computed now; None when the file is not there."""
+        try:
+            return file_md5(self.root / case_name / rel)
+        except OSError:
+            return None
+
     def put(self, local, case_name: str, rel: str, snapshot: bool = False) -> PutResult:
         """Copy `local` to <root>/<case>/<rel>: to a temporary name first, checked
         (md5 of both), then renamed, so the real name never holds a half file."""
@@ -168,6 +175,11 @@ class SftpCloud:
             return word if len(word) == 32 else None
         except Exception:
             return None
+
+    def remote_md5(self, case_name: str, rel: str) -> Optional[str]:
+        """md5 of <root>/<case>/<rel>, computed on the remote now; None when the file is not
+        there or the remote has no md5sum (a deletion is then never cleared)."""
+        return self._remote_md5(posixpath.join(self.root, case_name, rel))
 
     def put(self, local, case_name: str, rel: str, snapshot: bool = False) -> PutResult:
         """Send `local` to <root>/<case>/<rel> over SFTP: to a temporary name,

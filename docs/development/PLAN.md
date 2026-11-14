@@ -28,7 +28,7 @@ grid are the one stated exception), and one question is asked before deleting.
 
 - [x] Write the design as §13.13 at the end of `auto.md`
 - [x] **Review of §13.13 by the user.** Nothing below is built before it
-- [ ] Remote md5 of a named file (`cloud.py`: `LocalCloud`, `SftpCloud`);
+- [x] Remote md5 of a named file (`cloud.py`: `LocalCloud`, `SftpCloud`);
       ledger entries record the local `mtime` and `deleted`
 - [ ] Decide: the candidates of C1–C4 as explicit file lists in `plan.ctx`,
       with the "written after" rule and the data-related *needs you* hold-back
