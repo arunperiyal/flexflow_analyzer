@@ -145,7 +145,7 @@ def test_out_goes_on_a_whole_newer_ascii_plt_alone(world):
     p = world.run / 'riser.300.plt'
     p.write_text(p.read_text()[:-30])                           # cut short
     at(p, 10)
-    out = organise(world, 'output', keep_freq=1000, keep_out=False, remote=None)
+    out = organise(world, 'out', keep_freq=1000, keep_out=False, remote=None)
     assert left(world.run, '.out') == [300]
     assert 'Keeping .out of 1 step(s) whose PLT cannot stand in for them' in out
     assert '300: the ASCII riser.300.plt is cut short' in out
@@ -154,7 +154,7 @@ def test_out_goes_on_a_whole_newer_ascii_plt_alone(world):
 def test_out_written_again_by_a_restart_stays(world):
     for k in range(2):
         at(world.run / f'riser.400_{k}.out', 50)                # after both PLTs
-    organise(world, 'output', keep_freq=1000)
+    organise(world, 'out', keep_freq=1000)
     assert left(world.run, '.out') == [400]
 
 
@@ -163,7 +163,7 @@ def test_out_falls_through_to_the_binary_and_then_the_remote(world):
         (world.run / f'riser.{step}.plt').unlink()              # no ASCII PLT at all
     organise(world, 'plt', delete_binary=True, t1=300)          # 300, 400: only on the remote
     (world.there / 'riser.400.plt').unlink()                    # ... and 400 lost there
-    out = organise(world, 'output', keep_freq=1000)
+    out = organise(world, 'out', keep_freq=1000)
     assert left(world.run, '.out') == [400]
     assert 'Keeping .out of 1 step(s) with no riser.<step>.plt yet: 400' in out
 
@@ -172,13 +172,13 @@ def test_out_with_no_plt_and_no_remote_says_the_remote_was_not_asked(world):
     for step in STEPS:
         (world.run / f'riser.{step}.plt').unlink()
     shutil.rmtree(world.binary)
-    out = organise(world, 'output', keep_freq=1000, remote=None)
+    out = organise(world, 'out', keep_freq=1000, remote=None)
     assert left(world.run, '.out') == list(STEPS)
     assert 'The remote was not asked' in out
 
 
 def test_the_whole_chain_in_order_leaves_only_the_remote_copies(world):
-    organise(world, 'output', keep_freq=1000)
+    organise(world, 'out', keep_freq=1000)
     organise(world, 'plt', delete_ascii=True)
     organise(world, 'plt', delete_binary=True)
     assert left(world.run, '.out') == [] and left(world.run, '.plt') == []

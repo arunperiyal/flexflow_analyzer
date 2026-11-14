@@ -290,11 +290,7 @@ def _out(v):
         freed = _size_text(sum(snap.out_size.get(t, 0) for t in outs))
         s.row('Delete', f"{steps_phrase(outs).lower()} ({freed}): each only once a PLT of "
                         f"its step stands in for it")
-        if plan.steps_of('delete-out'):
-            s.row('By hand', BY_HAND)
-        else:
-            s.row('Why', "no command: `case organise output` also thins the .rst, and "
-                         "auto.keep_rst is not set (auto init --keep-rst N)")
+        s.row('By hand', BY_HAND)
     s.actions += [step.command for step in plan.steps_of('delete-out')]
     return [s]
 

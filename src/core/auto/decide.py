@@ -788,15 +788,13 @@ def _deletions(w):
         for a, b in runs_apart(binary, set(snap.binary) - set(binary)):
             plan.step('plt', 'delete', 'delete-binary',
                       f"case organise plt {name} --delete-binary --t1 {a} --t2 {b} --remote {remote}")
-        if conf.keep_rst:
-            for a, b in runs_apart(outs, set(snap.out) - set(outs)):
-                plan.step('output', 'delete', 'delete-out',
-                          f"case organise output {name} --all-out --keep-freq {conf.keep_rst} "
-                          f"--t1 {a} --t2 {b} --remote {remote}")
-            if snap.rst and thin:
-                plan.step('rst', 'delete', 'thin-rst',
-                          f"case organise output {name} --keep-out --keep-freq {conf.keep_rst} "
-                          f"--keep-newest {conf.keep_newest_rst} --t1 {min(thin)} --t2 {max(thin)}")
+        for a, b in runs_apart(outs, set(snap.out) - set(outs)):
+            plan.step('output', 'delete', 'delete-out',
+                      f"case organise out {name} --t1 {a} --t2 {b} --remote {remote}")
+        if conf.keep_rst and snap.rst and thin:
+            plan.step('rst', 'delete', 'thin-rst',
+                      f"case organise rst {name} --keep-freq {conf.keep_rst} "
+                      f"--keep-newest {conf.keep_newest_rst} --t1 {min(thin)} --t2 {max(thin)}")
         if parts:
             for part in parts:
                 plan.add('delete', part)

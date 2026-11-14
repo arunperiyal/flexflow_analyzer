@@ -624,8 +624,8 @@ def test_thinning_names_the_organise_command():
     s.rst = {t: 4 for t in (100, 200, 300, 400, 500, 550, 600)}
     s.rst_files = {t: {f"RUN_1/riser.{t}_{k}.rst": 100 for k in range(4)} for t in s.rst}
     plan = decide(s, CONF, True, True)
-    acts = [a for sec in build(s, plan, CONF) for a in sec.actions if '--keep-out' in a]
-    assert acts and acts[0].startswith('case organise output case --keep-out --keep-freq 200 '
+    acts = [a for sec in build(s, plan, CONF) for a in sec.actions if a.startswith('case organise rst')]
+    assert acts and acts[0].startswith('case organise rst case --keep-freq 200 '
                                        '--keep-newest 2 --t1 100 --t2')
 
 

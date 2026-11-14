@@ -214,7 +214,7 @@ def test_report_sections_of_a_queued_case(dummy):
     # uploads first (the grid set 400), then the deletion that follows
     assert sec['rst'].actions[0] == ('case upload rst case3 --t1 400 --t2 400 --freq 400 '
                                      '--missing --remote local')
-    assert sec['rst'].actions[1] == ('case organise output case3 --keep-out --keep-freq 200 '
+    assert sec['rst'].actions[1] == ('case organise rst case3 --keep-freq 200 '
                                      '--keep-newest 2 --t1 550 --t2 650')
     assert dict(sec['rst'].rows)['Thin'] == 'steps 550, 650: not multiples of 200'
     assert dict(sec['history'].rows)['Run dir'].startswith('riser.othd steps 501–760')

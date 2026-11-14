@@ -208,38 +208,32 @@ class CaseCommand(BaseCommand):
         history_parser.add_argument('--examples', action='store_true',
                                     help='Show usage examples')
 
-        # case organise output
-        output_parser = organise_subparsers.add_parser('output', add_help=False,
-                                    help='Remove intermediate .out/.rst files from run dir')
-        case_arg(output_parser, help='Case directory path')
-        output_parser.add_argument('--keep-freq', type=int, metavar='N',
-                                    help='Keep the .rst of steps divisible by N (default: 10 * freq); .out go once a whole, newer .plt of their step stands in for them')
-        output_parser.add_argument('--keep-newest', type=int, metavar='N', default=2,
-                                    help='Also keep the N newest complete .rst sets, whatever '
-                                         '--keep-freq says (default: 2; 1 keeps only the newest)')
-        output_parser.add_argument('--all-out', action='store_true',
-                                    help='Every .out in range, each still checked: one with no '
-                                         'whole, newer .plt to stand in for it is kept')
-        output_parser.add_argument('--keep-out', action='store_true',
-                                    help='Delete no .out at all; only thin the .rst')
-        context_flag(output_parser, 'remote', '--remote', type=str, metavar='REMOTE',
-                     help='The remote to ask for a verified copy of a binary PLT that is '
-                          'no longer in binary/ (or use context with "use remote:name")')
-        time_window(output_parser, 
-                    t1_kwargs=dict(metavar='STEP', help='Only target timesteps >= STEP'),
-                    t2_kwargs=dict(metavar='STEP', help='Only target timesteps <= STEP'))
-        output_parser.add_argument('--log', action='store_true',
-                                    help='Create log file of deletions')
-        output_parser.add_argument('--no-confirm', action='store_true',
-                                    help='Skip confirmation prompts')
-        output_parser.add_argument('--dry-run', action='store_true',
-                                    help='Show what would be deleted without deleting anything')
-        output_parser.add_argument('-v', '--verbose', action='store_true',
-                                    help='Enable verbose output')
-        output_parser.add_argument('-h', '--help', action='store_true',
-                                    help='Show help for output command')
-        output_parser.add_argument('--examples', action='store_true',
-                                    help='Show usage examples')
+        # case organise out / case organise rst
+        for word, what in (('out', '.out files (kept until a PLT stands in for them)'),
+                           ('rst', '.rst restart sets (thinned to --keep-freq, the newest kept)')):
+            sub = organise_subparsers.add_parser(word, add_help=False,
+                                                 help=f'Delete {what} from the run dir')
+            case_arg(sub, help='Case directory path')
+            if word == 'rst':
+                sub.add_argument('--keep-freq', type=int, metavar='N',
+                                 help='Keep the .rst of steps divisible by N (default: 10 * freq)')
+                sub.add_argument('--keep-newest', type=int, metavar='N', default=2,
+                                 help='Also keep the N newest complete .rst sets, whatever '
+                                      '--keep-freq says (default: 2; 1 keeps only the newest)')
+            else:
+                context_flag(sub, 'remote', '--remote', type=str, metavar='REMOTE',
+                             help='The remote to ask for a verified copy of a binary PLT that '
+                                  'is no longer in binary/ (or use context with "use remote:name")')
+            time_window(sub,
+                        t1_kwargs=dict(metavar='STEP', help='Only target timesteps >= STEP'),
+                        t2_kwargs=dict(metavar='STEP', help='Only target timesteps <= STEP'))
+            sub.add_argument('--log', action='store_true', help='Create log file of deletions')
+            sub.add_argument('--no-confirm', action='store_true', help='Skip confirmation prompts')
+            sub.add_argument('--dry-run', action='store_true',
+                             help='Show what would be deleted without deleting anything')
+            sub.add_argument('-v', '--verbose', action='store_true', help='Enable verbose output')
+            sub.add_argument('-h', '--help', action='store_true', help=f'Show help for {word}')
+            sub.add_argument('--examples', action='store_true', help='Show usage examples')
 
         # case organise plt
         plt_parser = organise_subparsers.add_parser('plt', add_help=False,
@@ -701,7 +695,8 @@ class CaseCommand(BaseCommand):
         console.print("    flexflow case run CS4SG1U1 --no-monitor")
         console.print("    flexflow case organise history CS4SG1U1 --update")
         console.print("    flexflow case organise history CS4SG1U1 --clean --compile --verify")
-        console.print("    flexflow case organise output CS4SG1U1")
+        console.print("    flexflow case organise out CS4SG1U1")
+        console.print("    flexflow case organise rst CS4SG1U1")
         console.print("    flexflow case organise plt CS4SG1U1 --delete-ascii")
         console.print("    flexflow case organise plt CS4SG1U1 --delete-binary --t1 0 --t2 1000")
         console.print("    flexflow case organise vtu CS4SG1U1 --clean")

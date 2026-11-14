@@ -74,27 +74,28 @@ Organize and clean up case directories. Pick one subcommand.
             Later jobs add to archive/ again, and --clean folds them in.
             rcv_files/ is not touched.
 
-    {Colors.CYAN}output{Colors.RESET}
-        Remove intermediate .out/.rst files from the run directory:
-          • .rst (restart points): keeps the steps divisible by
-            --keep-freq (default: 10 * freq, freq from outFreq in
-            simflow.config or auto-detected), and always: the step of
-            restartTsId in simflow.config (where a restart resumes), the
-            newest --keep-newest complete sets (all nsg parts; default 2),
-            and a newest set that is still incomplete
-          • .out: deletes a step's .out once the next file in the chain
-            can stand in for them: its ASCII PLT, whole (each zone holds
-            the lines its header counts) and written after every .out
-            part; else its binary PLT, whole and written after them;
-            else, when binary/ no longer holds it, its verified copy on
-            the remote (--remote). keep-freq steps too -- a restart does
-            not read .out. A step with no PLT, or one cut short or older
-            than its .out (made before a restart), keeps its .out and is
-            listed; the other steps go.
+    {Colors.CYAN}out{Colors.RESET}
+        Delete the .out files of the run directory, a step's .out once the
+        next file in the chain can stand in for them: its ASCII PLT, whole
+        (each zone holds the lines its header counts) and written after
+        every .out part; else its binary PLT, whole and written after
+        them; else, when binary/ no longer holds it, its verified copy on
+        the remote (--remote). A restart does not read .out. A step with no
+        PLT, or one cut short or older than its .out (made before a
+        restart), keeps its .out and is listed; the other steps go. The
+        .rst are not touched.
 
         {Colors.CYAN}--remote NAME{Colors.RESET}
             The remote to ask about a binary PLT that binary/ no longer
             holds. Without it such a step keeps its .out.
+
+    {Colors.CYAN}rst{Colors.RESET}
+        Thin the .rst (restart sets) of the run directory: keeps the steps
+        divisible by --keep-freq (default: 10 * freq, freq from outFreq in
+        simflow.config or auto-detected), and always: the step of
+        restartTsId in simflow.config (where a restart resumes), the
+        newest --keep-newest complete sets (all nsg parts; default 2), and
+        a newest set that is still incomplete. The .out are not touched.
 
         {Colors.CYAN}--keep-freq N{Colors.RESET}
             Keep the .rst of the steps divisible by N
@@ -104,15 +105,7 @@ Organize and clean up case directories. Pick one subcommand.
             newest was cut short when a job was killed while writing it, the
             one before it restarts the run. 1 keeps only the newest
 
-        {Colors.CYAN}--all-out{Colors.RESET}
-            Every .out in range, each still checked: a step with no
-            whole, newer .plt to stand in for its .out keeps them. It
-            does what the plain command does; it is kept so that the
-            command `auto show` prints goes on working.
-
-        {Colors.CYAN}--keep-out{Colors.RESET}
-            Delete no .out at all, converted or not: only the .rst are
-            thinned. Not with --all-out.
+    (`case organise output` is gone: it did both; use `out` and `rst`.)
 
     {Colors.CYAN}plt{Colors.RESET}
         Pass at least one of --delete-ascii / --delete-binary.
@@ -165,7 +158,7 @@ Organize and clean up case directories. Pick one subcommand.
     --t1 STEP                 Only target timesteps >= STEP
     --t2 STEP                 Only target timesteps <= STEP
     (either alone is a one-sided bound; both together is an inclusive range)
-    Available on history --update, output, plt and vtu.
+    Available on history --update, out, rst, plt and vtu.
     NOT applied to the other history flags, which always use everything.
 
 {Colors.BOLD}OTHER OPTIONS:{Colors.RESET}
@@ -181,17 +174,17 @@ Organize and clean up case directories. Pick one subcommand.
     Then run:             case organise history --update
 
     Set timestep context: use t1:0 t2:1000
-    Then run:              case organise output
+    Then run:              case organise out
 
 {Colors.BOLD}SAFETY:{Colors.RESET}
     • history --update, --clean, --compile and --verify never delete a
       job's data. --clean asks before it writes or removes cleaned files
       (with a stronger warning when one is the only copy of its run) and
       --compile before it replaces the compiled file; --prune asks once and
-      only deletes archive/ when cleaned/ holds it; output and plt show a
+      only deletes archive/ when cleaned/ holds it; out, rst and plt show a
       summary and ask for confirmation
     • --delete-binary only deletes a file whose copy on the remote has the
-      same md5; --delete-ascii and output only what a later file stands in for
+      same md5; --delete-ascii and out only what a later file stands in for
     • A t1/t2 context left over from something else never silently narrows
       history --clean — it always cleans the whole history
     • Use --no-confirm to skip confirmation
@@ -204,8 +197,9 @@ Organize and clean up case directories. Pick one subcommand.
     # Clean and join the runs, check everything, then drop archive/
     flexflow case organise history CS4SG1U1 --clean --compile --verify --prune
 
-    # Remove intermediate output files
-    flexflow case organise output CS4SG1U1
+    # Delete the .out files a PLT stands in for, and thin the .rst
+    flexflow case organise out CS4SG1U1
+    flexflow case organise rst CS4SG1U1
 
     # Delete PLT files from run dir where binary/ has a newer copy
     flexflow case organise plt CS4SG1U1 --delete-ascii
@@ -218,7 +212,7 @@ Organize and clean up case directories. Pick one subcommand.
     flexflow case organise vtu CS4SG1U1 --clean
 
     # Only target a timestep range
-    flexflow case organise output CS4SG1U1 --t1 0 --t2 1000
+    flexflow case organise out CS4SG1U1 --t1 0 --t2 1000
 
     # Use context
     use case CS4SG1U1
@@ -258,25 +252,22 @@ def print_organise_examples():
     # See what would happen, changing nothing
     flexflow case organise history CS4SG1U1 --clean --compile --dry-run
 
-{Colors.BOLD}Cleaning Output Directory:{Colors.RESET}
+{Colors.BOLD}Cleaning the .out and .rst files:{Colors.RESET}
 
-    # Remove converted .out and intermediate .rst (keeps .rst every freq*10)
-    flexflow case organise output CS4SG1U1
+    # Delete the .out a whole, newer PLT stands in for (the others stay)
+    flexflow case organise out CS4SG1U1
 
-    # Delete all .out, converted or not (asks first)
-    flexflow case organise output CS4SG1U1 --all-out
-
-    # Thin the .rst only, every .out stays
-    flexflow case organise output CS4SG1U1 --keep-out
+    # Thin the .rst (keeps those every freq*10, the restart point and the newest 2)
+    flexflow case organise rst CS4SG1U1
 
     # Keep only the .rst of the steps divisible by 5000
-    flexflow case organise output CS4SG1U1 --keep-freq 5000
+    flexflow case organise rst CS4SG1U1 --keep-freq 5000
 
     # Only clean up to timestep 5000
-    flexflow case organise output CS4SG1U1 --t2 5000
+    flexflow case organise out CS4SG1U1 --t2 5000
 
     # Create log file of deletions
-    flexflow case organise output CS4SG1U1 --log
+    flexflow case organise rst CS4SG1U1 --log
 
 {Colors.BOLD}Cleaning PLT Files:{Colors.RESET}
 
@@ -307,11 +298,11 @@ def print_organise_examples():
     # Run operations
     case organise history --update
     case organise history --clean --compile
-    case organise output
+    case organise out
 
     # Set a timestep window and reuse it across subcommands
     use t1:0 t2:1000
-    case organise output
+    case organise out
     case organise plt --delete-ascii
 
 {Colors.BOLD}What history --clean and --compile Do:{Colors.RESET}
@@ -321,10 +312,13 @@ def print_organise_examples():
     → cleaned/riser1.othd [1-1000], cleaned/riser2.othd [1001-2084]
     → riser.othd [1-2084]
 
-{Colors.BOLD}What output Does (freq=50, no --keep-freq):{Colors.RESET}
+{Colors.BOLD}What rst Does (freq=50, no --keep-freq):{Colors.RESET}
 
     • riser.50_1.rst       → Delete (not multiple of 500)
     • riser.500_1.rst      → Keep   (500 % 500 == 0, a restart point)
+
+{Colors.BOLD}What out Does:{Colors.RESET}
+
     • riser.500_1.out      → Delete (riser.500.plt is whole and newer)
     • riser.550_1.out      → Keep   (no riser.550.plt yet -- convert it first)
 
@@ -346,7 +340,7 @@ def print_organise_examples():
 
 {Colors.BOLD}Notes:{Colors.RESET}
     • history --update and --verify run immediately
-    • history --clean, --compile and --prune, and output, plt and vtu --clean, ask for
+    • history --clean, --compile and --prune, and out, rst, plt and vtu --clean, ask for
       confirmation unless --no-confirm (auto apply passes it: it asks once itself)
     • --delete-ascii never touches binary/; --delete-binary never touches the run dir
     • --delete-binary with no --t1/--t2/--freq/--keep-freq takes every PLT file in binary/

@@ -26,7 +26,7 @@ def organise(case_dir, config, **flags):
         setattr(args, key, value)
     case = SimpleNamespace(case_directory=str(case_dir), problem_name='riser',
                            config={'dir': './RUN_1', 'nsg': str(NSG), **config})
-    CaseOrganizer(case, args, _Logger(), Console(file=open('/dev/null', 'w'))).organize('output')
+    CaseOrganizer(case, args, _Logger(), Console(file=open('/dev/null', 'w'))).organize('rst')
 
 
 def write_rst(run, step, parts=NSG):

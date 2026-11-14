@@ -133,7 +133,7 @@ def test_remote_must_be_configured(rt):
 
 @pytest.mark.parametrize('line', [
     'case show', 'case run', 'case status', 'case out', 'case upload', 'case download',
-    'case organise history', 'case organise output', 'case organise plt',
+    'case organise history', 'case organise out', 'case organise rst', 'case organise plt',
     'case check run', 'case check history', 'case check config', 'case check plt',
     'case check def', 'case check out', 'case check all', 'case check data',
     'case status update',
@@ -322,7 +322,7 @@ def texts(rt, line):
 def test_completion_of_commands_and_subcommands(rt):
     assert 'case' in texts(rt, 'ca')
     assert {'show', 'create', 'organise', 'check', 'upload'} <= set(texts(rt, 'case '))
-    assert texts(rt, 'case organise ') == ['history', 'output', 'plt', 'vtu']
+    assert texts(rt, 'case organise ') == ['history', 'out', 'rst', 'plt', 'vtu']
 
 
 def test_completion_of_flags(rt):

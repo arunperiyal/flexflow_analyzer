@@ -15,7 +15,7 @@ hundreds of MB of data.
 
 This says nothing about whether the PLT is the *right* one (made from the
 current .out, after a restart). That needs the files it came from; see
-plt_covers() for the rule `case organise output` uses.
+plt_covers() for the rule `case organise out` uses.
 """
 
 import os

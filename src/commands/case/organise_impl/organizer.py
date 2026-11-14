@@ -20,6 +20,8 @@ from rich import box
 class CaseOrganizer(HistoryMixin):
     """Organizes and cleans up case directories."""
 
+    what = None            # 'out' or 'rst' while an `organise out|rst` runs
+
     def __init__(self, case, args, logger, console):
         """
         Initialize case organizer.
@@ -150,7 +152,7 @@ class CaseOrganizer(HistoryMixin):
         Parameters:
         -----------
         subcommand : str
-            'history', 'output', 'plt' or 'vtu'
+            'history', 'out', 'rst', 'plt' or 'vtu'
         """
         t1, t2 = self._t1_t2()
 
@@ -168,9 +170,11 @@ class CaseOrganizer(HistoryMixin):
             self._organize_history(t1, t2)
             return
 
-        # --- OUTPUT ---
-        if subcommand == 'output':
-            self.console.print("[bold]Step: Clean output directory[/bold]")
+        # --- OUT / RST ---
+        if subcommand in ('out', 'rst'):
+            self.what = subcommand
+            self.console.print(f"[bold]Step: {'.out' if subcommand == 'out' else '.rst'} "
+                               f"files of the run directory[/bold]")
             self._analyze_output_directory(t1, t2)
             self.console.print()
 
@@ -429,7 +433,9 @@ class CaseOrganizer(HistoryMixin):
         # Keep the steps divisible by --keep-freq, by default 10 * freq
         freq = None
         keep_interval = getattr(self.args, 'keep_freq', None)
-        if keep_interval is None:
+        if self.what == 'out':
+            keep_interval = 1                  # unused: no .rst is looked at
+        elif keep_interval is None:
             freq = self._get_frequency()
             if freq is None:
                 self.logger.warning("Could not determine frequency, skipping output directory "
@@ -437,16 +443,11 @@ class CaseOrganizer(HistoryMixin):
                 return
             keep_interval = freq * 10
             self.logger.info(f"Using freq={freq}, keep_interval={keep_interval}")
-        if getattr(self.args, 'keep_out', False):
-            self.console.print(f"  Keeping .rst at steps divisible by {keep_interval}; "
-                               f"[bold]every .out stays[/bold] (--keep-out)")
-        elif getattr(self.args, 'all_out', False):
-            self.console.print(f"  Keeping .rst at steps divisible by {keep_interval}; "
-                               f"[bold]every .out[/bold] in range is looked at, and goes once "
-                               f"a .plt stands in for it (--all-out)")
+        if self.what == 'rst':
+            self.console.print(f"  Keeping .rst at steps divisible by {keep_interval}")
         else:
-            self.console.print(f"  Keeping .rst at steps divisible by {keep_interval}; "
-                               f".out go once converted to .plt")
+            self.console.print("  Every .out in range is looked at, and goes once a .plt "
+                               "stands in for it")
 
         if t1 is not None or t2 is not None:
             self.logger.info(f"Limiting cleanup to timesteps in [{t1}, {t2}]")
@@ -537,10 +538,9 @@ class CaseOrganizer(HistoryMixin):
         out_pattern = f'{problem}.*_*.out'
         rst_pattern = f'{problem}.*_*.rst'
 
-        # --keep-out: the .out are not even looked at
-        keep_out = getattr(self.args, 'keep_out', False)
-        out_files = [] if keep_out else list(output_dir.glob(out_pattern))
-        rst_files = list(output_dir.glob(rst_pattern))
+        # `rst` does not look at the .out; `out` does not look at the .rst
+        out_files = [] if self.what == 'rst' else list(output_dir.glob(out_pattern))
+        rst_files = [] if self.what == 'out' else list(output_dir.glob(rst_pattern))
 
         self.logger.info(f"Found {len(out_files)} .out files, {len(rst_files)} .rst files "
                         f"in {output_dir.name}")
@@ -585,7 +585,7 @@ class CaseOrganizer(HistoryMixin):
 
             if file.suffix == '.out':
                 why = keep_out_because(step)
-                # --all-out too: no .out goes with nothing to stand in for it
+                # no .out goes with nothing to stand in for it
                 delete = why is None
                 if not delete:
                     kept_out.setdefault(why[0], {})[step] = why[1]
@@ -894,9 +894,9 @@ class CaseOrganizer(HistoryMixin):
         lines = []
         if subcommand == 'history':
             lines += self._history_summary(steps)
-        if subcommand == 'output':
-            total_out = self.stats['out_deleted'] + self.stats['rst_deleted'] + self.stats['plt_deleted']
-            lines.append(f"Output cleaned: {total_out} files removed  "
+        if subcommand in ('out', 'rst'):
+            n = self.stats['out_deleted'] if subcommand == 'out' else self.stats['rst_deleted']
+            lines.append(f".{subcommand} cleaned: {n} files removed  "
                          f"({self._format_size(self.stats['output_space_freed'])} freed)")
         if subcommand == 'plt':
             if getattr(self.args, 'delete_ascii', False):

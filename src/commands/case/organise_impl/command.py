@@ -43,7 +43,7 @@ def execute_organise(args):
         print_organise_examples()
         return
 
-    # No subcommand (history/output/plt/vtu) → show help
+    # No subcommand (history/out/rst/plt/vtu) → show help
     subcommand = getattr(args, 'organise_subcommand', None)
     if not subcommand:
         print_organise_help()
@@ -90,13 +90,11 @@ def execute_organise(args):
 
 
 def _check_keep_flags(args, subcommand):
-    """What is wrong with --freq/--keep-freq/--keep-out/--all-out, or None."""
+    """What is wrong with --freq/--keep-freq, or None."""
     for flag in ('freq', 'keep_freq'):
         value = getattr(args, flag, None)
         if value is not None and value < 1:
             return f"--{flag.replace('_', '-')} must be 1 or more"
-    if getattr(args, 'keep_out', False) and getattr(args, 'all_out', False):
-        return "--keep-out keeps every .out and --all-out takes them all; give one"
     if subcommand == 'plt' and not getattr(args, 'delete_binary', False):
         if getattr(args, 'keep_freq', None) is not None:
             return "--keep-freq only applies with --delete-binary"
@@ -116,7 +114,7 @@ def _execute_organise_on_all_cases(args, logger, console, subcommand):
     console : Console
         Rich console instance
     subcommand : str
-        'history', 'output', 'plt' or 'vtu'
+        'history', 'out', 'rst', 'plt' or 'vtu'
     """
     from pathlib import Path
     from src.core import cases_file
