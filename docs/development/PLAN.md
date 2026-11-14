@@ -4,7 +4,7 @@ The one plan file of this project. Work is listed as **phases**, each split
 into **tasks**.
 
 - A phase is one feature or one coherent piece of work. It gets **one branch**,
-  cut from `main`, named as shown beside the phase.
+  cut from `main` by the user, named as shown beside the phase.
 - A task is one step that can be checked on its own. It gets **one commit**,
   and its box is ticked in that same commit.
 - A new feature is added here, as a phase with tasks, before any of it is
