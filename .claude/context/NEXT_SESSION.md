@@ -1,58 +1,117 @@
 # Next session
 
-Where the `auto` work stands (2026-11-11) and what comes next. The design is
-`docs/AUTO_PLAN.md`; **§13 is the current design** and §13.7–13.12 hold the
-decisions taken since. `docs/auto_flow.html` and Help -> Flowchart (web UI)
-draw it. `main` is pushed at d2516ab; the "Job log" section (log tail of a
-failed job) is on branch `auto-job-log-tail`, not merged yet.
+Where the work stands on 2026-11-14 and what comes next. The plan is
+`docs/development/PLAN.md` (one file: open phases, backlog, a Done table);
+read it first. The rules are in `.claude/rules/`; the code map is
+`.claude/context/code-map.md`.
 
-## Built
+## State of the repository
 
-| what | where |
+- `main` is **more than 80 commits ahead of `origin/main`** (last push:
+  `b699d46`). Nothing from this stretch of work is pushed.
+- Tests: `python3 -m pytest test_scripts -q`, 1586 passing on `main`, about
+  two minutes. Some tests read untracked case data in `examples/`; a fresh
+  worktree needs those cases linked in.
+- **Copilot (GitHub Copilot CLI) worked in the main checkout**, which was
+  left on its branch `docs-install`. Check `git branch --show-current` and
+  whether a `copilot` process is still open before switching branches there;
+  a temporary `git worktree` avoids disturbing it. Its instructions are in
+  `.github/copilot-instructions.md`.
+- Two Copilot branches are **not merged and not reviewed**:
+  - `docs-install` (Phase 10, 4 commits). One commit edits this file, which
+    its instructions told it to skip; drop that change when merging.
+  - `flowreel-export` (Phase 9, 1 commit).
+  Both will conflict with `main` in `PLAN.md` and `CHANGELOG.md`.
+- About 90 old local branches are merged into `main`; delete them only on
+  the user's word.
+
+## What was built since the last notes (phases 1 to 5, 12 to 16, 18, 19)
+
+| What | Where |
 |---|---|
-| Queue reads fail loudly; jobs belong to cases by working directory | `src/core/slurm.py` |
-| PLT validity from the header; settled `.out` steps | `src/core/plt_valid.py`, `src/core/settled.py` |
-| `.cases.yml` (cases, remotes with a folder each, `auto:` keep_rst, keep_newest_rst, upload_rst, disk_alert, qos/account/partition) | `src/core/cases_file.py`, `src/core/auto/conf.py` |
-| `auto init`, `auto show`, `auto commands`, `auto status`, `auto apply` (history, upload, post only; `--dry-run`, `--yes`, `--only`) | `src/commands/auto/` |
-| Observe (files, queue, sacct, remote listing, ledger) -> Decide (pure) -> Report -> Act | `src/core/auto/{observe,decide,report,executor}.py` |
-| Stretches of equal output spacing, lost steps, provisional steps after a queued restart | `src/core/auto/stretches.py`, `decide.py` |
-| md5-checked uploads (temp name + rename), ledger, run log in `<folder>/auto_logs/`, folder lock | `cloud.py`, `ledger.py`, `runlog.py` |
-| Restart sets: `keep_rst` kept here, `upload_rst` sent (plus the final set of a finished run), `keep_newest_rst` (default 2) | `decide.py`, `organise_impl/organizer.py` |
-| After a restart from T: PLTs/sets above T from before the restart are the earlier run's (not trusted, posted/sent again); a copy counts only if `auto` sent it after the restart job started (ledger) | `decide.py` (`restarted`, `stale_plt`, `stale_rst`) |
-| History larger on the remote than here is never offered for upload | `decide.py` (`hist_shrink`) |
-| `run main` notes `restartTsId N` / `restartFlag off` in `.casestatus.md` | `run/main_impl/command.py` |
-| "Job log": last 15 lines of `slurm-<id>.out` of a main/post job that ended badly (branch `auto-job-log-tail`) | `observe.py` (`_tail`), `report.py` |
-| 12 dummy cases, fake SLURM, local "cloud" | `tools/make_dummy.py`, `tools/fake_slurm.py` |
+| Docs sorted into `docs/{installation,usage,architecture,development}/`, index `docs/README.md`; rules and context for Claude in `.claude/`; dead code removed | Done table, phases 1 to 4 |
+| One checked upload for `case upload` and `auto`: temporary name, size and md5, rename; one ledger with the local `mtime` and the remote `path` | `src/core/transfer/{cloud,ledger}.py` |
+| `case upload --to` and `case download --from` are now `--remote`; `case upload plt` / `download plt` (the old word `binary` still works); `case upload history --live` | `src/commands/case/download_impl/` |
+| `case check plt <case> --verify --remote NAME`: each binary PLT against its remote copy by md5 (read back when the remote has no `md5sum`); remote-only PLTs against the ledger; steps in neither place; how to rebuild a broken PLT | `src/core/transfer/verify.py`, `src/commands/case/check_impl/verify.py` |
+| The deletion chain, used by `case organise output`, `plt --delete-ascii`, `plt --delete-binary` | `src/core/chain.py`, `src/core/plt_ascii.py`, `organise_impl/organizer.py` |
+| `auto`: the plan carries `plan.steps` (`PlanStep`); `decide()` and `report.build()` split into one function per part | `src/core/auto/{decide,report}.py` |
+| `auto show`: every Action is a command, in the order `apply` takes them; waits and reasons are rows | `auto.md` §13.14 |
 
-Try it locally: `python3 tools/make_dummy.py && source dummy/env.sh && cd dummy/bare && flexflow auto show '*' --remote local`.
+## Decisions the user took (2026-11-13 and 14)
 
-Tests: `python3 -m pytest -q test_scripts` (miniconda base python has pytest;
-the flexflow_env one does not). Expected: all pass except two
-`test_web_field_render.py` tests that already failed on main before this work.
-
-## Waiting on the user (cluster)
-
-- Run `auto apply BR0SG0U1P0 --remote cloud --only upload --dry-run`, then without `--dry-run`, and bring back `auto_logs/auto_<time>.log` plus `auto show` afterwards. First real run of the additive steps.
-- Decide the job-name flag on `fixed/bare` (jobs `mainBR0fixed`/`postBR0fixed` vs the `main<case>` convention): per-case setting in `.cases.yml`, or rename the jobs.
-- `BR0SG0U6P0`: `archive/` is empty locally (runs 1–8 only on cloud); restore with `case download history BR0SG0U6P0 --archive --from cloud`. Local `cleaned/riser1` differs from the cloud's.
+- **`auto show` lists the commands `auto apply` runs**, so the sequence can
+  be read and any command run by hand. `auto apply` organises, uploads and
+  deletes as one conditional sequence, not only deletes.
+- **The chain.** A `.out` may go when its ASCII PLT is verified; an ASCII PLT
+  when its binary PLT is verified; a binary PLT when its copy on the remote
+  has the same md5. A missing link is passed over to the next one.
+- **A gap:** when one step of a range has nothing to stand in for it, that
+  step is kept and reported and the others are deleted.
+- **Repair goes back along the chain:** a broken binary PLT is made again
+  from the ASCII PLT (`run post convert`), a broken ASCII PLT from the `.out`
+  (`run post full`).
+- **Always verify.** No flag skips the check: no `--unverified`, and
+  `case organise output --all-out` stays but checks.
+- **Time is not the concern, a safe copy is:** md5 on both sides, read at
+  the moment of deleting.
+- An empty local `binary/` with the PLTs on the remote is a normal state.
+- Every step with `.out` gets its PLT made and uploaded; `--freq` is the
+  spacing of the series, not a way to thin it.
+- `auto apply` targets: `history`, `plt`, `output`, `input`, `rst`, `all`;
+  `--dry-run` uploads and deletes nothing and prints every step.
 
 ## Next to build
 
-1. **Delete stage** of `auto apply` behind one question (`--yes` skips): ASCII PLT and binary PLT only when the md5 on the cloud matches the ledger, `.out` of verified steps, `.rst` thinning to `keep_rst`/`keep_newest_rst`. Nothing above a restart point is deleted until its step has been posted again from the new run. Reports already list these as `[not built yet]`.
-2. **Steady check**: `data check steady` over the last N frames of OTHD/OISD, only for cases that reached `maxTimeSteps`; per-folder settings under `auto:` in `.cases.yml`. Not steady -> "Needs you" with `def time maxTimeSteps <N>` then `run main restart <last step>`. `auto` never queues main jobs.
-3. `auto log` (reads `auto_logs/`), polish of `auto status`.
-4. Display: with a queued restart, `Complete`/`Also kept` still count the earlier run's newer set (not deleted, only shown).
-5. Maybe: size-consistency check of `.rst` parts (a part cut short inside a complete set is not detected); md5 of files already on the remote on the first run.
+1. **Phase 17, `auto apply <target>`** (branch `auto-apply-targets`): run
+   `plan.steps` in the order shown, per target, each step only if the one
+   before succeeded; no target does nothing and lists the targets;
+   `--dry-run`; `--only` goes or stays as an alias. `apply` today still runs
+   history, then all uploads as one transfer, then the first post job, and
+   skips the steps of kind `check` and `delete`.
+2. **Phase 6, deleting in `auto apply`** (branch `auto-delete`): on top of
+   17, `apply` runs the delete commands after one question with totals.
+   Rewrite `auto.md` §13.13 as a new section at the end. The hand commands do
+   not read the SLURM queue, so the rule "nothing above the restart point of
+   a queued job" belongs here. Remove the `By hand` rows from the report
+   when `apply` deletes.
+3. Then Phase 7 (steady check), Phase 8 (`auto log`, `auto status`), Phase
+   11 (web UI checklist), and the backlog in the plan.
 
-## Open questions
+## Open points
 
-- A chained `auto` SLURM job only if the HPC team allows it (§12); cron, scrontab and `at` are disabled.
-- Running commands on the cluster from here: only read-only, in a session the user opens, every action confirmed.
+- **Not tried on real data.** Everything was tested on stand-in remotes and
+  dummy cases. The ASCII check was built from the header and first line the
+  user pasted from `riser.5750.plt` (`NODES = 1630573, ELEMENTS=1590192,
+  DATAPACKING=POINT`), on a synthetic file. First real runs to ask for:
+  `case check plt <case> --verify --remote cloud`, then `case organise plt
+  <case> --delete-ascii --dry-run`.
+- Uploads record "size only" on a remote without `md5sum`; only `--verify`
+  and `--delete-binary` read the copy back for an md5. The user was asked
+  whether uploads should read back too; not answered.
+- `docs/architecture/auto_flow.html` was not updated for phases 14 to 16.
+- Still to settle for Phase 6: what `apply` does with a case that needs you,
+  and the cost of the md5 on a large case.
 
-## Rules the user set (also in memory / CLAUDE.md)
+## Waiting on the user (cluster), from 2026-11-11, may be out of date
 
-- No Claude/Co-Authored-By in commit messages; `prompt.md` stays untracked.
-- One feature per branch; merge when the user says so; push only when asked.
+- First real run of the additive steps: `auto apply BR0SG0U1P0 --remote
+  cloud --dry-run`, then without `--dry-run`; bring back
+  `auto_logs/auto_<time>.log` and `auto show`.
+- The job-name flag on `fixed/bare` (`mainBR0fixed` against the
+  `main<case>` convention).
+- `BR0SG0U6P0`: `archive/` is empty locally; restore with `case download
+  history BR0SG0U6P0 --archive --remote cloud`.
+
+## Rules the user set (also in memory and `.claude/rules/`)
+
+- Plan first: a phase in `PLAN.md` split into tasks; one branch per phase
+  cut from `main`; one commit per task, ticking the task in the same commit.
+- Plain commit messages: no mention of Claude, no `Co-Authored-By`.
+  `prompt.md` stays untracked. Push only when asked.
 - Never Claude Artifacts: standalone HTML files in the repo instead.
-- Data safety first: fail closed, nothing deleted without a verified copy, ask once before deleting.
+- Update this file only when the user says so.
+- Data safety first: fail closed, nothing deleted without a verified copy,
+  ask once before deleting.
 - Every improvement from a real `auto show` becomes a dummy case plus a test.
+- `auto.md` and `webapp.md` are cited by section number: add at the end,
+  never renumber.
