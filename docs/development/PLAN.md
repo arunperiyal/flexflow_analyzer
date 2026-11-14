@@ -27,7 +27,7 @@ without a copy checked by md5 at that moment (restart sets off the `keep_rst`
 grid are the one stated exception), and one question is asked before deleting.
 
 - [x] Write the design as §13.13 at the end of `auto.md`
-- [ ] **Review of §13.13 by the user.** Nothing below is built before it
+- [x] **Review of §13.13 by the user.** Nothing below is built before it
 - [ ] Remote md5 of a named file (`cloud.py`: `LocalCloud`, `SftpCloud`);
       ledger entries record the local `mtime` and `deleted`
 - [ ] Decide: the candidates of C1–C4 as explicit file lists in `plan.ctx`,
