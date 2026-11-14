@@ -214,7 +214,9 @@ def test_report_sections_of_a_queued_case(dummy):
     # uploads first (the grid set 400), then the deletion that follows
     assert sec['rst'].actions[0] == ('case upload rst case3 --t1 400 --t2 400 --freq 400 '
                                      '--missing --remote local')
-    assert sec['rst'].actions[1].startswith('auto apply: delete .rst of steps 550, 650')
+    assert sec['rst'].actions[1] == ('case organise output case3 --keep-out --keep-freq 200 '
+                                     '--keep-newest 2 --t1 550 --t2 650')
+    assert dict(sec['rst'].rows)['Thin'] == 'steps 550, 650: not multiples of 200'
     assert dict(sec['history'].rows)['Run dir'].startswith('riser.othd steps 501–760')
 
 
@@ -222,7 +224,11 @@ def test_report_needs_and_flags_come_after_state(dummy):
     sec = report_of(dummy, 'case6')
     assert list(sec)[:3] == ['state', 'needs', 'flags']
     assert dict(sec['plt'].rows)['Binary'] == 'present 450, 500 · broken 550'
-    assert sec['plt'].actions[0] == 'case upload plt case6 --t1 450 --t2 500 --missing --remote local'
+    # the check first, then the upload, then the delete that follows from it
+    assert sec['plt'].actions == [
+        'case check plt case6 --verify --remote local',
+        'case upload plt case6 --t1 450 --t2 500 --missing --remote local',
+        'case organise plt case6 --delete-binary --t1 450 --t2 500 --remote local']
 
 
 def test_auto_commands_is_plain_text_to_read_or_save(dummy, monkeypatch, capsys):
@@ -232,10 +238,12 @@ def test_auto_commands_is_plain_text_to_read_or_save(dummy, monkeypatch, capsys)
     assert execute_commands(SimpleNamespace(case='*', remote='local')) == 0
     out = capsys.readouterr().out
     assert '\x1b[' not in out                                     # no colour codes
-    assert 'run post full case2 --t1 450 --t2 600 --no-remote    # 1, PLT files' in out
-    assert '#   wait: post job' in out                            # case4
+    assert 'run post full case2 --t1 450 --t2 600 --no-remote    # 2, PLT files' in out
+    assert '#   waiting: post job' in out                         # case4
     assert '#   needs you: Main job' in out                       # case7
-    assert '#   auto apply: delete' in out
+    assert 'auto apply:' not in out and 'not built yet' not in out
+    assert '--delete-binary --t1 450 --t2 500 --remote local    #' in out     # a command now
+    assert '#   by hand: auto apply does not delete yet' in out
 
 
 def test_auto_status_one_line_per_case(dummy, monkeypatch, capsys):
@@ -260,24 +268,34 @@ def test_a_change_of_output_frequency_is_not_a_hole(dummy):
     assert sec['plt'].actions == ['run post full case12 --t1 565 --t2 600 --no-remote']
 
 
-def test_deletions_say_they_are_not_built_and_agree_with_the_count(dummy):
+def test_every_action_is_a_command_and_the_rest_is_in_rows(dummy):
+    from src.commands.auto.show import resolve_cases as _all
+    from src.core.auto.report import build
+    results, confs, _ = gather(_all('*', dummy / 'bare'), 'local')
+    starts = ('case ', 'run ')
+    for snap, plan in results:
+        for sec in build(snap, plan, confs[snap.dir.parent]):
+            for action in sec.actions:
+                assert action.startswith(starts), (snap.name, action)
+                assert 'not built' not in action and 'auto apply' not in action
     sec = report_of(dummy, 'case6')
-    deletes = [a for s in sec.values() for a in s.actions if 'delete' in a]
-    assert deletes and all('[not built yet' in a for a in deletes)
-    one = [a for a in deletes if 'delete binary PLTs' in a]
-    assert one == ['auto apply: delete binary PLTs, steps 450, 500, once their copy on local is '
-                   'md5-checked [not built yet; by hand: case organise plt case6 '
-                   '--delete-binary --t1 450 --t2 500 --remote local]']
-    # the live-snapshot copy IS done by apply, so it carries no such label
-    live = [a for a in report_of(dummy, 'case2')['history'].actions if a.startswith('auto apply: copy')]
-    assert live and 'not built yet' not in live[0]
+    plt = dict(sec['plt'].rows)
+    assert plt['Delete'].startswith('binary 450, 500: each only once the next file stands in')
+    assert plt['By hand'].startswith('auto apply does not delete yet')
+    # the copy of a live history file is a command too
+    hist = report_of(dummy, 'case2')['history']
+    assert 'case upload history case2 --live --remote local' in hist.actions
+    assert dict(hist.rows)['Live copy'].startswith('a copy of the live riser.othd/.oisd')
+    # what a section waits for is a row, not an action
+    waiting = dict(report_of(dummy, 'case4')['plt'].rows)['Waiting']
+    assert waiting.startswith('post job') and 'until it ends' in waiting
 
 
 def test_a_single_step_reads_as_a_step(dummy):
     from src.core.auto.decide import steps_phrase
     assert steps_phrase([5740]) == 'Step 5740'
     sec = report_of(dummy, 'case3')
-    assert 'delete .rst of steps 550, 650' in sec['rst'].actions[1]
+    assert dict(sec['rst'].rows)['Thin'].startswith('steps 550, 650')
 
 
 def test_the_newest_set_a_queued_restart_will_recompute_is_said_so(dummy):

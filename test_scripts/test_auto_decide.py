@@ -612,7 +612,7 @@ def test_a_local_cloud_listing_carries_mtimes(tmp_path):
 # --- the by-hand commands next to a deletion that apply cannot do yet ---------------------
 
 def test_runs_apart_never_cover_a_file_that_is_not_in_the_list():
-    from src.core.auto.report import _runs_apart
+    from src.core.auto.decide import runs_apart as _runs_apart
     assert _runs_apart([5, 10, 20, 25], [15]) == [(5, 10), (20, 25)]
     assert _runs_apart([5, 10, 15], [3, 40]) == [(5, 15)]
     assert _runs_apart([], [1]) == []
@@ -624,9 +624,9 @@ def test_thinning_names_the_organise_command():
     s.rst = {t: 4 for t in (100, 200, 300, 400, 500, 550, 600)}
     s.rst_files = {t: {f"RUN_1/riser.{t}_{k}.rst": 100 for k in range(4)} for t in s.rst}
     plan = decide(s, CONF, True, True)
-    acts = [a for sec in build(s, plan, CONF) for a in sec.actions if 'delete .rst' in a]
-    assert acts and ('by hand: case organise output case --keep-out --keep-freq 200 '
-                     '--keep-newest 2 --t1 100 --t2') in acts[0]
+    acts = [a for sec in build(s, plan, CONF) for a in sec.actions if '--keep-out' in a]
+    assert acts and acts[0].startswith('case organise output case --keep-out --keep-freq 200 '
+                                       '--keep-newest 2 --t1 100 --t2')
 
 
 def test_a_restart_in_dot_restarts_that_no_history_part_starts_at_is_flagged():
