@@ -15,8 +15,10 @@
   or remote could not be read gets no deletion. A copy whose md5 differs puts
   the case under *needs you*. Every file is a line in the run log, and the case
   gets one line in `.casestatus.md`.
-- The reports (`auto show`, `auto commands`) still say "not built yet"; they
-  are updated next.
+- `auto show` and `auto commands` no longer say "not built yet": a delete line
+  now reads "... passes an md5 check [auto apply --delete]" (restart sets:
+  "no copy"). The by-hand `case organise` commands are gone from them, since
+  those do not make the md5 check. A case that needs you shows "Deleting: none".
 
 ### ❓ `case organise history`: --clean and --compile ask first
 

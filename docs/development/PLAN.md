@@ -37,7 +37,7 @@ grid are the one stated exception), and one question is asked before deleting.
 - [x] `auto apply --delete` and `--only delete`: order
       `history → upload → delete → post`, the plan listing, the question with
       totals, `--dry-run`
-- [ ] Reports (`auto show`, `auto commands`): replace the `[not built yet]`
+- [x] Reports (`auto show`, `auto commands`): replace the `[not built yet]`
       text
 - [ ] Dummy cases and a test for each rule: copy differs, size-only copy,
       `.out` newer than its PLT (restart), queued restart, post in flight,

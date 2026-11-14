@@ -291,7 +291,7 @@ def test_the_footer_does_not_claim_apply_is_missing(dummy, monkeypatch, capsys):
     execute_show(SimpleNamespace(case='case3', remote='local', detail=False, only=None))
     out = ' '.join(capsys.readouterr().out.split())
     assert 'not built yet).' not in out
-    assert '`auto apply --dry-run` lists what it would do: history, uploads, post jobs. Deleting is not built yet.' in out
+    assert '`auto apply --dry-run` lists what it would do: history, uploads, post jobs; `--delete` adds the deletions.' in out
 
 
 def test_the_rst_section_says_what_the_remote_holds_and_what_is_due(dummy):
@@ -396,3 +396,11 @@ def test_the_dry_run_says_what_the_files_are(dummy):
 def test_the_rst_section_says_which_sets_are_always_kept(dummy):
     rows = dict(report_of(dummy, 'case12')['rst'].rows)
     assert rows['Also kept'] == '600, 400 (the newest 2, whatever the grid)'
+
+
+def test_no_report_line_says_deleting_is_not_built(dummy):
+    for case in ('case3', 'case5', 'case10'):
+        for sec in report_of(dummy, case).values():
+            assert not any('not built' in a for a in sec.actions)
+    thin = [a for a in report_of(dummy, 'case5')['rst'].actions if 'delete .rst' in a]
+    assert thin and 'auto apply --delete' in thin[0]

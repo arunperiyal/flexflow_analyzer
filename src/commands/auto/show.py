@@ -300,7 +300,7 @@ def execute_show(args) -> int:
                      else "[green]none needs you[/green]"))
     console.print(upload)
     console.print("[dim]Nothing was changed. `auto apply --dry-run` lists what it would do: "
-                  "history, uploads, post jobs. Deleting is not built yet.[/dim]")
+                  "history, uploads, post jobs; `--delete` adds the deletions.[/dim]")
     console.rule(style='cyan')
     console.print()
     return 1 if needs or problems else 0
