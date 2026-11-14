@@ -38,7 +38,7 @@ def plans(tmp_path_factory):
 def test_the_dummy_cases_have_steps_of_every_kind(plans):
     kinds = {s.kind for _, plan, _ in plans for s in plan.steps}
     keys = {s.key for _, plan, _ in plans for s in plan.steps}
-    assert kinds == set(KINDS)
+    assert kinds == set(KINDS) | {'check', 'delete'}       # apply carries out KINDS only, so far
     assert {'organise', 'upload-history', 'post', 'upload-plt', 'upload-inputs'} <= keys
     assert all(s.target in TARGETS for _, plan, _ in plans for s in plan.steps)
 

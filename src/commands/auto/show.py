@@ -155,7 +155,6 @@ def _only(args):
 
 def _print_sections(console, sections, only=None):
     from rich.table import Table
-    from src.core.auto.report import AUTO_ONLY
     for sec in sections:
         if only is not None and sec.key not in only:
             continue
@@ -174,12 +173,7 @@ def _print_sections(console, sections, only=None):
                 grid.add_row('', 'Action:', '[dim]none[/dim]')
             for n, action in enumerate(sec.actions, 1):
                 label = 'Action:' if n == 1 else ''
-                if action.startswith(AUTO_ONLY):
-                    text = f"[magenta]{n}: {escape(action)}[/magenta]"
-                elif action.startswith('wait:'):
-                    text = f"[yellow]{n}: {escape(action)}[/yellow]"
-                else:
-                    text = f"{n}: [green]{escape(action)}[/green]"
+                text = f"{n}: [green]{escape(action)}[/green]"      # every action is a command
                 grid.add_row('', label, text)
         console.print(grid)
 
@@ -310,7 +304,7 @@ def execute_commands(args) -> int:
     """The commands of every case, plain text (no colour), numbered per case,
     so the output can be saved as a script and read before running it."""
     import sys
-    from src.core.auto.report import AUTO_ONLY, build
+    from src.core.auto.report import build
     got = _collect(args)
     if isinstance(got, int):
         return got
@@ -329,12 +323,12 @@ def execute_commands(args) -> int:
         for need in (i.text for i in plan.items if i.kind == 'needs'):
             out.write(f"#   needs you: {need}\n")
         for sec in sections:
+            for label, value in sec.rows:
+                if label in ('Waiting', 'Why', 'By hand'):
+                    out.write(f"#   {label.lower()}: {value}\n")
             for action in sec.actions:
-                if action.startswith(AUTO_ONLY) or action.startswith('wait:'):
-                    out.write(f"#   {action}\n")
-                else:
-                    n += 1
-                    out.write(f"{action}    # {n}, {sec.title}\n")
+                n += 1
+                out.write(f"{action}    # {n}, {sec.title}\n")
         if n == 0:
             out.write("#   no commands\n")
     return 1 if problems else 0

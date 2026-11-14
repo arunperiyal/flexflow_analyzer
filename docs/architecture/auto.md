@@ -950,3 +950,34 @@ deleted binary PLT gets `deleted: <when>`.
 **Cost.** The md5 of a 150 MB PLT is read once here and once on the remote
 for every binary PLT deleted. On the login node that is disk reading, not
 network; the remote one runs there (`md5sum` over SSH).
+
+### 13.14 `auto show`: every Action is a command (2026-11-14)
+
+Asked for by the user on 2026-11-13: the Action list of a section is the
+sequence of commands `auto apply` takes, so reading it tells what `apply`
+will do, and any of them can be run by hand.
+
+- An Action is always a command (`case ...` or `run ...`), with the case and
+  the remote named. No sentence starting `auto apply:`, no `wait:`, no
+  `[not built yet]`.
+- They are the plan's steps (`plan.steps`, `PlanStep` in `decide.py`), in
+  this order per section:
+
+  | Section | Actions, in order |
+  |---|---|
+  | History | `case download history --archive` (runs only on the remote), `case organise history`, `case upload history`, `case upload history --live` (a running job's files, as a snapshot) |
+  | PLT files | `case check plt --verify`, `run post full` / `convert`, `case upload plt` (`--missing` unless an old run's PLT must be replaced), `case organise plt --delete-ascii`, `case organise plt --delete-binary` |
+  | OUT files | `case organise output --all-out --keep-freq N` |
+  | RST files | `case upload rst`, `case organise output --keep-out --keep-freq N --keep-newest M` |
+  | Inputs and case files | `case upload --files ...` |
+
+- What is not a command is a row of the section: `Waiting` (a post job to
+  end first; post jobs one after the other), `Why` (why there is no command),
+  `Delete` and `Thin` (what the delete commands will take), `Live copy`,
+  `By hand`.
+- The delete commands follow the chain of `docs/usage/case-organise.md`:
+  each checks again when it runs and keeps what has nothing to stand in for
+  it. A range (`--t1`, `--t2`) never spans a file that is not meant to go.
+- `auto apply` does not run the check and delete steps yet (kinds `check`
+  and `delete` of `PlanStep`); the `By hand` row says so. That is the next
+  stage (PLAN.md, phases 17 and 6).

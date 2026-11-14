@@ -61,6 +61,10 @@ def _transfer_positionals(parser, direction):
                         ('compiled', 'the compiled file')):
         parser.add_argument(f'--{name}', action='store_true',
                             help=f'history: only {where} (combinable; none carries all three)')
+    if direction == 'upload':
+        parser.add_argument('--live', action='store_true',
+                            help="history: the run directory's .othd/.oisd as they are now, "
+                                 "while a job is still writing them (a snapshot, not checked)")
     parser.add_argument('--missing', action='store_true',
                         help='binary/rst: only the files the other side lacks (or holds at another size)')
     parser.add_argument('--fit', action='store_true',

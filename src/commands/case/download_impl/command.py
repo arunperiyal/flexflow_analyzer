@@ -16,7 +16,7 @@ from rich.progress import Progress, BarColumn, TextColumn, DownloadColumn, Trans
 from rich.table import Table
 from rich import box
 from . import budget
-from .history import (HistoryTransferMixin, HISTORY_SETS, history_label, history_sets,
+from .history import (HistoryTransferMixin, HISTORY_SETS, LIVE, history_label, history_sets,
                       history_target)
 
 # Loose files worth carrying with a case: what defines the run, and the othd maps
@@ -191,6 +191,8 @@ the remote gets the restarts it lacks.
     {Colors.YELLOW}--archive{Colors.RESET}              history: only archive/ (combinable; none: all three)
     {Colors.YELLOW}--cleaned{Colors.RESET}              history: only cleaned/
     {Colors.YELLOW}--compiled{Colors.RESET}             history: only the compiled file
+    {Colors.YELLOW}--live{Colors.RESET}                 history: the run directory's .othd/.oisd as they are now,
+                           while a job is still writing them (a snapshot, not compared)
     {Colors.YELLOW}--remote-path PATH{Colors.RESET}     The folder holding the cases on the remote; the case goes to
                          PATH/<case>. Default: the remote's folder in the case folder's
                          .cases.yml (remotes: {{NAME: DIR}}), else `remote set-path`
@@ -302,6 +304,7 @@ the remote gets the restarts it lacks.
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
     case upload history CS4SG1U1 --remote server
     case upload history CS4SG1U1 --remote server --cleaned --compiled
+    case upload history CS4SG1U1 --remote server --live          # a running job's history, as it is now
     case upload plt CS4SG1U1 --remote server --t1 1000 --t2 5000
     case upload plt CS4SG1U1 --remote server --t1 5000
     case upload plt CS4SG1U1 --remote server --missing
@@ -498,15 +501,18 @@ class CaseUploadCommand(HistoryTransferMixin):
         self._sending = None        # (remote name, local case path) of the target in hand
         self._ledgers = {}          # {folder of cases: Ledger}
 
-    def _send(self, ssh, local_file: str, remote_file: str, callback=None) -> None:
+    def _send(self, ssh, local_file: str, remote_file: str, callback=None,
+              snapshot: bool = False) -> None:
         """One file to the remote, the way `auto` sends it (core/transfer):
         to a temporary name, compared with the local file by size and md5,
         then renamed. IOError when it fails; nothing is then left under the
         real name. A file of the case in hand is written to the ledger of the
-        case's folder."""
+        case's folder. `snapshot`: a file a job is still writing, sent as it
+        is and not compared."""
         from src.core.transfer.cloud import send_checked
         mtime = os.stat(local_file).st_mtime
-        res = send_checked(ssh, local_file, remote_file, callback=callback, mkdir=False)
+        res = send_checked(ssh, local_file, remote_file, callback=callback, mkdir=False,
+                           snapshot=snapshot)
         if not res.ok:
             raise IOError(f"{os.path.basename(local_file)}: {res.detail}")
         self._sent[res.verified] = self._sent.get(res.verified, 0) + 1
@@ -518,14 +524,14 @@ class CaseUploadCommand(HistoryTransferMixin):
             rel = Path(local_file).resolve().relative_to(case_dir).as_posix()
         except ValueError:
             return
-        if os.stat(local_file).st_mtime != mtime:
+        if not snapshot and os.stat(local_file).st_mtime != mtime:
             return                  # written again while it went: not a checked copy
         from src.core.transfer.ledger import Ledger
         ledger = self._ledgers.get(case_dir.parent)
         if ledger is None:
             ledger = self._ledgers[case_dir.parent] = Ledger(case_dir.parent)
         ledger.record(remote_name, case_dir.name, rel, res.size, res.md5, res.verified,
-                      mtime=mtime, path=remote_file)
+                      mtime=None if snapshot else mtime, path=remote_file)
 
     def _report_checks(self) -> None:
         """How the files of this upload were checked."""
@@ -810,6 +816,8 @@ class CaseUploadCommand(HistoryTransferMixin):
                 )
                 return 1
             sets = [s for s in HISTORY_SETS if self._get_arg(args, s, False)]
+            if is_upload and self._get_arg(args, 'live', False):
+                sets.append(LIVE)
             if sets and mode != 'history':
                 self.console.print(
                     f"[red]Error:[/red] --{'/--'.join(sets)} pick the history sets; "

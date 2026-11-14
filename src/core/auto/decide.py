@@ -54,7 +54,7 @@ class Item:
     topic: str = 'other'        # the heading it is shown under: TOPIC_OF[kind] unless given
 
 
-AUTO_ONLY = 'auto apply: '      # an action only `auto apply` carries out, not a command to type
+AUTO_ONLY = 'auto apply: '      # no action starts with this any more (every one is a command)
 
 TARGETS = ('history', 'plt', 'output', 'rst', 'input')
 
@@ -64,9 +64,11 @@ class PlanStep:
     """One thing the plan has done for a case, as `auto show` lists it and
     `auto apply` runs it: show and apply both read plan.steps."""
     target: str                 # history | plt | output | rst | input
-    kind: str                   # what carries it out: history | upload | post
+    kind: str                   # what carries it out: history | upload | post | check | delete
     key: str                    # which step of its target: organise, upload-history, live,
-    #                             post, upload-plt, upload-rst, upload-rst-final, upload-inputs
+    #                             check-plt, post, upload-plt, delete-ascii, delete-binary,
+    #                             delete-out, upload-rst, upload-rst-final, thin-rst,
+    #                             upload-inputs
     command: str                # the command, as the user would type it
     files: Dict[str, int] = field(default_factory=dict)     # upload: relative path -> bytes
     note: str = ''              # why, or what it waits for
@@ -145,6 +147,23 @@ def _ended_at(job) -> Optional[float]:
         return datetime.strptime(job.end[:19], '%Y-%m-%dT%H:%M:%S').timestamp()
     except (ValueError, TypeError, AttributeError):
         return None
+
+
+def runs_apart(steps, others):
+    """`steps` split into runs (first, last) so that no step of `others` lies inside a run:
+    a range command cannot touch a file that is not in the list."""
+    steps, others = sorted(set(steps)), sorted(set(others) - set(steps))
+    runs, start, prev = [], None, None
+    for t in steps:
+        if start is not None and any(prev < o < t for o in others):
+            runs.append((start, prev))
+            start = None
+        if start is None:
+            start = t
+        prev = t
+    if start is not None:
+        runs.append((start, prev))
+    return runs
 
 
 def _post_jobs(todo: List[int], freq: int, ascii_steps) -> Tuple[List[Tuple[int, int, int, str]], List[int]]:
@@ -315,8 +334,10 @@ def _history(w):
                 if stale:
                     plan.uploads.update(stale)
                     plan.step('history', 'upload', 'live',
-                              AUTO_ONLY + f"copy the live {p}.othd/.oisd to {conf.remote} "
-                                          f"({_size_text(sum(stale.values()))})", files=stale)
+                              f"case upload history {name} --live --remote {conf.remote}",
+                              files=stale,
+                              note=f"a copy of the live {p}.othd/.oisd "
+                                   f"({_size_text(sum(stale.values()))}), refreshed each run")
                     plan.add('upload', f"A copy of the live {p}.othd and {p}.oisd "
                                        f"({_size_text(sum(stale.values()))}), refreshed each run")
         elif not broken_rule:
@@ -754,6 +775,28 @@ def _deletions(w):
             thin = [t for t in snap.rst if t % conf.keep_rst and t not in keep
                     and not provisional(t) and not stale_rst(t) and not (running and snap.live and t >= snap.live[1])]
         plan.ctx.update(del_ascii=ascii, del_binary=binary, del_out=outs, thin=thin)
+        # The commands that delete, each along the chain (core/chain.py): it checks again
+        # when it runs and keeps what has nothing to stand in for it. A range never spans a
+        # file that is not meant to go.
+        name, remote = snap.name, conf.remote
+        if binary or plan.steps_of('upload-plt'):
+            plan.step('plt', 'check', 'check-plt', f"case check plt {name} --verify --remote {remote}",
+                      note="the binary PLTs here against their copies on the remote, by md5")
+        for a, b in runs_apart(ascii, []):
+            plan.step('plt', 'delete', 'delete-ascii',
+                      f"case organise plt {name} --delete-ascii --t1 {a} --t2 {b} --remote {remote}")
+        for a, b in runs_apart(binary, set(snap.binary) - set(binary)):
+            plan.step('plt', 'delete', 'delete-binary',
+                      f"case organise plt {name} --delete-binary --t1 {a} --t2 {b} --remote {remote}")
+        if conf.keep_rst:
+            for a, b in runs_apart(outs, set(snap.out) - set(outs)):
+                plan.step('output', 'delete', 'delete-out',
+                          f"case organise output {name} --all-out --keep-freq {conf.keep_rst} "
+                          f"--t1 {a} --t2 {b} --remote {remote}")
+            if snap.rst and thin:
+                plan.step('rst', 'delete', 'thin-rst',
+                          f"case organise output {name} --keep-out --keep-freq {conf.keep_rst} "
+                          f"--keep-newest {conf.keep_newest_rst} --t1 {min(thin)} --t2 {max(thin)}")
         if parts:
             for part in parts:
                 plan.add('delete', part)

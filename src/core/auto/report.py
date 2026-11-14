@@ -6,49 +6,29 @@ decide recorded in plan.ctx.
     for section in build(snap, plan, conf):
         section.key, section.title, section.subtitle, section.rows, section.actions
 
-Rows are (label, value). An action is a command the user can run as it is
-(the case and the remote named, so it is safe whatever `use case:` is), or a
-line starting with AUTO_ONLY for what only `auto apply` does safely
-(deleting after an md5 check).
+Rows are (label, value). An action is always a command the user can run as it
+is (the case and the remote named, so it is safe whatever `use case:` is), in
+the order `auto apply` takes them: they are the plan's steps (plan.steps).
+What is not a command -- what a section waits for, why something is not done,
+what the delete commands will take -- is a row (Waiting, Why, Delete, Thin).
 """
 
 import time
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
-from .decide import AUTO_ONLY, CasePlan, _size_text, runs_text, steps_phrase, steps_text
+from .decide import CasePlan, _size_text, runs_text, steps_phrase, steps_text
 from .observe import CaseSnapshot
 
 SECTIONS = ('state', 'needs', 'flags', 'log', 'history', 'plt', 'out', 'rst', 'inputs')
-NOT_YET = ' [not built yet: delete by hand for now]'      # deleting is a later stage of apply
 
 
 def _predate(steps):
     return 'predates' if len(steps) == 1 else 'predate'
 
 
-def _by_hand(commands) -> str:
-    """The NOT_YET note with the commands that do the same by hand."""
-    if not commands:
-        return NOT_YET
-    return " [not built yet; by hand: " + '; '.join(commands) + "]"
-
-
-def _runs_apart(steps, others):
-    """`steps` split into runs (first, last) so that no step of `others` lies inside a run:
-    a range command cannot touch a file that is not in the list."""
-    steps, others = sorted(set(steps)), sorted(set(others) - set(steps))
-    runs, start, prev = [], None, None
-    for t in steps:
-        if start is not None and any(prev < o < t for o in others):
-            runs.append((start, prev))
-            start = None
-        if start is None:
-            start = t
-        prev = t
-    if start is not None:
-        runs.append((start, prev))
-    return runs
+# until `auto apply` runs the delete commands itself (a later stage)
+BY_HAND = "auto apply does not delete yet: the delete commands below are for you to run"
 
 
 @dataclass
@@ -221,6 +201,8 @@ def _history(v):
         s.row('Only there', ' · '.join(parts) + f" (on {remote}, not here)")
     if only and (only.get(('othd', 'archive')) or only.get(('oisd', 'archive'))):
         s.actions.append(f"case download history {name} --archive --remote {remote}")
+    for step in plan.steps_of('live'):
+        s.row('Live copy', step.note)
     for key in ('organise', 'upload-history', 'live'):
         s.actions += [step.command for step in plan.steps_of(key)]
     return [s]
@@ -271,25 +253,21 @@ def _plt(v):
     if snap.binary_time:
         s.row('Newest', f"binary PLT made {ago(max(snap.binary_time.values()), now)}")
     if c.get('post_now'):
-        s.actions.append(f"wait: post job {c['post_now'][0].jobid} is "
-                         f"{c['post_now'][0].state.lower()}")
+        s.row('Waiting', f"post job {c['post_now'][0].jobid} is "
+                         f"{c['post_now'][0].state.lower()}: nothing is posted or uploaded "
+                         f"until it ends")
     posts = plan.steps_of('post')
-    s.actions += [step.command for step in posts]
     if len(posts) > 1:
-        s.actions.append("wait: submit each post job after the previous one has ended")
-    s.actions += [step.command for step in plan.steps_of('upload-plt')]
-    if c.get('del_ascii'):
-        s.actions.append(AUTO_ONLY + f"delete ASCII PLTs, {steps_phrase(c['del_ascii']).lower()}, "
-                                     f"once the binary copy on {remote} is md5-checked"
-                         + _by_hand([f"case organise plt {name} --delete-ascii --t1 {a} --t2 {b}"
-                                     for a, b in _runs_apart(c['del_ascii'], [])]))
-    if c.get('del_binary'):
-        s.actions.append(AUTO_ONLY + f"delete binary PLTs, {steps_phrase(c['del_binary']).lower()}, "
-                                     f"once their copy on {remote} is md5-checked"
-                         + _by_hand([f"case organise plt {name} --delete-binary --t1 {a} --t2 {b} "
-                                     f"--remote {remote}"
-                                     for a, b in _runs_apart(
-                                         c['del_binary'], set(snap.binary) - set(c['del_binary']))]))
+        s.row('Waiting', "submit each post job after the previous one has ended")
+    gone = [f"{kind} {steps_text(c[key])}" for kind, key in (('ASCII', 'del_ascii'),
+                                                               ('binary', 'del_binary'))
+            if c.get(key)]
+    if gone:
+        s.row('Delete', ' · '.join(gone) + ": each only once the next file stands in for it "
+                                           f"(binary PLT, then its copy on {remote})")
+        s.row('By hand', BY_HAND)
+    for key in ('check-plt', 'post', 'upload-plt', 'delete-ascii', 'delete-binary'):
+        s.actions += [step.command for step in plan.steps_of(key)]
     return [s]
 
 
@@ -310,13 +288,14 @@ def _out(v):
     if c.get('del_out'):
         outs = c['del_out']
         freed = _size_text(sum(snap.out_size.get(t, 0) for t in outs))
-        s.actions.append(AUTO_ONLY + f"delete .out of {steps_phrase(outs).lower()} ({freed}) once "
-                                     f"{'its' if len(outs) == 1 else 'their'} PLT on {remote} is "
-                                     f"md5-checked"
-                         + _by_hand([f"case organise output {name} --all-out --keep-freq "
-                                     f"{conf.keep_rst} --t1 {a} --t2 {b}"
-                                     for a, b in _runs_apart(outs, set(snap.out) - set(outs))]
-                                    if conf.keep_rst else []))
+        s.row('Delete', f"{steps_phrase(outs).lower()} ({freed}): each only once a PLT of "
+                        f"its step stands in for it")
+        if plan.steps_of('delete-out'):
+            s.row('By hand', BY_HAND)
+        else:
+            s.row('Why', "no command: `case organise output` also thins the .rst, and "
+                         "auto.keep_rst is not set (auto init --keep-rst N)")
+    s.actions += [step.command for step in plan.steps_of('delete-out')]
     return [s]
 
 
@@ -389,11 +368,9 @@ def _rst(v):
         s.actions += [step.command for step in plan.steps_of('upload-rst', 'upload-rst-final')]
     thin = c.get('thin') or []
     if snap.rst and thin:                      # after the uploads: deleting follows from them
-        s.actions.append(AUTO_ONLY + f"delete .rst of {steps_phrase(thin).lower()}: not "
-                                     f"multiples of {conf.keep_rst}"
-                         + _by_hand([f"case organise output {name} --keep-out --keep-freq "
-                                     f"{conf.keep_rst} --keep-newest {conf.keep_newest_rst} "
-                                     f"--t1 {min(thin)} --t2 {max(thin)}"] if conf.keep_rst else []))
+        s.row('Thin', f"{steps_phrase(thin).lower()}: not multiples of {conf.keep_rst}")
+        s.row('By hand', BY_HAND)
+    s.actions += [step.command for step in plan.steps_of('thin-rst')]
     return [s]
 
 
@@ -427,6 +404,5 @@ def build(snap: CaseSnapshot, plan: CasePlan, conf, now: Optional[float] = None)
 
 
 def commands(sections: List[Section]) -> List[str]:
-    """The actions that are commands (not auto-apply-only), in order."""
-    return [a for sec in sections for a in sec.actions
-            if not a.startswith(AUTO_ONLY) and not a.startswith('wait:')]
+    """Every action, in order: each is a command."""
+    return [a for sec in sections for a in sec.actions]
