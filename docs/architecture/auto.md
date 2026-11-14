@@ -981,3 +981,23 @@ will do, and any of them can be run by hand.
 - `auto apply` does not run the check and delete steps yet (kinds `check`
   and `delete` of `PlanStep`); the `By hand` row says so. That is the next
   stage (PLAN.md, phases 17 and 6).
+
+### 13.15 `auto apply <target>` (2026-11-14)
+
+- `auto apply` takes a target: `history`, `plt`, `output`, `input`, `rst` or
+  `all`. It runs the steps of `plan.steps` whose `target` matches, in the
+  order of 13.14 (history, upload, post), each case stopping at its first
+  failed step. `all` is what `auto apply` did before.
+- With no target nothing is done and the targets are listed (exit 0).
+  `--only history,upload,post` still works, as `all` narrowed to those kinds
+  (deprecated).
+- Parsing: `auto apply <target> [case]`. A target word is always a target;
+  a case folder of that name is written `./plt`. With the case left out, the
+  `use case:` context is used.
+- `--dry-run` prints the steps of the target and then the check and delete
+  steps as `not run by apply yet`; nothing is sent or deleted. They run in
+  Phase 6, through the hand commands (`case check plt --verify`, `case
+  organise ...`), which do their own checks.
+- `output` and `rst` have only delete steps, so `auto apply output` and
+  `auto apply rst` do nothing until Phase 6.
+

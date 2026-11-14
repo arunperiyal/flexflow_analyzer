@@ -8,10 +8,13 @@ auto - the per-case workflow for a folder of cases (docs/architecture/auto.md §
                          table for several (case:*), each in full with --detail
     auto commands [case] just the commands to run, numbered, as plain text
     auto status [case]   one line per case
-    auto apply [case] [--remote NAME] [--only history,upload,post] [--dry-run] [--yes]
+    auto apply <target> [case] [--remote NAME] [--dry-run] [--yes]
+                         target: history, plt, output, input, rst, all
                          organise history, upload (checked, never deleting), submit post jobs
     auto log [case]      (not built yet)
 """
+
+import argparse
 
 from ..base import BaseCommand
 from src.cli.context import case_arg, context_flag
@@ -39,7 +42,9 @@ class AutoCommand(BaseCommand):
         parser = subparsers.add_parser(self.name, add_help=False, help=self.description)
         parser.add_argument('what', nargs='?', metavar='init|show|commands|status|apply|log',
                             help='; '.join(f"{n}: {h}" for n, h in SUBCOMMANDS)).completer = _complete_sub
-        case_arg(parser, help="show: the case folder (default: use case:); '*' for every case in .cases.yml")
+        case_arg(parser, help="show: the case folder (default: use case:); '*' for every case in .cases.yml; "
+                              "apply: a target (history, plt, output, input, rst, all) first")
+        parser.add_argument('extra', nargs='?', metavar='CASE', help=argparse.SUPPRESS)
         context_flag(parser, 'remote', '--remote', type=str, metavar='NAME',
                      help='the remote (or use remote:NAME); `local` for a folder')
         parser.add_argument('--path', metavar='DIR',
@@ -60,7 +65,7 @@ class AutoCommand(BaseCommand):
         parser.add_argument('--only', metavar='SECTIONS',
                             help='show: only these sections (state, needs, flags, history, '
                                  'plt, out, rst, inputs); apply: only these steps '
-                                 '(history, upload, post); comma-separated')
+                                 '(history, upload, post); comma-separated (apply: deprecated, use a target)')
         parser.add_argument('--dry-run', action='store_true',
                             help='apply: list what would be done, do nothing')
         parser.add_argument('--yes', action='store_true',

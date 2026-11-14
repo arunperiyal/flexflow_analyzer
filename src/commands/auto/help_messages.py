@@ -28,8 +28,12 @@ def print_auto_help():
     auto commands [case]   just the Action commands, numbered, as plain text
                            (`auto commands '*' > todo.sh` to read before running)
     auto status [case]     one line per case: state, steps, jobs, what is next
-    auto apply [case] [--remote NAME] [--only history,upload,post] [--dry-run] [--yes]
-        does the additive steps for each case, in this order, planned again
+    auto apply <target> [case] [--remote NAME] [--dry-run] [--yes]
+        target: history, plt, output, input, rst or all. With no target nothing
+        is done and the targets are listed. A target word is always a target
+        (a case of that name: ./plt). --only history,upload,post still works
+        and means `all` limited to those steps (deprecated).
+        does the additive steps of the target for each case, in this order, planned again
         from the files and the queue right before each: organise the history
         (when no main job is active), upload what the remote lacks (to a
         temporary name, checked by md5, then renamed; the verified files are
@@ -39,7 +43,8 @@ def print_auto_help():
         fails stops that case; the others go on. The record of the run is
         auto_logs/auto_<time>.log. It does not run the delete commands yet
         (.out, PLTs, .rst): `auto show` lists them for you to run; each
-        checks again and keeps what has no verified copy.
+        checks again and keeps what has no verified copy. --dry-run lists them
+        as `not run by apply yet`.
     auto log [case]        {g}(not built yet; the logs are in auto_logs/){r}
 
     The remote is --remote NAME or `use remote:NAME`: its login comes from

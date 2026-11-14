@@ -1,7 +1,13 @@
 """auto apply: carry out what `auto show` lists, the additive steps only --
 organise the history, upload (checked, never deleting), submit a post job.
 
-    auto apply [case] --remote NAME [--only history,upload,post] [--dry-run] [--yes]
+    auto apply <target> [case] --remote NAME [--dry-run] [--yes]
+
+    target: history | plt | output | input | rst | all. Each runs the steps
+    `auto show` lists for that part of the case (plan.steps, filtered by
+    their target), in the order below. With no target nothing is done and the
+    targets are listed. The check and delete steps (`case check plt --verify`,
+    `case organise ...`) are shown by --dry-run but not run yet (Phase 6).
 
 For each case, in this order, with the plan made again from the files and the
 queue right before each step (so a step runs on what is there now, not on what
@@ -24,7 +30,42 @@ from rich.markup import escape
 from .show import _collect, _size_text_of
 
 KINDS = ('history', 'upload', 'post')
-MARK = {'history': '↻', 'upload': '↑', 'post': '▶'}
+MARK = {'history': '↻', 'upload': '↑', 'post': '▶', 'later': '·'}
+TARGETS = (('history', 'organise and upload the history'),
+           ('plt', 'post jobs and binary PLT uploads'),
+           ('output', '.out files'),
+           ('input', 'inputs and case files'),
+           ('rst', 'restart sets'),
+           ('all', 'every target above, in `auto show` order'))
+NOT_RUN = ('check', 'delete')       # kinds `apply` does not carry out yet
+
+
+def split_target(args):
+    """(target, case) from the positionals: `apply plt CASE`, `apply plt`
+    (the case from `use case:`) or `apply CASE` (no target). A target word is
+    always a target; name a case of that name as `./plt`. A --only with no
+    target is the old way to say `all`."""
+    from src.cli.context import current_case
+    names = [t for t, _ in TARGETS]
+    first, second = getattr(args, 'case', None), getattr(args, 'extra', None)
+    target = getattr(args, 'target', None)
+    if target is None and first in names:
+        target, first, second = first, second, None
+        first = first or current_case()
+    elif second is not None:
+        raise ValueError(f"`auto apply {first} {second}`: the first word is not a target "
+                         f"({', '.join(names)})")
+    if target is None and getattr(args, 'only', None):
+        target = 'all'
+    return target, first
+
+
+def for_target(plan, target):
+    """The plan with only the steps of this target (`all`: every step)."""
+    import dataclasses
+    if target in (None, 'all'):
+        return plan
+    return dataclasses.replace(plan, steps=[s for s in plan.steps if s.target == target])
 
 
 def _kinds(args):
@@ -105,10 +146,13 @@ def _intended(plan, only):
         waiting = len(plan.steps_of('post')) - 1
         more = f" (+{waiting} more after it)" if waiting else ''
         out.append(('post', f"run post {mode} --t1 {a} --t2 {b} --freq {d}{more}"))
+    for step in plan.steps:
+        if step.kind in NOT_RUN and set(KINDS) <= set(only):
+            out.append(('later', f"{step.command}   (not run by apply yet)"))
     return out
 
 
-def _run_case(case_dir, remote, only, clouds, ledgers, log, console):
+def _run_case(case_dir, remote, only, target, clouds, ledgers, log, console):
     """The steps taken for one case: [Step]."""
     from src.commands.auto.show import gather
     from src.core.auto import executor
@@ -124,6 +168,7 @@ def _run_case(case_dir, remote, only, clouds, ledgers, log, console):
             console.print(f"  [bold red]![/bold red] {escape(problems[0] if problems else 'nothing read')}")
             break
         snap, plan = results[0]
+        plan = for_target(plan, target)
         conf = confs[Path(case_dir).parent]
         if kind == 'history' and plan.due('history'):
             step = executor.do_history(snap, plan)
@@ -161,9 +206,17 @@ def execute_apply(args) -> int:
     console = Console()
     try:
         only = _kinds(args)
-    except AutoConfError as e:
+        target, case = split_target(args)
+    except (AutoConfError, ValueError) as e:
         console.print(f"[red]Error:[/red] {escape(str(e))}")
         return 2
+    if target is None:
+        console.print("[bold]auto apply[/bold] needs a target; nothing was done.")
+        for name, what in TARGETS:
+            console.print(f"  [cyan]{name:<8}[/cyan] {what}")
+        console.print("[dim]e.g. `auto apply plt BR0SG0U1P0 --dry-run`; `auto show` lists the steps.[/dim]")
+        return 0
+    args.case = case
     got = _collect(args)
     if isinstance(got, int):
         return got
@@ -177,10 +230,10 @@ def execute_apply(args) -> int:
         return 1
 
     # what would be done
-    todo = [(snap, plan, _intended(plan, only)) for snap, plan in first]
-    todo = [t for t in todo if any(kind != 'detail' for kind, _ in t[2])]
+    todo = [(snap, plan, _intended(for_target(plan, target), only)) for snap, plan in first]
+    todo = [t for t in todo if any(kind not in ('detail', 'later') for kind, _ in t[2])]
     console.print()
-    console.rule(f"[bold]auto apply[/bold]  [dim]{escape(remote or '')}[/dim]", style='cyan')
+    console.rule(f"[bold]auto apply {target}[/bold]  [dim]{escape(remote or '')}[/dim]", style='cyan')
     if not todo:
         console.print("  [green]✓[/green] nothing to do"
                       + (f" ({sum(p.needs_you for _, p in first)} need you: `auto show`)"
@@ -219,14 +272,14 @@ def execute_apply(args) -> int:
         log = RunLog(folders[0])
         stack.callback(log.close)
         ledgers = {folder: Ledger(folder) for folder in folders}
-        log.line('', 'start', f"auto apply --remote {remote} --only {','.join(sorted(only))} "
+        log.line('', 'start', f"auto apply {target} --remote {remote} --only {','.join(sorted(only))} "
                               f"for {len(todo)} case(s)")
         try:
             for snap, _, _ in todo:
                 console.print()
                 console.rule(f"[bold cyan]{escape(snap.name)}[/bold cyan]", align='left',
                              style='grey50')
-                steps = _run_case(snap.dir, remote, only, clouds, ledgers, log, console)
+                steps = _run_case(snap.dir, remote, only, target, clouds, ledgers, log, console)
                 failures += sum(1 for s in steps if not s.ok)
             # what is left
             results, _, _ = gather(case_dirs, remote, clouds)

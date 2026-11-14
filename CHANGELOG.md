@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### ▶ `auto apply <target>`
+
+- `auto apply` now takes a target: `history`, `plt`, `output`, `input`, `rst`
+  or `all` (`auto apply plt BR0SG0U1P0 --remote cloud --dry-run`). Each runs
+  only the steps `auto show` lists for that part of the case. With no target
+  it does nothing and lists the targets.
+- `--only` still works and means `all` limited to those steps; it is
+  deprecated.
+- `--dry-run` also lists the check and delete commands as `not run by apply
+  yet`.
+
 ### 📋 `auto show`: every Action is a command
 
 - The Action list of each section is now only commands, in the order `auto
