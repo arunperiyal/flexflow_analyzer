@@ -191,6 +191,8 @@ the remote gets the restarts it lacks.
     {Colors.YELLOW}--archive{Colors.RESET}              history: only archive/ (combinable; none: all three)
     {Colors.YELLOW}--cleaned{Colors.RESET}              history: only cleaned/
     {Colors.YELLOW}--compiled{Colors.RESET}             history: only the compiled file
+    {Colors.YELLOW}--live{Colors.RESET}                 history: the run directory's .othd/.oisd as they are now,
+                           while a job is still writing them (a snapshot, not compared)
     {Colors.YELLOW}--remote-path PATH{Colors.RESET}     The folder holding the cases on the remote; the case goes to
                          PATH/<case>. Default: the remote's folder in the case folder's
                          .cases.yml (remotes: {{NAME: DIR}}), else `remote set-path`
@@ -302,6 +304,7 @@ the remote gets the restarts it lacks.
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
     case upload history CS4SG1U1 --remote server
     case upload history CS4SG1U1 --remote server --cleaned --compiled
+    case upload history CS4SG1U1 --remote server --live          # a running job's history, as it is now
     case upload plt CS4SG1U1 --remote server --t1 1000 --t2 5000
     case upload plt CS4SG1U1 --remote server --t1 5000
     case upload plt CS4SG1U1 --remote server --missing

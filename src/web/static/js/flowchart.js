@@ -355,8 +355,10 @@ const FlowChart = (() => {
         the run is auto_logs/auto_<time>.log.
 
         Post jobs still go through Slurm, so run it again at the next login
-        to carry on. Deleting what is safely copied (.out, PLTs, .rst
-        thinning) is not built yet: those steps stay by hand.`,
+        to carry on. It does not delete yet: auto show lists the delete
+        commands (case organise output, case organise plt --delete-ascii,
+        --delete-binary) for you to run. Each checks again when it runs and
+        keeps what has no verified copy.`,
     },
     {
       id: 'autoNeeds', kind: 'step', col: 3, row: 14, label: ['Handle what', 'it left to you'],

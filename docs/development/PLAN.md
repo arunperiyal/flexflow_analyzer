@@ -166,7 +166,7 @@ Settled with the user on 2026-11-13:
   observation and action.
 - `case organise plt` always verifies. There is no `--unverified` flag.
 
-Order of work: 12, 13, 18, 14, 19 and 15 (done), 16, 17, then Phase 6. Phases 12 to 14 change
+Order of work: 12, 13, 18, 14, 19, 15 and 16 (done), 17, then Phase 6. Phases 12 to 14 change
 hand commands and are useful on their own; 15 is a refactor with no change in
 behaviour; 16 and 17 are what the user sees.
 
@@ -191,24 +191,6 @@ What the code check found (why 12, 14 and 15 are needed):
 - **Parsing.** `auto` takes `what` and `[case]` as positionals. A target word
   after `apply` (`history`, `plt`, `output`, `all`) has to be told apart from
   a case name.
-
-### Phase 16: `auto show`, Action lists only commands (branch `auto-show-commands`)
-
-- [ ] PLT files: `case check plt --verify`; `run post convert` / `run post
-      full` when binary PLTs are not made; `case upload plt ... --freq N
-      --remote REMOTE` with `--missing` only when the remote lacks some;
-      `case organise plt --delete-ascii ...`; `case organise plt
-      --delete-binary ...`. No `auto apply: ...` sentences and no `[not built yet]`
-- [ ] History: `case organise history ...`, `case upload history ...`; the
-      copy of a live `.othd` / `.oisd` becomes a command too
-- [ ] OUT files: `case organise output ...`
-- [ ] RST files: `case upload rst ...`, `case organise output --keep-out
-      --keep-freq N --keep-newest N ...`
-- [ ] Inputs and case files: `case upload <case> --files ...`
-- [ ] What is not a command (waiting for a job, a reason) moves out of
-      Action into a row of its own (`Waiting`, `Why`)
-- [ ] `auto commands` prints the same list; tests on the dummy cases
-- [ ] `docs/architecture/auto_flow.html`, the web flowchart, `CHANGELOG.md`
 
 ### Phase 17: `auto apply <target>` (branch `auto-apply-targets`)
 
@@ -275,6 +257,7 @@ As noted on 2026-11-11; may be out of date.
 | 14 | `organise-verified` | Deleting along the chain (`core/chain.py`): `.out` on a verified ASCII PLT (`core/plt_ascii.py`), an ASCII PLT on a verified binary PLT, a binary PLT on a remote copy with the same md5 read at that moment (`--remote`); a missing link is passed over; a step with nothing to stand in is kept and reported, the others go. `--freq` for `--delete-ascii`. Left open: the queued-restart rule is left to `auto` (Phase 6) |
 | 19 | `organise-review` | After the user's review of Phase 14: the ASCII check reads the real simPlt header and counts in blocks; `--all-out` checks each `.out` (it now does what the plain command does); `--freq` is accepted with `--delete-ascii` (the flag check had still refused it) |
 | 15 | `auto-steps` | Refactor, no change in what `auto` prints or does: the plan carries `plan.steps` (`PlanStep`: target, kind, key, command, files); `decide()` and `report.build()` are split into one function per part; the report's command lines and `auto apply` both read the steps; `test_auto_steps.py` holds them together on every dummy case. `apply` still runs history, upload, post in that order with the uploads as one transfer; per-target order is Phase 17 |
+| 16 | `auto-show-commands` | Every Action of `auto show` is a command, in the order `apply` takes them (`auto.md` §13.14): check, post, upload, deletes for PLT; the same for History, OUT, RST and Inputs. Waits and reasons are rows (`Waiting`, `Why`, `Delete`, `Thin`, `By hand`). New: `case upload history --live`. The check and delete steps are in `plan.steps` (kinds `check`, `delete`) but `apply` does not run them yet. Not done: `auto_flow.html` was left as it is (it draws the decisions, not the Action lines) |
 
 ---
 

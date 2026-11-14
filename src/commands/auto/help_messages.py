@@ -15,7 +15,13 @@ def print_auto_help():
         what auto would do; changes nothing. case: a folder, or `use case:`;
         `use case:*` (or '*') for every case in .cases.yml. One case: labelled
         sections (State, History, PLT files, OUT files, RST files, Inputs and
-        case files) with sizes, times and numbered Action commands. Several
+        case files) with sizes, times and numbered Action commands. Every
+        Action is a command you can run as it is, in the order `auto apply`
+        takes them: check, post, upload, then the deletes (PLT files: `case
+        check plt --verify`, `run post`, `case upload plt`, `case organise
+        plt --delete-ascii`, `--delete-binary`). What is not a command is a
+        row: Waiting (a job to end first), Why, Delete and Thin (what the
+        delete commands will take), By hand. Several
         cases: the summary table; each in full with --detail. --only plt,rst
         shows just those sections (state, needs, flags, history, plt, out, rst,
         inputs).
@@ -31,7 +37,9 @@ def print_auto_help():
         stretch with no PLT yet. It shows what it will do and asks once
         (--yes skips; --dry-run only shows). It deletes nothing. A step that
         fails stops that case; the others go on. The record of the run is
-        auto_logs/auto_<time>.log. Deletions (.out, PLTs, .rst) are not built.
+        auto_logs/auto_<time>.log. It does not run the delete commands yet
+        (.out, PLTs, .rst): `auto show` lists them for you to run; each
+        checks again and keeps what has no verified copy.
     auto log [case]        {g}(not built yet; the logs are in auto_logs/){r}
 
     The remote is --remote NAME or `use remote:NAME`: its login comes from

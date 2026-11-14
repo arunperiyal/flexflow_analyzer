@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+### 📋 `auto show`: every Action is a command
+
+- The Action list of each section is now only commands, in the order `auto
+  apply` takes them, so you can read what it will do and run any of them
+  yourself. For PLT files: `case check plt --verify`, `run post`, `case
+  upload plt`, `case organise plt --delete-ascii`, `case organise plt
+  --delete-binary`. The same for History, OUT files, RST files and Inputs.
+- The sentences are gone from Action (`auto apply: delete ... [not built
+  yet; by hand: ...]`, `wait: ...`). What is not a command is a row:
+  `Waiting`, `Why`, `Delete`, `Thin`, `Live copy`, `By hand`.
+- `auto commands` prints the same list; the waits and notes are comments.
+- **`case upload history --live`** sends the run directory's `.othd`/`.oisd`
+  while a job is still writing them, as a snapshot. It is the command behind
+  the "copy of the live history" that `auto apply` already made.
+- `auto apply` does not run the delete commands yet; the `By hand` row says
+  so.
+
 ### 🔗 `case organise plt` and `output`: deleting along the chain
 
 A file is now deleted only when the next form of the same data stands in for
