@@ -1001,3 +1001,18 @@ will do, and any of them can be run by hand.
 - `output` and `rst` have only delete steps, so `auto apply output` and
   `auto apply rst` do nothing until Phase 6.
 
+### 13.16 `case organise out` and `case organise rst` (2026-11-14)
+
+`case organise output` did two jobs, picked by opposite flags (`--all-out`,
+`--keep-out`). It is split: `out` deletes `.out` along the chain (no
+`--keep-freq`, `--keep-newest`), `rst` thins the `.rst` (no `--remote`); the
+old word and the two flags are gone. The command lines of 13.14 become:
+
+| Section | Action |
+|---|---|
+| OUT files | `case organise out <case> --t1 A --t2 B --remote R` |
+| RST files | `case organise rst <case> --keep-freq N --keep-newest M --t1 A --t2 B` |
+
+The `.out` step no longer needs `auto.keep_rst`: it is not about restart
+sets. Earlier sections keep the old command in the text they were written
+with.

@@ -3,7 +3,7 @@
 ## Overview
 
 `case organise` manages FlexFlow case directories through four subcommands:
-`history`, `output`, `plt` and `vtu`. Running without a subcommand shows help.
+`history`, `out`, `rst`, `plt` and `vtu`. Running without a subcommand shows help.
 
 ```bash
 case organise <subcommand> [case_directory] [options]
@@ -114,31 +114,37 @@ itself, with or without `--verify`. Lists the files and asks once, unless
 Later jobs add to `archive/` again; the next `--clean` folds them into
 `cleaned/`, reading the pruned runs from `cleaned/` itself.
 
-### `output`
+### `out`
 
-Removes intermediate output files from the run directory:
-
-- **`.rst` files** (restart points): deleted if their time step is NOT
-  divisible by `--keep-freq N`
-  - Without `--keep-freq` it keeps the multiples of `freq * 10`, where freq is
-    read from `simflow.config` (`outFreq` field) or auto-detected from the
-    existing output files
-- **`.out` files**: deleted at any step, keep-freq steps included, once the
-  next file in the chain can stand in for them (see "The deletion chain"
-  below): the step's ASCII PLT, whole and written after every `.out` part;
-  else its binary PLT, whole and written after them; else, when `binary/` no
-  longer holds it, its verified copy on the remote (`--remote NAME`). A
-  restart reads only `.rst` (and the `.sgd` subgrid files); `.out` is read
-  only by the conversion that writes the `.plt`. A step with nothing to stand
-  in keeps its `.out` and is listed with the reason; the other steps go.
-  `--all-out` takes every `.out` in range and still checks each: it deletes
-  nothing the plain command would keep.
+Deletes `.out` files from the run directory, at any step, keep-freq steps
+included, once the next file in the chain can stand in for them (see "The
+deletion chain" below): the step's ASCII PLT, whole and written after every
+`.out` part; else its binary PLT, whole and written after them; else, when
+`binary/` no longer holds it, its verified copy on the remote (`--remote
+NAME`). A restart reads only `.rst` (and the `.sgd` subgrid files); `.out` is
+read only by the conversion that writes the `.plt`. A step with nothing to
+stand in keeps its `.out` and is listed with the reason; the other steps go.
+The `.rst` files are not looked at.
 
 With `--t1`/`--t2`, only files whose timestep falls in that window are
 considered; the rest are left untouched (either bound alone is a one-sided
-limit — `--t2` alone behaves like the old `--upto`).
+limit).
 
-PLT files are not touched by `output` — see `plt` below.
+### `rst`
+
+Thins the `.rst` files (restart points) of the run directory: a set is
+deleted if its time step is NOT divisible by `--keep-freq N`.
+
+- Without `--keep-freq` it keeps the multiples of `freq * 10`, where freq is
+  read from `simflow.config` (`outFreq` field) or auto-detected from the
+  existing output files.
+- Always kept, whatever `--keep-freq` says: the step of `restartTsId` in
+  `simflow.config`, the newest `--keep-newest N` complete sets (default 2),
+  and a newest set that is still incomplete.
+- `--t1`/`--t2` limit it as for `out`.
+
+The `.out` and PLT files are not touched by `rst`. (`case organise output`,
+which did both, is gone.)
 
 ### The deletion chain
 
@@ -162,7 +168,7 @@ before. A file may be deleted only when the next one stands in for it:
   ASCII PLT (`run post convert`), a broken ASCII PLT from the `.out` (`run
   post full`). `case check plt --verify` says which.
 
-The natural order is therefore `case organise output`, then `plt
+The natural order is therefore `case organise out`, then `plt
 --delete-ascii`, then `plt --delete-binary`.
 
 ### `plt`
@@ -229,7 +235,7 @@ runs as its own step with its own entry in the confirmation summary.
 5. If `--prune`: for each type whose `cleaned/` is current and reads
    through, confirm and delete `archive/`
 
-### Running `output`
+### Running `out` and `rst`
 
 1. Determine frequency (from config or auto-detect)
 2. Keep interval = `--keep-freq`, or `freq × 10` without it
@@ -261,7 +267,7 @@ runs as its own step with its own entry in the confirmation summary.
 ```
 
 Either alone is a one-sided bound; both together is an inclusive range.
-Available on `history --update`, `output`, `plt` and `vtu`. **Not** applied
+Available on `history --update`, `out`, `rst`, `plt` and `vtu`. **Not** applied
 to the other `history` flags, which always use the whole history: which
 steps a run keeps depends on every later run, and a `t1`/`t2` context left
 over from something else would silently cut the cleaned and compiled files
@@ -271,7 +277,7 @@ Both flags can also come from context instead of being typed explicitly:
 
 ```bash
 use t1:0 t2:1000
-case organise output          # --t1/--t2 injected from context
+case organise out          # --t1/--t2 injected from context
 case organise plt --delete-ascii
 ```
 
@@ -286,10 +292,11 @@ case organise history CS4SG1U1 --clean                          # Each run witho
 case organise history CS4SG1U1 --clean --compile                # ... and one joined file per type
 case organise history CS4SG1U1 --verify                         # Check archive/, cleaned/, compiled
 case organise history CS4SG1U1 --clean --compile --verify --prune   # ... then delete archive/
-case organise output CS4SG1U1                                   # Clean intermediate output files
+case organise out CS4SG1U1                                      # Delete the .out a PLT stands in for
+case organise rst CS4SG1U1                                      # Thin the .rst
 case organise history CS4SG1U1 --update --t1 0 --t2 1000        # Only archive files in [0, 1000]
-case organise output CS4SG1U1 --keep-freq 5000                # Custom retention
-case organise output CS4SG1U1 --t2 5000                         # Only clean up to timestep 5000
+case organise rst CS4SG1U1 --keep-freq 5000                   # Custom retention
+case organise out CS4SG1U1 --t2 5000                            # Only clean up to timestep 5000
 case organise history CS4SG1U1 --prune --no-confirm             # Skip confirmation
 case organise history CS4SG1U1 --prune --log                    # Log deletions to file
 case organise plt CS4SG1U1 --delete-ascii                       # Delete run-dir PLT with newer binary/ copy
@@ -315,7 +322,7 @@ case organise plt CS4SG1U1       # → "Nothing to do — pass --delete-ascii an
   `--dry-run`
 - `history --prune` only deletes `archive/` when `cleaned/` holds every step
   that counts, and asks first
-- `output` and `plt` show a summary before acting and ask for confirmation —
+- `out`, `rst` and `plt` show a summary before acting and ask for confirmation —
   all unless `--no-confirm` is given
 - `--delete-binary` deletes a file only when its copy on the remote has the
   same md5; with no remote to ask it deletes nothing

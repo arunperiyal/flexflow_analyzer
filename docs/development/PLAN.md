@@ -214,16 +214,15 @@ for the `.out` files, `--keep-out` for the `.rst`). Two words say what each
 command touches. To be built after Phase 17, before Phase 6, so that Phase 6
 deletes with the final command names.
 
-- [ ] `case organise out`: what `case organise output` does to the `.out`
-      files (the `--all-out` path, the chain rules of Phase 14, `--keep-freq`,
-      `--t1` / `--t2`)
-- [ ] `case organise rst`: what it does to the `.rst` files (the `--keep-out`
+- [x] `case organise out`: what `case organise output` does to the `.out`
+      files (the `--all-out` path, the chain rules of Phase 14, `--t1` / `--t2`, `--remote`; no `--keep-freq`)
+- [x] `case organise rst`: what it does to the `.rst` files (the `--keep-out`
       path: `--keep-freq`, `--keep-newest`, `--t1` / `--t2`); no `--keep-out`
       flag is left
-- [ ] The `output` subcommand is removed, with its flags `--all-out` and
+- [x] The `output` subcommand is removed, with its flags `--all-out` and
       `--keep-out`; the old word gives a one-line error that names the new
       ones
-- [ ] `auto show`, `auto commands` and `auto apply` print and run the new
+- [x] `auto show`, `auto commands` and `auto apply` print and run the new
       commands (`decide.py` steps `delete-out` and `thin-rst`; the `apply`
       targets `output` and `rst` stay as they are); the dummy cases, tests,
       completion, help text, `docs/usage/`, `docs/architecture/auto_flow.html`,

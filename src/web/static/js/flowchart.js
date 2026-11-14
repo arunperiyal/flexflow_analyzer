@@ -246,13 +246,13 @@ const FlowChart = (() => {
     {
       id: 'cleanup', kind: 'step', col: 1, row: 20, label: ['Delete what is', 'safely copied'],
       title: 'Delete what is safely copied',
-      command: 'case organise output --keep-freq <N>\ncase organise plt --delete-ascii\ncase organise plt --delete-binary',
+      command: 'case organise out\ncase organise rst --keep-freq <N>\ncase organise plt --delete-ascii\ncase organise plt --delete-binary',
       detail: `Only after the upload check above: --delete-binary does not
         look at the remote.
 
-        In this order. "organise output" deletes each step's .out once its
-        .plt exists, so it has to run while the PLTs are still here; it keeps
-        the .rst of the steps divisible by N (your choice, e.g. 500), plus
+        In this order. "organise out" deletes each step's .out once its
+        .plt exists, so it has to run while the PLTs are still here;
+        "organise rst" keeps the .rst of the steps divisible by N (your choice, e.g. 500), plus
         the restart point in simflow.config, the two newest complete sets
         (--keep-newest, default 2: if the newest was cut short when the job
         was killed, the one before it restarts the run) and a set still being
@@ -356,7 +356,7 @@ const FlowChart = (() => {
 
         Post jobs still go through Slurm, so run it again at the next login
         to carry on. It does not delete yet: auto show lists the delete
-        commands (case organise output, case organise plt --delete-ascii,
+        commands (case organise out, case organise rst, case organise plt --delete-ascii,
         --delete-binary) for you to run. Each checks again when it runs and
         keeps what has no verified copy.`,
     },

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### 🧹 `case organise out` and `case organise rst`
+
+- `case organise output` is split in two: `out` deletes the `.out` files a
+  whole, newer PLT stands in for; `rst` thins the `.rst` (`--keep-freq`,
+  `--keep-newest`). The `output` word and its `--all-out` / `--keep-out`
+  flags are gone.
+- `auto show`, `auto commands` and the web flowchart print the new commands.
+  The `.out` delete command no longer depends on `auto.keep_rst`.
+
 ### ▶ `auto apply <target>`
 
 - `auto apply` now takes a target: `history`, `plt`, `output`, `input`, `rst`
