@@ -83,6 +83,13 @@ class LocalCloud:
                 found.mtimes[(rel / name).as_posix()] = st.st_mtime
         return found
 
+    def remote_size(self, case_name: str, rel: str) -> Optional[int]:
+        """Size of <root>/<case>/<rel> now; None when it is not there."""
+        try:
+            return (self.root / case_name / rel).stat().st_size
+        except OSError:
+            return None
+
     def remote_md5(self, case_name: str, rel: str) -> Optional[str]:
         """md5 of <root>/<case>/<rel>, computed now; None when the file is not there."""
         try:
@@ -175,6 +182,14 @@ class SftpCloud:
             return word if len(word) == 32 else None
         except Exception:
             return None
+
+    def remote_size(self, case_name: str, rel: str) -> Optional[int]:
+        """Size of <root>/<case>/<rel> now; None when it is not there."""
+        try:
+            got = self.ssh.remote_stat(posixpath.join(self.root, case_name, rel))
+        except Exception:
+            return None
+        return got[0] if got else None
 
     def remote_md5(self, case_name: str, rel: str) -> Optional[str]:
         """md5 of <root>/<case>/<rel>, computed on the remote now; None when the file is not

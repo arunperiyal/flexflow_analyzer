@@ -4,7 +4,7 @@ What `auto` has sent to a remote and checked, per folder of cases:
 
     {"cloud": {"BR0SG0U1P0": {"binary/riser.5740.plt":
         {"size": 155342168, "md5": "9e1f...", "verified": "md5", "when": "2026-11-12 09:31:05",
-         "mtime": 1762940000.5, "deleted": "2026-11-14 10:02:11"}}}}
+         "mtime": 1762940000.5, "deleted": "2026-11-14 10:02:11", "mismatch": "<when>"}}}}
 
 `mtime` is the local file's modification time when it was sent (the delete stage
 compares it once the local file is gone); `deleted` is set when the delete stage
@@ -57,6 +57,15 @@ class Ledger:
         if entry is not None:
             entry['deleted'] = time.strftime('%Y-%m-%d %H:%M:%S')
             self.save()
+
+    def mark_mismatch(self, remote: str, case: str, rel: str):
+        """The remote copy's md5 differs from the local file's or the ledger's: `auto show`
+        puts the case under needs-you until the file is sent again (record() clears it)."""
+        entry = self.get(remote, case, rel)
+        if entry is None:
+            entry = self.data.setdefault(remote, {}).setdefault(case, {}).setdefault(rel, {})
+        entry['mismatch'] = time.strftime('%Y-%m-%d %H:%M:%S')
+        self.save()
 
     def save(self):
         self.path.parent.mkdir(parents=True, exist_ok=True)

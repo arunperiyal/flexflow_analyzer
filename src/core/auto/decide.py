@@ -607,6 +607,12 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
         if not c.ok:
             plan.add('flag', f"binary/{p}.{t}.plt is broken: {c.reason}.")
 
+    for rel, e in sorted(snap.ledger.items()):
+        if e.get('mismatch'):
+            plan.add('needs', f"{rel}: the copy on {conf.remote} had another md5 than this file "
+                              f"when a deletion was tried ({e['mismatch']}). Find out which is "
+                              f"right, then send it again.")
+
     # -- deletions, once the copies on the cloud are checked (auto.md 13.13) ---------
     # Candidates only: explicit file lists. The executor checks every file again (size, md5
     # on both sides, the "written after" times) right before it goes.

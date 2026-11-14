@@ -32,7 +32,7 @@ grid are the one stated exception), and one question is asked before deleting.
       ledger entries record the local `mtime` and `deleted`
 - [x] Decide: the candidates of C1–C4 as explicit file lists in `plan.ctx`,
       with the "written after" rule and the data-related *needs you* hold-back
-- [ ] Executor `do_delete`: per-file checks right before each unlink, run log
+- [x] Executor `do_delete`: per-file checks right before each unlink, run log
       lines, the `.casestatus.md` line, the ledger
 - [ ] `auto apply --delete` and `--only delete`: order
       `history → upload → delete → post`, the plan listing, the question with
