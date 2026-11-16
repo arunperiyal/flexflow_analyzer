@@ -8,8 +8,8 @@ auto - the per-case workflow for a folder of cases (docs/architecture/auto.md §
                          table for several (case:*), each in full with --detail
     auto commands [case] just the commands to run, numbered, as plain text
     auto status [case]   one line per case
-    auto apply [case] [--remote NAME] [--only history,upload,post] [--dry-run] [--yes]
-                         organise history, upload (checked, never deleting), submit post jobs
+    auto apply [case] [--remote NAME] [--only history,upload,delete,post] [--delete] [--dry-run] [--yes]
+                         organise history, upload (checked), submit post jobs; --delete also deletes checked copies
     auto log [case]      (not built yet)
 """
 
@@ -20,7 +20,7 @@ SUBCOMMANDS = (('init', "Set a remote's folder and auto's settings in .cases.yml
                ('show', 'What auto would do for a case, or every case with case:* (changes nothing)'),
                ('commands', 'Just the commands to run, numbered, as plain text'),
                ('status', 'One line per case: state, steps, jobs, what is next'),
-               ('apply', 'Organise history, upload (checked), submit post jobs; deletes nothing'),
+               ('apply', 'Organise history, upload (checked), submit post jobs; --delete removes checked copies'),
                ('log', 'What earlier runs did (not built yet)'))
 
 

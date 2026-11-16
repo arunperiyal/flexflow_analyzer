@@ -344,19 +344,21 @@ const FlowChart = (() => {
     {
       id: 'autoApply', kind: 'step', col: 3, row: 13, label: ['Carry it out'],
       title: 'Carry it out (auto)',
-      command: 'auto apply --dry-run\nauto apply\nauto apply --only upload',
+      command: 'auto apply --dry-run\nauto apply\nauto apply --delete\nauto apply --only upload',
       detail: `Does the additive steps for each case, in this order, planned
         again from the files and the queue right before each: organise the
         history (when no main job is active), upload what the remote lacks
         (to a temporary name, checked by md5, then renamed; recorded in
         auto_logs/ledger.json), submit a post job for the first stretch of
         steps with no PLT yet. It shows what it will do and asks once.
-        Nothing is deleted. A step that fails stops that case; the record of
+        Without --delete nothing is deleted; with it (or --only delete) a
+        delete stage follows the upload: ASCII PLT, binary PLT and .out
+        whose copy on the remote passes an md5 check made right then, and
+        .rst sets off the keep_rst grid. A step that fails stops that case; the record of
         the run is auto_logs/auto_<time>.log.
 
         Post jobs still go through Slurm, so run it again at the next login
-        to carry on. Deleting what is safely copied (.out, PLTs, .rst
-        thinning) is not built yet: those steps stay by hand.`,
+        to carry on.`,
     },
     {
       id: 'autoNeeds', kind: 'step', col: 3, row: 14, label: ['Handle what', 'it left to you'],
