@@ -134,3 +134,47 @@ def read_files(case_dir, ext: str, problem: Optional[str] = None) -> List[Path]:
     if not files and problem and compiled_path(case_dir, ext, problem).is_file():
         return [compiled_path(case_dir, ext, problem)]
     return files
+
+
+def parse_runs(text: str) -> List[int]:
+    """
+    Run numbers from `1,3` or `2-4` or `1,3-5`, in the order typed, which
+    must be ascending (a run is never repeated). Raises ValueError with a
+    sentence for anything else.
+    """
+    numbers: List[int] = []
+    for part in str(text).split(','):
+        part = part.strip()
+        if not part:
+            raise ValueError(f"empty item in run list '{text}'")
+        low, dash, high = part.partition('-')
+        try:
+            first = int(low)
+            last = int(high) if dash else first
+        except ValueError:
+            raise ValueError(f"'{part}' is not a run number or a range like 2-4")
+        if first < 1 or last < first:
+            raise ValueError(f"'{part}' is not a run number or a range like 2-4")
+        numbers.extend(range(first, last + 1))
+    for before, after in zip(numbers, numbers[1:]):
+        if after <= before:
+            raise ValueError(f"runs must be in ascending order, once each: "
+                             f"{after} comes after {before} in '{text}'")
+    return numbers
+
+
+def pick_archived(case_dir, ext: str, problem: Optional[str], numbers: Optional[List[int]]) -> List[Path]:
+    """
+    The archive/ files of `numbers` in that order (every archived run when
+    `numbers` is None). Raises ValueError naming the numbers archive/ lacks
+    and the ones it has.
+    """
+    have = archived(case_dir, ext, problem)
+    if numbers is None:
+        return list(have.values())
+    missing = [n for n in numbers if n not in have]
+    if missing:
+        there = ', '.join(map(str, have)) or 'none'
+        raise ValueError(f"no {ext}_files/archive/ run {', '.join(map(str, missing))} "
+                         f"(there: {there})")
+    return [have[n] for n in numbers]

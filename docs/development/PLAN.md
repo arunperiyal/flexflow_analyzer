@@ -244,9 +244,9 @@ compile, `plot` must be able to read single archived runs. `plot` with no
 flag keeps reading the whole history (compiled file while fresh, else the
 runs; `core/history.read_files`).
 
-- [ ] `core/history.parse_runs()`: `1,3` / `2-4` / `1,3-5` to a list of run
+- [x] `core/history.parse_runs()`: `1,3` / `2-4` / `1,3-5` to a list of run
       numbers; ascending only, else an error that says so (Phase 22 uses it
-      too)
+      too); `pick_archived()` takes the files
 - [ ] `plot --archive LIST`: read `othd_files/archive/` and
       `oisd_files/archive/` runs of those numbers, in order, instead of the
       whole history; a bare `--archive` is every archived run; a number not
