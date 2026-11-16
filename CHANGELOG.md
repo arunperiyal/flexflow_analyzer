@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+### 🗑 `auto apply --delete`: the delete stage
+
+- `auto apply --delete` (or `--only delete`) deletes local files whose copy on
+  the remote passes an md5 check made at that moment: the ASCII PLT, the binary
+  PLT and the `.out` of a step, in the order `history → upload → delete → post`.
+  A plain `auto apply` still deletes nothing.
+- Restart sets off the `auto.keep_rst` grid are deleted without a copy; the
+  question says so, with the number of sets and their size.
+- Each file is checked again right before it goes; one that fails is left and
+  reported. A case that needs you, has a post job in the queue, or whose queue
+  or remote could not be read gets no deletion. A copy whose md5 differs puts
+  the case under *needs you*. Every file is a line in the run log, and the case
+  gets one line in `.casestatus.md`.
+- `auto show` and `auto commands` still list the delete commands for you to
+  run by hand; the `By hand` row now says `auto apply --delete` does it with
+  the md5 check made right before each file goes. A case that needs you shows
+  "Deleting: none".
+- With a target (`auto apply plt --delete`) only that target's files go: `plt`
+  the ASCII and binary PLTs, `output` the `.out`, `rst` the restart sets.
+
 ### 🧹 `case organise out` and `case organise rst`
 
 - `case organise output` is split in two: `out` deletes the `.out` files a
@@ -19,8 +39,8 @@
   it does nothing and lists the targets.
 - `--only` still works and means `all` limited to those steps; it is
   deprecated.
-- `--dry-run` also lists the check and delete commands as `not run by apply
-  yet`.
+- `--dry-run` also lists the check and delete commands as `not run by apply`
+  (the delete ones run with `--delete`, see below).
 
 ### 📋 `auto show`: every Action is a command
 
@@ -36,8 +56,8 @@
 - **`case upload history --live`** sends the run directory's `.othd`/`.oisd`
   while a job is still writing them, as a snapshot. It is the command behind
   the "copy of the live history" that `auto apply` already made.
-- `auto apply` does not run the delete commands yet; the `By hand` row says
-  so.
+- `auto apply` runs no delete command unless `--delete` is given; the `By
+  hand` row says so.
 
 ### 🔗 `case organise plt` and `output`: deleting along the chain
 

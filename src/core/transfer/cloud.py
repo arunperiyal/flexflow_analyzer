@@ -176,6 +176,20 @@ class LocalCloud:
         except OSError:
             return None
 
+    def remote_size(self, case_name: str, rel: str) -> Optional[int]:
+        """Size of <root>/<case>/<rel> now; None when it is not there."""
+        try:
+            return (self.root / case_name / rel).stat().st_size
+        except OSError:
+            return None
+
+    def remote_md5(self, case_name: str, rel: str) -> Optional[str]:
+        """md5 of <root>/<case>/<rel>, computed now; None when the file is not there."""
+        try:
+            return file_md5(self.root / case_name / rel)
+        except OSError:
+            return None
+
     def put(self, local, case_name: str, rel: str, snapshot: bool = False) -> PutResult:
         """Copy `local` to <root>/<case>/<rel>: to a temporary name first, checked
         (md5 of both), then renamed, so the real name never holds a half file."""
@@ -258,6 +272,19 @@ class SftpCloud:
         reading the file back when the remote has none. None when the file
         cannot be read."""
         return remote_md5(self.ssh, posixpath.join(self.root, case_name, rel), read_back=True)
+
+    def remote_size(self, case_name: str, rel: str) -> Optional[int]:
+        """Size of <root>/<case>/<rel> now; None when it is not there."""
+        try:
+            got = self.ssh.remote_stat(posixpath.join(self.root, case_name, rel))
+        except Exception:
+            return None
+        return got[0] if got else None
+
+    def remote_md5(self, case_name: str, rel: str) -> Optional[str]:
+        """md5 of <root>/<case>/<rel>, computed on the remote now; None when the file is not
+        there or the remote has no md5sum (a deletion is then never cleared)."""
+        return remote_md5(self.ssh, posixpath.join(self.root, case_name, rel))
 
     def put(self, local, case_name: str, rel: str, snapshot: bool = False) -> PutResult:
         """Send `local` to <root>/<case>/<rel>, checked (send_checked)."""

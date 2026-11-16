@@ -8,9 +8,10 @@ auto - the per-case workflow for a folder of cases (docs/architecture/auto.md §
                          table for several (case:*), each in full with --detail
     auto commands [case] just the commands to run, numbered, as plain text
     auto status [case]   one line per case
-    auto apply <target> [case] [--remote NAME] [--dry-run] [--yes]
+    auto apply <target> [case] [--remote NAME] [--delete] [--dry-run] [--yes]
                          target: history, plt, output, input, rst, all
-                         organise history, upload (checked, never deleting), submit post jobs
+                         organise history, upload (checked), submit post jobs; --delete also
+                         deletes what has an md5-checked copy on the remote
     auto log [case]      (not built yet)
 """
 
@@ -23,7 +24,7 @@ SUBCOMMANDS = (('init', "Set a remote's folder and auto's settings in .cases.yml
                ('show', 'What auto would do for a case, or every case with case:* (changes nothing)'),
                ('commands', 'Just the commands to run, numbered, as plain text'),
                ('status', 'One line per case: state, steps, jobs, what is next'),
-               ('apply', 'Organise history, upload (checked), submit post jobs; deletes nothing'),
+               ('apply', 'Organise history, upload (checked), submit post jobs; --delete removes checked copies'),
                ('log', 'What earlier runs did (not built yet)'))
 
 
@@ -65,7 +66,10 @@ class AutoCommand(BaseCommand):
         parser.add_argument('--only', metavar='SECTIONS',
                             help='show: only these sections (state, needs, flags, history, '
                                  'plt, out, rst, inputs); apply: only these steps '
-                                 '(history, upload, post); comma-separated (apply: deprecated, use a target)')
+                                 '(history, upload, delete, post); comma-separated (apply: deprecated, use a target)')
+        parser.add_argument('--delete', action='store_true',
+                            help='apply: also delete what has an md5-checked copy on the remote '
+                                 '(or use --only delete)')
         parser.add_argument('--dry-run', action='store_true',
                             help='apply: list what would be done, do nothing')
         parser.add_argument('--yes', action='store_true',

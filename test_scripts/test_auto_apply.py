@@ -394,3 +394,84 @@ def test_dry_run_of_a_target_lists_what_apply_does_not_run_yet(dummy, capsys):
     assert apply('case5', target='all', dry_run=True) == 0
     out = capsys.readouterr().out
     assert 'auto apply all' in out and 'nothing was done' in out
+
+
+# --- the md5 of a named remote file, and what the ledger keeps for the delete stage ------------
+
+def test_local_cloud_remote_md5_is_computed_now_and_none_when_absent(tmp_path):
+    (tmp_path / 'remote' / 'c1' / 'binary').mkdir(parents=True)
+    f = tmp_path / 'remote' / 'c1' / 'binary' / 'a.plt'
+    f.write_bytes(b'one')
+    cloud = LocalCloud(tmp_path / 'remote')
+    first = cloud.remote_md5('c1', 'binary/a.plt')
+    f.write_bytes(b'two')
+    assert first != cloud.remote_md5('c1', 'binary/a.plt')      # read again each time
+    assert cloud.remote_md5('c1', 'binary/a.plt') == file_md5(f)
+    assert cloud.remote_md5('c1', 'binary/none.plt') is None
+
+
+def test_sftp_remote_md5_and_none_without_md5sum_or_file(tmp_path):
+    f = tmp_path / 'nas' / 'c1' / 'a.plt'
+    f.parent.mkdir(parents=True)
+    f.write_bytes(b'abc' * 50)
+    assert sftp_cloud(tmp_path).remote_md5('c1', 'a.plt') == file_md5(f)
+    assert sftp_cloud(tmp_path, md5sum=False).remote_md5('c1', 'a.plt') is None
+
+
+def test_ledger_records_the_local_mtime_and_when_it_was_deleted(tmp_path):
+    led = Ledger(tmp_path)
+    led.record('cloud', 'c1', 'binary/a.plt', 10, 'abc', 'md5', mtime=1234.5)
+    assert 'deleted' not in Ledger(tmp_path).get('cloud', 'c1', 'binary/a.plt')
+    led.mark_deleted('cloud', 'c1', 'binary/a.plt')
+    entry = Ledger(tmp_path).get('cloud', 'c1', 'binary/a.plt')
+    assert entry['mtime'] == 1234.5 and entry['deleted'] and entry['md5'] == 'abc'
+
+
+# --- --delete and --only delete ------------------------------------------------------------
+
+def rst_files_of(dummy, case):
+    return sorted(p.name for p in (dummy / 'bare' / case / 'RUN_1').glob('*.rst'))
+
+
+def test_a_plain_apply_never_deletes_even_restart_sets(dummy):
+    before = rst_files_of(dummy, 'case5')
+    apply('case5')
+    assert rst_files_of(dummy, 'case5') == before
+
+
+def test_dry_run_with_delete_lists_and_deletes_nothing(dummy, capsys):
+    before = rst_files_of(dummy, 'case5')
+    assert apply('case5', only='delete', dry_run=True) == 0
+    out = ' '.join(capsys.readouterr().out.split())
+    assert 'C4 restart sets' in out and 'only computed in a real run' in out
+    assert rst_files_of(dummy, 'case5') == before
+
+
+def test_the_question_names_the_totals_and_no_declines_it(dummy, monkeypatch, capsys):
+    before = rst_files_of(dummy, 'case5')
+    asked = []
+    monkeypatch.setattr('builtins.input', lambda q: asked.append(q) or 'n')
+    assert apply('case5', only='delete', yes=False) == 1
+    assert 'DELETES' in asked[0] and 'restart set' in asked[0] and 'no copy' in asked[0]
+    assert rst_files_of(dummy, 'case5') == before
+
+
+def test_only_delete_removes_the_restart_sets_off_the_grid_and_logs_it(dummy):
+    before = rst_files_of(dummy, 'case5')
+    assert apply('case5', only='delete') == 0
+    after = rst_files_of(dummy, 'case5')
+    assert 0 < len(after) < len(before)
+    assert 'deleted' in last_log(dummy) and 'C4 restart set' in last_log(dummy)
+    assert 'auto deleted:' in (dummy / 'bare' / 'case5' / '.casestatus.md').read_text()
+
+
+def test_the_delete_flag_adds_the_stage_to_a_plain_apply(dummy, capsys):
+    apply('case5', dry_run=True)
+    assert 'C4' not in capsys.readouterr().out
+    apply('case5', delete=True, dry_run=True)
+    assert 'C4' in capsys.readouterr().out
+
+
+def test_the_order_is_history_upload_delete_post():
+    from src.commands.auto.apply import KINDS
+    assert KINDS == ('history', 'upload', 'delete', 'post')

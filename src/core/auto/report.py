@@ -27,8 +27,9 @@ def _predate(steps):
     return 'predates' if len(steps) == 1 else 'predate'
 
 
-# until `auto apply` runs the delete commands itself (a later stage)
-BY_HAND = "auto apply does not delete yet: the delete commands below are for you to run"
+# `auto apply` alone never deletes; `--delete` does it, checking each file again right before
+BY_HAND = ("auto apply does not delete unless asked (auto apply --delete); "
+           "or run the delete commands below yourself")
 
 
 @dataclass
@@ -259,6 +260,9 @@ def _plt(v):
     posts = plan.steps_of('post')
     if len(posts) > 1:
         s.row('Waiting', "submit each post job after the previous one has ended")
+    if c.get('delete_hold'):
+        s.row('Deleting', "auto apply --delete deletes nothing while the case needs you "
+                          "(see Needs you); the commands below check each file when they run")
     gone = [f"{kind} {steps_text(c[key])}" for kind, key in (('ASCII', 'del_ascii'),
                                                                ('binary', 'del_binary'))
             if c.get(key)]

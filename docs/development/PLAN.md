@@ -22,31 +22,38 @@ Status marks: `[ ]` to do, `[x]` done, `[~]` dropped (say why).
 
 ### Phase 6: `auto apply`, deleting (branch `auto-delete`)
 
-**On hold until Phases 12 to 17 are done**, then to be redone on top of them.
-The first design (`auto.md` §13.13, commit `1abbe95`) had `auto` delete files
-itself from an explicit list. The direction set on 2026-11-13 is different:
-`auto apply` runs the same commands `auto show` lists, so the md5 check
-belongs to `case check plt --verify` (Phase 13) and the refusal to delete an
-unchecked file belongs to `case organise plt` / `case organise output`
-(Phase 14).
+Built first, before Phases 12 to 17 changed `auto` to run the commands `auto
+show` lists; merged with them on 2026-11-16 (the delete stage reads
+`plan.ctx['delete']`, the new code reads `plan.steps`). The first design
+(`auto.md` §13.13, commit `1abbe95`) has `auto` delete files itself from an
+explicit list, each checked again by md5 right before it goes. The direction
+set on 2026-11-13 is that `auto apply` runs the same commands `auto show`
+lists, so the md5 check belongs to `case check plt --verify` (Phase 13) and
+the refusal to delete an unchecked file to `case organise plt` / `case
+organise out` (Phase 14). Both paths now exist side by side.
 
 - [x] Write the design as §13.13 at the end of `auto.md`
-- [~] Review of §13.13 by the user: overtaken by the new direction
-- [ ] Rewrite §13.13 as a new section at the end of `auto.md`: deleting is
-      done by the hand commands; keep its rules (md5 at the time of deleting,
-      "written after", the restart guard, fail closed, restart-set keeps)
-- [~] Is deleting part of `auto apply all`, or only with a flag: settled
-      2026-11-13. `auto apply` organises, uploads and deletes as one
-      conditional sequence; `--dry-run` shows it without uploading or
-      deleting
-- [ ] Still to settle with the user: cases that need you; the cost of the md5
-- [ ] `auto apply plt` and `auto apply output` run the delete commands, after
-      the question with totals
-- [ ] Dummy cases and a test for each rule: copy differs, size-only copy,
+- [x] **Review of §13.13 by the user.** Nothing below is built before it
+- [x] Remote md5 of a named file (`cloud.py`: `LocalCloud`, `SftpCloud`);
+      ledger entries record the local `mtime` and `deleted`
+- [x] Decide: the candidates of C1–C4 as explicit file lists in `plan.ctx`,
+      with the "written after" rule and the data-related *needs you* hold-back
+- [x] Executor `do_delete`: per-file checks right before each unlink, run log
+      lines, the `.casestatus.md` line, the ledger
+- [x] `auto apply --delete` and `--only delete`: order
+      `history → upload → delete → post`, the plan listing, the question with
+      totals, `--dry-run`
+- [x] Reports (`auto show`, `auto commands`): replace the `[not built yet]`
+      text
+- [x] Dummy cases and a test for each rule: copy differs, size-only copy,
       `.out` newer than its PLT (restart), queued restart, post in flight,
       restart-set keeps, a case that needs you
-- [ ] Help text, `docs/architecture/auto_flow.html`, the web flowchart,
-      `CHANGELOG.md`
+- [x] Help text, completion, `docs/architecture/auto_flow.html`, the web
+      flowchart, `CHANGELOG.md`
+- [ ] Reconcile the two delete paths: have `do_delete` call the chain commands
+      (`case organise ...`) it now duplicates, keeping the "written after"
+      rule, the queued-restart hold-back and the one question with totals
+
 
 ### Phase 7: `auto`, the steady check (branch `auto-steady`)
 
@@ -229,6 +236,34 @@ deletes with the final command names.
       the web flowchart and `CHANGELOG.md` follow
 
 ---
+
+### Phase 12: `case check --remote`, verify against the remote (branch `check-remote`)
+
+Found on a real case (`BR0SG0U1P0`, PLTs moved to the remote by hand; none
+left here). `case check plt` printed "no riser.<step>.plt ... 1400 expected",
+and `case organise output --all-out` (no remote chosen) said "The remote was
+not asked" and kept the `.out` of step 5740 with "Convert them first (run post
+full)", though the PLT was on the remote. Both looked only on this machine.
+
+- [ ] Design: how `check` reads the remote (the `remote` / `.cases.yml`
+      folder as `auto` does, read-only), and what a file moved by hand counts
+      as; add it as a section at the end of `auto.md` or a short note in
+      `docs/architecture/`
+- [ ] Rename `case check out` to `case check output` (parser, help, completion,
+      `case check all`, docs); keep `out` as an alias for now
+- [ ] `case check history --remote NAME`: compare the history files here with
+      the remote's
+- [ ] `case check plt --remote NAME`: a `remote` row next to `binary/` and
+      `./RUN_n/`; without a remote, say the remote was not looked at, not
+      "no PLT; N expected"
+- [ ] `case check output --remote NAME`: for each `.out`, whether its PLT is
+      here or on the remote; steps with neither are listed as "convert first"
+- [ ] `case organise output`: before deleting `.out` files, look for their
+      PLTs on the remote (`--remote` or `use remote:`; one remote in
+      `.cases.yml`: use it); "Convert them first" only for steps with a PLT
+      nowhere. The "not asked" line says what to type
+- [ ] Dummy case (PLTs on the remote only, none local) and tests for each
+- [ ] Help text, completion, `CHANGELOG.md`
 
 ## Backlog
 

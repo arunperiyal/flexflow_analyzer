@@ -37,10 +37,10 @@ def run(dummy, *cmd, cwd=None):
                                'FAKE_SLURM_DIR': str(dummy / 'slurm')})
 
 
-def test_twelve_cases_registered(dummy):
+def test_fifteen_cases_registered(dummy):
     from src.core import cases_file
     cf = cases_file.read(dummy / 'bare')
-    assert [c['name'] for c in cf.cases] == [f'case{i}' for i in range(1, 13)]
+    assert [c['name'] for c in cf.cases] == [f'case{i}' for i in range(1, 16)]
     assert all(Path(c['path']).is_dir() for c in cf.cases)
     assert cf.remotes == {'local': str(dummy / 'cloud' / 'bare')}
     assert cf.auto == {'keep_rst': 200, 'upload_rst': 400, 'disk_alert': '1M'}

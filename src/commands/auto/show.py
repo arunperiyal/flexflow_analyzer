@@ -119,10 +119,10 @@ def gather(case_dirs, remote, clouds=None):
                 except CloudError as e:
                     problems.append(f"{Path(case_dir).name}: {e}")
             from src.core.transfer.ledger import Ledger
-            sent = {rel: e.get('when') for rel, e in
-                    Ledger(Path(case_dir).parent).data.get(conf.remote, {})
-                    .get(Path(case_dir).name, {}).items()}
-            snap = observe_case(case_dir, queue, ended, listing, sent)
+            entries = (Ledger(Path(case_dir).parent).data.get(conf.remote, {})
+                       .get(Path(case_dir).name, {}))
+            sent = {rel: e.get('when') for rel, e in entries.items()}
+            snap = observe_case(case_dir, queue, ended, listing, sent, entries)
             results.append((snap, decide(snap, conf, cloud_ok=listing is not None,
                                          sacct_ok=sacct_ok)))
     finally:
@@ -294,7 +294,7 @@ def execute_show(args) -> int:
                      else "[green]none needs you[/green]"))
     console.print(upload)
     console.print("[dim]Nothing was changed. `auto apply --dry-run` lists what it would do: "
-                  "history, uploads, post jobs. Deleting is not built yet.[/dim]")
+                  "history, uploads, post jobs; `--delete` adds the deletions.[/dim]")
     console.rule(style='cyan')
     console.print()
     return 1 if needs or problems else 0

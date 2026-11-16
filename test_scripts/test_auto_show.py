@@ -179,11 +179,11 @@ def test_the_case_context(dummy, monkeypatch, capsys):
     assert rt.execute_line('use case:*') == 0
     assert rt.execute_line('auto show --remote local') == 1      # some cases need you
     out = capsys.readouterr().out
-    assert '12 cases' in out and 'summary' in out
+    assert '15 cases' in out and 'summary' in out
     assert 'PLT files' not in out                                # table only for several
     assert rt.execute_line('auto show --remote local --detail --only plt') == 1
     out = capsys.readouterr().out
-    assert out.count('PLT files') == 11 and 'RST files' not in out   # case9 has none
+    assert out.count('PLT files') == 14 and 'RST files' not in out   # case9 has none
     assert rt.execute_line('auto show --remote local --only nonsense') == 2
 
 
@@ -243,7 +243,7 @@ def test_auto_commands_is_plain_text_to_read_or_save(dummy, monkeypatch, capsys)
     assert '#   needs you: Main job' in out                       # case7
     assert 'auto apply:' not in out and 'not built yet' not in out
     assert '--delete-binary --t1 450 --t2 500 --remote local    #' in out     # a command now
-    assert '#   by hand: auto apply does not delete yet' in out
+    assert '#   by hand: auto apply does not delete unless asked' in out
 
 
 def test_auto_status_one_line_per_case(dummy, monkeypatch, capsys):
@@ -281,7 +281,7 @@ def test_every_action_is_a_command_and_the_rest_is_in_rows(dummy):
     sec = report_of(dummy, 'case6')
     plt = dict(sec['plt'].rows)
     assert plt['Delete'].startswith('binary 450, 500: each only once the next file stands in')
-    assert plt['By hand'].startswith('auto apply does not delete yet')
+    assert plt['By hand'].startswith('auto apply does not delete unless asked')
     # the copy of a live history file is a command too
     hist = report_of(dummy, 'case2')['history']
     assert 'case upload history case2 --live --remote local' in hist.actions
@@ -289,6 +289,12 @@ def test_every_action_is_a_command_and_the_rest_is_in_rows(dummy):
     # what a section waits for is a row, not an action
     waiting = dict(report_of(dummy, 'case4')['plt'].rows)['Waiting']
     assert waiting.startswith('post job') and 'until it ends' in waiting
+def test_a_case_that_needs_you_has_no_deletion_candidates(dummy):
+    sec = report_of(dummy, 'case6')                  # a cut-short binary PLT and a bad post job
+    assert 'auto apply --delete deletes nothing' in dict(sec['plt'].rows)['Deleting']
+    results, _, _ = gather(resolve_cases('case6', dummy / 'bare'), 'local')
+    ctx = results[0][1].ctx
+    assert ctx['delete_hold'] and not any(ctx['delete'].values())
 
 
 def test_a_single_step_reads_as_a_step(dummy):
@@ -311,7 +317,7 @@ def test_the_footer_does_not_claim_apply_is_missing(dummy, monkeypatch, capsys):
     execute_show(SimpleNamespace(case='case3', remote='local', detail=False, only=None))
     out = ' '.join(capsys.readouterr().out.split())
     assert 'not built yet).' not in out
-    assert '`auto apply --dry-run` lists what it would do: history, uploads, post jobs. Deleting is not built yet.' in out
+    assert '`auto apply --dry-run` lists what it would do: history, uploads, post jobs; `--delete` adds the deletions.' in out
 
 
 def test_the_rst_section_says_what_the_remote_holds_and_what_is_due(dummy):
@@ -416,3 +422,12 @@ def test_the_dry_run_says_what_the_files_are(dummy):
 def test_the_rst_section_says_which_sets_are_always_kept(dummy):
     rows = dict(report_of(dummy, 'case12')['rst'].rows)
     assert rows['Also kept'] == '600, 400 (the newest 2, whatever the grid)'
+
+
+def test_no_report_line_says_deleting_is_not_built(dummy):
+    for case in ('case3', 'case5', 'case10'):
+        for sec in report_of(dummy, case).values():
+            assert not any('not built' in a for a in sec.actions)
+    thin = [a for a in report_of(dummy, 'case5')['rst'].actions if a.startswith('case organise rst')]
+    assert thin
+    assert 'auto apply --delete' in dict(report_of(dummy, 'case5')['rst'].rows)['By hand']

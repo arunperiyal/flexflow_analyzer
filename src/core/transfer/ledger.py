@@ -5,16 +5,17 @@ of cases: <folder>/auto_logs/ledger.json
     {"cloud": {"BR0SG0U1P0": {"binary/riser.5740.plt":
         {"size": 155342168, "md5": "9e1f...", "verified": "md5",
          "mtime": 1794475865.0, "path": "/nas/cases/BR0SG0U1P0/binary/riser.5740.plt",
-         "when": "2026-11-12 09:31:05"}}}}
+         "when": "2026-11-12 09:31:05", "deleted": "2026-11-14 10:02:11", "mismatch": "<when>"}}}}
 
 `mtime` is when the local file was last written, as it was when sent: a local
 file written again since (a restart, a new conversion) no longer matches its
 entry. `path` is where on the remote the copy is: `case upload --remote-path`
 can send a case somewhere other than the folder `auto` uses.
 
-A later stage deletes a local file only when its entry is `verified: md5` and
-the size and md5 still match the file on the remote. Written after every file,
-so a run cut short keeps what it had finished.
+The delete stage compares `mtime` once the local file is gone; `deleted` is set when the delete stage
+removed the local file. The delete stage clears a file only when its md5 is
+computed on both sides at that moment; the ledger alone never clears one.
+Written after every file, so a run cut short keeps what it had finished.
 """
 
 import json
@@ -61,6 +62,22 @@ class Ledger:
         """Take a file out: its copy was found missing or different."""
         if self.data.get(remote, {}).get(case, {}).pop(rel, None) is not None:
             self.save()
+
+    def mark_deleted(self, remote: str, case: str, rel: str):
+        """The local file is gone: say when, and keep what the entry knew."""
+        entry = self.get(remote, case, rel)
+        if entry is not None:
+            entry['deleted'] = time.strftime('%Y-%m-%d %H:%M:%S')
+            self.save()
+
+    def mark_mismatch(self, remote: str, case: str, rel: str):
+        """The remote copy's md5 differs from the local file's or the ledger's: `auto show`
+        puts the case under needs-you until the file is sent again (record() clears it)."""
+        entry = self.get(remote, case, rel)
+        if entry is None:
+            entry = self.data.setdefault(remote, {}).setdefault(case, {}).setdefault(rel, {})
+        entry['mismatch'] = time.strftime('%Y-%m-%d %H:%M:%S')
+        self.save()
 
     def save(self):
         self.path.parent.mkdir(parents=True, exist_ok=True)
