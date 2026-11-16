@@ -235,6 +235,42 @@ deletes with the final command names.
       completion, help text, `docs/usage/`, `docs/architecture/auto_flow.html`,
       the web flowchart and `CHANGELOG.md` follow
 
+### Phase 21: `plot --archive N` (branch `plot-archive`)
+
+Asked for on 2026-11-17, after a `plot --gnu` of `fixed/bare` showed one
+spike near step 2750, where `riser5` and `riser6` both restart inside
+`riser3`. To see whether the spike is in the solver's files or made by the
+compile, `plot` must be able to read single archived runs. `plot` with no
+flag keeps reading the whole history (compiled file while fresh, else the
+runs; `core/history.read_files`).
+
+- [ ] `core/history.parse_runs()`: `1,3` / `2-4` / `1,3-5` to a list of run
+      numbers; ascending only, else an error that says so (Phase 22 uses it
+      too)
+- [ ] `plot --archive LIST`: read `othd_files/archive/` and
+      `oisd_files/archive/` runs of those numbers, in order, instead of the
+      whole history; a bare `--archive` is every archived run; a number not
+      in `archive/` is an error that lists the ones there. The file
+      choice goes through `shared.find_files` / `scan_kinds` / `select`
+- [ ] The title and the `reading` line say which archive runs were read
+- [ ] Dummy case with overlapping runs, tests, help text, completion,
+      `CHANGELOG.md`
+
+### Phase 22: `case organise history --clean 1,2,3` (branch `organise-clean-select`)
+
+Asked for on 2026-11-17. `--clean` today decides itself which runs make the
+history; with abandoned branches (`riser4`, `riser5` of `fixed/bare`) the
+user must choose. To be built after Phase 21.
+
+- [ ] `--clean LIST` (same syntax as Phase 21, ascending only): only the
+      runs named are cleaned
+- [ ] `cleaned/` holds them renamed `riser1..riserN` in that order; a mapping
+      (cleaned N from archive M) is written next to them and printed
+- [ ] A non-empty `cleaned/` is not overwritten without `--force`
+- [ ] Overlaps among the chosen runs still resolve as today (the later run
+      wins); gaps and overlaps are printed
+- [ ] Tests, help text, completion, `CHANGELOG.md`
+
 ---
 
 ### Phase 12: `case check --remote`, verify against the remote (branch `check-remote`)
