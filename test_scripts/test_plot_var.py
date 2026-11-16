@@ -94,7 +94,7 @@ def test_pendulum_selection(monkeypatch, tmp_path):
                     'acceleration': t * 4}
 
     monkeypatch.setattr('src.core.readers.othd_reader.OTHDReader', Reader)
-    monkeypatch.setattr(shared, 'find_files', lambda case, kind: ['x.othd'])
+    monkeypatch.setattr(shared, 'find_files', lambda case, kind, archive=None: ['x.othd'])
     args = SimpleNamespace(othid=None, t1=2, t2=None, last=2)
     sel = plot.select_pendulum(tmp_path, args, Log(), ['pd', 'pendVel'])
     assert list(sel.values) == ['pendDisp', 'pendVel']

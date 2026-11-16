@@ -247,13 +247,13 @@ runs; `core/history.read_files`).
 - [x] `core/history.parse_runs()`: `1,3` / `2-4` / `1,3-5` to a list of run
       numbers; ascending only, else an error that says so (Phase 22 uses it
       too); `pick_archived()` takes the files
-- [ ] `plot --archive LIST`: read `othd_files/archive/` and
+- [x] `plot --archive LIST`: read `othd_files/archive/` and
       `oisd_files/archive/` runs of those numbers, in order, instead of the
       whole history; a bare `--archive` is every archived run; a number not
       in `archive/` is an error that lists the ones there. The file
       choice goes through `shared.find_files` / `scan_kinds` / `select`
-- [ ] The title and the `reading` line say which archive runs were read
-- [ ] Dummy case with overlapping runs, tests, help text, completion,
+- [x] The title and the `reading` line say which archive runs were read
+- [x] Dummy case with overlapping runs, tests, help text, completion,
       `CHANGELOG.md`
 
 ### Phase 22: `case organise history --clean 1,2,3` (branch `organise-clean-select`)
