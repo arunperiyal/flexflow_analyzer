@@ -382,6 +382,20 @@ Not split into tasks yet. Each needs a decision before it becomes a phase.
 - **Project layout**: rename `test_scripts/` to `tests/`; a `pyproject.toml`
   with the pytest settings.
 
+## Open branches
+
+As of 2026-11-17, after Phases 21 to 24 were merged. To work on later.
+
+| Branch | Phase | State |
+|---|---|---|
+| `docs-install` | 10 | 4 commits not in `main` (installed documentation, development testing tools, next-session notes); 37 commits behind `main`, so merge or rebase `main` first. On `origin` |
+| `flowreel-export` | 9 | 1 commit not in `main` (`Add FlowReel body export`); 37 commits behind `main`, same. On `origin` |
+| shellkit (separate repository, `/media/arunperiyal/Works/projects/shellkit`) | 25 | No branch yet. The user makes it and says Claude may edit that repository; then Phase 25 is built there and the pin in `requirements.txt` raised |
+
+- The user merges both open branches; Claude resolves conflicts when asked.
+- 115 merged local branches are still there (Phase 4's open item); the user
+  deletes them when they like.
+
 ## Waiting on the user
 
 As noted on 2026-11-11; may be out of date.
