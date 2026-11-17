@@ -59,11 +59,11 @@ def execute_template(args):
             if plot_type == 'single':
                 source_file = os.path.join(template_dir, 'example_single_config.yaml')
                 default_output = 'plot_single.yaml'
-                usage_cmd = 'flexflow plot --input-file {}'
+                usage_cmd = 'plot --input-file {}'
             elif plot_type == 'multi':
                 source_file = os.path.join(template_dir, 'example_multi_config.yaml')
                 default_output = 'plot_multi.yaml'
-                usage_cmd = 'flexflow compare --input-file {}'
+                usage_cmd = 'compare --input-file {}'
             else:
                 logger.error(f"Invalid plot type: {plot_type}")
                 print_plot_help()
@@ -94,7 +94,7 @@ def execute_template(args):
                 print_case_help()
                 return
 
-            usage_cmd = 'flexflow case create --from-config {} --ref-case ./refCase'
+            usage_cmd = 'case create --from-config {} --ref-case ./refCase'
 
         else:
             logger.error(f"Invalid domain: {domain}")

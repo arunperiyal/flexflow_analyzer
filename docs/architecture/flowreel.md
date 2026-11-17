@@ -28,7 +28,7 @@ translating.
 Add a subcommand that writes the `bodies:` block from what the case already says:
 
 ```text
-flexflow field flowreel <case_dir> [--output flowreel.yml] [--body NAME ...] [--stdout]
+field flowreel <case_dir> [--output flowreel.yml] [--body NAME ...] [--stdout]
 ```
 
 | Flag | Meaning |
@@ -80,7 +80,7 @@ whole centreline and maps of span against time, so it needs every node of an out
 group in one file, in long form:
 
 ```text
-flexflow data table <case> --var aleDisp --all-nodes --othid 1 --output riser_disp.csv
+data table <case> --var aleDisp --all-nodes --othid 1 --output riser_disp.csv
 ```
 
 ```csv
@@ -96,7 +96,7 @@ time,node,aleDisp_x,aleDisp_y,aleDisp_z
   place the probes. The `othd.<block>.map` already has the undeformed coordinates:
 
 ```text
-flexflow data table <case> --othid 1 --stations --output riser_nodes.csv
+data table <case> --othid 1 --stations --output riser_nodes.csv
 ```
 
 ```csv
@@ -116,7 +116,7 @@ needs no `node` column.
 there should be a CSV of them too:
 
 ```text
-flexflow data table <case> --var pendDisp,pendVel,pendAccel --output pendulum.csv
+data table <case> --var pendDisp,pendVel,pendAccel --output pendulum.csv
 ```
 
 ```csv

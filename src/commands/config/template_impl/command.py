@@ -47,19 +47,19 @@ def execute_template(args):
         if template_type == 'single':
             source_file = os.path.join(template_dir, 'example_single_config.yaml')
             default_output = 'single_plot_config.yaml'
-            usage_cmd = f'flexflow plot --input-file {{}}'
+            usage_cmd = f'plot --input-file {{}}'
         elif template_type == 'multi':
             source_file = os.path.join(template_dir, 'example_multi_config.yaml')
             default_output = 'multi_plot_config.yaml'
-            usage_cmd = f'flexflow compare --input-file {{}}'
+            usage_cmd = f'compare --input-file {{}}'
         elif template_type == 'fft':
             source_file = os.path.join(template_dir, 'example_fft_config.yaml')
             default_output = 'fft_plot_config.yaml'
-            usage_cmd = f'flexflow plot --input-file {{}}'
+            usage_cmd = f'plot --input-file {{}}'
         elif template_type == 'case':
             source_file = os.path.join(template_dir, 'example_case_config.yaml')
             default_output = 'case_config.yaml'
-            usage_cmd = f'flexflow case create --from-config {{}}'
+            usage_cmd = f'case create --from-config {{}}'
         else:
             print(f"{Colors.red('Error:')} Invalid template type: {template_type}", file=sys.stderr)
             print(f"Valid types: single, multi, fft, case", file=sys.stderr)

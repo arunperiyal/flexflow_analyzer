@@ -11,7 +11,7 @@ def print_plot_help():
 Generate plot configuration templates.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    flexflow template plot {Colors.YELLOW}<type>{Colors.RESET} [output_file]
+    template plot {Colors.YELLOW}<type>{Colors.RESET} [output_file]
 
 {Colors.BOLD}TEMPLATE TYPES:{Colors.RESET}
     {Colors.CYAN}single{Colors.RESET}     Single plot configuration (time-domain, FFT, trajectories)
@@ -24,30 +24,30 @@ Generate plot configuration templates.
 
 {Colors.BOLD}DESCRIPTION:{Colors.RESET}
     Creates plot template YAML files that can be edited and used with:
-    - flexflow plot --input-file <file>       (single plot template)
-    - flexflow compare --input-file <file>    (multi-case comparison template)
+    - plot --input-file <file>       (single plot template)
+    - compare --input-file <file>    (multi-case comparison template)
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
 
     {Colors.BOLD}Generate single plot template:{Colors.RESET}
-        flexflow template plot single
-        flexflow template plot single my_plot.yaml
+        template plot single
+        template plot single my_plot.yaml
 
     {Colors.BOLD}Generate multi-case comparison template:{Colors.RESET}
-        flexflow template plot multi
-        flexflow template plot multi comparison.yaml
+        template plot multi
+        template plot multi comparison.yaml
 
     {Colors.BOLD}Use generated template:{Colors.RESET}
         # 1. Edit the YAML file
         vi plot_single.yaml
 
         # 2. Run the plot command
-        flexflow plot --input-file plot_single.yaml
+        plot --input-file plot_single.yaml
 
 {Colors.BOLD}WORKFLOW:{Colors.RESET}
-    1. Generate template:    flexflow template plot single my_config.yaml
+    1. Generate template:    template plot single my_config.yaml
     2. Edit configuration:   vi my_config.yaml
-    3. Generate plot:        flexflow plot --input-file my_config.yaml
+    3. Generate plot:        plot --input-file my_config.yaml
 """)
 
 
@@ -59,7 +59,7 @@ def print_case_help():
 Generate case creation configuration templates.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    flexflow template case {Colors.YELLOW}<type>{Colors.RESET} [output_file]
+    template case {Colors.YELLOW}<type>{Colors.RESET} [output_file]
 
 {Colors.BOLD}TEMPLATE TYPES:{Colors.RESET}
     {Colors.CYAN}single{Colors.RESET}     Single case configuration
@@ -81,36 +81,36 @@ Generate case creation configuration templates.
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
 
     {Colors.BOLD}Generate single case template:{Colors.RESET}
-        flexflow template case single
-        flexflow template case single my_case.yaml
+        template case single
+        template case single my_case.yaml
 
     {Colors.BOLD}Generate batch cases template:{Colors.RESET}
-        flexflow template case multi
-        flexflow template case multi batch_cases.yaml
+        template case multi
+        template case multi batch_cases.yaml
 
     {Colors.BOLD}Use generated template:{Colors.RESET}
         # 1. Edit the YAML file
         vi case_single.yaml
 
         # 2. Create the case
-        flexflow case create --from-config case_single.yaml --ref-case ./refCase
+        case create --from-config case_single.yaml --ref-case ./refCase
 
 {Colors.BOLD}WORKFLOW:{Colors.RESET}
 
     {Colors.BOLD}For single case:{Colors.RESET}
-        1. Generate template:    flexflow template case single my_case.yaml
+        1. Generate template:    template case single my_case.yaml
         2. Edit configuration:   vi my_case.yaml
            - Modify case_name, problem_name
            - Set geo parameters (groove_depth, etc.)
            - Set def parameters (Ur, Re, etc.)
-        3. Create case:          flexflow case create --from-config my_case.yaml --ref-case ./refCase
+        3. Create case:          case create --from-config my_case.yaml --ref-case ./refCase
 
     {Colors.BOLD}For multiple cases:{Colors.RESET}
-        1. Generate template:    flexflow template case multi my_cases.yaml
+        1. Generate template:    template case multi my_cases.yaml
         2. Edit configuration:   vi my_cases.yaml
            - Define parameter variations in the 'cases' list
            - Each case gets unique name and parameters
-        3. Create cases:         flexflow case create --from-config my_cases.yaml --ref-case ./refCase
+        3. Create cases:         case create --from-config my_cases.yaml --ref-case ./refCase
 """)
 
 
@@ -125,7 +125,7 @@ def print_template_examples():
 
 {Colors.BOLD}Single Plot Configuration:{Colors.RESET}
     # Generate template
-    flexflow template plot single my_plot.yaml
+    template plot single my_plot.yaml
 
     # Edit to configure:
     #   - Case directory
@@ -135,11 +135,11 @@ def print_template_examples():
     #   - Components, time range, styling
 
     # Use template
-    flexflow plot --input-file my_plot.yaml
+    plot --input-file my_plot.yaml
 
 {Colors.BOLD}Multi-Case Comparison:{Colors.RESET}
     # Generate template
-    flexflow template plot multi comparison.yaml
+    template plot multi comparison.yaml
 
     # Edit to configure:
     #   - Multiple case directories
@@ -148,7 +148,7 @@ def print_template_examples():
     #   - Output options
 
     # Use template
-    flexflow compare --input-file comparison.yaml
+    compare --input-file comparison.yaml
 
 {Colors.BOLD}═══════════════════════════════════════════════════════════════════{Colors.RESET}
 {Colors.BOLD}Case Templates{Colors.RESET}
@@ -156,7 +156,7 @@ def print_template_examples():
 
 {Colors.BOLD}Single Case Creation:{Colors.RESET}
     # Generate template
-    flexflow template case single my_case.yaml
+    template case single my_case.yaml
 
     # Edit to configure:
     #   - case_name: testCase
@@ -166,11 +166,11 @@ def print_template_examples():
     #   - def parameters (Ur, Re, etc.)
 
     # Create case
-    flexflow case create --from-config my_case.yaml --ref-case ./refCase
+    case create --from-config my_case.yaml --ref-case ./refCase
 
 {Colors.BOLD}Batch Case Generation:{Colors.RESET}
     # Generate template
-    flexflow template case multi batch_cases.yaml
+    template case multi batch_cases.yaml
 
     # Edit the 'cases' list to define multiple cases:
     #   cases:
@@ -182,17 +182,17 @@ def print_template_examples():
     #       def: {{Ur: 5.0}}
 
     # Create all cases
-    flexflow case create --from-config batch_cases.yaml --ref-case ./refCase
+    case create --from-config batch_cases.yaml --ref-case ./refCase
 
 {Colors.BOLD}═══════════════════════════════════════════════════════════════════{Colors.RESET}
 {Colors.BOLD}Quick Reference{Colors.RESET}
 {Colors.BOLD}═══════════════════════════════════════════════════════════════════{Colors.RESET}
 
 {Colors.BOLD}All Template Commands:{Colors.RESET}
-    flexflow template plot single [file]     # Single plot config
-    flexflow template plot multi [file]      # Multi-case comparison config
-    flexflow template case single [file]     # Single case config
-    flexflow template case multi [file]      # Batch cases config
+    template plot single [file]     # Single plot config
+    template plot multi [file]      # Multi-case comparison config
+    template case single [file]     # Single case config
+    template case multi [file]      # Batch cases config
 
 {Colors.BOLD}Default Output Files:{Colors.RESET}
     plot single  → plot_single.yaml
@@ -201,9 +201,9 @@ def print_template_examples():
     case multi   → case_multi.yaml
 
 {Colors.BOLD}Common Workflow:{Colors.RESET}
-    1. Generate:  flexflow template <domain> <type> my_config.yaml
+    1. Generate:  template <domain> <type> my_config.yaml
     2. Edit:      vi my_config.yaml
-    3. Use:       flexflow <command> --input-file my_config.yaml
+    3. Use:       <command> --input-file my_config.yaml
 """)
 
 
@@ -215,7 +215,7 @@ def print_script_help():
 Generate SLURM job script templates for FlexFlow simulations.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    flexflow template script {Colors.YELLOW}<type>{Colors.RESET} [case_directory]
+    template script {Colors.YELLOW}<type>{Colors.RESET} [case_directory]
 
 {Colors.BOLD}SCRIPT TYPES:{Colors.RESET}
     {Colors.CYAN}env{Colors.RESET}      Environment config (executable paths, module loads)
@@ -253,32 +253,32 @@ Generate SLURM job script templates for FlexFlow simulations.
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
 
     {Colors.BOLD}Generate environment config only:{Colors.RESET}
-        flexflow template script env Case001
+        template script env Case001
 
     {Colors.BOLD}Generate env with custom SIMFLOW_HOME:{Colors.RESET}
-        flexflow template script env Case001 --simflow-home /opt/simflow/2024.1
+        template script env Case001 --simflow-home /opt/simflow/2024.1
 
     {Colors.BOLD}Generate env with custom gmsh path:{Colors.RESET}
-        flexflow template script env Case001 --gmsh-path /usr/local/bin/gmsh
+        template script env Case001 --gmsh-path /usr/local/bin/gmsh
 
     {Colors.BOLD}Generate env with module load for FlexFlow:{Colors.RESET}
-        flexflow template script env Case001 --load-ff-module flexflow
+        template script env Case001 --load-ff-module flexflow
 
     {Colors.BOLD}Generate env with module load for gmsh:{Colors.RESET}
-        flexflow template script env Case001 --load-gmsh-module gmsh/4.8.0
+        template script env Case001 --load-gmsh-module gmsh/4.8.0
 
     {Colors.BOLD}Generate env with both module loads:{Colors.RESET}
-        flexflow template script env Case001 --load-ff-module flexflow --load-gmsh-module gmsh
+        template script env Case001 --load-ff-module flexflow --load-gmsh-module gmsh
 
     {Colors.BOLD}Generate main script for shared partition:{Colors.RESET}
-        flexflow template script main Case001 --partition shared
+        template script main Case001 --partition shared
 
     {Colors.BOLD}Generate main script with custom wall time:{Colors.RESET}
-        flexflow template script main Case001 --partition medium --wall-time 48:00:00
+        template script main Case001 --partition medium --wall-time 48:00:00
 
     {Colors.BOLD}Generate in current directory:{Colors.RESET}
         cd Case001
-        flexflow template script env
+        template script env
 
 {Colors.BOLD}USAGE OF GENERATED SCRIPTS:{Colors.RESET}
 
@@ -309,7 +309,7 @@ Generate SLURM job script templates for FlexFlow simulations.
         sbatch postFlex.sh 100 0 5000   # Freq=100, process 0-5000
 
 {Colors.BOLD}WORKFLOW:{Colors.RESET}
-    1. Generate scripts:     flexflow template script all Case001
+    1. Generate scripts:     template script all Case001
     2. Edit environment:     vi Case001/simflow_env.sh
     3. Submit jobs:
        - run pre             # Or: sbatch preFlex.sh

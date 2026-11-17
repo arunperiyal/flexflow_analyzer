@@ -10,7 +10,7 @@ def print_template_help():
 Generate template YAML configuration files.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    flexflow config template {Colors.YELLOW}<type> <output_file>{Colors.RESET}
+    config template {Colors.YELLOW}<type> <output_file>{Colors.RESET}
 
 {Colors.BOLD}TEMPLATE TYPES:{Colors.RESET}
     {Colors.CYAN}single{Colors.RESET}     Generate single case plot configuration
@@ -23,9 +23,9 @@ Generate template YAML configuration files.
 
 {Colors.BOLD}DESCRIPTION:{Colors.RESET}
     Creates a template YAML file that can be edited and used with:
-    - flexflow plot --input-file <file>       (single plot template)
-    - flexflow compare --input-file <file>    (multi-case comparison template)
-    - flexflow case create --from-config <file>  (case creation template)
+    - plot --input-file <file>       (single plot template)
+    - compare --input-file <file>    (multi-case comparison template)
+    - case create --from-config <file>  (case creation template)
 """)
 
 
@@ -35,24 +35,24 @@ def print_template_examples():
 {Colors.BOLD}{Colors.CYAN}Template Command Examples{Colors.RESET}
 
 {Colors.BOLD}Generate Templates:{Colors.RESET}
-    flexflow config template single my_plot.yaml
-    flexflow config template multi comparison.yaml
-    flexflow config template case batch_cases.yaml
+    config template single my_plot.yaml
+    config template multi comparison.yaml
+    config template case batch_cases.yaml
 
 {Colors.BOLD}Use Generated Templates:{Colors.RESET}
     # Edit the generated YAML file, then use it:
-    flexflow plot --input-file my_plot.yaml
-    flexflow compare --input-file comparison.yaml
-    flexflow case create --from-config batch_cases.yaml --ref-case ./refCase
+    plot --input-file my_plot.yaml
+    compare --input-file comparison.yaml
+    case create --from-config batch_cases.yaml --ref-case ./refCase
 
 {Colors.BOLD}Case Template Workflow:{Colors.RESET}
     # 1. Generate case configuration template
-    flexflow config template case my_cases.yaml
+    config template case my_cases.yaml
 
     # 2. Edit my_cases.yaml to define your case parameters
     #    - Single case: modify the top-level case_name, geo, def sections
     #    - Multiple cases: uncomment and edit the 'cases' section
 
     # 3. Create case(s) from the configuration
-    flexflow case create --from-config my_cases.yaml --ref-case ./refCase
+    case create --from-config my_cases.yaml --ref-case ./refCase
 """)

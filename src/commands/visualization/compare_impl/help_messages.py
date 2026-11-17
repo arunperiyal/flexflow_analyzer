@@ -10,8 +10,8 @@ def print_compare_help():
 Compare data from multiple FlexFlow cases on a single plot.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    flexflow compare {Colors.YELLOW}<case1> <case2>{Colors.RESET} [...] [options]
-    flexflow compare {Colors.YELLOW}--input-file{Colors.RESET} <yaml_file>
+    compare {Colors.YELLOW}<case1> <case2>{Colors.RESET} [...] [options]
+    compare {Colors.YELLOW}--input-file{Colors.RESET} <yaml_file>
 
 {Colors.BOLD}REQUIRED OPTIONS:{Colors.RESET}
     {Colors.YELLOW}--node{Colors.RESET} N              Node number to compare
@@ -67,40 +67,40 @@ def print_compare_examples():
 {Colors.BOLD}{Colors.CYAN}Compare Command Examples{Colors.RESET}
 
 {Colors.BOLD}Basic Comparison:{Colors.RESET}
-    flexflow compare CS4SG1U1 CS4SG2U1 --node 100 --data-type displacement
+    compare CS4SG1U1 CS4SG2U1 --node 100 --data-type displacement
 
 {Colors.BOLD}Multiple Cases:{Colors.RESET}
-    flexflow compare CS4SG1U1 CS4SG2U1 CS4SG3U1 --node 100 --data-type force
+    compare CS4SG1U1 CS4SG2U1 CS4SG3U1 --node 100 --data-type force
 
 {Colors.BOLD}With Styling:{Colors.RESET}
-    flexflow compare CS4SG1U1 CS4SG2U1 --node 100 --data-type displacement \\
+    compare CS4SG1U1 CS4SG2U1 --node 100 --data-type displacement \\
         --component y --plot-style "blue,2,-,o|red,2,--,s" \\
         --legend "Configuration 1|Configuration 2" \\
         --title "Case Comparison|16" --fontname "Times New Roman"
 
 {Colors.BOLD}Three Cases with Different Styles:{Colors.RESET}
-    flexflow compare CS4SG1U1 CS4SG2U1 CS4SG3U1 --node 100 \\
+    compare CS4SG1U1 CS4SG2U1 CS4SG3U1 --node 100 \\
         --data-type displacement --component y \\
         --plot-style "blue,2,-,o|red,2,--,s|green,2,-.,^" \\
         --legend "Case A|Case B|Case C" \\
         --output comparison.pdf
 
 {Colors.BOLD}Save to File (Remote/SSH):{Colors.RESET}
-    flexflow compare CS4SG1U1 CS4SG2U1 --node 100 --data-type displacement \\
+    compare CS4SG1U1 CS4SG2U1 --node 100 --data-type displacement \\
         --component y --output comparison.png --no-display
 
 {Colors.BOLD}Subplot Layout:{Colors.RESET}
-    flexflow compare CS4SG1U1 CS4SG2U1 CS4SG3U1 CS4SG4U1 --node 100 \\
+    compare CS4SG1U1 CS4SG2U1 CS4SG3U1 CS4SG4U1 --node 100 \\
         --data-type displacement --component y --subplot "2,2" \\
         --legend "Case 1|Case 2|Case 3|Case 4" \\
         --output comparison_subplots.pdf
 
 {Colors.BOLD}Separate Plots for Each Case:{Colors.RESET}
-    flexflow compare CS4SG1U1 CS4SG2U1 CS4SG3U1 --node 100 \\
+    compare CS4SG1U1 CS4SG2U1 CS4SG3U1 --node 100 \\
         --data-type displacement --component y --separate \\
         --output-prefix "result_" --output-format pdf
     # Creates: result_CS4SG1U1.pdf, result_CS4SG2U1.pdf, result_CS4SG3U1.pdf
 
 {Colors.BOLD}Using YAML Configuration:{Colors.RESET}
-    flexflow compare --input-file comparison.yaml
+    compare --input-file comparison.yaml
 """)

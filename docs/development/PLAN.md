@@ -302,7 +302,7 @@ into `archive/`. `plot` with no flag keeps reading the whole history.
 
 From `version comment` 1 (2026-11-01) and 2 (2026-11-10).
 
-- [ ] Examples in the `help_messages.py` files and `docs/usage/` start with
+- [x] Examples in the `help_messages.py` files and `docs/usage/` start with
       the command, not `flexflow ` (about 220 lines); one pass, then a test
       that no help text has the prefix
 - [ ] `case download` / `case upload` of a case whose folder is missing on

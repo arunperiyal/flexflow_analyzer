@@ -131,7 +131,7 @@ class CaseRunCommand:
                 print("\n[FlexFlow] Monitoring stopped (jobs still running)")
         else:
             print("\n[FlexFlow] Jobs submitted. Use 'squeue' to monitor progress.")
-            print(f"[FlexFlow] Run 'flexflow case run {self.case_dir.name}' again after mainFlex completes.")
+            print(f"[FlexFlow] Run 'case run {self.case_dir.name}' again after mainFlex completes.")
         
         return True
     
@@ -452,8 +452,8 @@ def execute_case_run(args):
     
     if not hasattr(args, 'case') or not args.case:
         print("Error: Case directory is required")
-        print("\nUsage: flexflow case run <case_dir> [options]")
-        print("Use 'flexflow case run --help' for more information")
+        print("\nUsage: case run <case_dir> [options]")
+        print("Use 'case run --help' for more information")
         return
     
     runner = CaseRunCommand(
@@ -488,7 +488,7 @@ def show_run_help():
     console.print("Submit and monitor SLURM jobs for FlexFlow simulations.")
     console.print()
     console.print("[bold]USAGE:[/bold]")
-    console.print("    flexflow case run <case_dir> [options]")
+    console.print("    case run <case_dir> [options]")
     console.print()
     
     # Options table
@@ -529,22 +529,22 @@ def show_run_examples():
     console.print("[bold cyan]Case Run Examples[/bold cyan]")
     console.print()
     console.print("[bold]Basic usage:[/bold]")
-    console.print("    flexflow case run CS4SG1U1")
+    console.print("    case run CS4SG1U1")
     console.print("    → Submit jobs and monitor progress")
     console.print()
     console.print("[bold]Submit without monitoring:[/bold]")
-    console.print("    flexflow case run CS4SG1U1 --no-monitor")
+    console.print("    case run CS4SG1U1 --no-monitor")
     console.print("    → Submit jobs and exit immediately")
     console.print()
     console.print("[bold]Clean restart:[/bold]")
-    console.print("    flexflow case run CS4SG1U1 --clean")
+    console.print("    case run CS4SG1U1 --clean")
     console.print("    → Remove existing output and start fresh")
     console.print()
     console.print("[bold]Resume from specific step:[/bold]")
-    console.print("    flexflow case run CS4SG1U1 --from-step 5000")
+    console.print("    case run CS4SG1U1 --from-step 5000")
     console.print("    → Restart simulation from timestep 5000")
     console.print()
     console.print("[bold]Preview without submitting:[/bold]")
-    console.print("    flexflow case run CS4SG1U1 --dry-run")
+    console.print("    case run CS4SG1U1 --dry-run")
     console.print("    → Show what would be done without submitting jobs")
     console.print()

@@ -10,7 +10,7 @@ def print_check_help():
 Verdicts on the time history.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    flexflow data check steady [{Colors.YELLOW}case{Colors.RESET}] --var {Colors.YELLOW}NAME{Colors.RESET} [options]
+    data check steady [{Colors.YELLOW}case{Colors.RESET}] --var {Colors.YELLOW}NAME{Colors.RESET} [options]
 
 {Colors.BOLD}SUBCOMMANDS:{Colors.RESET}
     {Colors.YELLOW}steady{Colors.RESET}                 Whether a variable has settled, and from which tsId
@@ -27,7 +27,7 @@ Whether the history of a variable has settled into a steady state -- a
 steady oscillation, or a steady value -- and from which tsId it has.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    flexflow data check steady [{Colors.YELLOW}case{Colors.RESET}] --var {Colors.YELLOW}NAME{Colors.RESET} [options]
+    data check steady [{Colors.YELLOW}case{Colors.RESET}] --var {Colors.YELLOW}NAME{Colors.RESET} [options]
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
     {Colors.YELLOW}--var NAME{Colors.RESET}             Variable or component. Repeat it, or comma-separate;
@@ -84,10 +84,10 @@ steady oscillation, or a steady value -- and from which tsId it has.
     window start when all of it is steady. "-" when no rest passes.
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
-    flexflow data check steady CS4SG1U1 --var dy --node 24
-    flexflow data check steady CS4SG1U1 --var dx,dy --node 24 --last 4000
-    flexflow data check steady CS4SG1U1 --var tt --oisd --tol 0.1 -v
-    flexflow data check steady * --var dy --last 4000
+    data check steady CS4SG1U1 --var dy --node 24
+    data check steady CS4SG1U1 --var dx,dy --node 24 --last 4000
+    data check steady CS4SG1U1 --var tt --oisd --tol 0.1 -v
+    data check steady * --var dy --last 4000
 """)
 
 
@@ -96,10 +96,10 @@ def print_steady_examples():
 {Colors.BOLD}{Colors.CYAN}Data Check Steady Examples{Colors.RESET}
 
   {Colors.BOLD}Has the cross-flow displacement settled, and from when?{Colors.RESET}
-    flexflow data check steady CS4SG1U1 --var dy --node 24
+    data check steady CS4SG1U1 --var dy --node 24
 
   {Colors.BOLD}Only the last 4000 steps, with the blocks shown:{Colors.RESET}
-    flexflow data check steady CS4SG1U1 --var dy --node 24 --last 4000 -v
+    data check steady CS4SG1U1 --var dy --node 24 --last 4000 -v
 
   {Colors.BOLD}From the shell context:{Colors.RESET}
     use case:CS4SG1U1 var:dy node:24 last:4000

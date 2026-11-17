@@ -10,7 +10,7 @@ def print_info_help():
 Display information about a FlexFlow case directory.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    flexflow case show [{Colors.YELLOW}case_directory{Colors.RESET}] [options]
+    case show [{Colors.YELLOW}case_directory{Colors.RESET}] [options]
 
 {Colors.BOLD}ARGUMENTS:{Colors.RESET}
     {Colors.YELLOW}case_directory{Colors.RESET}        Path to case directory (optional if context is set)
@@ -44,26 +44,26 @@ def print_info_examples():
 
 {Colors.BOLD}Basic Usage:{Colors.RESET}
     # Show case information
-    flexflow case show CS4SG1U1
+    case show CS4SG1U1
 
     # Show with verbose output
-    flexflow case show CS4SG1U1 --verbose
+    case show CS4SG1U1 --verbose
 
     # Show relative path case
-    flexflow case show ./cases/CS4SG1U1
+    case show ./cases/CS4SG1U1
 
     # Show absolute path case
-    flexflow case show /full/path/to/CS4SG1U1
+    case show /full/path/to/CS4SG1U1
 
 {Colors.BOLD}Using Context:{Colors.RESET}
     # Set case context
-    flexflow use case CS4SG1U1
+    use case CS4SG1U1
 
     # Show current case (no argument needed)
-    flexflow case show
+    case show
 
     # Verbose with context
-    flexflow case show --verbose
+    case show --verbose
 
 {Colors.BOLD}Workflow Example:{Colors.RESET}
     # Navigate and analyze

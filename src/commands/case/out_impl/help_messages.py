@@ -11,9 +11,9 @@ def print_out_help():
 Build small derived files from a case's own inputs.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    flexflow case out <case_dir> --map [NAME]
-    flexflow case out * --map            {Colors.DIM}# every case in .cases.yml{Colors.RESET}
-    flexflow case out * --list           {Colors.DIM}# survey them all in one table{Colors.RESET}
+    case out <case_dir> --map [NAME]
+    case out * --map            {Colors.DIM}# every case in .cases.yml{Colors.RESET}
+    case out * --list           {Colors.DIM}# survey them all in one table{Colors.RESET}
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
     {Colors.YELLOW}--list{Colors.RESET}             Table of the case's outputTimeHistory blocks:
@@ -157,14 +157,14 @@ Build small derived files from a case's own inputs.
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
 
   {Colors.BOLD}Every nodal block in the case:{Colors.RESET}
-    flexflow case out BR0SG0U1P0 --map
+    case out BR0SG0U1P0 --map
 
   {Colors.BOLD}Just one, by node-set or block name:{Colors.RESET}
-    flexflow case out BR0SG0U1P0 --map cyl_nodes
-    flexflow case out BR0SG0U1P0 --map riser_probe
+    case out BR0SG0U1P0 --map cyl_nodes
+    case out BR0SG0U1P0 --map riser_probe
 
   {Colors.BOLD}Every registered case at once:{Colors.RESET}
-    flexflow case out * --map
+    case out * --map
     {Colors.DIM}(or set the context once: use case:*){Colors.RESET}
 
 {Colors.BOLD}NOTES:{Colors.RESET}

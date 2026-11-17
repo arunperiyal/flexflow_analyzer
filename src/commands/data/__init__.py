@@ -199,7 +199,7 @@ class DataCommand(BaseCommand):
         console.print("Work with time-series data from OTHD/OISD files.")
         console.print()
         console.print("[bold]USAGE:[/bold]")
-        console.print("    flexflow data <subcommand> [options]")
+        console.print("    data <subcommand> [options]")
         console.print()
 
         # Create subcommands table
@@ -216,11 +216,11 @@ class DataCommand(BaseCommand):
         console.print(table)
         console.print()
         console.print("[bold]EXAMPLES:[/bold]")
-        console.print("    flexflow data show CS4SG1U1")
-        console.print("    flexflow data show CS4SG1U1 --oisd")
-        console.print("    flexflow data table CS4SG1U1 --var aleDisp_y --node 24 --tail 20")
-        console.print("    flexflow data stats CS4SG1U1 --var aleDisp_y --func max,rms")
-        console.print("    flexflow data stats CS4SG1U1 --var totTrac_y --func maxloc")
+        console.print("    data show CS4SG1U1")
+        console.print("    data show CS4SG1U1 --oisd")
+        console.print("    data table CS4SG1U1 --var aleDisp_y --node 24 --tail 20")
+        console.print("    data stats CS4SG1U1 --var aleDisp_y --func max,rms")
+        console.print("    data stats CS4SG1U1 --var totTrac_y --func maxloc")
         console.print()
 
 

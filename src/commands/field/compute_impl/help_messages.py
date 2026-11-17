@@ -11,7 +11,7 @@ def print_compute_help():
 Quantities derived from a surface zone's own elements (Tecplot-free).
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    flexflow field compute <quantity> <case_dir> --zone ZONE [options]
+    field compute <quantity> <case_dir> --zone ZONE [options]
 
 {Colors.BOLD}QUANTITIES:{Colors.RESET}
     {Colors.YELLOW}force{Colors.RESET}                 Pressure force on every surface element:
@@ -228,41 +228,41 @@ Quantities derived from a surface zone's own elements (Tecplot-free).
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
 
   {Colors.BOLD}One element table per timestep, named after the body:{Colors.RESET}
-    flexflow field compute force BR0SG0U1P0 --zone cyl --t1 50 --t2 5000 --freq 50
+    field compute force BR0SG0U1P0 --zone cyl --t1 50 --t2 5000 --freq 50
       # -> <case>/cyl.forces/elements_50.csv .. + summary.csv
 
   {Colors.BOLD}Somewhere else instead:{Colors.RESET}
-    flexflow field compute force BR0SG0U1P0 --zone cyl --t1 50 --t2 5000 --freq 50 \\
+    field compute force BR0SG0U1P0 --zone cyl --t1 50 --t2 5000 --freq 50 \\
       --output loads          # -> <case>/loads/elements_50.csv .. + summary.csv
 
   {Colors.BOLD}The same run as one combined table:{Colors.RESET}
-    flexflow field compute force BR0SG0U1P0 --zone cyl --t1 50 --t2 5000 --freq 50 \\
+    field compute force BR0SG0U1P0 --zone cyl --t1 50 --t2 5000 --freq 50 \\
       --output cyl_forces.csv
 
   {Colors.BOLD}Force distribution to view in ParaView:{Colors.RESET}
-    flexflow field compute force BR0SG0U1P0 --zone cyl --t1 50 --t2 5000 \\
+    field compute force BR0SG0U1P0 --zone cyl --t1 50 --t2 5000 \\
       --output cyl_forces.pvd
 
   {Colors.BOLD}Sectional Cd/Cl, one table per timestep:{Colors.RESET}
-    flexflow case domain BR0SG0U1P0 --init            {Colors.DIM}# once{Colors.RESET}
-    flexflow case domain body --name cyl --radius 0.5 {Colors.DIM}# the case states neither{Colors.RESET}
-    flexflow case domain field --velocity 0,0,1
-    flexflow field compute force_coeff BR0SG0U1P0 --zone cyl \\
+    case domain BR0SG0U1P0 --init            {Colors.DIM}# once{Colors.RESET}
+    case domain body --name cyl --radius 0.5 {Colors.DIM}# the case states neither{Colors.RESET}
+    case domain field --velocity 0,0,1
+    field compute force_coeff BR0SG0U1P0 --zone cyl \\
       --t1 50 --t2 5000 --freq 50 --sectional 48
       {Colors.DIM}# -> <case>/cyl.force_coeff/sectional_50.csv .. + summary.csv{Colors.RESET}
 
   {Colors.BOLD}Whole-body Cd/Cl over time, nothing sectional:{Colors.RESET}
-    flexflow field compute force_coeff BR0SG0U1P0 --zone cyl --t1 50 --t2 5000
+    field compute force_coeff BR0SG0U1P0 --zone cyl --t1 50 --t2 5000
 
   {Colors.BOLD}Separation angle along the span:{Colors.RESET}
-    flexflow field compute wall_shear BR0SG0U1P0 --zone cyl --t1 50 --t2 5000 --freq 50
+    field compute wall_shear BR0SG0U1P0 --zone cyl --t1 50 --t2 5000 --freq 50
       {Colors.DIM}# -> <case>/cyl.wall_shear/elements_50.csv .. + summary.csv{Colors.RESET}
-    flexflow field compute separation BR0SG0U1P0 --body cyl --sectional 48
+    field compute separation BR0SG0U1P0 --body cyl --sectional 48
       {Colors.DIM}# -> <case>/cyl.separation/azimuthal_50.csv .. + separation.csv{Colors.RESET}
     {Colors.DIM}(re-bin as often as you like: separation opens no PLT){Colors.RESET}
 
   {Colors.BOLD}Section across the flow instead of along the body:{Colors.RESET}
-    flexflow field compute force_coeff BR0SG0U1P0 --zone cyl --timestep 100 \\
+    field compute force_coeff BR0SG0U1P0 --zone cyl --timestep 100 \\
       --sectional 20 --direction z --flow x
 
 {Colors.BOLD}NOTES:{Colors.RESET}

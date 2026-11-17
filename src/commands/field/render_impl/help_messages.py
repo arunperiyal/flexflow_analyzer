@@ -96,7 +96,7 @@ Make pictures from PLT field data using {Colors.BOLD}pyvista{Colors.RESET} (no T
 Given a case, the PLT is auto-converted to a cached .vtu first.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    flexflow field render <mode> [<case>] [options]
+    field render <mode> [<case>] [options]
 
 {Colors.BOLD}MODES:{Colors.RESET}
     {Colors.YELLOW}iso{Colors.RESET}       An isosurface of a scalar -- Q-criterion for vortex tubes,
@@ -114,12 +114,12 @@ Given a case, the PLT is auto-converted to a cached .vtu first.
     for its own help.{Colors.RESET}
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
-    flexflow field render iso myCase --timestep 100 --values 20 --color W
-    flexflow field render slice myCase --normal z --color Pressure
-    flexflow field render iso myCase --t1 100 --t2 500 --color-range -1 1
-    flexflow field render slice myCase --t1 100 --t2 5000 -j 8 --camera cam.yml
-    flexflow field render slice myCase --normal x --output cut.vtp
-    flexflow field render colorbar --color Pressure --color-range -1 1 --output legend.pdf
+    field render iso myCase --timestep 100 --values 20 --color W
+    field render slice myCase --normal z --color Pressure
+    field render iso myCase --t1 100 --t2 500 --color-range -1 1
+    field render slice myCase --t1 100 --t2 5000 -j 8 --camera cam.yml
+    field render slice myCase --normal x --output cut.vtp
+    field render colorbar --color Pressure --color-range -1 1 --output legend.pdf
 
 {Colors.BOLD}OUTPUT:{Colors.RESET}
     {Colors.DIM}Always a directory under the case -- <case>/render_<mode>/ by default, or
@@ -144,7 +144,7 @@ Render isosurface PNGs from PLT field data (Q-criterion or any scalar), coloured
 by another variable.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    flexflow field render iso [<case>] [options]
+    field render iso [<case>] [options]
 
 {_COMMON_INPUT}
 
@@ -173,29 +173,29 @@ by another variable.
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
 
   {Colors.BOLD}Render a case timestep:{Colors.RESET}
-    flexflow field render iso myCase --timestep 100 --values 20 --color W
+    field render iso myCase --timestep 100 --values 20 --color W
 
   {Colors.BOLD}An existing .vtu with several iso values:{Colors.RESET}
-    flexflow field render iso --vtu field.vtu --contour QCriterion --values 5 50 --output wake
+    field render iso --vtu field.vtu --contour QCriterion --values 5 50 --output wake
 
   {Colors.BOLD}A page to orbit, instead of pictures from fixed views:{Colors.RESET}
-    flexflow field render iso myCase --timestep 100 --values 20 --output wake.html
+    field render iso myCase --timestep 100 --values 20 --output wake.html
     {Colors.DIM}(myCase/wake/wake_100.html -- open it in a browser and turn it by hand){Colors.RESET}
 
   {Colors.BOLD}A whole range on one fixed scale, so the frames can be compared:{Colors.RESET}
-    flexflow field render iso myCase --t1 100 --t2 500 --color W --color-range -0.5 0.5
+    field render iso myCase --t1 100 --t2 500 --color W --color-range -0.5 0.5
     {Colors.DIM}(one figure per step in 100..500, all on the same scale, in myCase/render_iso/){Colors.RESET}
 
   {Colors.BOLD}Write then use a config template:{Colors.RESET}
-    flexflow field render iso --write-template iso.yml
-    flexflow field render iso myCase --config iso.yml
+    field render iso --write-template iso.yml
+    field render iso myCase --config iso.yml
 
 {Colors.BOLD}CAMERA REUSE:{Colors.RESET}  ({Colors.DIM}what a Tecplot .sty is for, without Tecplot{Colors.RESET})
 
     Set the view once by eye, then pin it for every timestep:
 
-        flexflow field render iso myCase --timestep 100 --pick-camera cam.yml
-        flexflow field render iso myCase --t1 100 --t2 500 --camera cam.yml \\
+        field render iso myCase --timestep 100 --pick-camera cam.yml
+        field render iso myCase --t1 100 --t2 500 --camera cam.yml \\
                 --color-range -1 1
 
     {Colors.DIM}--pick-camera needs a screen; --camera does not. So pick it on your own
@@ -220,7 +220,7 @@ Cut a plane through the volume and colour it -- the other picture you routinely
 want out of a run. Or cut a series of planes along one normal.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    flexflow field render slice [<case>] [options]
+    field render slice [<case>] [options]
 
 {_COMMON_INPUT}
 
@@ -239,17 +239,17 @@ want out of a run. Or cut a series of planes along one normal.
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
 
   {Colors.BOLD}A plane through the middle of the case:{Colors.RESET}
-    flexflow field render slice myCase --timestep 100 --normal z --color Pressure
+    field render slice myCase --timestep 100 --normal z --color Pressure
 
   {Colors.BOLD}At a chosen height:{Colors.RESET}
-    flexflow field render slice myCase --normal z --origin 0,0,3
+    field render slice myCase --normal z --origin 0,0,3
 
   {Colors.BOLD}Ten stations down the riser, all on one scale:{Colors.RESET}
-    flexflow field render slice myCase --normal z --slices 10 --color-range -1 1 --output stations
+    field render slice myCase --normal z --slices 10 --color-range -1 1 --output stations
 
   {Colors.BOLD}The cut itself, for ParaView or pandas:{Colors.RESET}
-    flexflow field render slice myCase --normal x --output cut.vtp
-    flexflow field render slice myCase --normal x --output cut.csv
+    field render slice myCase --normal x --output cut.vtp
+    field render slice myCase --normal x --output cut.csv
 
 {Colors.BOLD}CAMERA:{Colors.RESET}
     {Colors.DIM}A plane is invisible edge-on, so the default is a single view looking
@@ -258,8 +258,8 @@ want out of a run. Or cut a series of planes along one normal.
     whatever --normal would have chosen.
 
     To set the view by eye and pin it across a sweep (what a Tecplot .sty does):
-        flexflow field render slice myCase --timestep 100 --pick-camera cam.yml
-        flexflow field render slice myCase --t1 100 --t2 500 --camera cam.yml
+        field render slice myCase --timestep 100 --pick-camera cam.yml
+        field render slice myCase --t1 100 --t2 500 --camera cam.yml
     --pick-camera needs a screen; --camera does not.{Colors.RESET}
 
 {Colors.BOLD}NOTES:{Colors.RESET}
@@ -285,7 +285,7 @@ Reads only the {Colors.YELLOW}color:{Colors.RESET} block -- no case, .vtu or cam
 from, so it must be given.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    flexflow field render colorbar --config FILE --output NAME.pdf
+    field render colorbar --config FILE --output NAME.pdf
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
     {Colors.YELLOW}--config FILE{Colors.RESET}          YAML config -- the color: block (preset, range, levels,
@@ -303,11 +303,11 @@ from, so it must be given.
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
 
   {Colors.BOLD}Write a template, fill in the scale that matches a figure, render it:{Colors.RESET}
-    flexflow field render colorbar --write-template bar.yml
-    flexflow field render colorbar --config bar.yml --output legend.pdf
+    field render colorbar --write-template bar.yml
+    field render colorbar --config bar.yml --output legend.pdf
 
   {Colors.BOLD}Straight from the CLI, no config file:{Colors.RESET}
-    flexflow field render colorbar --color Pressure --color-range -200 200 \\
+    field render colorbar --color Pressure --color-range -200 200 \\
             --output legend.pdf
 
 {Colors.BOLD}MATCHING A FIGURE:{Colors.RESET}

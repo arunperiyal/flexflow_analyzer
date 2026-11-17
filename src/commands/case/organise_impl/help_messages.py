@@ -13,7 +13,7 @@ def print_organise_help():
 Organize and clean up case directories. Pick one subcommand.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    flexflow case organise <{Colors.YELLOW}subcommand{Colors.RESET}> [{Colors.YELLOW}case_directory{Colors.RESET}] [options]
+    case organise <{Colors.YELLOW}subcommand{Colors.RESET}> [{Colors.YELLOW}case_directory{Colors.RESET}] [options]
 
 {Colors.BOLD}ARGUMENTS:{Colors.RESET}
     {Colors.YELLOW}case_directory{Colors.RESET}        Path to case directory (optional if context is set)
@@ -202,27 +202,27 @@ Organize and clean up case directories. Pick one subcommand.
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
     # Move the latest .othd/.oisd/.rcv from the run dir into archive/
-    flexflow case organise history CS4SG1U1 --update
+    case organise history CS4SG1U1 --update
 
     # Clean and join the runs, check everything, then drop archive/
-    flexflow case organise history CS4SG1U1 --clean --compile --verify --prune
+    case organise history CS4SG1U1 --clean --compile --verify --prune
 
     # Delete the .out files a PLT stands in for, and thin the .rst
-    flexflow case organise out CS4SG1U1
-    flexflow case organise rst CS4SG1U1
+    case organise out CS4SG1U1
+    case organise rst CS4SG1U1
 
     # Delete PLT files from run dir where binary/ has a newer copy
-    flexflow case organise plt CS4SG1U1 --delete-ascii
+    case organise plt CS4SG1U1 --delete-ascii
 
     # Delete PLT files from binary/ for a timestep range
-    flexflow case organise plt CS4SG1U1 --delete-binary --t1 0 --t2 1000
+    case organise plt CS4SG1U1 --delete-binary --t1 0 --t2 1000
 
     # List, then delete, the .vtu caches field render left in binary/
-    flexflow case organise vtu CS4SG1U1
-    flexflow case organise vtu CS4SG1U1 --clean
+    case organise vtu CS4SG1U1
+    case organise vtu CS4SG1U1 --clean
 
     # Only target a timestep range
-    flexflow case organise out CS4SG1U1 --t1 0 --t2 1000
+    case organise out CS4SG1U1 --t1 0 --t2 1000
 
     # Use context
     use case CS4SG1U1
@@ -245,63 +245,63 @@ def print_organise_examples():
     #   riser.othd  → othd_files/archive/riser6.othd
     #   riser.oisd  → oisd_files/archive/riser6.oisd
     #   riser.rcv   → rcv_files/riser6.rcv (if present)
-    flexflow case organise history CS4SG1U1 --update
+    case organise history CS4SG1U1 --update
 
     # Each run without what later runs redid, into cleaned/
-    flexflow case organise history CS4SG1U1 --clean
+    case organise history CS4SG1U1 --clean
 
     # Only runs 1, 2 and 6 (3, 4, 5 abandoned): cleaned/ becomes riser1..3
-    flexflow case organise history CS4SG1U1 --clean 1,2,6 --compile
+    case organise history CS4SG1U1 --clean 1,2,6 --compile
 
     # One file per type: othd_files/riser.othd, oisd_files/riser.oisd
-    flexflow case organise history CS4SG1U1 --clean --compile
+    case organise history CS4SG1U1 --clean --compile
 
     # Check archive/, cleaned/ and the compiled files
-    flexflow case organise history CS4SG1U1 --verify
+    case organise history CS4SG1U1 --verify
 
     # The whole round, deleting archive/ at the end (asks first)
-    flexflow case organise history CS4SG1U1 --update --clean --compile --verify --prune
+    case organise history CS4SG1U1 --update --clean --compile --verify --prune
 
     # See what would happen, changing nothing
-    flexflow case organise history CS4SG1U1 --clean --compile --dry-run
+    case organise history CS4SG1U1 --clean --compile --dry-run
 
 {Colors.BOLD}Cleaning the .out and .rst files:{Colors.RESET}
 
     # Delete the .out a whole, newer PLT stands in for (the others stay)
-    flexflow case organise out CS4SG1U1
+    case organise out CS4SG1U1
 
     # Thin the .rst (keeps those every freq*10, the restart point and the newest 2)
-    flexflow case organise rst CS4SG1U1
+    case organise rst CS4SG1U1
 
     # Keep only the .rst of the steps divisible by 5000
-    flexflow case organise rst CS4SG1U1 --keep-freq 5000
+    case organise rst CS4SG1U1 --keep-freq 5000
 
     # Only clean up to timestep 5000
-    flexflow case organise out CS4SG1U1 --t2 5000
+    case organise out CS4SG1U1 --t2 5000
 
     # Create log file of deletions
-    flexflow case organise rst CS4SG1U1 --log
+    case organise rst CS4SG1U1 --log
 
 {Colors.BOLD}Cleaning PLT Files:{Colors.RESET}
 
     # Delete run-dir PLT files that have a newer copy in binary/
-    flexflow case organise plt CS4SG1U1 --delete-ascii
+    case organise plt CS4SG1U1 --delete-ascii
 
     # Only within a timestep window
-    flexflow case organise plt CS4SG1U1 --delete-ascii --t1 1000 --t2 2000
+    case organise plt CS4SG1U1 --delete-ascii --t1 1000 --t2 2000
 
     # Unconditionally delete PLT files from binary/ for a timestep window
-    flexflow case organise plt CS4SG1U1 --delete-binary --t1 1000 --t2 2000
+    case organise plt CS4SG1U1 --delete-binary --t1 1000 --t2 2000
 
     # Thin binary/ out: in 4000-5000, keep only the steps divisible by 5
-    flexflow case organise plt CS4SG1U1 --delete-binary --t1 4000 --t2 5000 --freq 1 --keep-freq 5
+    case organise plt CS4SG1U1 --delete-binary --t1 4000 --t2 5000 --freq 1 --keep-freq 5
 
     # Both directions in one call
-    flexflow case organise plt CS4SG1U1 --delete-ascii --delete-binary --t1 1000 --t2 2000
+    case organise plt CS4SG1U1 --delete-ascii --delete-binary --t1 1000 --t2 2000
 
     # The .vtu caches of field render: list them, delete those up to step 3000
-    flexflow case organise vtu CS4SG1U1
-    flexflow case organise vtu CS4SG1U1 --clean --t2 3000
+    case organise vtu CS4SG1U1
+    case organise vtu CS4SG1U1 --clean --t2 3000
 
 {Colors.BOLD}Using Context:{Colors.RESET}
 

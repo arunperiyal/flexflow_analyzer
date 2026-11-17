@@ -11,7 +11,7 @@ def print_info_help():
 Show detailed information about PLT files and perform consistency checks.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    flexflow field info <case_dir> [options]
+    field info <case_dir> [options]
 
 {Colors.BOLD}ARGUMENTS:{Colors.RESET}
     {Colors.YELLOW}case_dir{Colors.RESET}              Path to case directory containing binary/ folder
@@ -35,19 +35,19 @@ Show detailed information about PLT files and perform consistency checks.
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
 
   {Colors.BOLD}Show all information:{Colors.RESET}
-    flexflow field info CS4SG1U1
+    field info CS4SG1U1
 
   {Colors.BOLD}Show only variables:{Colors.RESET}
-    flexflow field info CS4SG1U1 --variables
+    field info CS4SG1U1 --variables
 
   {Colors.BOLD}Show consistency checks:{Colors.RESET}
-    flexflow field info CS4SG1U1 --checks
+    field info CS4SG1U1 --checks
 
   {Colors.BOLD}Combine filters:{Colors.RESET}
-    flexflow field info CS4SG1U1 --variables --checks --zones
+    field info CS4SG1U1 --variables --checks --zones
 
   {Colors.BOLD}Show detailed statistics:{Colors.RESET}
-    flexflow field info CS4SG1U1 --stats --detailed
+    field info CS4SG1U1 --stats --detailed
 
 {Colors.BOLD}CONSISTENCY CHECKS:{Colors.RESET}
 

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### 📖 Help examples start with the command
+
+- The usage lines and examples in every `--help` / `--examples` text, and in
+  `docs/`, no longer start with `flexflow `: in the shell you type `case show
+  C1`, not `flexflow case show C1`. The old `flexflow new ...` examples of
+  `case create` now read `case create ...`. `flexflow --completion` and
+  `flexflow --help`, run from bash, keep the name.
+
 ### 📈 `plot --run`
 
 - `plot --var dy --run` reads the `.othd` / `.oisd` in the case's run directory

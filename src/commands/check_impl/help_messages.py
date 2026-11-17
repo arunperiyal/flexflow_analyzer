@@ -19,7 +19,7 @@ def print_check_help():
     Automatically detects file type by extension and shows relevant metadata.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    flexflow check <file>
+    check <file>
     ff check <file>
 
 {Colors.BOLD}SUPPORTED FILE TYPES:{Colors.RESET}

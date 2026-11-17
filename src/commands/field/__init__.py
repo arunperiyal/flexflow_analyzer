@@ -331,7 +331,7 @@ class FieldCommand(BaseCommand):
         console.print("Work with binary PLT field data files (Tecplot-free).")
         console.print()
         console.print("[bold]USAGE:[/bold]")
-        console.print("    flexflow field <subcommand> [options]")
+        console.print("    field <subcommand> [options]")
         console.print()
 
         # Create subcommands table
@@ -351,14 +351,14 @@ class FieldCommand(BaseCommand):
         console.print(table)
         console.print()
         console.print("[bold]EXAMPLES:[/bold]")
-        console.print("    flexflow field info myCase --checks")
-        console.print("    flexflow field extract myCase --variables U,V,Pressure --zone FIELD --timestep 100")
-        console.print("    flexflow field extract myCase --variables U,V --zone FIELD --t1 100 --t2 500 --probe 2.5,0,0")
-        console.print("    flexflow field compute force myCase --zone cyl --timestep 100")
-        console.print("    flexflow field convert myCase --timestep 100")
-        console.print("    flexflow field render iso myCase --timestep 100 --values 20 --color W")
-        console.print("    flexflow field render slice myCase --normal z --color Pressure")
-        console.print("    flexflow field check results.vtk")
+        console.print("    field info myCase --checks")
+        console.print("    field extract myCase --variables U,V,Pressure --zone FIELD --timestep 100")
+        console.print("    field extract myCase --variables U,V --zone FIELD --t1 100 --t2 500 --probe 2.5,0,0")
+        console.print("    field compute force myCase --zone cyl --timestep 100")
+        console.print("    field convert myCase --timestep 100")
+        console.print("    field render iso myCase --timestep 100 --values 20 --color W")
+        console.print("    field render slice myCase --normal z --color Pressure")
+        console.print("    field check results.vtk")
         console.print()
 
 

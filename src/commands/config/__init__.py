@@ -70,7 +70,7 @@ class ConfigCommand(BaseCommand):
         console.print("Manage FlexFlow configuration files.")
         console.print()
         console.print("[bold]USAGE:[/bold]")
-        console.print("    flexflow config <subcommand> [options]")
+        console.print("    config <subcommand> [options]")
         console.print()
 
         # Create subcommands table
@@ -84,9 +84,9 @@ class ConfigCommand(BaseCommand):
         console.print(table)
         console.print()
         console.print("[bold]EXAMPLES:[/bold]")
-        console.print("    flexflow config template single my_plot.yaml")
-        console.print("    flexflow config template multi comparison.yaml")
-        console.print("    flexflow config template case batch_cases.yaml")
+        console.print("    config template single my_plot.yaml")
+        console.print("    config template multi comparison.yaml")
+        console.print("    config template case batch_cases.yaml")
         console.print()
 
 

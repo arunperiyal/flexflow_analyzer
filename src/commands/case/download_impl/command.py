@@ -158,11 +158,11 @@ So do the restarts ({Colors.CYAN}.restarts{Colors.RESET}, `case organise history
 the remote gets the restarts it lacks.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    flexflow case upload [{Colors.YELLOW}case{Colors.RESET}] --remote {Colors.YELLOW}REMOTE{Colors.RESET} [options]
-    flexflow case upload plt [{Colors.YELLOW}case{Colors.RESET}] [--t1 STEP] [--t2 STEP] [options]
-    flexflow case upload rst [{Colors.YELLOW}case{Colors.RESET}] [--t1 STEP] [--t2 STEP] [options]
-    flexflow case upload input [{Colors.YELLOW}case{Colors.RESET}] [options]
-    flexflow case upload history [{Colors.YELLOW}case{Colors.RESET}] [--archive] [--cleaned] [--compiled] [options]
+    case upload [{Colors.YELLOW}case{Colors.RESET}] --remote {Colors.YELLOW}REMOTE{Colors.RESET} [options]
+    case upload plt [{Colors.YELLOW}case{Colors.RESET}] [--t1 STEP] [--t2 STEP] [options]
+    case upload rst [{Colors.YELLOW}case{Colors.RESET}] [--t1 STEP] [--t2 STEP] [options]
+    case upload input [{Colors.YELLOW}case{Colors.RESET}] [options]
+    case upload history [{Colors.YELLOW}case{Colors.RESET}] [--archive] [--cleaned] [--compiled] [options]
 
 {Colors.BOLD}ARGUMENTS:{Colors.RESET}
     {Colors.YELLOW}plt{Colors.RESET}                    The binary PLTs in binary/ only -- with --t1/--t2,
@@ -339,11 +339,11 @@ So do the restarts ({Colors.CYAN}.restarts{Colors.RESET}, `case organise history
 the restarts found only on the remote are added here.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    flexflow case download [{Colors.YELLOW}case{Colors.RESET}] --remote {Colors.YELLOW}REMOTE{Colors.RESET} [options]
-    flexflow case download plt [{Colors.YELLOW}case{Colors.RESET}] [--t1 STEP] [--t2 STEP] [--freq N] [options]
-    flexflow case download rst [{Colors.YELLOW}case{Colors.RESET}] [--t1 STEP] [--t2 STEP] [options]
-    flexflow case download input [{Colors.YELLOW}case{Colors.RESET}] [options]
-    flexflow case download history [{Colors.YELLOW}case{Colors.RESET}] [--archive] [--cleaned] [--compiled] [options]
+    case download [{Colors.YELLOW}case{Colors.RESET}] --remote {Colors.YELLOW}REMOTE{Colors.RESET} [options]
+    case download plt [{Colors.YELLOW}case{Colors.RESET}] [--t1 STEP] [--t2 STEP] [--freq N] [options]
+    case download rst [{Colors.YELLOW}case{Colors.RESET}] [--t1 STEP] [--t2 STEP] [options]
+    case download input [{Colors.YELLOW}case{Colors.RESET}] [options]
+    case download history [{Colors.YELLOW}case{Colors.RESET}] [--archive] [--cleaned] [--compiled] [options]
 
 {Colors.BOLD}ARGUMENTS:{Colors.RESET}
     {Colors.YELLOW}plt{Colors.RESET}                    binary/ only -- with --t1/--t2, only the timesteps
