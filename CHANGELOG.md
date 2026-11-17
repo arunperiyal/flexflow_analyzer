@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### 📈 `plot --run`
+
+- `plot --var dy --run` reads the `.othd` / `.oisd` in the case's run directory
+  (`dir:` of `simflow.config`) instead of the history: what a job is writing
+  now, before `case organise history --update` archives it. A last step that is
+  still being written is left out with a warning; the job's file is not
+  touched. `--run` and `--archive` cannot be given together.
+
 ### 🧹 `case organise history --clean RUNS`
 
 - `--clean 1,2,6` (also `1-3`, `1,3-5`; ascending only) cleans only those runs

@@ -44,6 +44,9 @@ class PlotCommand(BaseCommand):
                             help='The group id, whichever kind the variables are in')
         parser.add_argument('--archive', nargs='?', const='all', metavar='RUNS',
                             help='Read these runs of archive/ (1, 1,3 or 2-4) instead of the whole history')
+        parser.add_argument('--run', action='store_true',
+                            help="Read the run directory's .othd/.oisd (what a job is writing now) "
+                                 "instead of the history")
         parser.add_argument('--othd', action='store_true', help='Look only in the othd files')
         parser.add_argument('--oisd', action='store_true', help='Look only in the oisd files')
 

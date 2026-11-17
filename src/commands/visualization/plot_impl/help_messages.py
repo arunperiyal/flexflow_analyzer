@@ -25,6 +25,10 @@ same --var, node and window.
     {Colors.YELLOW}--node{Colors.RESET} N              Node to read (default: 0; use node:N)
     {Colors.YELLOW}--othid{Colors.RESET} ID            othId in the othd files (default: the first; use othid:N)
     {Colors.YELLOW}--osgid{Colors.RESET} ID            osgId in the oisd files (default: the first; use osgid:N)
+    {Colors.YELLOW}--run{Colors.RESET}                 Read the run directory's .othd/.oisd (`dir:` of simflow.config)
+                            instead of the history: what a job is writing now, before
+                            `case organise history --update` archives it. A last step
+                            still being written is left out. Not with --archive
     {Colors.YELLOW}--othd{Colors.RESET} / {Colors.YELLOW}--oisd{Colors.RESET}       Look in one kind of file only
     {Colors.YELLOW}--archive{Colors.RESET} [RUNS]      Read these runs of othd_files/ and oisd_files/archive/
                             ({Colors.DIM}1, 1,3 or 2-4, ascending{Colors.RESET}) instead of the whole history;
@@ -94,6 +98,7 @@ def print_plot_examples():
     plot CS4SG1U1 --var dy --last 1000
     plot CS4SG1U1 --var tty --archive 6        # only archive/riser6, not the whole history
     plot CS4SG1U1 --var tty --archive 3,6      # runs 3 and 6, the later run wins a shared step
+    plot CS4SG1U1 --var dy --run               # the job running now, from the run directory
 
 {Colors.BOLD}FFT and Trajectories:{Colors.RESET}
     plot CS4SG1U1 --var dy --plot-type fft --last 2000

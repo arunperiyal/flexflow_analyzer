@@ -166,13 +166,59 @@ def for_each_case(args, logger, run_one):
         sys.exit(1)
 
 
-def find_files(case_dir, kind, archive=None):
+_TRIMMED = []   # temporary copies of run-directory files, removed at exit
+
+
+def _whole_steps(path, logger=None):
+    """`path`, or when a job still writing it left the last step half written,
+    a temporary copy without that step. ValueError if the file is broken or
+    holds no whole step."""
+    import tempfile
+    from pathlib import Path
+    from ..case.organise_impl.history import check_file, scan_blocks
+    path = Path(path)
+    check = check_file(path)
+    if check['problems']:
+        raise ValueError(f"{path.name}: {'; '.join(check['problems'])}")
+    if not check['cut']:
+        return path
+    header, blocks = scan_blocks(path)
+    if len(blocks) < 2:
+        raise ValueError(f"{path.name} has no whole step yet")
+    if logger is not None:
+        logger.warning(f"{path.name}: the last step is still being written -- left out")
+    tmp = tempfile.TemporaryDirectory(prefix='ff_run_')
+    _TRIMMED.append(tmp)
+    out = Path(tmp.name) / path.name
+    with open(path, 'rb') as src, open(out, 'wb') as dst:
+        dst.write(header)
+        for _, start, end in blocks[:-1]:
+            src.seek(start)
+            dst.write(src.read(end - start))
+    return out
+
+
+def run_files(case_dir, kind, logger=None):
+    """The `kind` (othd/oisd) files in the case's run directory (`dir:` of
+    simflow.config), the file a job is writing now, in name order. A last step
+    still being written is left out. ValueError if there is no run directory."""
+    from ...core.simflow_config import SimflowConfig
+    run_dir = SimflowConfig.find(case_dir).run_dir(case_dir)
+    if run_dir is None or not run_dir.is_dir():
+        raise ValueError(f"no run directory for {case_dir} (`dir:` in simflow.config)")
+    return [_whole_steps(p, logger) for p in sorted(run_dir.glob(f'*.{kind}'))]
+
+
+def find_files(case_dir, kind, archive=None, run=False, logger=None):
     """The othd or oisd files of a case's history, in run order (riser2 before
     riser10): the compiled file while it is up to date, else every run in
     archive/ and cleaned/ (core/history.py, as the other readers take them).
     `archive` ('all', or '1,3-4' as `plot --archive` takes it) reads those
-    archive/ runs instead; ValueError if archive/ lacks one."""
+    archive/ runs instead; ValueError if archive/ lacks one. `run` reads the
+    run directory's files instead (what a job is writing now)."""
     from ...core import history
+    if run:
+        return [str(p) for p in run_files(case_dir, kind, logger)]
     if archive is not None:
         numbers = None if str(archive).strip().lower() == 'all' else history.parse_runs(archive)
         return [str(p) for p in history.pick_archived(
@@ -189,15 +235,16 @@ def out_freq(case_dir):
         return None
 
 
-def scan_kinds(case_dir, kinds, logger, archive=None):
+def scan_kinds(case_dir, kinds, logger, archive=None, run=False):
     """Scan the requested kinds. Returns {kind: SeriesMeta} for those present.
-    With `archive` (see find_files) only those archive/ runs are read; a kind
-    lacking one is left out, and is an error only when no kind has them."""
+    With `archive` (see find_files) only those archive/ runs are read, with
+    `run` the run directory's files; a kind lacking them is left out, and is
+    an error only when no kind has them."""
     metas = {}
     refused = []
     for kind in kinds:
         try:
-            paths = find_files(case_dir, kind, archive)
+            paths = find_files(case_dir, kind, archive, run, logger)
         except ValueError as exc:
             refused.append(str(exc))
             continue
@@ -210,6 +257,9 @@ def scan_kinds(case_dir, kinds, logger, archive=None):
             sys.exit(1)
     if not metas and refused:
         logger.error(refused[0])
+        sys.exit(1)
+    if not metas and run:
+        logger.error(f"no {' or '.join(kinds)} files in the run directory of {case_dir}")
         sys.exit(1)
     return metas
 
@@ -444,7 +494,8 @@ def select(case_dir, args, logger, requested):
     search), then the group (--othid/--osgid/--group), the node, and the
     --t1/--t2/--last window. Exits with a sentence on anything wrong."""
     kinds = which_kinds(args)
-    metas = scan_kinds(case_dir, kinds, logger, getattr(args, "archive", None))
+    metas = scan_kinds(case_dir, kinds, logger, getattr(args, "archive", None),
+                       bool(getattr(args, "run", False)))
     if not metas:
         logger.error(f"No othd/oisd data found under {case_dir}")
         sys.exit(1)

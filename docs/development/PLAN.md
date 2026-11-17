@@ -289,13 +289,13 @@ Comment 6 of `version comment` (2026-11-11) and asked again on 2026-11-17:
 what a job is writing now, before `case organise history --update` moves it
 into `archive/`. `plot` with no flag keeps reading the whole history.
 
-- [ ] `plot --run`: read the `.othd` / `.oisd` of the case's run directory
+- [x] `plot --run`: read the `.othd` / `.oisd` of the case's run directory
       (`dir:` of `simflow.config`, e.g. `RUN_1`) instead of the history; a
       cut-off last step (a job still writing) is left out, as `--clean` does;
       an empty run directory is an error that says so
-- [ ] `--run` and `--archive` exclude each other, with an error that says so;
+- [x] `--run` and `--archive` exclude each other, with an error that says so;
       the title and the `reading` line name the run directory
-- [ ] Tests (a dummy run directory, a half-written last step, both flags),
+- [x] Tests (a dummy run directory, a half-written last step, both flags),
       help text, completion, `CHANGELOG.md`
 
 ### Phase 24: help examples and the carried `.casestatus.md` (branch `help-and-carry`)
