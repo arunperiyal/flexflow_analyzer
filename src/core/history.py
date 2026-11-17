@@ -14,10 +14,10 @@ always holds the whole history and archive/ only what is not yet pruned.
 
 `--clean 1,2,6` cleans only those runs: cleaned/ is made to hold exactly
 riser1..3, run 6 renamed riser3, and cleaned/.runs.json says which archive run
-each came from ({"cleaned N": archive M}). Readers go through it: a cleaned
-file counts as its source run, an archive run below the highest source that is
-not in the record is skipped, a newer one is a new run. Without the record
-cleaned N and archive N are the same run.
+each came from ({"cleaned": {N: archive M}, "skipped": [archive runs left
+out]}). Readers go through it: a cleaned file counts as its source run, a
+skipped archive run is ignored, any other archive run is a new one. Without
+the record cleaned N and archive N are the same run.
 
 Before this, the parts sat directly in othd_files/ (riserN.othd), and the
 compiled file in othd_files/compiled/. The flat parts are still read until a
@@ -61,24 +61,30 @@ def selection(case_dir, ext: str) -> Dict[int, int]:
         return {}
 
 
-def write_selection(case_dir, ext: str, mapping: Dict[int, int]) -> None:
-    """Keep {cleaned N: archive M} in cleaned/ (an empty mapping removes the record)."""
+def write_selection(case_dir, ext: str, mapping: Dict[int, int], skipped=()) -> None:
+    """Keep {cleaned N: archive M} and the archive runs left out in cleaned/
+    (an empty mapping removes the record)."""
     path = record_path(case_dir, ext)
     if not mapping:
         path.unlink(missing_ok=True)
         return
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + '.__tmp__')
-    tmp.write_text(json.dumps({'cleaned': {str(k): v for k, v in sorted(mapping.items())}}, indent=1) + '\n')
+    data = {'cleaned': {str(k): v for k, v in sorted(mapping.items())},
+            'skipped': sorted(skipped)}
+    tmp.write_text(json.dumps(data, indent=1) + '\n')
     os.replace(tmp, path)
 
 
 def skipped(case_dir, ext: str, problem: Optional[str]) -> List[int]:
-    """The archive runs a selection leaves out: below its highest source, not in it."""
-    chosen = set(selection(case_dir, ext).values())
-    if not chosen:
+    """The archive runs the selection left out (those still in archive/)."""
+    if not selection(case_dir, ext):
         return []
-    return [n for n in archived(case_dir, ext, problem) if n < max(chosen) and n not in chosen]
+    try:
+        left = {int(n) for n in json.loads(record_path(case_dir, ext).read_text())['skipped']}
+    except (OSError, ValueError, KeyError, TypeError):
+        return []
+    return [n for n in archived(case_dir, ext, problem) if n in left]
 
 
 def compiled_path(case_dir, ext: str, problem: str) -> Path:
@@ -131,17 +137,18 @@ def next_number(case_dir, ext: str, problem: Optional[str]) -> int:
     return max(taken, default=0) + 1
 
 
-def runs(case_dir, ext: str, problem: Optional[str]) -> Dict[int, Path]:
+def runs(case_dir, ext: str, problem: Optional[str], use_record: bool = True) -> Dict[int, Path]:
     """
     {N: file} holding each run: the archived part, or the cleaned one once
     the part is pruned. Every run is there, so read in order with the later
     one winning, these give the whole history. After a `--clean LIST` N is
     the archive run (a cleaned file stands for its source run) and the runs
-    the selection skipped are left out.
+    the selection skipped are left out (`use_record=False` reads as if there
+    were no selection: cleaned N is archive N).
     """
-    chosen = selection(case_dir, ext)
+    chosen = selection(case_dir, ext) if use_record else {}
     found = {chosen.get(n, n): path for n, path in cleaned(case_dir, ext, problem).items()}
-    left_out = set(skipped(case_dir, ext, problem))
+    left_out = set(skipped(case_dir, ext, problem)) if use_record else set()
     found.update({n: path for n, path in archived(case_dir, ext, problem).items()
                   if n not in left_out})
     return dict(sorted(found.items()))

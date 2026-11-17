@@ -266,15 +266,15 @@ in the new set are removed, the named runs are written renamed `1..N` in the
 order given. Design agreed on 2026-11-17 (user's words: "clean is a temporary
 directory between archive and the compiled file").
 
-- [x] `core/history`: `cleaned/.runs.json` (`{"cleaned N": archive M}`:
-      read, write, remove); `runs()` / `read_files()` read through it: a
-      cleaned file counts as its source run, archive runs below the highest
-      source and not in the record are skipped, newer ones are new runs
-- [ ] `--clean LIST` (syntax of Phase 21, ascending only): the plan reads only
+- [x] `core/history`: `cleaned/.runs.json` (`{"cleaned": {N: archive M},
+      "skipped": [...]}`: read, write, remove); `runs()` / `read_files()` read
+      through it: a cleaned file counts as its source run, the skipped runs
+      are ignored, an archive run that came after is a new run
+- [x] `--clean LIST` (syntax of Phase 21, ascending only): the plan reads only
       those runs; `cleaned/` is made to hold exactly `1..N`; the record is
       written; mapping, overlaps and gaps are printed; the question lists the
       files removed and written (`--no-confirm`, `--dry-run` as today)
-- [ ] `--compile`, `--verify` and the "up to date" check judge `cleaned/`
+- [x] `--compile`, `--verify` and the "up to date" check judge `cleaned/`
       against the selection in the record
 - [ ] `--prune` refuses while a record is present and says why; a plain
       `--clean` (all runs) asks, clears the record and cleans everything
