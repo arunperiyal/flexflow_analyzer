@@ -266,7 +266,7 @@ in the new set are removed, the named runs are written renamed `1..N` in the
 order given. Design agreed on 2026-11-17 (user's words: "clean is a temporary
 directory between archive and the compiled file").
 
-- [ ] `core/history`: `cleaned/.runs.json` (`{"cleaned N": archive M}`:
+- [x] `core/history`: `cleaned/.runs.json` (`{"cleaned N": archive M}`:
       read, write, remove); `runs()` / `read_files()` read through it: a
       cleaned file counts as its source run, archive runs below the highest
       source and not in the record are skipped, newer ones are new runs
