@@ -305,12 +305,13 @@ From `version comment` 1 (2026-11-01) and 2 (2026-11-10).
 - [x] Examples in the `help_messages.py` files and `docs/usage/` start with
       the command, not `flexflow ` (about 220 lines); one pass, then a test
       that no help text has the prefix
-- [ ] `case download` / `case upload` of a case whose folder is missing on
-      the remote: `.casestatus.md` (and `.restarts`) are carried after the
-      folder is made, or skipped with one line that says why, instead of
-      `[Errno 2] No such file`; the run still ends `Incomplete: n/m` only
-      for what really failed
-- [ ] Tests, `CHANGELOG.md`
+- [x] `case download` / `case upload` of a case whose folder is missing on
+      the remote: `.casestatus.md` and `.restarts` are skipped with one line
+      that says why (upload the case first), instead of `[Errno 2] No such
+      file` twice; the run still ends `Incomplete: n/m` only for what really
+      failed. Decided: no empty case folder is made on the remote for the
+      notes alone
+- [x] Tests, `CHANGELOG.md`
 
 ### Phase 25: shellkit, `version comment clear` and `\` continuation
 

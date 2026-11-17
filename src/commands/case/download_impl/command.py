@@ -1104,10 +1104,8 @@ class CaseUploadCommand(HistoryTransferMixin):
             for target in all_targets:
                 if target['case_path'] not in synced:
                     synced.add(target['case_path'])
-                    self.sync_case_status(ssh, target['remote_case_path'],
-                                          target['case_path'], is_upload)
-                    self.sync_restarts(ssh, target['remote_case_path'],
-                                       target['case_path'], is_upload)
+                    self.sync_case_notes(ssh, target['remote_case_path'],
+                                         target['case_path'], is_upload)
 
             ssh.disconnect()
             self._sending = None
@@ -1134,6 +1132,24 @@ class CaseUploadCommand(HistoryTransferMixin):
             if state is not None:
                 self._finalize_transfer_state(state, success=False)
             return 1
+
+    def sync_case_notes(self, ssh, remote_case_path: str, local_case_path: str,
+                        is_upload: bool) -> None:
+        """Carry .casestatus.md and .restarts of one case. An upload to a case
+        folder the remote does not have (the case's own upload failed, or
+        carried nothing) leaves them: one line says so, not an SFTP error for
+        each file. Never fails the transfer."""
+        try:
+            missing = is_upload and not ssh.remote_path_exists(remote_case_path)
+        except Exception:
+            missing = False         # cannot tell: try, and let each carry say what failed
+        if missing:
+            self.console.print(f"[yellow]⚠[/yellow]  {Path(local_case_path).name}: not on the remote "
+                               f"yet ({remote_case_path}) -- .casestatus.md and .restarts not "
+                               f"carried; upload the case first")
+            return
+        self.sync_case_status(ssh, remote_case_path, local_case_path, is_upload)
+        self.sync_restarts(ssh, remote_case_path, local_case_path, is_upload)
 
     def sync_case_status(self, ssh, remote_case_path: str, local_case_path: str,
                          is_upload: bool) -> None:

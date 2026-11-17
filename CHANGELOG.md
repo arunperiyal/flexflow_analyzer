@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### 🐛 Upload to a case the remote does not have
+
+- `case upload` of a case whose folder is not on the remote (its own upload
+  failed, or carried nothing) no longer prints `.casestatus.md not carried: …
+  [Errno 2] No such file`. One line says the case is not on the remote yet and
+  that the notes and `.restarts` were left; upload the case first.
+
 ### 📖 Help examples start with the command
 
 - The usage lines and examples in every `--help` / `--examples` text, and in

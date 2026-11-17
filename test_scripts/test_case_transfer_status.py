@@ -121,3 +121,32 @@ def test_merge_keeps_untimed_entries_in_place():
         '- 2026-01-01 00:00  a', '- hand-written, no time', '- 2026-01-02 00:00  b',
         '- 2026-01-03 00:00  c']
     assert cs.merge(newer, newer) == newer
+
+
+# --- a case folder the remote does not have ---------------------------------------
+
+def test_upload_to_a_case_the_remote_lacks_says_so_once(setup):
+    t, ssh, case = setup
+    (case / cs.FILENAME).write_text(NOTES_HERE)
+    (case / '.restarts').write_text('# restarts\n')
+    t.sync_case_notes(ssh, '/r/C1', str(case), is_upload=True)
+    assert ssh.files == {}
+    out = said(t)
+    assert out.count('not on the remote yet') == 1
+    assert 'Errno' not in out and 'not carried:' not in out
+
+
+def test_upload_to_an_existing_case_carries_both(setup):
+    t, ssh, case = setup
+    ssh.files['/r/C1'] = [b'', 0]                # the folder is there
+    (case / cs.FILENAME).write_text(NOTES_HERE)
+    (case / '.restarts').write_text('# restarts\n')
+    t.sync_case_notes(ssh, '/r/C1', str(case), is_upload=True)
+    assert '/r/C1/' + cs.FILENAME in ssh.files
+    assert '/r/C1/.restarts' in ssh.files
+
+
+def test_download_does_not_need_the_folder_check(setup):
+    t, ssh, case = setup
+    t.sync_case_notes(ssh, '/r/C1', str(case), is_upload=False)     # nothing there: quiet
+    assert 'not on the remote' not in said(t)
