@@ -75,6 +75,27 @@ favour of the later run. This also covers a restart appended inside one file.
   one shorter (a new run restarted inside it) asks first, unless
   `--no-confirm`
 
+#### `history --clean RUNS`
+
+`--clean 1,2,6` (or `1-3`, `1,3-5`; ascending only, each run once) cleans only
+those runs of `archive/`, for a case with abandoned runs (a branch that
+diverged). `archive/` is the store and is not changed; `cleaned/` is derived,
+so it is replaced: whatever it held is removed (the question lists the files)
+and the named runs are written as `riser1..N` in the order given, so
+`--clean 1,2,6` makes `cleaned/riser3` from `archive/riser6`. "The later run
+wins" still applies among the runs named.
+
+- The output shows the mapping (`riser3.othd ← archive 6`) and any tsIds in none
+  of the chosen runs
+- `cleaned/.runs.json` keeps `{"cleaned": {N: archive M}, "skipped": [...]}`.
+  `--compile`, `--verify` and the readers (`plot`, `data`, `case check`) follow
+  it: a cleaned file counts as its archive run, a skipped run is ignored, a job
+  that is archived afterwards is a new run (name it in the next `--clean`)
+- `--prune` refuses while it stands, because `archive/` holds runs `cleaned/`
+  does not
+- A plain `--clean` asks, cleans every run of `archive/` and removes the record
+- An unknown run, or a list that is not ascending, changes nothing
+
 #### `history --compile`
 
 Joins `cleaned/` in run order into `othd_files/{problem}.othd` and

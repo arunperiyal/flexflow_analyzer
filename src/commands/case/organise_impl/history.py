@@ -811,6 +811,11 @@ class HistoryMixin:
             if not parts:
                 self.console.print(f"  [dim]{label}: archive/ is empty — nothing to prune[/dim]")
                 continue
+            if history.selection(self.case_dir, ext):
+                self.console.print(f"  [yellow]⚠[/yellow]  {label}: cleaned/ was made from a selection "
+                                   f"of runs (.runs.json), so archive/ holds runs it does not — nothing "
+                                   f"pruned. A plain --clean cleans every run and lifts this.")
+                continue
             plan = self._plan(ext, label, quiet=True)
             if plan is None or self._stale_cleaned(ext, plan):
                 self.console.print(f"  [yellow]⚠[/yellow]  {label}: cleaned/ is out of date with "

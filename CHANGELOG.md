@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### 🧹 `case organise history --clean RUNS`
+
+- `--clean 1,2,6` (also `1-3`, `1,3-5`; ascending only) cleans only those runs
+  of `archive/` and makes `cleaned/` hold exactly them, renamed `riser1..N` in
+  the order given (`cleaned/riser3` is made from `archive/riser6`). Files
+  `cleaned/` held before are removed after a question that lists them;
+  `archive/` is never changed. For abandoned runs that must not count.
+- `cleaned/.runs.json` records which archive run each cleaned file came from
+  and which runs were left out. `--compile`, `--verify` and the readers
+  (`plot`, `data`, `case check`) follow it; a job archived afterwards is read
+  as a new run.
+- `--prune` refuses while that record stands. A plain `--clean` asks, cleans
+  every run and removes the record.
+
 ### 📈 `plot --archive`
 
 - `plot --var tty --archive 6` reads only `archive/riser6` of the othd and

@@ -276,9 +276,9 @@ directory between archive and the compiled file").
       files removed and written (`--no-confirm`, `--dry-run` as today)
 - [x] `--compile`, `--verify` and the "up to date" check judge `cleaned/`
       against the selection in the record
-- [ ] `--prune` refuses while a record is present and says why; a plain
+- [x] `--prune` refuses while a record is present and says why; a plain
       `--clean` (all runs) asks, clears the record and cleans everything
-- [ ] Tests (selection, rename order, removal of the old files, readers,
+- [x] Tests (selection, rename order, removal of the old files, readers,
       compile, verify, prune refusal, plain `--clean` after a selection),
       help text, completion, `docs/usage/case-organise.md`, `CHANGELOG.md`
 

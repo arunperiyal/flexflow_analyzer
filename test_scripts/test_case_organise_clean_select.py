@@ -124,3 +124,15 @@ def test_both_kinds_follow_the_same_selection(case):
         assert history.selection(case, ext) == {1: 1, 2: 2, 3: 4}
         assert names(case / f'{ext}_files' / 'cleaned') == [
             '.runs.json', f'riser1.{ext}', f'riser2.{ext}', f'riser3.{ext}']
+
+
+def test_prune_refuses_while_a_selection_stands(case):
+    organizer, out = run(case, clean='1,2,4', prune=True)
+    assert 'nothing pruned' in out and 'selection' in out
+    assert names(case / 'othd_files' / 'archive') == sorted(RUNS)
+
+
+def test_prune_works_again_after_a_plain_clean(case):
+    run(case, clean='1,2,4')
+    run(case, clean=True, prune=True)
+    assert names(case / 'othd_files' / 'archive') == []
