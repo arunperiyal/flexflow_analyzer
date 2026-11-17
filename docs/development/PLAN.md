@@ -282,6 +282,53 @@ directory between archive and the compiled file").
       compile, verify, prune refusal, plain `--clean` after a selection),
       help text, completion, `docs/usage/case-organise.md`, `CHANGELOG.md`
 
+### Phase 23: `plot --run` (branch `plot-run`)
+
+Comment 6 of `version comment` (2026-11-11) and asked again on 2026-11-17:
+`plot` reads only the history (`othd_files/`, `oisd_files/`); it cannot show
+what a job is writing now, before `case organise history --update` moves it
+into `archive/`. `plot` with no flag keeps reading the whole history.
+
+- [ ] `plot --run`: read the `.othd` / `.oisd` of the case's run directory
+      (`dir:` of `simflow.config`, e.g. `RUN_1`) instead of the history; a
+      cut-off last step (a job still writing) is left out, as `--clean` does;
+      an empty run directory is an error that says so
+- [ ] `--run` and `--archive` exclude each other, with an error that says so;
+      the title and the `reading` line name the run directory
+- [ ] Tests (a dummy run directory, a half-written last step, both flags),
+      help text, completion, `CHANGELOG.md`
+
+### Phase 24: help examples and the carried `.casestatus.md` (branch `help-and-carry`)
+
+From `version comment` 1 (2026-11-01) and 2 (2026-11-10).
+
+- [ ] Examples in the `help_messages.py` files and `docs/usage/` start with
+      the command, not `flexflow ` (about 220 lines); one pass, then a test
+      that no help text has the prefix
+- [ ] `case download` / `case upload` of a case whose folder is missing on
+      the remote: `.casestatus.md` (and `.restarts`) are carried after the
+      folder is made, or skipped with one line that says why, instead of
+      `[Errno 2] No such file`; the run still ends `Incomplete: n/m` only
+      for what really failed
+- [ ] Tests, `CHANGELOG.md`
+
+### Phase 25: shellkit, `version comment clear` and `\` continuation
+
+From `version comment` 5 (2026-11-10) and the request of 2026-11-17. The
+`version` builtin and the shell are in shellkit (a separate repository,
+pinned in `requirements.txt`; v0.1.6 has `version comment --remove N` and no
+clear-all), so the work is there and FlexFlow only moves the pin. Needs the
+user's word to edit shellkit, and a branch there made by the user.
+
+- [ ] shellkit: `version comment clear` clears every comment (asks first
+      unless `--yes`); `version comment clear 2` / `clear 2 4` clears those
+      numbers and says so for a number that is not there; `--remove` stays;
+      tests, help text, its changelog
+- [ ] shellkit: a line ending in `\` continues on the next line (prompt shows
+      a continuation mark), in the interactive shell; tests
+- [ ] shellkit tagged (v0.1.7), the pin in `requirements.txt` here raised,
+      the suite run against it
+
 ---
 
 ### Phase 12: `case check --remote`, verify against the remote (branch `check-remote`)
