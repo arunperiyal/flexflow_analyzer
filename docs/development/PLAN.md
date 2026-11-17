@@ -258,18 +258,29 @@ runs; `core/history.read_files`).
 
 ### Phase 22: `case organise history --clean 1,2,3` (branch `organise-clean-select`)
 
-Asked for on 2026-11-17. `--clean` today decides itself which runs make the
-history; with abandoned branches (`riser4`, `riser5` of `fixed/bare`) the
-user must choose. To be built after Phase 21.
+Asked for on 2026-11-17. `--clean` decides itself which runs make the
+history; with abandoned branches (`riser4`, `riser5` of `fixed/bare`) the user
+must choose. `archive/` is the store and is never changed by `--clean`;
+`cleaned/` is derived and temporary, so `--clean LIST` replaces it: files not
+in the new set are removed, the named runs are written renamed `1..N` in the
+order given. Design agreed on 2026-11-17 (user's words: "clean is a temporary
+directory between archive and the compiled file").
 
-- [ ] `--clean LIST` (same syntax as Phase 21, ascending only): only the
-      runs named are cleaned
-- [ ] `cleaned/` holds them renamed `riser1..riserN` in that order; a mapping
-      (cleaned N from archive M) is written next to them and printed
-- [ ] A non-empty `cleaned/` is not overwritten without `--force`
-- [ ] Overlaps among the chosen runs still resolve as today (the later run
-      wins); gaps and overlaps are printed
-- [ ] Tests, help text, completion, `CHANGELOG.md`
+- [ ] `core/history`: `cleaned/.runs.json` (`{"cleaned N": archive M}`:
+      read, write, remove); `runs()` / `read_files()` read through it: a
+      cleaned file counts as its source run, archive runs below the highest
+      source and not in the record are skipped, newer ones are new runs
+- [ ] `--clean LIST` (syntax of Phase 21, ascending only): the plan reads only
+      those runs; `cleaned/` is made to hold exactly `1..N`; the record is
+      written; mapping, overlaps and gaps are printed; the question lists the
+      files removed and written (`--no-confirm`, `--dry-run` as today)
+- [ ] `--compile`, `--verify` and the "up to date" check judge `cleaned/`
+      against the selection in the record
+- [ ] `--prune` refuses while a record is present and says why; a plain
+      `--clean` (all runs) asks, clears the record and cleans everything
+- [ ] Tests (selection, rename order, removal of the old files, readers,
+      compile, verify, prune refusal, plain `--clean` after a selection),
+      help text, completion, `docs/usage/case-organise.md`, `CHANGELOG.md`
 
 ---
 
