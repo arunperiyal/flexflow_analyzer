@@ -42,6 +42,8 @@ class PlotCommand(BaseCommand):
         osgid_arg(parser, help='osgId (surface group) in the oisd files (default: the first)')
         parser.add_argument('--group', type=int, metavar='ID',
                             help='The group id, whichever kind the variables are in')
+        parser.add_argument('--archive', nargs='?', const='all', metavar='RUNS',
+                            help='Read these runs of archive/ (1, 1,3 or 2-4) instead of the whole history')
         parser.add_argument('--othd', action='store_true', help='Look only in the othd files')
         parser.add_argument('--oisd', action='store_true', help='Look only in the oisd files')
 

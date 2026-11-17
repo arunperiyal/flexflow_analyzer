@@ -381,7 +381,7 @@ _flexflow_completions() {
             fi
             ;;
         plot)
-            local flags="--var --node --othid --osgid --group --othd --oisd --plot-type \\
+            local flags="--var --node --othid --osgid --group --othd --oisd --archive --plot-type \\
                         --t1 --t2 --last --plot-style \\
                         --title --xlabel --ylabel --legend --legend-style --fontsize --fontname \\
                         --output --restart --gnu --no-display --input-file -v --verbose -h --help --examples"

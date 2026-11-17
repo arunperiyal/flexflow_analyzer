@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### 📈 `plot --archive`
+
+- `plot --var tty --archive 6` reads only `archive/riser6` of the othd and
+  oisd files; `--archive 1,3` or `--archive 2-4` joins those runs in order
+  (ascending only; the later run wins a step both wrote); a bare `--archive`
+  is every archived run. Without it `plot` reads the whole history as before.
+  To tell a spike in the solver's files from one made by the compile.
+
 ### 🗑 `auto apply --delete`: the delete stage
 
 - `auto apply --delete` (or `--only delete`) deletes local files whose copy on

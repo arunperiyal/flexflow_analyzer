@@ -26,6 +26,10 @@ same --var, node and window.
     {Colors.YELLOW}--othid{Colors.RESET} ID            othId in the othd files (default: the first; use othid:N)
     {Colors.YELLOW}--osgid{Colors.RESET} ID            osgId in the oisd files (default: the first; use osgid:N)
     {Colors.YELLOW}--othd{Colors.RESET} / {Colors.YELLOW}--oisd{Colors.RESET}       Look in one kind of file only
+    {Colors.YELLOW}--archive{Colors.RESET} [RUNS]      Read these runs of othd_files/ and oisd_files/archive/
+                            ({Colors.DIM}1, 1,3 or 2-4, ascending{Colors.RESET}) instead of the whole history;
+                            a bare --archive is every archived run. A step two runs
+                            both wrote comes from the later run
 
 {Colors.BOLD}PLOT OPTIONS:{Colors.RESET}
     {Colors.YELLOW}--plot-type{Colors.RESET} TYPE     time (default), fft, traj2d, traj3d
@@ -88,6 +92,8 @@ def print_plot_examples():
 {Colors.BOLD}A Window:{Colors.RESET}
     plot CS4SG1U1 --var dy --t1 2000 --t2 4000
     plot CS4SG1U1 --var dy --last 1000
+    plot CS4SG1U1 --var tty --archive 6        # only archive/riser6, not the whole history
+    plot CS4SG1U1 --var tty --archive 3,6      # runs 3 and 6, the later run wins a shared step
 
 {Colors.BOLD}FFT and Trajectories:{Colors.RESET}
     plot CS4SG1U1 --var dy --plot-type fft --last 2000

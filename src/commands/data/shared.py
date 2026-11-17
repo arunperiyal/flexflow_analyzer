@@ -166,11 +166,17 @@ def for_each_case(args, logger, run_one):
         sys.exit(1)
 
 
-def find_files(case_dir, kind):
+def find_files(case_dir, kind, archive=None):
     """The othd or oisd files of a case's history, in run order (riser2 before
     riser10): the compiled file while it is up to date, else every run in
-    archive/ and cleaned/ (core/history.py, as the other readers take them)."""
+    archive/ and cleaned/ (core/history.py, as the other readers take them).
+    `archive` ('all', or '1,3-4' as `plot --archive` takes it) reads those
+    archive/ runs instead; ValueError if archive/ lacks one."""
     from ...core import history
+    if archive is not None:
+        numbers = None if str(archive).strip().lower() == 'all' else history.parse_runs(archive)
+        return [str(p) for p in history.pick_archived(
+            case_dir, kind, history.problem_of(case_dir), numbers)]
     return [str(p) for p in history.read_files(case_dir, kind)]
 
 
@@ -183,11 +189,18 @@ def out_freq(case_dir):
         return None
 
 
-def scan_kinds(case_dir, kinds, logger):
-    """Scan the requested kinds. Returns {kind: SeriesMeta} for those present."""
+def scan_kinds(case_dir, kinds, logger, archive=None):
+    """Scan the requested kinds. Returns {kind: SeriesMeta} for those present.
+    With `archive` (see find_files) only those archive/ runs are read; a kind
+    lacking one is left out, and is an error only when no kind has them."""
     metas = {}
+    refused = []
     for kind in kinds:
-        paths = find_files(case_dir, kind)
+        try:
+            paths = find_files(case_dir, kind, archive)
+        except ValueError as exc:
+            refused.append(str(exc))
+            continue
         if not paths:
             continue
         try:
@@ -195,6 +208,9 @@ def scan_kinds(case_dir, kinds, logger):
         except Exception as exc:
             logger.error(f"Could not read the {kind} files: {exc}")
             sys.exit(1)
+    if not metas and refused:
+        logger.error(refused[0])
+        sys.exit(1)
     return metas
 
 
@@ -428,7 +444,7 @@ def select(case_dir, args, logger, requested):
     search), then the group (--othid/--osgid/--group), the node, and the
     --t1/--t2/--last window. Exits with a sentence on anything wrong."""
     kinds = which_kinds(args)
-    metas = scan_kinds(case_dir, kinds, logger)
+    metas = scan_kinds(case_dir, kinds, logger, getattr(args, "archive", None))
     if not metas:
         logger.error(f"No othd/oisd data found under {case_dir}")
         sys.exit(1)
