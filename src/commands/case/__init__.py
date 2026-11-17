@@ -184,8 +184,10 @@ class CaseCommand(BaseCommand):
         case_arg(history_parser, help='Case directory path')
         history_parser.add_argument('--update', action='store_true',
                                     help='Move .othd/.oisd from the run dir into {othd,oisd}_files/archive/ (.rcv to rcv_files/)')
-        history_parser.add_argument('--clean', action='store_true',
-                                    help='Write cleaned/: each run without the steps a later run redid')
+        history_parser.add_argument('--clean', nargs='?', const=True, metavar='RUNS',
+                                    help='Write cleaned/: each run without the steps a later run redid; '
+                                         'RUNS (1,2,3 or 1-3, ascending) cleans only those archive runs, '
+                                         'renamed 1..N, and replaces what cleaned/ held')
         history_parser.add_argument('--compile', action='store_true',
                                     help='Join cleaned/ into {othd,oisd}_files/{problem}.othd|oisd')
         history_parser.add_argument('--verify', action='store_true',

@@ -50,6 +50,16 @@ Organize and clean up case directories. Pick one subcommand.
             {Colors.CYAN}.restarts{Colors.RESET}. Once archive/ is pruned a cleaned file is the
             run's only copy: cutting one shorter asks first.
 
+        {Colors.CYAN}--clean RUNS{Colors.RESET}   (1,2,3 or 1-3 or 1,3-5; ascending)
+            Clean only those runs of archive/, and make cleaned/ hold exactly
+            them: riser1..N in the order given (--clean 1,2,6 writes
+            cleaned/riser3 from archive/riser6), whatever else cleaned/ held
+            is removed. archive/ is never changed. The mapping and the runs
+            left out are kept in cleaned/.runs.json, which --compile, --verify
+            and the readers follow; --prune refuses while it stands. A plain
+            --clean asks, cleans every run and drops it. For when a run was
+            abandoned (a diverged branch) and must not count.
+
         {Colors.CYAN}--compile{Colors.RESET}
             Join cleaned/ into othd_files/{{problem}}.othd and
             oisd_files/{{problem}}.oisd. Only from a cleaned/ that is up to date
@@ -239,6 +249,9 @@ def print_organise_examples():
 
     # Each run without what later runs redid, into cleaned/
     flexflow case organise history CS4SG1U1 --clean
+
+    # Only runs 1, 2 and 6 (3, 4, 5 abandoned): cleaned/ becomes riser1..3
+    flexflow case organise history CS4SG1U1 --clean 1,2,6 --compile
 
     # One file per type: othd_files/riser.othd, oisd_files/riser.oisd
     flexflow case organise history CS4SG1U1 --clean --compile

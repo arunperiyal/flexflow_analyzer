@@ -12,11 +12,19 @@ and the same under oisd_files/. N numbers the jobs in the order they ran, so
 cleaned/. `--prune` deletes archive/ once cleaned/ checks out, so cleaned/
 always holds the whole history and archive/ only what is not yet pruned.
 
+`--clean 1,2,6` cleans only those runs: cleaned/ is made to hold exactly
+riser1..3, run 6 renamed riser3, and cleaned/.runs.json says which archive run
+each came from ({"cleaned": {N: archive M}, "skipped": [archive runs left
+out]}). Readers go through it: a cleaned file counts as its source run, a
+skipped archive run is ignored, any other archive run is a new one. Without
+the record cleaned N and archive N are the same run.
+
 Before this, the parts sat directly in othd_files/ (riserN.othd), and the
 compiled file in othd_files/compiled/. The flat parts are still read until a
 `history` step moves them into archive/; compiled/ is not read.
 """
 
+import json
 import os
 import re
 from pathlib import Path
@@ -35,6 +43,48 @@ def archive_dir(case_dir, ext: str) -> Path:
 
 def cleaned_dir(case_dir, ext: str) -> Path:
     return type_dir(case_dir, ext) / 'cleaned'
+
+
+RECORD = '.runs.json'
+
+
+def record_path(case_dir, ext: str) -> Path:
+    return cleaned_dir(case_dir, ext) / RECORD
+
+
+def selection(case_dir, ext: str) -> Dict[int, int]:
+    """{cleaned N: archive M} of a `--clean LIST`, or {} (cleaned N is archive N)."""
+    try:
+        data = json.loads(record_path(case_dir, ext).read_text())
+        return {int(k): int(v) for k, v in data['cleaned'].items()}
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return {}
+
+
+def write_selection(case_dir, ext: str, mapping: Dict[int, int], skipped=()) -> None:
+    """Keep {cleaned N: archive M} and the archive runs left out in cleaned/
+    (an empty mapping removes the record)."""
+    path = record_path(case_dir, ext)
+    if not mapping:
+        path.unlink(missing_ok=True)
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + '.__tmp__')
+    data = {'cleaned': {str(k): v for k, v in sorted(mapping.items())},
+            'skipped': sorted(skipped)}
+    tmp.write_text(json.dumps(data, indent=1) + '\n')
+    os.replace(tmp, path)
+
+
+def skipped(case_dir, ext: str, problem: Optional[str]) -> List[int]:
+    """The archive runs the selection left out (those still in archive/)."""
+    if not selection(case_dir, ext):
+        return []
+    try:
+        left = {int(n) for n in json.loads(record_path(case_dir, ext).read_text())['skipped']}
+    except (OSError, ValueError, KeyError, TypeError):
+        return []
+    return [n for n in archived(case_dir, ext, problem) if n in left]
 
 
 def compiled_path(case_dir, ext: str, problem: str) -> Path:
@@ -87,14 +137,20 @@ def next_number(case_dir, ext: str, problem: Optional[str]) -> int:
     return max(taken, default=0) + 1
 
 
-def runs(case_dir, ext: str, problem: Optional[str]) -> Dict[int, Path]:
+def runs(case_dir, ext: str, problem: Optional[str], use_record: bool = True) -> Dict[int, Path]:
     """
     {N: file} holding each run: the archived part, or the cleaned one once
     the part is pruned. Every run is there, so read in order with the later
-    one winning, these give the whole history.
+    one winning, these give the whole history. After a `--clean LIST` N is
+    the archive run (a cleaned file stands for its source run) and the runs
+    the selection skipped are left out (`use_record=False` reads as if there
+    were no selection: cleaned N is archive N).
     """
-    found = dict(cleaned(case_dir, ext, problem))
-    found.update(archived(case_dir, ext, problem))
+    chosen = selection(case_dir, ext) if use_record else {}
+    found = {chosen.get(n, n): path for n, path in cleaned(case_dir, ext, problem).items()}
+    left_out = set(skipped(case_dir, ext, problem)) if use_record else set()
+    found.update({n: path for n, path in archived(case_dir, ext, problem).items()
+                  if n not in left_out})
     return dict(sorted(found.items()))
 
 
@@ -114,7 +170,7 @@ def compiled_is_fresh(case_dir, ext: str, problem: Optional[str]) -> bool:
     if not out.is_file() or flat(case_dir, ext, problem):
         return False
     watched = [archive_dir(case_dir, ext), cleaned_dir(case_dir, ext),
-               *runs(case_dir, ext, problem).values()]
+               record_path(case_dir, ext), *runs(case_dir, ext, problem).values()]
     return out.stat().st_mtime >= _newest(watched)
 
 
