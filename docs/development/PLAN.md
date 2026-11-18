@@ -71,7 +71,9 @@ main jobs.
 
 ### Phase 8: `auto log` and `auto status` polish (branch `auto-log`)
 
-- [ ] `auto log`: read back the run logs in `<folder>/auto_logs/`
+- [x] `auto log [case] [--list] [--log N]`: read back the run logs in
+      `<folder>/auto_logs/` (newest by default, one case's lines, `--list` for
+      every run, `--log N` for the Nth newest)
 - [ ] `auto status`: polish the layout
 - [ ] With a queued restart, `Complete` / `Also kept` should not count the
       earlier run's newer restart set

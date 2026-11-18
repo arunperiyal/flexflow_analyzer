@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### 📜 `auto log`
+
+- `auto log` reads back what `auto apply` did: the newest run's log in
+  `auto_logs/`, one line per action, failures in red, exit status 1 when a step
+  failed. `auto log C1` keeps one case's lines (and the run's own start and
+  end); `auto log --list` shows every run on one line (when, cases, steps,
+  failed, the command, and a note when a run has no end line); `auto log --log
+  2` reads the second newest. From inside a case it reads the folder above.
+
 ### 🐚 Shell: `version comment clear` and `\` continuation (shellkit v0.1.7)
 
 - `version comment clear` clears every comment, after asking (`--yes` does

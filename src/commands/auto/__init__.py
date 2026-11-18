@@ -12,7 +12,8 @@ auto - the per-case workflow for a folder of cases (docs/architecture/auto.md §
                          target: history, plt, output, input, rst, all
                          organise history, upload (checked), submit post jobs; --delete also
                          deletes what has an md5-checked copy on the remote
-    auto log [case]      (not built yet)
+    auto log [case] [--list] [--log N]
+                         read back the logs of `auto apply` (newest; --list: all runs)
 """
 
 import argparse
@@ -25,7 +26,7 @@ SUBCOMMANDS = (('init', "Set a remote's folder and auto's settings in .cases.yml
                ('commands', 'Just the commands to run, numbered, as plain text'),
                ('status', 'One line per case: state, steps, jobs, what is next'),
                ('apply', 'Organise history, upload (checked), submit post jobs; --delete removes checked copies'),
-               ('log', 'What earlier runs did (not built yet)'))
+               ('log', 'What earlier auto apply runs did, from auto_logs/ (--list: every run)'))
 
 
 def _complete_sub(rt, prefix):
@@ -72,6 +73,10 @@ class AutoCommand(BaseCommand):
                                  '(or use --only delete)')
         parser.add_argument('--dry-run', action='store_true',
                             help='apply: list what would be done, do nothing')
+        parser.add_argument('--list', action='store_true',
+                            help='log: one line per run, newest first')
+        parser.add_argument('--log', type=int, metavar='N',
+                            help='log: the Nth newest run (1 is the newest)')
         parser.add_argument('--yes', action='store_true',
                             help='apply: do not ask before starting')
         parser.add_argument('--force', action='store_true',
@@ -101,7 +106,7 @@ class AutoCommand(BaseCommand):
             from .apply import execute_apply
             return execute_apply(args)
         if what == 'log':
-            print("auto log is not built yet; the log of each apply run is in auto_logs/.")
-            return 2
+            from .log import execute_log
+            return execute_log(args)
         print(f"Unknown subcommand: {what} (init, show, commands, status, apply, log)")
         return 2
