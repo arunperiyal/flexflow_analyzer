@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### 🐛 `auto show` and a post job that ended while the run went on
+
+- When a post job ended COMPLETED while the main job was still writing `.out`,
+  and its log has no `started: steps a..b` line, `auto` read what the job was
+  given only from `binary/`, which is empty once the PLTs are uploaded. It then
+  said the `.out` written meanwhile should have been converted and suggested no
+  `run post`. It now also counts the PLTs on the remote written while the job
+  ran, so those steps get their `run post` command.
+
 ### 🐛 Upload to a case the remote does not have
 
 - `case upload` of a case whose folder is not on the remote (its own upload

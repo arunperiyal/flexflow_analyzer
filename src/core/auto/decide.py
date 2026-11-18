@@ -536,10 +536,16 @@ def _post(w):
         ended_at = _ended_at(last_post) if last_post else None
         given = snap.post_windows.get(last_post.jobid) if last_post else None
         if given is None and last_post and ended_at:
-            # no "post job N started: steps a..b" line: the steps it made are the binary
-            # PLTs written while it ran, so a later step was not given to it
+            # no "post job N started: steps a..b" line: the steps it made are the PLTs
+            # written while it ran, here in binary/ or (once binary/ is emptied after the
+            # upload) on the remote, so a later step was not given to it
             began = _parse_time(last_post.start)
-            made = [t for t, when in snap.binary_time.items()
+            times = dict(snap.binary_time)
+            for key, when in snap.cloud_mtime.items():
+                m = re.match(rf'binary/{re.escape(p)}\.(\d+)\.plt$', key)
+                if m:
+                    times.setdefault(int(m.group(1)), when)
+            made = [t for t, when in times.items()
                     if began is not None and began - 60 <= when <= ended_at + 120]
             if made:
                 given = (min(made), max(made))
