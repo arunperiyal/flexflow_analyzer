@@ -1036,3 +1036,18 @@ makes them again. The step shown is `case organise vtu <case> --leftovers`,
 or `case organise vtu <case>` with `vtu_cache: delete`; the age
 rule is auto's own. `auto show` adds `VTU` and `Delete VTU` rows to the PLT
 section. Names other than the render's are never touched.
+
+### 13.18 The command forms after Phase 31 (2026-11-19)
+
+The hand commands `auto show` lists changed their spelling; what they do did not. Earlier sections
+keep the old forms in the text they were written with:
+
+| Before | Now |
+|---|---|
+| `case organise plt C --delete-ascii --t1 A --t2 B --remote R` | `case organise plt C ascii --t1 A --t2 B --remote R` |
+| `case organise plt C --delete-binary ...` | `case organise plt C binary ...` |
+| `case organise history C --update --clean --compile` | `case organise history C update clean compile` |
+| `case check plt C --verify --remote R` | `case check plt C --remote R` |
+| `case organise vtu C --clean --leftovers` | `case organise vtu C --leftovers` (13.17) |
+
+With one remote in `.cases.yml`, `--remote R` may be left out of all of these.

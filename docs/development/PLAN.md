@@ -570,9 +570,9 @@ The rules the commands will follow:
 - [x] Actions as words: `organise plt ascii|binary`, `organise history
       update|clean|compile|verify|prune` (the flags removed; `auto`'s
       commands in `decide.py`, the help, completion, the web UI's calls)
-- [ ] A test that audits the parsers: every command that deletes takes
+- [x] A test that audits the parsers: every command that deletes takes
       `--dry-run` and `--yes`; no option is spelled two ways
-- [ ] Docs (`docs/usage/`, `docs/architecture/auto.md` at the end),
+- [x] Docs (`docs/usage/`, `docs/architecture/auto.md` at the end),
       `CHANGELOG.md` (breaking: list each old form and its new one)
 
 ### Phase 12: `case check --remote`, verify against the remote (branch `check-remote`)

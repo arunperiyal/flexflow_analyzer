@@ -175,7 +175,7 @@ class CaseCommand(BaseCommand):
         history_parser = organise_subparsers.add_parser('history', add_help=False,
                                     help='OTHD/OISD history: archive/ → cleaned/ → compiled file')
         case_arg(history_parser, help='Case directory path')
-        history_parser.add_argument(
+        history_actions = history_parser.add_argument(
             'actions', nargs='*', metavar='ACTION',
             help='What to do, in this order: update (move .othd/.oisd from the run dir into '
                  'archive/, .rcv to rcv_files/), clean [RUNS] (write cleaned/: each run without '
@@ -183,6 +183,12 @@ class CaseCommand(BaseCommand):
                  'runs), compile (join cleaned/ into the {problem}.othd|oisd), verify (check '
                  'archive/, cleaned/, the compiled file and missing tsIds), prune (delete '
                  'archive/ once cleaned/ checks out)')
+        history_actions.completer = described(
+            ('update', 'Move the run dir history into archive/'),
+            ('clean', 'Write cleaned/ (RUNS: 1,2,3 or 1-3)'),
+            ('compile', 'Join cleaned/ into one file'),
+            ('verify', 'Check archive/, cleaned/, the compiled file'),
+            ('prune', 'Delete archive/ once cleaned/ checks out'))
         time_window(history_parser,
                     t1_kwargs=dict(metavar='STEP', help='update: only files reaching timesteps >= STEP'),
                     t2_kwargs=dict(metavar='STEP', help='update: only files reaching timesteps <= STEP'))
@@ -213,11 +219,14 @@ class CaseCommand(BaseCommand):
         plt_parser = organise_subparsers.add_parser('plt', add_help=False,
                                     help='Delete PLT files in the run dir and/or binary/')
         case_arg(plt_parser, help='Case directory path')
-        plt_parser.add_argument(
+        plt_actions = plt_parser.add_argument(
             'actions', nargs='*', metavar='ACTION',
             help='ascii: delete the ASCII PLT files of the run dir whose binary PLT is whole and '
                  'newer (or verified on the remote); binary: delete the PLT files of binary/ that '
                  'have a copy on the remote with the same md5')
+        plt_actions.completer = described(
+            ('ascii', 'Delete the run dir ASCII PLTs a whole binary PLT stands in for'),
+            ('binary', 'Delete the binary/ PLTs that have a verified copy on the remote'))
         context_flag(plt_parser, 'remote', '--remote', type=str, metavar='REMOTE',
                      help='The remote holding the copies (default: the only one in '
                           '.cases.yml; or use context with "use remote:name")')
