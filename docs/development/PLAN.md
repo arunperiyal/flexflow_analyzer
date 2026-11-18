@@ -317,17 +317,17 @@ From `version comment` 1 (2026-11-01) and 2 (2026-11-10).
 
 From `version comment` 5 (2026-11-10) and the request of 2026-11-17. The
 `version` builtin and the shell are in shellkit (a separate repository,
-pinned in `requirements.txt`; v0.1.6 has `version comment --remove N` and no
-clear-all), so the work is there and FlexFlow only moves the pin. Needs the
-user's word to edit shellkit, and a branch there made by the user.
+pinned in `requirements.txt` (v0.1.6 had `version comment --remove N` and no
+clear-all), so the work was there and FlexFlow only moved the pin, to v0.1.7.
+Shellkit has no changelog file; its changes are in `DESIGN.md` there.
 
-- [ ] shellkit: `version comment clear` clears every comment (asks first
+- [x] shellkit: `version comment clear` clears every comment (asks first
       unless `--yes`); `version comment clear 2` / `clear 2 4` clears those
       numbers and says so for a number that is not there; `--remove` stays;
       tests, help text, its changelog
-- [ ] shellkit: a line ending in `\` continues on the next line (prompt shows
+- [x] shellkit: a line ending in `\` continues on the next line (prompt shows
       a continuation mark), in the interactive shell; tests
-- [ ] shellkit tagged (v0.1.7), the pin in `requirements.txt` here raised,
+- [x] shellkit tagged (v0.1.7), the pin in `requirements.txt` here raised,
       the suite run against it
 
 ---
@@ -405,7 +405,6 @@ As of 2026-11-17, after Phases 21 to 24 were merged. To work on later.
 | `docs-install` | 10 | 4 commits not in `main` (installed documentation, development testing tools, next-session notes); 37 commits behind `main`, so merge or rebase `main` first. On `origin` |
 | `flowreel-export` | 9 | 1 commit not in `main` (`Add FlowReel body export`); 37 commits behind `main`, same. On `origin` |
 | `auto-post-window` | 26 | Merged into `main` (`ff0dd3d`) and kept on `origin` on purpose, as the reference if this bug returns: `auto show` suggests no `run post` and prints `Post job N ended COMPLETED after the .out of steps ... were written, yet they have no whole PLT`, for `.out` the post job was never given (it ended while the main job still wrote them). Cause: with no `post job N started: steps a..b` log line, the job's window was read only from `binary/`, empty once uploaded; the fix (`f169a78`, `_post` in `src/core/auto/decide.py`) also reads the remote PLTs' write times. Still unfixed: a remote that got its PLTs from a later upload, not from the post job, has mtimes outside the window and gives the old alarm |
-| shellkit (separate repository, `/media/arunperiyal/Works/projects/shellkit`) | 25 | No branch yet. The user makes it and says Claude may edit that repository; then Phase 25 is built there and the pin in `requirements.txt` raised |
 
 - The user merges both open branches; Claude resolves conflicts when asked.
 - 115 merged local branches are still there (Phase 4's open item); the user

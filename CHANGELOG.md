@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### 🐚 Shell: `version comment clear` and `\` continuation (shellkit v0.1.7)
+
+- `version comment clear` clears every comment, after asking (`--yes` does
+  not ask); `version comment clear 2 4` clears those numbers and says so for a
+  number that is not there. `version comment --remove N` is as before. The
+  comment text `clear` alone can no longer be saved.
+- In the shell, a line ending in `\` goes on at the next line (a `…` marks it),
+  as in bash: the lines join into one command, which is one history entry.
+  Two backslashes at the end are an escaped backslash and run as usual.
+- `requirements.txt` pins shellkit v0.1.7.
+
 ### 🐛 `auto show` and a post job that ended while the run went on
 
 - When a post job ended COMPLETED while the main job was still writing `.out`,
