@@ -198,7 +198,6 @@ the remote gets the restarts it lacks.
                          .cases.yml (remotes: {{NAME: DIR}}), else `remote set-path`
     {Colors.YELLOW}--force{Colors.RESET}                Create remote directories if they do not exist
     {Colors.YELLOW}--resume{Colors.RESET}               Resume the last interrupted upload
-    {Colors.YELLOW}--examples{Colors.RESET}             Show usage examples
     {Colors.YELLOW}-h, --help{Colors.RESET}             Show this help message
 
 {Colors.BOLD}DESCRIPTION:{Colors.RESET}
@@ -299,7 +298,7 @@ the remote gets the restarts it lacks.
     web app) take it only while it is newer than archive/, cleaned/ and every
     run; so when it was not up to date where it came from, or the other side
     has runs it does not, it is made older than them there, and the readers
-    take the runs until the next `case organise history --compile`.
+    take the runs until the next `case organise history compile`.
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
     case upload history CS4SG1U1 --remote server
@@ -377,7 +376,6 @@ the restarts found only on the remote are added here.
                          .cases.yml (remotes: {{NAME: DIR}}), else `remote set-path`
     {Colors.YELLOW}--force{Colors.RESET}                Create the local case directory if it does not exist
     {Colors.YELLOW}--resume{Colors.RESET}               Resume the last interrupted download
-    {Colors.YELLOW}--examples{Colors.RESET}             Show usage examples
     {Colors.YELLOW}-h, --help{Colors.RESET}             Show this help message
 
 {Colors.BOLD}DESCRIPTION:{Colors.RESET}
@@ -466,7 +464,7 @@ the restarts found only on the remote are added here.
     web app) take it only while it is newer than archive/, cleaned/ and every
     run; so when it was not up to date where it came from, or the other side
     has runs it does not, it is made older than them there, and the readers
-    take the runs until the next `case organise history --compile`.
+    take the runs until the next `case organise history compile`.
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
     case download history CS4SG1U1 --remote server
@@ -721,7 +719,7 @@ class CaseUploadCommand(HistoryTransferMixin):
         action_label = 'Upload' if is_upload else 'Download'
         target_label = 'upload' if is_upload else 'download'
 
-        if self._get_arg(args, 'help', False) is True or self._get_arg(args, 'examples', False) is True:
+        if self._get_arg(args, 'help', False) is True:
             help_fn()
             return 0
 
@@ -2329,7 +2327,7 @@ class CaseUploadCommand(HistoryTransferMixin):
         """
         return self._execute_transfer(args, 'download')
 
-        if getattr(args, "help", False) or getattr(args, "examples", False):
+        if getattr(args, "help", False):
             show_download_help()
             return 0
 

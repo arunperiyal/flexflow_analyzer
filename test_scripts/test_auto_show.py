@@ -59,7 +59,7 @@ def test_every_case_gets_what_the_readme_says(dummy):
     assert got['case9'].state == 'skipped'
     assert [i.text for i in got['case5'].items if i.kind == 'history'] == [
         'Move RUN_1/riser.othd and .oisd into archive/ as run 2, then clean and compile '
-        '(organise history --update --clean --compile)']
+        '(organise history update clean compile)']
 
 
 def test_a_job_named_for_case1_does_not_make_case1_busy(dummy):
@@ -141,12 +141,23 @@ def test_a_folder_without_auto_conf_is_an_error(dummy, tmp_path):
         gather(resolve_cases(str(lone / 'case2'), tmp_path), 'local')
 
 
-def test_the_remote_must_be_named_and_listed(dummy):
+def test_the_only_listed_remote_is_used_when_none_is_named(dummy):
     case = resolve_cases('case2', dummy / 'bare')
-    with pytest.raises(AutoConfError, match='which remote'):
+    results, confs, _ = gather(case, None)             # the dummy lists one: local
+    assert [c.remote for c in confs.values()] == ['local'] and results
+
+
+def test_with_several_remotes_one_must_be_named_and_listed(dummy):
+    from src.core import cases_file
+    folder = dummy / 'bare'
+    cf = cases_file.read(folder)
+    cf.remotes['cloud2'] = '/elsewhere'
+    cases_file.write(cf)
+    case = resolve_cases('case2', folder)
+    with pytest.raises(AutoConfError, match='more than one'):
         gather(case, None)
-    with pytest.raises(AutoConfError, match="no folder for remote 'cloud'"):
-        gather(case, 'cloud')
+    with pytest.raises(AutoConfError, match="no folder for remote 'nowhere'"):
+        gather(case, 'nowhere')
 
 
 def test_the_case_context(dummy, monkeypatch, capsys):
@@ -165,7 +176,12 @@ def test_the_case_context(dummy, monkeypatch, capsys):
     assert rt.execute_line('auto show --remote local') == 2      # no case set
     assert 'no case given' in capsys.readouterr().out
     assert rt.execute_line('use case:case3') == 0
-    assert rt.execute_line('auto show') == 2                     # no remote set
+    assert rt.execute_line('auto show') == 0                     # the one remote listed
+    from src.core import cases_file
+    cf = cases_file.read(dummy / 'bare')
+    cf.remotes['cloud2'] = '/elsewhere'
+    cases_file.write(cf)
+    assert rt.execute_line('auto show') == 2                     # two: none is chosen
     assert 'which remote' in capsys.readouterr().out
     assert rt.execute_line('auto show --remote local') == 0
     out = capsys.readouterr().out
@@ -226,9 +242,9 @@ def test_report_needs_and_flags_come_after_state(dummy):
     assert dict(sec['plt'].rows)['Binary'] == 'present 450, 500 · broken 550'
     # the check first, then the upload, then the delete that follows from it
     assert sec['plt'].actions == [
-        'case check plt case6 --verify --remote local',
+        'case check plt case6 --remote local',
         'case upload plt case6 --t1 450 --t2 500 --missing --remote local',
-        'case organise plt case6 --delete-binary --t1 450 --t2 500 --remote local']
+        'case organise plt case6 binary --t1 450 --t2 500 --remote local']
 
 
 def test_auto_commands_is_plain_text_to_read_or_save(dummy, monkeypatch, capsys):
@@ -242,7 +258,7 @@ def test_auto_commands_is_plain_text_to_read_or_save(dummy, monkeypatch, capsys)
     assert '#   waiting: post job' in out                         # case4
     assert '#   needs you: Main job' in out                       # case7
     assert 'auto apply:' not in out and 'not built yet' not in out
-    assert '--delete-binary --t1 450 --t2 500 --remote local    #' in out     # a command now
+    assert 'binary --t1 450 --t2 500 --remote local    #' in out     # a command now
     assert '#   by hand: auto apply does not delete unless asked' in out
 
 

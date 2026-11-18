@@ -149,9 +149,9 @@ flowchart TD
   S --> U0["Upload a snapshot of the live .othd and .oisd"]
   B -->|no| C{".othd or .oisd in the run directory?"}
   C -->|no| D
-  C -->|yes| H1["Read the queue again, then&lt;br/&gt;organise history --update: run dir to archive/"]
+  C -->|yes| H1["Read the queue again, then&lt;br/&gt;organise history update: run dir to archive/"]
   H1 --> D{"An archive/ part not yet in cleaned/?"}
-  D -->|yes| H2["organise history --clean --compile"]
+  D -->|yes| H2["organise history clean compile"]
   D -->|no| H3
   H2 --> H3["Upload archive/, cleaned/, compiled file&lt;br/&gt;only what the md5 ledger lacks"]
   classDef ok fill:#ddf1e3,stroke:#1d6b3a,color:#0f3a1f

@@ -2,17 +2,17 @@
 Where a case keeps its OTHD/OISD history (`case organise history`).
 
     othd_files/archive/riserN.othd   one per job, as the solver wrote it: moved
-                                     here by mainFlex.sh or `history --update`
+                                     here by mainFlex.sh or `history update`
     othd_files/cleaned/riserN.othd   run N's steps that no later run redid
-                                     (`history --clean`)
-    othd_files/riser.othd            cleaned/ joined into one file (`--compile`)
+                                     (`history clean`)
+    othd_files/riser.othd            cleaned/ joined into one file (`compile`)
 
 and the same under oisd_files/. N numbers the jobs in the order they ran, so
 "the later run wins" is the later N; one N is the same run in archive/ and
-cleaned/. `--prune` deletes archive/ once cleaned/ checks out, so cleaned/
+cleaned/. `prune` deletes archive/ once cleaned/ checks out, so cleaned/
 always holds the whole history and archive/ only what is not yet pruned.
 
-`--clean 1,2,6` cleans only those runs: cleaned/ is made to hold exactly
+`clean 1,2,6` cleans only those runs: cleaned/ is made to hold exactly
 riser1..3, run 6 renamed riser3, and cleaned/.runs.json says which archive run
 each came from ({"cleaned": {N: archive M}, "skipped": [archive runs left
 out]}). Readers go through it: a cleaned file counts as its source run, a
@@ -53,7 +53,7 @@ def record_path(case_dir, ext: str) -> Path:
 
 
 def selection(case_dir, ext: str) -> Dict[int, int]:
-    """{cleaned N: archive M} of a `--clean LIST`, or {} (cleaned N is archive N)."""
+    """{cleaned N: archive M} of a `clean LIST`, or {} (cleaned N is archive N)."""
     try:
         data = json.loads(record_path(case_dir, ext).read_text())
         return {int(k): int(v) for k, v in data['cleaned'].items()}
@@ -141,7 +141,7 @@ def runs(case_dir, ext: str, problem: Optional[str], use_record: bool = True) ->
     """
     {N: file} holding each run: the archived part, or the cleaned one once
     the part is pruned. Every run is there, so read in order with the later
-    one winning, these give the whole history. After a `--clean LIST` N is
+    one winning, these give the whole history. After a `clean LIST` N is
     the archive run (a cleaned file stands for its source run) and the runs
     the selection skipped are left out (`use_record=False` reads as if there
     were no selection: cleaned N is archive N).

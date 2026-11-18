@@ -47,7 +47,7 @@ def test_an_old_leftover_goes_a_young_one_stays():
     assert 'killed render' in texts(plan, 'delete')[0]
     assert 'younger than a day' in texts(plan, 'note')[0]
     step, = plan.steps_of('delete-vtu')
-    assert step.command == 'case organise vtu case --clean --leftovers'
+    assert step.command == 'case organise vtu case --leftovers'
 
 
 def test_a_cache_with_its_plt_is_kept_unless_the_config_says_delete():
@@ -57,7 +57,7 @@ def test_a_cache_with_its_plt_is_kept_unless_the_config_says_delete():
     assert 'kept' in texts(keep, 'note')[0] and 'vtu_cache: delete' in texts(keep, 'note')[0]
     gone = plan_for(caches, cache='delete')
     assert sorted(gone.ctx['delete']['vtu']) == ['binary/riser.100.vtu', 'binary/riser.100.z1.vtu']
-    assert gone.steps_of('delete-vtu')[0].command == 'case organise vtu case --clean --keep-orphans'
+    assert gone.steps_of('delete-vtu')[0].command == 'case organise vtu case'
 
 
 def test_a_cache_without_its_plt_is_reported_never_deleted():
@@ -111,3 +111,9 @@ def test_a_dummy_case_with_vtu_files(dummy):
     from test_auto_show import report_of
     rows = dict(report_of(dummy, 'case3')['plt'].rows)
     assert rows['VTU'].startswith('2 cache') and 'Delete VTU' in rows
+
+
+def test_vtu_cache_survives_a_round_trip_through_cases_yml(tmp_path):
+    from src.core.auto.conf import read, set_up
+    set_up(tmp_path, remote='local', path='/x', vtu_cache='delete')
+    assert read(tmp_path, 'local').vtu_cache == 'delete'

@@ -34,16 +34,12 @@ def execute_case_check(args):
         print_check_help()
         return
 
-    if hasattr(args, 'examples') and args.examples:
-        print_check_help()
-        return
-
     subcommand = getattr(args, 'check_subcommand', None)
     if not subcommand:
         print_check_help()
         return
 
-    if subcommand == 'plt' and getattr(args, 'verify', False):
+    if subcommand == 'plt' and getattr(args, 'remote', None) is not None:
         # binary/ against the remote copy; with --freq only the multiples of it
         from .verify import execute_verify
         return execute_verify(args)

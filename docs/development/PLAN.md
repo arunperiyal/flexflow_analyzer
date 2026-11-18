@@ -502,7 +502,7 @@ unrecorded, and the right words.
 - [ ] Say how to get a record: for each step the command that makes the
       remote copy count (see the next task), instead of "post again"
 - [ ] A way to record copies that are only there, with the user vouching:
-      `case check plt --verify --adopt [--t1 A --t2 B]` writes the ledger
+      `case check plt --remote --adopt [--t1 A --t2 B]` writes the ledger
       entry from the remote's size, md5 and write time (it cannot compare with
       a local file: it says so), and says what it did not prove. Decide with
       the user whether this, or `--trust-remote` on `case organise out`, or
@@ -555,23 +555,24 @@ The rules the commands will follow:
   cloud"); `--remote` is for choosing between several.
 - `case check plt --remote` replaces `--verify` (with Phase 12).
 
-- [ ] The single remote is the default (`core/cases_file.py`, `cloud.py`,
+- [x] The single remote is the default (`core/cases_file.py`, `cloud.py`,
       `conf.py`: the error says "which remote?" only when there are several
       or none)
-- [ ] `case organise out/rst/plt/vtu/history`: list, ask, do; `--dry-run`,
+- [x] `case organise out/rst/plt/vtu/history`: list, ask, do; `--dry-run`,
       `--yes`; `--no-confirm` removed (`organizer.py`, `history.py`)
-- [ ] The common flags from one helper (`src/commands/case/__init__.py`);
+- [x] The common flags from one helper (`src/commands/case/__init__.py`);
       `--examples` removed and every help ends with its examples
-- [ ] `case organise vtu`: leftovers and caches with a PLT, `--orphans`;
-      `--leftovers` and `--keep-orphans` removed; `auto`'s command updated
-- [ ] `case check plt --remote` instead of `--verify`; `check` takes
+- [x] `case organise vtu`: leftovers and caches with a PLT, `--orphans`;
+      `--clean` and `--keep-orphans` removed (`--leftovers` stays: it picks
+      what `auto` deletes); `auto`'s command updated
+- [x] `case check plt --remote` instead of `--verify`; `check` takes
       `-v` and the same `--t1/--t2/--freq` words where they apply
-- [ ] Actions as words: `organise plt ascii|binary`, `organise history
+- [x] Actions as words: `organise plt ascii|binary`, `organise history
       update|clean|compile|verify|prune` (the flags removed; `auto`'s
       commands in `decide.py`, the help, completion, the web UI's calls)
-- [ ] A test that audits the parsers: every command that deletes takes
+- [x] A test that audits the parsers: every command that deletes takes
       `--dry-run` and `--yes`; no option is spelled two ways
-- [ ] Docs (`docs/usage/`, `docs/architecture/auto.md` at the end),
+- [x] Docs (`docs/usage/`, `docs/architecture/auto.md` at the end),
       `CHANGELOG.md` (breaking: list each old form and its new one)
 
 ### Phase 12: `case check --remote`, verify against the remote (branch `check-remote`)

@@ -187,7 +187,7 @@ class HistoryMixin:
                                "cannot name the history files[/red]")
             return
 
-        self._clean_runs = None   # `--clean 1,2,3`: the archive runs to clean, or None for all
+        self._clean_runs = None   # `clean 1,2,3`: the archive runs to clean, or None for all
         raw = getattr(self.args, 'clean', False)
         if isinstance(raw, str):
             try:
@@ -336,7 +336,7 @@ class HistoryMixin:
         A last step cut off by a killed job is left out. All runs must share
         one header (`mask`/`nOths` or `nOsfs`).
 
-        With `sources` (the archive runs of `--clean 1,2,3`) only those runs
+        With `sources` (the archive runs of `clean 1,2,3`) only those runs
         count, labelled 1..N in that order: the cleaned file names. Without
         them the cleaned/.runs.json of an earlier selection stands in, unless
         `ignore_record`.
@@ -492,7 +492,7 @@ class HistoryMixin:
         redid, without a cut-off last step. A run with nothing left has no
         cleaned file. Once archive/ is pruned the cleaned file is the run's
         only copy: changing or removing cleaned files asks first
-        (once per type), unless --no-confirm. Returns False if nothing could be done
+        (once per type), unless --yes. Returns False if nothing could be done
         or the answer was no.
         """
         problem = self.case.problem_name
@@ -503,7 +503,7 @@ class HistoryMixin:
         if explicit is None and had and not dry_run:
             self.console.print(f"  [yellow]⚠[/yellow]  cleaned/ was made from a selection of runs "
                                f"(.runs.json): a plain --clean cleans every run of archive/ instead")
-            if not self.args.no_confirm:
+            if not self.args.yes:
                 self.console.print("[bold yellow]Clean every run and drop the selection?[/bold yellow] "
                                    "\\[y/N]: ", end="")
                 if self._read_answer() not in ('y', 'yes'):
@@ -580,7 +580,7 @@ class HistoryMixin:
             if dry_run:
                 continue
             only = [c for c in changes if c[3]]
-            if not self.args.no_confirm:
+            if not self.args.yes:
                 if only:
                     self.console.print(
                         f"[bold yellow]{len(only)} cleaned file(s) above are the only copy of their "
@@ -604,7 +604,7 @@ class HistoryMixin:
         return True
 
     def _write_record(self, ext: str, plan: dict):
-        """cleaned/.runs.json after a `--clean 1,2,3`; a plain --clean drops it."""
+        """cleaned/.runs.json after a `clean 1,2,3`; a plain --clean drops it."""
         if getattr(self.args, 'dry_run', False):
             return
         explicit = self._clean_runs
@@ -691,7 +691,7 @@ class HistoryMixin:
                                + (" [dim](dry run)[/dim]" if dry_run else ""))
             if dry_run:
                 continue
-            if not getattr(self.args, 'no_confirm', False):
+            if not getattr(self.args, 'yes', False):
                 self.console.print(f"[bold yellow]Write {self._rel(out)}"
                                    f"{' (replaces the one there)' if out.exists() else ''}?"
                                    f"[/bold yellow] \\[y/N]: ", end="")
@@ -800,7 +800,7 @@ class HistoryMixin:
         """
         Delete archive/ for each type whose cleaned/ reads through and is
         what --clean would write now: every step the archive holds that
-        counts is then in cleaned/. Asks first unless --no-confirm; --dry-run
+        counts is then in cleaned/. Asks first unless --yes; --dry-run
         only lists. rcv_files/ is not touched.
         """
         problem = self.case.problem_name
@@ -840,7 +840,7 @@ class HistoryMixin:
         if dry_run:
             self.console.print(f"  [bold cyan]Dry run:[/bold cyan] {len(to_delete)} file(s) would be deleted")
             return
-        if not self.args.no_confirm:
+        if not self.args.yes:
             self.console.print(f"[bold yellow]Delete {len(to_delete)} archived file(s)? "
                                f"cleaned/ keeps their steps.[/bold yellow] \\[y/N]: ", end="")
             if self._read_answer() not in ('y', 'yes'):

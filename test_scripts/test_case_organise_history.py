@@ -43,7 +43,7 @@ class _Logger:
 
 def make_organizer(case_dir, **flags):
     args = Namespace(update=False, verify=False, clean=False, compile=False, prune=False,
-                     dry_run=False, no_confirm=True, log=False, verbose=False, t1=None, t2=None)
+                     dry_run=False, yes=True, log=False, verbose=False, t1=None, t2=None)
     for key, value in flags.items():
         setattr(args, key, value)
     case = SimpleNamespace(case_directory=str(case_dir), problem_name='riser',
@@ -258,7 +258,7 @@ def test_verify_reports_tsids_in_no_run_without_failing(tmp_path):
 
 def test_prune_deletes_archive_once_cleaned_holds_it(tmp_path):
     archive(tmp_path, RESTARTED)
-    run(tmp_path, clean=True, compile=True, verify=True, prune=True, no_confirm=True)
+    run(tmp_path, clean=True, compile=True, verify=True, prune=True, yes=True)
     assert names(tmp_path / 'othd_files' / 'archive') == []
     assert names(tmp_path / 'othd_files' / 'cleaned') == ['riser1.othd', 'riser2.othd']
     assert values(tmp_path / 'othd_files' / 'riser.othd')[10] == 2.0
@@ -270,23 +270,23 @@ def test_prune_refuses_a_cleaned_out_of_date(tmp_path):
     archive(tmp_path, RESTARTED)
     run(tmp_path, clean=True)
     archive(tmp_path, {'riser3.othd': othd([11], value=3.0)})
-    _, out = run(tmp_path, prune=True, no_confirm=True)
+    _, out = run(tmp_path, prune=True, yes=True)
     assert len(names(tmp_path / 'othd_files' / 'archive')) == 3
     assert 'nothing pruned' in out
 
 
 def test_after_a_prune_a_later_run_is_cleaned_against_cleaned(tmp_path, monkeypatch):
     archive(tmp_path, RESTARTED)
-    run(tmp_path, clean=True, prune=True, no_confirm=True)
+    run(tmp_path, clean=True, prune=True, yes=True)
     archive(tmp_path, {'riser3.othd': othd(range(9, 13), value=3.0)})   # restart from 8
 
     # cleaned/riser2 is now the only copy of run 2: cutting it asks
     monkeypatch.setattr('builtins.input', lambda *a: 'n')
-    run(tmp_path, clean=True, no_confirm=False)
+    run(tmp_path, clean=True, yes=False)
     assert max(values(tmp_path / 'othd_files' / 'cleaned' / 'riser2.othd')) == 10
 
     monkeypatch.setattr('builtins.input', lambda *a: 'y')
-    run(tmp_path, clean=True, compile=True, no_confirm=False)
+    run(tmp_path, clean=True, compile=True, yes=False)
     joined = values(tmp_path / 'othd_files' / 'riser.othd')
     assert sorted(joined) == list(range(1, 13))
     assert [joined[4], joined[8], joined[9]] == [1.0, 2.0, 3.0]
@@ -327,23 +327,23 @@ def _answers(monkeypatch, *given):
 def test_clean_asks_before_writing_and_a_no_changes_nothing(tmp_path, monkeypatch):
     archive(tmp_path, RESTARTED)
     asked = _answers(monkeypatch, 'n')
-    _, out = run(tmp_path, clean=True, no_confirm=False)
+    _, out = run(tmp_path, clean=True, yes=False)
     assert asked and 'nothing changed' in out
     assert names(tmp_path / 'othd_files' / 'cleaned') == []
     assert not (tmp_path / '.restarts').exists()       # not rewritten either
 
 
-def test_clean_with_yes_writes_and_with_no_confirm_does_not_ask(tmp_path, monkeypatch):
+def test_clean_with_yes_writes_and_with_yes_does_not_ask(tmp_path, monkeypatch):
     archive(tmp_path, RESTARTED)
     _answers(monkeypatch, 'y', 'y')
-    run(tmp_path, clean=True, no_confirm=False)
+    run(tmp_path, clean=True, yes=False)
     assert names(tmp_path / 'othd_files' / 'cleaned') == ['riser1.othd', 'riser2.othd']
 
     other = tmp_path / 'other'
     other.mkdir()
     archive(other, RESTARTED)
     asked = _answers(monkeypatch)
-    run(other, clean=True)                              # no_confirm is the test default
+    run(other, clean=True)                              # yes is the test default
     assert not asked and names(other / 'othd_files' / 'cleaned') == ['riser1.othd', 'riser2.othd']
 
 
@@ -351,7 +351,7 @@ def test_clean_with_nothing_to_change_does_not_ask(tmp_path, monkeypatch):
     archive(tmp_path, RESTARTED)
     run(tmp_path, clean=True)
     asked = _answers(monkeypatch)
-    run(tmp_path, clean=True, no_confirm=False)
+    run(tmp_path, clean=True, yes=False)
     assert not asked
 
 
@@ -362,11 +362,11 @@ def test_compile_asks_before_replacing_and_a_no_leaves_the_file(tmp_path, monkey
     before = compiled.read_bytes()
     compiled.write_bytes(before + b'x')                 # no longer what --compile writes
     asked = _answers(monkeypatch, 'n')
-    _, out = run(tmp_path, compile=True, no_confirm=False)
+    _, out = run(tmp_path, compile=True, yes=False)
     assert asked and 'not compiled' in out
     assert compiled.read_bytes() == before + b'x'
     _answers(monkeypatch, 'y')
-    run(tmp_path, compile=True, no_confirm=False)
+    run(tmp_path, compile=True, yes=False)
     assert compiled.read_bytes() == before
 
 
@@ -376,5 +376,5 @@ def test_no_answer_at_all_is_a_no(tmp_path, monkeypatch):
     def eof(*a):
         raise EOFError
     monkeypatch.setattr('builtins.input', eof)
-    run(tmp_path, clean=True, no_confirm=False)
+    run(tmp_path, clean=True, yes=False)
     assert names(tmp_path / 'othd_files' / 'cleaned') == []

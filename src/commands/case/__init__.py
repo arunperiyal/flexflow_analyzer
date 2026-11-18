@@ -8,6 +8,7 @@ import sys
 from ..base import BaseCommand
 from src.cli.completers import described, file_flags
 from src.cli.context import case_arg, context_flag, freq_arg, time_window
+from .common_flags import organise_flags
 
 
 # `case upload|download [plt|rst|input|history] [case]`: what to carry. Nothing named is
@@ -119,8 +120,6 @@ class CaseCommand(BaseCommand):
                                 help='Enable verbose output')
         show_parser.add_argument('-h', '--help', action='store_true',
                                 help='Show help for show command')
-        show_parser.add_argument('--examples', action='store_true',
-                                help='Show usage examples')
 
         # case create (was: new)
         create_parser = case_subparsers.add_parser('create', add_help=False,
@@ -146,8 +145,6 @@ class CaseCommand(BaseCommand):
                                   help='Enable verbose output')
         create_parser.add_argument('-h', '--help', action='store_true',
                                   help='Show help for create command')
-        create_parser.add_argument('--examples', action='store_true',
-                                  help='Show usage examples')
 
         # case run
         run_parser = case_subparsers.add_parser('run', add_help=False,
@@ -165,16 +162,12 @@ class CaseCommand(BaseCommand):
                                help='Enable verbose output')
         run_parser.add_argument('-h', '--help', action='store_true',
                                help='Show help for run command')
-        run_parser.add_argument('--examples', action='store_true',
-                               help='Show usage examples')
 
         # case organise
         organise_parser = case_subparsers.add_parser('organise', add_help=False,
                                                      help='Organize and clean up case directory')
         organise_parser.add_argument('-h', '--help', action='store_true',
                                     help='Show help for organise command')
-        organise_parser.add_argument('--examples', action='store_true',
-                                    help='Show usage examples')
         organise_subparsers = organise_parser.add_subparsers(dest='organise_subcommand',
                                                              help='Organise subcommands')
 
@@ -182,33 +175,24 @@ class CaseCommand(BaseCommand):
         history_parser = organise_subparsers.add_parser('history', add_help=False,
                                     help='OTHD/OISD history: archive/ → cleaned/ → compiled file')
         case_arg(history_parser, help='Case directory path')
-        history_parser.add_argument('--update', action='store_true',
-                                    help='Move .othd/.oisd from the run dir into {othd,oisd}_files/archive/ (.rcv to rcv_files/)')
-        history_parser.add_argument('--clean', nargs='?', const=True, metavar='RUNS',
-                                    help='Write cleaned/: each run without the steps a later run redid; '
-                                         'RUNS (1,2,3 or 1-3, ascending) cleans only those archive runs, '
-                                         'renamed 1..N, and replaces what cleaned/ held')
-        history_parser.add_argument('--compile', action='store_true',
-                                    help='Join cleaned/ into {othd,oisd}_files/{problem}.othd|oisd')
-        history_parser.add_argument('--verify', action='store_true',
-                                    help='Check archive/, cleaned/ and the compiled file, and for missing tsIds')
-        history_parser.add_argument('--prune', action='store_true',
-                                    help='Delete archive/ once cleaned/ checks out and is up to date')
+        history_actions = history_parser.add_argument(
+            'actions', nargs='*', metavar='ACTION',
+            help='What to do, in this order: update (move .othd/.oisd from the run dir into '
+                 'archive/, .rcv to rcv_files/), clean [RUNS] (write cleaned/: each run without '
+                 'the steps a later run redid; RUNS, e.g. 1,2,3 or 1-3, cleans only those archive '
+                 'runs), compile (join cleaned/ into the {problem}.othd|oisd), verify (check '
+                 'archive/, cleaned/, the compiled file and missing tsIds), prune (delete '
+                 'archive/ once cleaned/ checks out)')
+        history_actions.completer = described(
+            ('update', 'Move the run dir history into archive/'),
+            ('clean', 'Write cleaned/ (RUNS: 1,2,3 or 1-3)'),
+            ('compile', 'Join cleaned/ into one file'),
+            ('verify', 'Check archive/, cleaned/, the compiled file'),
+            ('prune', 'Delete archive/ once cleaned/ checks out'))
         time_window(history_parser,
-                    t1_kwargs=dict(metavar='STEP', help='Only --update files reaching timesteps >= STEP'),
-                    t2_kwargs=dict(metavar='STEP', help='Only --update files reaching timesteps <= STEP'))
-        history_parser.add_argument('--log', action='store_true',
-                                    help='Create log file of deletions')
-        history_parser.add_argument('--no-confirm', action='store_true',
-                                    help='Skip confirmation prompts')
-        history_parser.add_argument('--dry-run', action='store_true',
-                                    help='Show what would be done without changing anything')
-        history_parser.add_argument('-v', '--verbose', action='store_true',
-                                    help='Enable verbose output')
-        history_parser.add_argument('-h', '--help', action='store_true',
-                                    help='Show help for history command')
-        history_parser.add_argument('--examples', action='store_true',
-                                    help='Show usage examples')
+                    t1_kwargs=dict(metavar='STEP', help='update: only files reaching timesteps >= STEP'),
+                    t2_kwargs=dict(metavar='STEP', help='update: only files reaching timesteps <= STEP'))
+        organise_flags(history_parser, 'history')
 
         # case organise out / case organise rst
         for word, what in (('out', '.out files (kept until a PLT stands in for them)'),
@@ -229,76 +213,48 @@ class CaseCommand(BaseCommand):
             time_window(sub,
                         t1_kwargs=dict(metavar='STEP', help='Only target timesteps >= STEP'),
                         t2_kwargs=dict(metavar='STEP', help='Only target timesteps <= STEP'))
-            sub.add_argument('--log', action='store_true', help='Create log file of deletions')
-            sub.add_argument('--no-confirm', action='store_true', help='Skip confirmation prompts')
-            sub.add_argument('--dry-run', action='store_true',
-                             help='Show what would be deleted without deleting anything')
-            sub.add_argument('-v', '--verbose', action='store_true', help='Enable verbose output')
-            sub.add_argument('-h', '--help', action='store_true', help=f'Show help for {word}')
-            sub.add_argument('--examples', action='store_true', help='Show usage examples')
+            organise_flags(sub, 'out/rst')
 
         # case organise plt
         plt_parser = organise_subparsers.add_parser('plt', add_help=False,
                                     help='Delete PLT files in the run dir and/or binary/')
         case_arg(plt_parser, help='Case directory path')
-        plt_parser.add_argument('--delete-ascii', action='store_true',
-                                    help='Delete ASCII PLT files from the run dir whose binary PLT '
-                                         'is whole and newer (or verified on the remote)')
-        plt_parser.add_argument('--delete-binary', action='store_true',
-                                    help='Delete PLT files from binary/ within --t1/--t2 that have '
-                                         'a copy on the remote with the same md5')
+        plt_actions = plt_parser.add_argument(
+            'actions', nargs='*', metavar='ACTION',
+            help='ascii: delete the ASCII PLT files of the run dir whose binary PLT is whole and '
+                 'newer (or verified on the remote); binary: delete the PLT files of binary/ that '
+                 'have a copy on the remote with the same md5')
+        plt_actions.completer = described(
+            ('ascii', 'Delete the run dir ASCII PLTs a whole binary PLT stands in for'),
+            ('binary', 'Delete the binary/ PLTs that have a verified copy on the remote'))
         context_flag(plt_parser, 'remote', '--remote', type=str, metavar='REMOTE',
-                     help='The remote holding the copies (needed by --delete-binary; '
-                          'or use context with "use remote:name")')
+                     help='The remote holding the copies (default: the only one in '
+                          '.cases.yml; or use context with "use remote:name")')
         # Plain flags, not the `freq` context: they choose which steps are looked at.
         plt_parser.add_argument('--freq', type=int, metavar='N',
                                     help='Only the steps divisible by N')
         plt_parser.add_argument('--keep-freq', type=int, metavar='N',
-                                    help='With --delete-binary: keep the steps divisible by N')
+                                    help='With binary: keep the steps divisible by N')
         time_window(plt_parser, 
                     t1_kwargs=dict(metavar='STEP', help='Only target timesteps >= STEP'),
                     t2_kwargs=dict(metavar='STEP', help='Only target timesteps <= STEP'))
-        plt_parser.add_argument('--log', action='store_true',
-                                    help='Create log file of deletions')
         plt_parser.add_argument('--no-verify', action='store_true',
-                                    help='With --delete-binary: do not ask the remote; delete the '
+                                    help='With binary: do not ask the remote; delete the '
                                          'whole PLT files here (they may have no copy there)')
-        plt_parser.add_argument('--no-confirm', action='store_true',
-                                    help='Skip confirmation prompts')
-        plt_parser.add_argument('--dry-run', action='store_true',
-                                    help='Show what would be deleted without deleting anything')
-        plt_parser.add_argument('-v', '--verbose', action='store_true',
-                                    help='Enable verbose output')
-        plt_parser.add_argument('-h', '--help', action='store_true',
-                                    help='Show help for plt command')
-        plt_parser.add_argument('--examples', action='store_true',
-                                    help='Show usage examples')
+        organise_flags(plt_parser, 'plt')
 
         # case organise vtu
         vtu_parser = organise_subparsers.add_parser('vtu', add_help=False,
-                                    help='List or delete the .vtu caches field render keeps in binary/')
+                                    help='Delete the .vtu caches field render keeps in binary/')
         case_arg(vtu_parser, help='Case directory path')
-        vtu_parser.add_argument('--clean', action='store_true',
-                                    help='Delete them (within --t1/--t2); without it they are only listed')
         vtu_parser.add_argument('--leftovers', action='store_true',
                                     help='Only the .partial/.deriving files a killed render left')
-        vtu_parser.add_argument('--keep-orphans', action='store_true',
-                                    help='Leave the .vtu whose .plt is gone (it cannot be rebuilt)')
+        vtu_parser.add_argument('--orphans', action='store_true',
+                                    help='Also the .vtu whose .plt is gone (it cannot be rebuilt)')
         time_window(vtu_parser,
                     t1_kwargs=dict(metavar='STEP', help='Only target timesteps >= STEP'),
                     t2_kwargs=dict(metavar='STEP', help='Only target timesteps <= STEP'))
-        vtu_parser.add_argument('--log', action='store_true',
-                                    help='Create log file of deletions')
-        vtu_parser.add_argument('--no-confirm', action='store_true',
-                                    help='Skip confirmation prompts')
-        vtu_parser.add_argument('--dry-run', action='store_true',
-                                    help='Show what would be deleted without deleting anything')
-        vtu_parser.add_argument('-v', '--verbose', action='store_true',
-                                    help='Enable verbose output')
-        vtu_parser.add_argument('-h', '--help', action='store_true',
-                                    help='Show help for vtu command')
-        vtu_parser.add_argument('--examples', action='store_true',
-                                    help='Show usage examples')
+        organise_flags(vtu_parser, 'vtu')
 
         # case check
         check_parser = case_subparsers.add_parser('check', add_help=False,
@@ -351,12 +307,13 @@ class CaseCommand(BaseCommand):
         time_window(plt_check_parser, 
                     t1_kwargs=dict(metavar='STEP', help='Only check timesteps >= STEP'),
                     t2_kwargs=dict(metavar='STEP', help='Only check timesteps <= STEP'))
-        plt_check_parser.add_argument('--verify', action='store_true',
-                                    help='Compare each PLT in binary/ with its copy on the '
-                                         'remote, by size and md5')
-        context_flag(plt_check_parser, 'remote', '--remote', type=str, metavar='REMOTE',
-                     help='With --verify: the remote to compare with '
-                          '(or use context with "use remote:name")')
+        # a plain option, not the `remote` context: its being given is what asks for the
+        # comparison, so `use remote:` left over from earlier does not turn it on
+        plt_check_parser.add_argument('--remote', nargs='?', const='', default=None,
+                                      metavar='NAME',
+                                      help='Also compare each PLT in binary/ with its copy on '
+                                           'the remote, by size and md5 (NAME: else `use remote:`, '
+                                           'else the only remote .cases.yml lists)')
         plt_check_parser.add_argument('-v', '--verbose', action='store_true',
                                     help='Enable verbose output')
         plt_check_parser.add_argument('-h', '--help', action='store_true',
@@ -565,8 +522,6 @@ class CaseCommand(BaseCommand):
                                   help='Resume the last interrupted transfer')
         upload_parser.add_argument('-h', '--help', action='store_true',
                                   help='Show help for upload command')
-        upload_parser.add_argument('--examples', action='store_true',
-                                  help='Show usage examples')
 
         # case download
         download_parser = case_subparsers.add_parser('download', add_help=False,
@@ -599,8 +554,6 @@ class CaseCommand(BaseCommand):
                                     help='Resume the last interrupted transfer')
         download_parser.add_argument('-h', '--help', action='store_true',
                                     help='Show help for download command')
-        download_parser.add_argument('--examples', action='store_true',
-                                    help='Show usage examples')
 
         file_flags(create_parser, {'--ref-case': (), '--from-config': ('.yml', '.yaml')})
 
@@ -702,13 +655,13 @@ class CaseCommand(BaseCommand):
         console.print("    case create myCase --problem-name test")
         console.print("    case run CS4SG1U1")
         console.print("    case run CS4SG1U1 --no-monitor")
-        console.print("    case organise history CS4SG1U1 --update")
-        console.print("    case organise history CS4SG1U1 --clean --compile --verify")
+        console.print("    case organise history CS4SG1U1 update")
+        console.print("    case organise history CS4SG1U1 clean compile verify")
         console.print("    case organise out CS4SG1U1")
         console.print("    case organise rst CS4SG1U1")
-        console.print("    case organise plt CS4SG1U1 --delete-ascii")
-        console.print("    case organise plt CS4SG1U1 --delete-binary --t1 0 --t2 1000")
-        console.print("    case organise vtu CS4SG1U1 --clean")
+        console.print("    case organise plt CS4SG1U1 ascii")
+        console.print("    case organise plt CS4SG1U1 binary --t1 0 --t2 1000")
+        console.print("    case organise vtu CS4SG1U1")
         console.print("    case check run CS4SG1U1")
         console.print("    case check plt CS4SG1U1 --t1 0 --t2 1000")
         console.print("    case check out CS4SG1U1")

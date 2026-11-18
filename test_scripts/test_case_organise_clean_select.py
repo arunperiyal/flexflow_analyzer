@@ -1,4 +1,4 @@
-"""`case organise history --clean 1,2,4`: clean only those archive runs.
+"""`case organise history clean 1,2,4`: clean only those archive runs.
 
 archive/ is the store and is never changed. cleaned/ is derived, so a
 selection replaces it: the named runs are written as riser1..N in the order

@@ -27,7 +27,7 @@ same --var, node and window.
     {Colors.YELLOW}--osgid{Colors.RESET} ID            osgId in the oisd files (default: the first; use osgid:N)
     {Colors.YELLOW}--run{Colors.RESET}                 Read the run directory's .othd/.oisd (`dir:` of simflow.config)
                             instead of the history: what a job is writing now, before
-                            `case organise history --update` archives it. A last step
+                            `case organise history update` archives it. A last step
                             still being written is left out. Not with --archive
     {Colors.YELLOW}--othd{Colors.RESET} / {Colors.YELLOW}--oisd{Colors.RESET}       Look in one kind of file only
     {Colors.YELLOW}--archive{Colors.RESET} [RUNS]      Read these runs of othd_files/ and oisd_files/archive/

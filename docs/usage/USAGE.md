@@ -332,8 +332,8 @@ login nodes are named otherwise.
 **Checking the binary PLTs against the remote:**
 
 ```bash
-ff case check plt mycase --verify --remote myserver
-ff case check plt mycase --verify --remote myserver --t1 8950 --t2 9900 --freq 50
+ff case check plt mycase --remote myserver
+ff case check plt mycase --remote myserver --t1 8950 --t2 9900 --freq 50
 ```
 
 Each PLT in `binary/` is compared with its copy on the remote by size and

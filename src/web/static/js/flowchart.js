@@ -150,7 +150,7 @@ const FlowChart = (() => {
         Stop before a queued restart's restartTsId: the steps after it will
         be computed again.
 
-        Do not run "case organise history --update" on a running case: it
+        Do not run "case organise history update" on a running case: it
         would move the file the solver is writing.`,
     },
     {
@@ -174,7 +174,7 @@ const FlowChart = (() => {
     {
       id: 'history', kind: 'step', col: 1, row: 14, label: ['Organise the history'],
       title: 'Organise the history',
-      command: 'case check run\ncase organise history --update --clean --compile',
+      command: 'case check run\ncase organise history update clean compile',
       detail: `"case check run" shows whether the run directory still holds
         .othd and .oisd files. --update moves them into othd_files/archive/
         and oisd_files/archive/, --clean writes each run without the steps a
@@ -246,8 +246,8 @@ const FlowChart = (() => {
     {
       id: 'cleanup', kind: 'step', col: 1, row: 20, label: ['Delete what is', 'safely copied'],
       title: 'Delete what is safely copied',
-      command: 'case organise out\ncase organise rst --keep-freq <N>\ncase organise plt --delete-ascii\ncase organise plt --delete-binary',
-      detail: `Only after the upload check above: --delete-binary does not
+      command: 'case organise out\ncase organise rst --keep-freq <N>\ncase organise plt ascii\ncase organise plt binary',
+      detail: `Only after the upload check above: binary does not
         look at the remote.
 
         In this order. "organise out" deletes each step's .out once its
@@ -256,8 +256,8 @@ const FlowChart = (() => {
         the restart point in simflow.config, the two newest complete sets
         (--keep-newest, default 2: if the newest was cut short when the job
         was killed, the one before it restarts the run) and a set still being
-        written. --delete-ascii deletes the ASCII PLTs that have a newer
-        binary copy, so it goes before --delete-binary.`,
+        written. ascii deletes the ASCII PLTs that have a newer
+        binary copy, so it goes before binary.`,
     },
     {
       id: 'uploadRst', kind: 'step', col: 1, row: 21, label: ['Upload the restart sets', 'on the upload grid'],
@@ -357,7 +357,7 @@ const FlowChart = (() => {
         Post jobs still go through Slurm, so run it again at the next login
         to carry on. Without --delete nothing is deleted: auto show lists the
         delete commands (case organise out, case organise rst, case organise plt
-        --delete-ascii, --delete-binary) for you to run, each checking again when it
+        ascii, binary) for you to run, each checking again when it
         runs. With --delete (or --only delete) a delete stage follows the upload: the
         ASCII PLT, binary PLT and .out whose copy on the remote passes an md5 check
         made right then, and the .rst sets off the keep_rst grid.`,

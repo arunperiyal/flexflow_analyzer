@@ -443,10 +443,6 @@ def execute_case_run(args):
     # Handle help flag
     if hasattr(args, 'help') and args.help:
         show_run_help()
-        return
-    
-    # Handle examples flag
-    if hasattr(args, 'examples') and args.examples:
         show_run_examples()
         return
     
@@ -502,7 +498,6 @@ def show_run_help():
     table.add_row("--dry-run", "Preview actions without submitting jobs")
     table.add_row("-v, --verbose", "Enable verbose output")
     table.add_row("-h, --help", "Show this help message")
-    table.add_row("--examples", "Show usage examples")
     
     console.print("[bold]OPTIONS:[/bold]")
     console.print(table)

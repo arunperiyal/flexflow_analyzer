@@ -56,7 +56,7 @@ def world(tmp_path):
 
 def organise(world, subcommand, **flags):
     args = Namespace(delete_ascii=False, delete_binary=False, freq=None, keep_freq=None,
-                     all_out=False, keep_out=False, dry_run=False, no_confirm=True, log=False,
+                     all_out=False, keep_out=False, dry_run=False, yes=True, log=False,
                      verbose=False, t1=None, t2=None, remote='local')
     for key, value in flags.items():
         setattr(args, key, value)
@@ -85,7 +85,20 @@ def test_delete_binary_takes_only_what_the_remote_holds_with_the_same_md5(world)
     assert Ledger(world.folder).get('local', 'CS1', 'binary/riser.100.plt')['verified'] == 'md5'
 
 
+def two_remotes(world):
+    """With one remote listed it is used; with two, none is chosen for you."""
+    cf = yaml.safe_load((world.folder / '.cases.yml').read_text())
+    cf['remotes']['other'] = str(world.folder / 'o')
+    (world.folder / '.cases.yml').write_text(yaml.safe_dump(cf))
+
+
+def test_delete_binary_with_one_remote_listed_uses_it(world):
+    out = organise(world, 'plt', delete_binary=True, remote=None)
+    assert left(world.binary, '.plt') == []
+
+
 def test_delete_binary_without_a_remote_deletes_nothing(world):
+    two_remotes(world)
     out = organise(world, 'plt', delete_binary=True, remote=None)
     assert left(world.binary, '.plt') == list(STEPS)
     assert 'The remote could not be asked, so nothing in binary/ is deleted' in out
@@ -123,6 +136,7 @@ def test_delete_ascii_stands_on_the_remote_when_binary_is_gone_here(world):
     out = organise(world, 'plt', delete_ascii=True)
     assert left(world.run, '.plt') == [400]                     # its copy is not as recorded
     # and with no remote to ask, none of them goes
+    two_remotes(world)
     out = organise(world, 'plt', delete_ascii=True, remote=None)
     assert left(world.run, '.plt') == [400] and 'the remote was not asked' in out
 
@@ -172,6 +186,7 @@ def test_out_with_no_plt_and_no_remote_says_the_remote_was_not_asked(world):
     for step in STEPS:
         (world.run / f'riser.{step}.plt').unlink()
     shutil.rmtree(world.binary)
+    two_remotes(world)
     out = organise(world, 'out', keep_freq=1000, remote=None)
     assert left(world.run, '.out') == list(STEPS)
     assert 'The remote was not asked' in out

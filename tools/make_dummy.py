@@ -180,7 +180,7 @@ class Case:
             def __getattr__(self, name):
                 return lambda *a, **k: None
         args = Namespace(update=False, verify=False, clean=False, compile=False, prune=False,
-                         dry_run=False, no_confirm=True, log=False, verbose=False, t1=None, t2=None)
+                         dry_run=False, yes=True, log=False, verbose=False, t1=None, t2=None)
         for step in steps:
             setattr(args, step, True)
         case = SimpleNamespace(case_directory=str(self.dir), problem_name='riser',
@@ -306,7 +306,7 @@ def build(root: Path):
     job(c, 'main', 'TIMEOUT', ended_days=1)
     cases.append(('case5', 'main ended (TIMEOUT) yesterday; its .othd still in RUN_1; '
                   '.out 350-500; cloud up to 300',
-                  'history: --update (riser2), --clean, --compile, upload; post 350-500; needs you: '
+                  'history: update (riser2), clean, compile, upload; post 350-500; needs you: '
                   'stopped at 520 of 1000 with nothing queued'))
 
     # case6 -- the post job was killed at the walltime

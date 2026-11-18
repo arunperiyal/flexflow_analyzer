@@ -250,7 +250,7 @@ def _folder_rule(w):
                              f"{r['first']}, {r.get('part', '?')}) but no history part starts "
                              f"there (they start at {', '.join(map(str, snap.run_starts))}). "
                              f"Check with `case check history`; .restarts is only rewritten by "
-                             f"`case organise history --clean`.")
+                             f"`case organise history clean`.")
     # run numbers that skip: history of a run that is in neither archive/ nor cleaned/
     for ext, h in snap.history.items():
         have_runs = set(h.archive) | set(h.cleaned)
@@ -345,10 +345,10 @@ def _history(w):
             n = max(numbers, default=0) + 1
             plan.ctx['organise'] = ('update', n)
             plan.step('history', 'history', 'organise',
-                      f"case organise history {name} --update --clean --compile")
+                      f"case organise history {name} update clean compile")
             plan.add('history', f"Move {snap.run_rel}/{p}.othd and .oisd into archive/ as run "
                                 f"{n}, then clean and compile "
-                                f"(organise history --update --clean --compile)")
+                                f"(organise history update clean compile)")
             organising = True
     if not organising and not broken_rule:
         # a run that a later run rewrites from its first step on has nothing left to clean
@@ -362,10 +362,10 @@ def _history(w):
         if uncleaned:
             plan.ctx['organise'] = ('clean', uncleaned)
             plan.step('history', 'history', 'organise',
-                      f"case organise history {name} --clean --compile")
+                      f"case organise history {name} clean compile")
             plan.add('history', f"Clean and compile archive run(s) "
                                 f"{', '.join(map(str, uncleaned))}, not yet in cleaned/ "
-                                f"(organise history --clean --compile)")
+                                f"(organise history clean compile)")
             organising = True
     if cloud is not None:
         hist = {k: v for k, v in snap.files.items() if k.startswith(('othd_files/', 'oisd_files/'))
@@ -861,14 +861,14 @@ def _deletions(w):
         # file that is not meant to go.
         name, remote = snap.name, conf.remote
         if binary or plan.steps_of('upload-plt'):
-            plan.step('plt', 'check', 'check-plt', f"case check plt {name} --verify --remote {remote}",
+            plan.step('plt', 'check', 'check-plt', f"case check plt {name} --remote {remote}",
                       note="the binary PLTs here against their copies on the remote, by md5")
         for a, b in runs_apart(ascii, []):
             plan.step('plt', 'delete', 'delete-ascii',
-                      f"case organise plt {name} --delete-ascii --t1 {a} --t2 {b} --remote {remote}")
+                      f"case organise plt {name} ascii --t1 {a} --t2 {b} --remote {remote}")
         for a, b in runs_apart(binary, set(snap.binary) - set(binary)):
             plan.step('plt', 'delete', 'delete-binary',
-                      f"case organise plt {name} --delete-binary --t1 {a} --t2 {b} --remote {remote}")
+                      f"case organise plt {name} binary --t1 {a} --t2 {b} --remote {remote}")
         for a, b in runs_apart(outs, set(snap.out) - set(outs)):
             plan.step('output', 'delete', 'delete-out',
                       f"case organise out {name} --t1 {a} --t2 {b} --remote {remote}")
@@ -927,8 +927,8 @@ def _vtu(w):
             what.append(f"{len(caches)} cache{'s' if len(caches) != 1 else ''} ({size(caches)})")
         plan.add('delete', f".vtu: {' and '.join(what)}; the next render converts the PLT "
                            f"again.", 'delete')
-        flags = ('--clean --keep-orphans' if conf.vtu_cache == 'delete' else '--clean --leftovers')
-        plan.step('plt', 'delete', 'delete-vtu', f"case organise vtu {snap.name} {flags}",
+        flags = '' if conf.vtu_cache == 'delete' else ' --leftovers'
+        plan.step('plt', 'delete', 'delete-vtu', f"case organise vtu {snap.name}{flags}",
                   note="leftovers a day old" + (", caches with a PLT here"
                                                 if conf.vtu_cache == 'delete' else ''))
     if caches and conf.vtu_cache != 'delete':

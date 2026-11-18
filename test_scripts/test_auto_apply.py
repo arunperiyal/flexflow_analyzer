@@ -59,7 +59,7 @@ def test_dry_run_changes_nothing_and_writes_no_log(dummy, capsys):
     before = tree(dummy)
     assert apply('*', dry_run=True) == 0
     out = capsys.readouterr().out
-    assert 'organise history --update --clean --compile' in out and 'run post full --t1 350' in out
+    assert 'organise history update clean compile' in out and 'run post full --t1 350' in out
     assert 'nothing was done' in out
     assert tree(dummy) == before and not (dummy / 'bare' / 'auto_logs').exists()
 

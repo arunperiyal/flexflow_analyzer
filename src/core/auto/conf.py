@@ -85,9 +85,12 @@ def read(folder, remote: Optional[str]) -> AutoConf:
     except cases_file.CasesFileError as e:
         raise AutoConfError(str(e))
     listed = ', '.join(cf.remotes) or 'none yet'
+    remote, _ = cases_file.remote_of(cf, remote)
     if not remote:
         raise AutoConfError(f"which remote? --remote NAME or `use remote:NAME` "
-                            f"({cases_file.FILENAME} lists: {listed})")
+                            f"({cases_file.FILENAME} lists: {listed})"
+                            + ("; it lists more than one, so none is chosen for you"
+                               if len(cf.remotes) > 1 else ""))
     path = cf.remotes.get(remote)
     if not path:
         raise AutoConfError(f"{cf.path} has no folder for remote '{remote}' (lists: {listed}); "
