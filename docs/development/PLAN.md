@@ -404,6 +404,7 @@ As of 2026-11-17, after Phases 21 to 24 were merged. To work on later.
 |---|---|---|
 | `docs-install` | 10 | 4 commits not in `main` (installed documentation, development testing tools, next-session notes); 37 commits behind `main`, so merge or rebase `main` first. On `origin` |
 | `flowreel-export` | 9 | 1 commit not in `main` (`Add FlowReel body export`); 37 commits behind `main`, same. On `origin` |
+| `auto-post-window` | 26 | Merged into `main` (`ff0dd3d`) and kept on `origin` on purpose, as the reference if this bug returns: `auto show` suggests no `run post` and prints `Post job N ended COMPLETED after the .out of steps ... were written, yet they have no whole PLT`, for `.out` the post job was never given (it ended while the main job still wrote them). Cause: with no `post job N started: steps a..b` log line, the job's window was read only from `binary/`, empty once uploaded; the fix (`f169a78`, `_post` in `src/core/auto/decide.py`) also reads the remote PLTs' write times. Still unfixed: a remote that got its PLTs from a later upload, not from the post job, has mtimes outside the window and gives the old alarm |
 | shellkit (separate repository, `/media/arunperiyal/Works/projects/shellkit`) | 25 | No branch yet. The user makes it and says Claude may edit that repository; then Phase 25 is built there and the pin in `requirements.txt` raised |
 
 - The user merges both open branches; Claude resolves conflicts when asked.
