@@ -298,15 +298,29 @@ class SftpCloud:
             pass
 
 
+def remote_name_for(folder, remote: Optional[str]) -> Optional[str]:
+    """The remote a command uses for this folder: the one named, else the only one its
+    .cases.yml lists, else None (open_for_folder says which remote is needed)."""
+    from src.core import cases_file
+    if remote:
+        return remote
+    try:
+        return cases_file.remote_of(cases_file.read(folder), None)[0]
+    except cases_file.CasesFileError:
+        return None
+
+
 def open_for_folder(folder, remote: Optional[str]):
-    """The remote named `remote` as the folder of cases `folder` uses it (the
-    folder in its .cases.yml `remotes:`); CloudError when it cannot be used."""
+    """The remote named `remote` (else the only one listed) as the folder of cases
+    `folder` uses it (the folder in its .cases.yml `remotes:`); CloudError when it
+    cannot be used."""
     from types import SimpleNamespace
     from src.core import cases_file
     try:
         cf = cases_file.read(folder)
     except cases_file.CasesFileError as e:
         raise CloudError(str(e))
+    remote, _ = cases_file.remote_of(cf, remote)
     listed = ', '.join(cf.remotes)
     if not remote and not cf.remotes:
         raise CloudError(f"no remote is set for this folder, and so no path on one: "
@@ -314,7 +328,8 @@ def open_for_folder(folder, remote: Optional[str]):
                          f"Set both with `auto init --remote NAME --path DIR`")
     if not remote:
         raise CloudError(f"which remote? --remote NAME or `use remote:NAME` "
-                         f"({cases_file.FILENAME} lists: {listed})")
+                         f"({cases_file.FILENAME} lists: {listed}); it lists more than one, "
+                         f"so none is chosen for you")
     path = cf.remotes.get(remote)
     if not path:
         others = f" (it lists: {listed})" if listed else " (it lists none)"

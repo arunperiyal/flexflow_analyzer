@@ -230,13 +230,21 @@ def test_the_command_exits_1_and_names_what_is_wrong(world, capsys):
     assert 'riser.200.plt verified' in out                       # -v: a line per file
 
 
+def test_the_only_listed_remote_is_used_and_said(world, capsys):
+    assert run(world, remote=None) == 0
+    assert 'Using remote: local (the only one in .cases.yml)' in capsys.readouterr().out
+
+
 def test_the_command_needs_a_remote_it_knows(world, capsys):
+    cases = yaml.safe_load((world.folder / '.cases.yml').read_text())
+    cases['remotes']['other'] = str(world.folder / 'o')       # two: none is chosen for you
+    (world.folder / '.cases.yml').write_text(yaml.safe_dump(cases))
     assert run(world, remote=None) == 1
     assert 'which remote?' in capsys.readouterr().out
     assert run(world, remote='nowhere') == 1
     out = ' '.join(capsys.readouterr().out.split())
     assert "the remote 'nowhere' is not set for this folder, and its path is not set" in out
-    assert 'auto init --remote nowhere --path DIR' in out and 'it lists: local' in out
+    assert 'auto init --remote nowhere --path DIR' in out and 'it lists: local, other' in out
     # a folder with no remote at all
     (world.folder / '.cases.yml').write_text(yaml.safe_dump(
         {'cases': [{'name': 'CS1', 'path': 'CS1'}], 'remotes': {}, 'auto': {}}))

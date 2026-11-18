@@ -141,12 +141,23 @@ def test_a_folder_without_auto_conf_is_an_error(dummy, tmp_path):
         gather(resolve_cases(str(lone / 'case2'), tmp_path), 'local')
 
 
-def test_the_remote_must_be_named_and_listed(dummy):
+def test_the_only_listed_remote_is_used_when_none_is_named(dummy):
     case = resolve_cases('case2', dummy / 'bare')
-    with pytest.raises(AutoConfError, match='which remote'):
+    results, confs, _ = gather(case, None)             # the dummy lists one: local
+    assert [c.remote for c in confs.values()] == ['local'] and results
+
+
+def test_with_several_remotes_one_must_be_named_and_listed(dummy):
+    from src.core import cases_file
+    folder = dummy / 'bare'
+    cf = cases_file.read(folder)
+    cf.remotes['cloud2'] = '/elsewhere'
+    cases_file.write(cf)
+    case = resolve_cases('case2', folder)
+    with pytest.raises(AutoConfError, match='more than one'):
         gather(case, None)
-    with pytest.raises(AutoConfError, match="no folder for remote 'cloud'"):
-        gather(case, 'cloud')
+    with pytest.raises(AutoConfError, match="no folder for remote 'nowhere'"):
+        gather(case, 'nowhere')
 
 
 def test_the_case_context(dummy, monkeypatch, capsys):
@@ -165,7 +176,12 @@ def test_the_case_context(dummy, monkeypatch, capsys):
     assert rt.execute_line('auto show --remote local') == 2      # no case set
     assert 'no case given' in capsys.readouterr().out
     assert rt.execute_line('use case:case3') == 0
-    assert rt.execute_line('auto show') == 2                     # no remote set
+    assert rt.execute_line('auto show') == 0                     # the one remote listed
+    from src.core import cases_file
+    cf = cases_file.read(dummy / 'bare')
+    cf.remotes['cloud2'] = '/elsewhere'
+    cases_file.write(cf)
+    assert rt.execute_line('auto show') == 2                     # two: none is chosen
     assert 'which remote' in capsys.readouterr().out
     assert rt.execute_line('auto show --remote local') == 0
     out = capsys.readouterr().out

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### 🌐 The only remote is the default
+
+- When a folder's `.cases.yml` lists exactly one remote, `case check plt`,
+  `case organise out/plt` and `auto` use it without `--remote` or `use
+  remote:`; `case check plt --verify` says "Using remote: NAME (the only one in
+  .cases.yml)". With two or more, none is chosen for you (the error says so).
+- Fixed: `auto init --vtu-cache delete` wrote an `auto:` key `.cases.yml`
+  refused to read back.
+
 ### 🗑️ `case organise plt --delete-binary --no-verify`
 
 - `--no-verify` does not ask the remote: the binary PLT files that are whole

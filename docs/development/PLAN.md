@@ -555,7 +555,7 @@ The rules the commands will follow:
   cloud"); `--remote` is for choosing between several.
 - `case check plt --remote` replaces `--verify` (with Phase 12).
 
-- [ ] The single remote is the default (`core/cases_file.py`, `cloud.py`,
+- [x] The single remote is the default (`core/cases_file.py`, `cloud.py`,
       `conf.py`: the error says "which remote?" only when there are several
       or none)
 - [ ] `case organise out/rst/plt/vtu/history`: list, ask, do; `--dry-run`,

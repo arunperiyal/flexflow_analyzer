@@ -27,7 +27,8 @@ def _steps(names) -> str:
 def execute_verify(args) -> int:
     from src.cli.context import current_case, current_dir
     from src.core.simflow_config import SimflowConfig
-    from src.core.transfer.cloud import CloudError, open_for_folder
+    from src.core import cases_file
+    from src.core.transfer.cloud import CloudError, open_for_folder, remote_name_for
     from src.core.transfer.ledger import Ledger
     from src.core.transfer.verify import verify_plts
 
@@ -65,15 +66,19 @@ def execute_verify(args) -> int:
                               f"simflow.config, so the PLT names are not known")
                 code = 1
                 continue
+            used = remote_name_for(folder, remote)
             try:
                 if folder not in clouds:
                     clouds[folder] = open_for_folder(folder, remote)
                     ledgers[folder] = Ledger(folder)
+                    if not remote and used:
+                        console.print(f"Using remote: {escape(used)} [dim](the only one in "
+                                      f"{cases_file.FILENAME})[/dim]")
                 cloud = clouds[folder]
                 console.print(f"[bold]PLT verify[/bold]  [dim]{escape(case_dir.name)}: binary/"
                               f"{escape(problem)}.<step>.plt against {escape(cloud.where)}[/dim]")
                 say = (lambda line: console.print(f"  [dim]{escape(line)}[/dim]")) if verbose else None
-                result = verify_plts(case_dir, problem, cloud, remote, ledgers[folder],
+                result = verify_plts(case_dir, problem, cloud, used, ledgers[folder],
                                      window=window, freq=freq, say=say,
                                      run_dir=cfg.run_dir(case_dir))
             except CloudError as e:

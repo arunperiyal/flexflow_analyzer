@@ -200,16 +200,17 @@ def remote_copies(case_dir, problem: str, remote_name: Optional[str], window=Non
     case_dir = Path(case_dir)
 
     def load():
-        from .transfer.cloud import CloudError, open_for_folder
+        from .transfer.cloud import CloudError, open_for_folder, remote_name_for
         from .transfer.ledger import Ledger
         from .transfer.verify import verify_plts
+        used = remote_name_for(case_dir.parent, remote_name)
         try:
             cloud = open_for_folder(case_dir.parent, remote_name)
         except CloudError as e:
             return {}, set(), str(e)
         try:
             ledger = Ledger(case_dir.parent)
-            result = verify_plts(case_dir, problem, cloud, remote_name, ledger,
+            result = verify_plts(case_dir, problem, cloud, used, ledger,
                                  window=window, freq=freq, run_dir=run_dir)
         except CloudError as e:
             return {}, set(), str(e)
@@ -218,7 +219,7 @@ def remote_copies(case_dir, problem: str, remote_name: Optional[str], window=Non
         good, verified = {}, set()
         for name in result.verified + result.kept_there:
             step = int(name.rsplit('.', 2)[-2])
-            entry = ledger.get(remote_name, case_dir.name, f"binary/{name}") or {}
+            entry = ledger.get(used, case_dir.name, f"binary/{name}") or {}
             if entry.get('mtime') is not None:
                 good[step] = entry['mtime']
         for name in result.verified:

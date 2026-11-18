@@ -248,8 +248,8 @@ class CaseCommand(BaseCommand):
                                     help='Delete PLT files from binary/ within --t1/--t2 that have '
                                          'a copy on the remote with the same md5')
         context_flag(plt_parser, 'remote', '--remote', type=str, metavar='REMOTE',
-                     help='The remote holding the copies (needed by --delete-binary; '
-                          'or use context with "use remote:name")')
+                     help='The remote holding the copies (default: the only one in '
+                          '.cases.yml; or use context with "use remote:name")')
         # Plain flags, not the `freq` context: they choose which steps are looked at.
         plt_parser.add_argument('--freq', type=int, metavar='N',
                                     help='Only the steps divisible by N')

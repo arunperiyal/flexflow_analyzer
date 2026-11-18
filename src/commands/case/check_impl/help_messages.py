@@ -76,8 +76,8 @@ Pick one subcommand.
 
     {Colors.CYAN}plt --verify{Colors.RESET}
         Compare each binary PLT in binary/ with its copy on the remote
-        ({Colors.YELLOW}--remote NAME{Colors.RESET}, or {Colors.DIM}use remote:NAME{Colors.RESET}; its folder comes from the
-        case folder's .cases.yml), reading both sides now:
+        ({Colors.YELLOW}--remote NAME{Colors.RESET}, or {Colors.DIM}use remote:NAME{Colors.RESET}, or the only one the
+        case folder's .cases.yml lists; its folder comes from there), reading both sides now:
           • {Colors.GREEN}verified{Colors.RESET}: same size and same md5, and the local file is whole.
             Written to auto_logs/ledger.json, the record of checked copies
             (a remote without md5sum has the copy read back and hashed here)

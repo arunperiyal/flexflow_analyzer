@@ -97,7 +97,9 @@ Organize and clean up case directories. Pick one subcommand.
 
         {Colors.CYAN}--remote NAME{Colors.RESET}
             The remote to ask about a binary PLT that binary/ no longer
-            holds. Without it such a step keeps its .out.
+            holds. Not needed when .cases.yml lists only one remote: it is
+            used, and said. With several and none named, such a step keeps
+            its .out.
 
     {Colors.CYAN}rst{Colors.RESET}
         Thin the .rst (restart sets) of the run directory: keeps the steps
@@ -138,7 +140,8 @@ Organize and clean up case directories. Pick one subcommand.
             Delete PLT files from binary/ within --t1/--t2 that have a copy
             on the remote with the same size and md5, both read at that
             moment (as `case check plt --verify` does).
-              • Needs --remote NAME (or `use remote:NAME`)
+              • Needs a remote: --remote NAME, `use remote:NAME`, or the only one
+                .cases.yml lists
               • A file whose copy is missing or differs, or that is cut
                 short here, is kept and listed
               • When the remote cannot be asked, nothing is deleted
@@ -155,7 +158,8 @@ Organize and clean up case directories. Pick one subcommand.
 
         {Colors.CYAN}--remote NAME{Colors.RESET}
             The remote holding the copies; its folder comes from the case
-            folder's .cases.yml
+            folder's .cases.yml. Not needed when it lists only one remote
+            (that one is used)
         {Colors.CYAN}--freq N{Colors.RESET}
             Only the steps divisible by N
         {Colors.CYAN}--keep-freq N{Colors.RESET}  (with --delete-binary)
