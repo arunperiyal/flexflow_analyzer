@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### 🔗 Pipe rows between commands
+
+- `data stats --func maxloc` (also `minloc`, `zeroloc`) now offers the PLT it
+  chose, per case, to the command after a `|`, which runs once per case with
+  `case` and `time` set from it:
+  `use case:* last:1000 node:25 var:dy; data stats --func maxloc | case
+  download plt`. Needs shellkit 0.1.8; a `|` into `grep` and the like is
+  unchanged.
+
 ### ⚠️ `case organise`: `--yes`, and `vtu` asks and deletes
 
 Breaking (the old forms are gone, no aliases):

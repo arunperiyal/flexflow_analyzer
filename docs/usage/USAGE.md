@@ -71,6 +71,26 @@ plot --title "Analysis; Results"; data stats
 - Errors don't stop subsequent commands
 - Empty commands (;;) are skipped automatically
 
+### Piping Rows Between Commands
+
+A command that finds *where* something happens can hand that to the next one with
+`|`. `data stats --func maxloc` (also `minloc`, `zeroloc`) offers, for each case, the
+PLT step it chose; the command after the `|` then runs once per case, at that step, as
+if you had typed `use case:... time:...` for it:
+
+```bash
+# the PLT at the largest dy displacement, for every case in the registry, downloaded
+use case:* last:1000 node:25 var:dy; data stats --func maxloc | case download plt
+
+# render each one
+use case:* last:1000 node:25 var:dy; data stats --func maxloc | field render iso
+```
+
+Each run is headed by a line (`── 2/5  case:BR1SG0U1P0 time:5400`); the context you had
+before is put back afterwards. One run failing is said and the rest still go; with no
+PLT found nothing runs ("nothing to pass on"). A command that is not a FlexFlow command
+after the `|` (`grep`, `sort`) still reads the text, as always.
+
 ### Def File Parameters
 
 ```bash
@@ -458,6 +478,8 @@ ff data stats CS4SG1U1
 - Min, max, mean, std dev
 - Per node and component
 - Time-averaged values
+- `--func maxloc|minloc|zeroloc`: where it happens and which PLT shows it; pipe it into
+  a command (see Piping Rows Between Commands)
 
 ## Field Operations
 

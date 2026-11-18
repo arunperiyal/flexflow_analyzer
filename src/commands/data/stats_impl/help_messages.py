@@ -72,6 +72,15 @@ One row per variable instead of one row per timestep.
     between two outputs never names a file that was not written. The step size
     comes from outFreq in simflow.config, or {Colors.YELLOW}--freq{Colors.RESET}.
 
+{Colors.BOLD}PIPING:{Colors.RESET}
+    maxloc, minloc and zeroloc offer the PLT they chose to the command after a
+    `|`, which then runs once per case with `case` and `time` set from it:
+
+        use case:* last:1000 node:25 var:dy; data stats --func maxloc | case download plt
+
+    Each case in `*` gets its own run. Several variables or both directions
+    of zeroloc offer one run each.
+
 {Colors.BOLD}ZEROLOC:{Colors.RESET}
     Where the cylinder passes through its undeflected position -- the frame
     halfway between the extremes, moving fastest.
@@ -99,6 +108,7 @@ One row per variable instead of one row per timestep.
     data stats CS4SG1U1 --var aleDisp_y --node 24 --func zeroloc
     data stats CS4SG1U1 --var totTrac --func rms,std --t1 3000 --t2 5000
     data stats CS4SG1U1 --var dy --func rms,std --last 1000
+    data stats * --var dy --node 25 --last 1000 --func maxloc | case download plt
     data stats CS4SG1U1 --var aleDisp --node 24 --func range --output swing.csv
 """)
 
