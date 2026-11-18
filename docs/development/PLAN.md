@@ -350,6 +350,27 @@ the local `binary/` PLTs, which are empty once uploaded.
       `binary/`; test with an emptied `binary/`
 - [x] Tests, `CHANGELOG.md`
 
+### Phase 27: `run sq` is easier to use (branch `run-sq-usage`)
+
+From the user (2026-11-18): `run sq` is a little confusing to use. One command
+does four jobs, told apart by the first word: the queue (`run sq`), a refresh
+loop (`run sq watch [N]`), a search (`run sq find KEY`) and one job
+(`run sq <job_id> [--out] [-n N]`). `--by-dir` and the many `--sort` names
+(14, with aliases such as `id`, `job-id`, `jobid`) are not easy to tell apart.
+
+- [ ] Decide with the user what confuses them: the four modes in one command,
+      the option names, the output columns, or the help. Ask for the commands
+      they typed and expected
+- [ ] Rework the usage and help text: a short "what do you want to do" list
+      first (see my jobs, watch, find a case's jobs, see one job and its log),
+      then the options
+- [ ] Rename or fold the confusing parts the user picks (for example `find`
+      beside `--by-dir`, or the `--sort` aliases), keeping the old words
+      working with a note
+- [ ] Mistyped input is explained: `run sq watch abc`, `run sq find` with no
+      key, a job id that is not in the queue
+- [ ] Tests, help text, completion, `CHANGELOG.md`
+
 ### Phase 12: `case check --remote`, verify against the remote (branch `check-remote`)
 
 Found on a real case (`BR0SG0U1P0`, PLTs moved to the remote by hand; none
