@@ -187,7 +187,8 @@ def _offer(case_dir, plt_tsid):
         return
     from shellkit import current_runtime
     rt = current_runtime()
-    if rt is not None:
+    # shellkit older than 0.1.8 has no rows: the table is still shown, only the pipe is lost
+    if rt is not None and hasattr(rt, 'emit'):
         rt.emit([{'case': str(case_dir), 'time': plt_tsid}])
 
 

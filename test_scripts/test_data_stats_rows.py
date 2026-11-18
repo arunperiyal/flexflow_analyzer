@@ -41,6 +41,12 @@ def test_without_a_shell_nothing_is_needed(registry, monkeypatch):
     execute_statistics(args(case="*", var=["aleDisp_x"], func=["maxloc"], freq=1))
 
 
+def test_an_older_shellkit_without_rows_still_gives_the_table(registry, monkeypatch, capsys):
+    monkeypatch.setattr('shellkit.current_runtime', lambda: SimpleNamespace())   # no emit
+    execute_statistics(args(case="*", var=["aleDisp_x"], func=["maxloc"], freq=1))
+    assert 'maxloc' in capsys.readouterr().out
+
+
 def test_piped_into_a_command_it_runs_per_case_at_that_step(registry, monkeypatch, tmp_path):
     from shellkit import Runtime
     from src.cli.app import create_app
