@@ -260,6 +260,9 @@ class CaseCommand(BaseCommand):
                     t2_kwargs=dict(metavar='STEP', help='Only target timesteps <= STEP'))
         plt_parser.add_argument('--log', action='store_true',
                                     help='Create log file of deletions')
+        plt_parser.add_argument('--no-verify', action='store_true',
+                                    help='With --delete-binary: do not ask the remote; delete the '
+                                         'whole PLT files here (they may have no copy there)')
         plt_parser.add_argument('--no-confirm', action='store_true',
                                     help='Skip confirmation prompts')
         plt_parser.add_argument('--dry-run', action='store_true',

@@ -388,24 +388,55 @@ remote link only. It never changes what `auto` does.
 - It is printed, not silent: a line "remote copy not checked (--no-verify)"
   in the step and in the summary, so a deleted file is known to have had no
   proof.
-- It asks once ("N binary PLT(s) have no checked copy on the remote; delete?")
-  unless `--yes` is given, since a deletion cannot be undone.
+- It uses the confirmation `case organise` already asks ("Delete N files?",
+  skipped by `--no-confirm`), since a deletion cannot be undone.
 - It is not read from `.cases.yml` or `auto`: `auto` never passes it, so the
   server's rule is unchanged.
-- The same flag where the chain is used: `case organise plt --delete-binary`,
-  `--delete-ascii` (only the binary link is waived), `case organise out`,
-  `case organise rst`; and `case check plt --verify` is not changed (it is the
-  check itself).
+- Only `case organise plt --delete-binary` takes it: there the remote copy is
+  the only thing that stands in for the file. For `--delete-ascii`, `out` and
+  `rst` the local binary PLT is what stands in, so waiving the remote would
+  change nothing; and `case check plt --verify` is the check itself.
 
-- [ ] Confirm with the user: the name (`--no-verify`), the confirmation, and
+- [x] Confirm with the user: the name (`--no-verify`), the confirmation, and
       which commands take it
-- [ ] `RemoteCopies` can be told not to ask (`core/chain.py`): a link that is
+- [x] `RemoteCopies` can be told not to ask (`core/chain.py`): a link that is
       waived stands in as `by='waived'`, never as `remote`
-- [ ] `case organise plt --delete-binary --no-verify`, with the notice and
-      the confirmation (`--yes` skips it)
-- [ ] The same flag on `--delete-ascii`, `organise out` and `organise rst`
-- [ ] `auto` is untouched: a test that no `auto` step carries the flag
-- [ ] Tests, help text, completion, `CHANGELOG.md`
+- [x] `case organise plt --delete-binary --no-verify`, with the notice and
+      the existing confirmation
+- [x] Not on `--delete-ascii`, `organise out` and `organise rst` (see above)
+- [x] `auto` is untouched: a test that no `auto` step carries the flag
+- [x] Tests, help text, completion, `CHANGELOG.md`
+
+### Phase 29: `auto` cleans up the `.vtu` caches (branch `auto-vtu`)
+
+From the user (2026-11-18). Today only `case organise vtu [--clean]` handles
+the `.vtu` files `field render` and `field convert` leave in `binary/`
+(`{problem}.{step}.vtu`, `.z{N}.vtu`, and the `.partial`/`.deriving`
+leftovers of a killed run). `auto` never looks at them, so they pile up
+unseen and a killed render leaves half-written files.
+
+Suggested shape, for the user to confirm:
+
+- `.partial` and `.deriving` files are always junk: `auto` deletes them (older
+  than a day, so a render still running is left alone).
+- A cache whose PLT is still here is rebuilt by the next render, so it may go,
+  but only when the config says so (`vtu_cache: delete`, off by default): it
+  costs conversion time, and a `field compute` may have written values into it.
+- A `.vtu` whose PLT is gone cannot be rebuilt: `auto show` reports it, and
+  `auto` never deletes it.
+- `auto show` says how many caches there are and how much space they take.
+- It runs where `.vtu` files are made (the personal machine), not on the
+  server; `auto` never uploads them.
+
+- [ ] Confirm with the user: which of the above, and the config word
+- [ ] Observe: the snapshot lists the `.vtu` files of `binary/` (kind, step,
+      size, age, whether the PLT is there)
+- [ ] Decide: the leftovers go; the caches go when configured; the orphans are
+      reported and kept; a step the plan still needs is not touched
+- [ ] `auto show` and `auto status` report them; the executor deletes through
+      the same path as `case organise vtu --clean`
+- [ ] Tests (a dummy case with each kind), help text, `docs/architecture/auto.md`
+      (new section at the end), `CHANGELOG.md`
 
 ### Phase 29: `auto` cleans up the `.vtu` caches (branch `auto-vtu`)
 
