@@ -575,6 +575,57 @@ The rules the commands will follow:
 - [x] Docs (`docs/usage/`, `docs/architecture/auto.md` at the end),
       `CHANGELOG.md` (breaking: list each old form and its new one)
 
+### Phase 32: pipe rows between commands (shellkit 0.1.8; branch `pipe-rows`)
+
+From the user (2026-11-19). To render a case at its largest displacement:
+
+    use case:BR0SG0U1P0 last:1000 node:25 var:dy; data stats --func maxloc
+    use time:5400; case download plt
+
+and the same again for every case. Asked: a `--maxloc` flag on `case download
+plt`, or a pipe, `data stats --func maxloc | case download plt`.
+
+Decision: the pipe, and not the flag. A `--maxloc` flag on `download` would need
+the variable, node, window and function too (five flags for one command, the
+opposite of Phase 31), and would have to be repeated on `field render`, `plot`
+and every other command that wants "the step where". The pipe does it once.
+
+Today a pipe cannot do it: in shellkit only the first segment of `a | b` can be
+a command; every later one runs in the OS shell on the text of the first. So:
+
+- A command may **emit rows**: a list of `{context key: value}`, one per case
+  (here `{case: ..., time: 5400}`).
+- In `a | b`, when `a` emitted rows and `b` is a shell command, `b` runs once
+  per row with that row's keys set as context for that run (as `use` would),
+  then the context is put back. `a`'s own output is still shown. `a` emitting
+  no rows, or `b` not being a shell command, keeps today's text pipe, so
+  `data stats | grep` is unchanged.
+- It helps every command that takes the context (`case download plt`,
+  `field render`, `plot`, `data table`, `case show`...), not only this one.
+
+Then `use case:* last:1000 node:25 var:dy; data stats --func maxloc | case
+download plt` does every case: `data stats` takes `case:*` (it does not today)
+and emits one row per case with the PLT it chose (the first of its ranked
+files, so a file that exists, as `maxloc` already picks).
+
+shellkit (its own branch `row-pipes`, tag v0.1.8, then the pin here):
+- [ ] `Runtime.emit(rows)` for a command, and `execute_pipe` runs a shell
+      command segment once per row with the row's keys as context
+- [ ] The failure of one row is reported and the rest still run; the status
+      is the worst one; no rows says "nothing to pass on"
+- [ ] Tests, `help` text for `|` ("rows"), `DESIGN.md`, version 0.1.8
+
+flexflow_manager:
+- [ ] Pin shellkit 0.1.8
+- [ ] `data stats` takes `case:*` (one result per case, each in its own
+      section) and emits rows for `maxloc`, `minloc` and `zeroloc` (`case` and
+      `time` of the PLT chosen; for `zeroloc` the descending crossing first)
+- [ ] `case download plt` (and `field render`, `plot`) take that `time` from
+      the context as they already do; a test with two dummy cases through the
+      pipe
+- [ ] Help for `data stats` (the pipe, with the example above), `docs/usage/`,
+      `CHANGELOG.md`
+
 ### Phase 12: `case check --remote`, verify against the remote (branch `check-remote`)
 
 Found on a real case (`BR0SG0U1P0`, PLTs moved to the remote by hand; none
