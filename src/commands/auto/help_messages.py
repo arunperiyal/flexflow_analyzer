@@ -27,7 +27,8 @@ def print_auto_help():
         inputs).
     auto commands [case]   just the Action commands, numbered, as plain text
                            (`auto commands '*' > todo.sh` to read before running)
-    auto status [case]     one line per case: state, steps, jobs, what is next
+    auto status [case]     one line per case: state, steps, jobs (with ids), what is next;
+                           a footer counts the cases and those that need you
     auto apply <target> [case] [--remote NAME] [--delete] [--dry-run] [--yes]
         target: history, plt, output, input, rst or all. With no target nothing
         is done and the targets are listed. A target word is always a target
@@ -58,7 +59,12 @@ def print_auto_help():
         needed; the question gives their number and size). Nothing is deleted
         for a case that needs you, has a post job in the queue, or whose queue
         or remote could not be read.
-    auto log [case]        {g}(not built yet; the logs are in auto_logs/){r}
+    auto log [case] [--list] [--log N]
+                           read back the logs of `auto apply` (auto_logs/auto_<time>.log):
+                           the newest run, one line per action, failures in red; with a
+                           case only its lines. --list shows every run, one line each;
+                           --log N reads the Nth newest (1 is the newest). The folder is the
+                           shell's directory, or the one above it when it is a case.
 
     The remote is --remote NAME or `use remote:NAME`: its login comes from
     `remote list`, its folder for these cases from .cases.yml.

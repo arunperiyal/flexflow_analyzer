@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+### 📋 `auto status`
+
+- The `job` column names the job (`main 1234695 pending`, not `main pending`),
+  and a footer counts the cases, those with something to do and those that
+  need you, as `auto show` does.
+
+### 🐛 `auto show`: a queued restart and the restart sets above it
+
+- With a restart queued from step T, the sets above T belong to the earlier run
+  (the queued job computes those steps again). `Complete` no longer names one of
+  them as the newest, they are listed on an `Old run` row, and `keep_newest_rst`
+  no longer counts them: the newest sets kept are the newest at or below T. So
+  one more set at or below T stays, where an earlier run's set used to take its
+  place; nothing is deleted that was not before.
+
+### 📜 `auto log`
+
+- `auto log` reads back what `auto apply` did: the newest run's log in
+  `auto_logs/`, one line per action, failures in red, exit status 1 when a step
+  failed. `auto log C1` keeps one case's lines (and the run's own start and
+  end); `auto log --list` shows every run on one line (when, cases, steps,
+  failed, the command, and a note when a run has no end line); `auto log --log
+  2` reads the second newest. From inside a case it reads the folder above.
+
 ### 🐚 Shell: `version comment clear` and `\` continuation (shellkit v0.1.7)
 
 - `version comment clear` clears every comment, after asking (`--yes` does
