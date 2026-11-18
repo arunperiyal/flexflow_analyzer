@@ -111,3 +111,9 @@ def test_a_dummy_case_with_vtu_files(dummy):
     from test_auto_show import report_of
     rows = dict(report_of(dummy, 'case3')['plt'].rows)
     assert rows['VTU'].startswith('2 cache') and 'Delete VTU' in rows
+
+
+def test_vtu_cache_survives_a_round_trip_through_cases_yml(tmp_path):
+    from src.core.auto.conf import read, set_up
+    set_up(tmp_path, remote='local', path='/x', vtu_cache='delete')
+    assert read(tmp_path, 'local').vtu_cache == 'delete'
