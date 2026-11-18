@@ -371,6 +371,42 @@ loop (`run sq watch [N]`), a search (`run sq find KEY`) and one job
       key, a job id that is not in the queue
 - [ ] Tests, help text, completion, `CHANGELOG.md`
 
+### Phase 28: `--no-verify`, delete without asking the remote (branch `no-verify`)
+
+From the user (2026-11-18): on the personal machine `case organise plt
+--delete-binary` cannot run, because the deletion chain (`core/chain.py`)
+needs the remote copy of each binary PLT (same size and md5) and stops with
+"The remote could not be asked, so nothing in binary/ is deleted: which
+remote?". That is right on the server, where a PLT with no good copy must
+stay, but on the personal machine the user knows the files are not wanted.
+
+Suggested shape: `--no-verify` is an explicit, per-command waiver of the
+remote link only. It never changes what `auto` does.
+
+- The remote check is skipped, so a binary PLT with no remote copy may go.
+  The local checks stay (a PLT that is cut short or not whole is still said).
+- It is printed, not silent: a line "remote copy not checked (--no-verify)"
+  in the step and in the summary, so a deleted file is known to have had no
+  proof.
+- It asks once ("N binary PLT(s) have no checked copy on the remote; delete?")
+  unless `--yes` is given, since a deletion cannot be undone.
+- It is not read from `.cases.yml` or `auto`: `auto` never passes it, so the
+  server's rule is unchanged.
+- The same flag where the chain is used: `case organise plt --delete-binary`,
+  `--delete-ascii` (only the binary link is waived), `case organise out`,
+  `case organise rst`; and `case check plt --verify` is not changed (it is the
+  check itself).
+
+- [ ] Confirm with the user: the name (`--no-verify`), the confirmation, and
+      which commands take it
+- [ ] `RemoteCopies` can be told not to ask (`core/chain.py`): a link that is
+      waived stands in as `by='waived'`, never as `remote`
+- [ ] `case organise plt --delete-binary --no-verify`, with the notice and
+      the confirmation (`--yes` skips it)
+- [ ] The same flag on `--delete-ascii`, `organise out` and `organise rst`
+- [ ] `auto` is untouched: a test that no `auto` step carries the flag
+- [ ] Tests, help text, completion, `CHANGELOG.md`
+
 ### Phase 12: `case check --remote`, verify against the remote (branch `check-remote`)
 
 Found on a real case (`BR0SG0U1P0`, PLTs moved to the remote by hand; none
