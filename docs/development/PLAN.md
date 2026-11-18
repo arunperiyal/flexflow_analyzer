@@ -407,6 +407,37 @@ remote link only. It never changes what `auto` does.
 - [x] `auto` is untouched: a test that no `auto` step carries the flag
 - [x] Tests, help text, completion, `CHANGELOG.md`
 
+### Phase 29: `auto` cleans up the `.vtu` caches (branch `auto-vtu`)
+
+From the user (2026-11-18). Today only `case organise vtu [--clean]` handles
+the `.vtu` files `field render` and `field convert` leave in `binary/`
+(`{problem}.{step}.vtu`, `.z{N}.vtu`, and the `.partial`/`.deriving`
+leftovers of a killed run). `auto` never looks at them, so they pile up
+unseen and a killed render leaves half-written files.
+
+Suggested shape, for the user to confirm:
+
+- `.partial` and `.deriving` files are always junk: `auto` deletes them (older
+  than a day, so a render still running is left alone).
+- A cache whose PLT is still here is rebuilt by the next render, so it may go,
+  but only when the config says so (`vtu_cache: delete`, off by default): it
+  costs conversion time, and a `field compute` may have written values into it.
+- A `.vtu` whose PLT is gone cannot be rebuilt: `auto show` reports it, and
+  `auto` never deletes it.
+- `auto show` says how many caches there are and how much space they take.
+- It runs where `.vtu` files are made (the personal machine), not on the
+  server; `auto` never uploads them.
+
+- [ ] Confirm with the user: which of the above, and the config word
+- [ ] Observe: the snapshot lists the `.vtu` files of `binary/` (kind, step,
+      size, age, whether the PLT is there)
+- [ ] Decide: the leftovers go; the caches go when configured; the orphans are
+      reported and kept; a step the plan still needs is not touched
+- [ ] `auto show` and `auto status` report them; the executor deletes through
+      the same path as `case organise vtu --clean`
+- [ ] Tests (a dummy case with each kind), help text, `docs/architecture/auto.md`
+      (new section at the end), `CHANGELOG.md`
+
 ### Phase 12: `case check --remote`, verify against the remote (branch `check-remote`)
 
 Found on a real case (`BR0SG0U1P0`, PLTs moved to the remote by hand; none
