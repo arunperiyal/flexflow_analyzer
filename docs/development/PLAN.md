@@ -74,10 +74,12 @@ main jobs.
 - [x] `auto log [case] [--list] [--log N]`: read back the run logs in
       `<folder>/auto_logs/` (newest by default, one case's lines, `--list` for
       every run, `--log N` for the Nth newest)
-- [ ] `auto status`: polish the layout
+- [x] `auto status`: polish the layout (the job column names the job id; a footer
+      counts the cases, those with something to do and those that need you, as
+      `auto show` does)
 - [x] With a queued restart, `Complete` / `Also kept` should not count the
       earlier run's newer restart set
-- [ ] Tests, help text, completion, `CHANGELOG.md`
+- [x] Tests, help text, completion, `CHANGELOG.md`
 
 ### Phase 9: files for FlowReel (branch `flowreel-export`)
 
@@ -452,5 +454,5 @@ Design: <where the design is, or two lines of it>.
 
 - [ ] <task: one commit>
 - [ ] <task: one commit>
-- [ ] Tests, help text, completion, `CHANGELOG.md`
+- [x] Tests, help text, completion, `CHANGELOG.md`
 ```

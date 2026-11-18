@@ -27,7 +27,8 @@ def print_auto_help():
         inputs).
     auto commands [case]   just the Action commands, numbered, as plain text
                            (`auto commands '*' > todo.sh` to read before running)
-    auto status [case]     one line per case: state, steps, jobs, what is next
+    auto status [case]     one line per case: state, steps, jobs (with ids), what is next;
+                           a footer counts the cases and those that need you
     auto apply <target> [case] [--remote NAME] [--delete] [--dry-run] [--yes]
         target: history, plt, output, input, rst or all. With no target nothing
         is done and the targets are listed. A target word is always a target

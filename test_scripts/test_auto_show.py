@@ -252,8 +252,10 @@ def test_auto_status_one_line_per_case(dummy, monkeypatch, capsys):
     monkeypatch.chdir(dummy / 'bare')
     assert execute_status(SimpleNamespace(case='*', remote='local')) == 1   # some need you
     out = ' '.join(capsys.readouterr().out.split())
-    assert 'case4 post running 800/1000 post running waits for post job' in out
+    assert 'case4 post running 800/1000 post 1300107 running waits for post job 1300107' in out
+    assert 'case3 queued 760/1000 main 1300105 pending' in out         # the job's id is there
     assert 'case1 done 1000/1000 - nothing' in out
+    assert '15 case(s) · 12 with something to do · 7 need(s) you' in out   # the footer, as in auto show
 
 
 def test_a_change_of_output_frequency_is_not_a_hole(dummy):

@@ -349,11 +349,12 @@ def execute_status(args) -> int:
     table = Table(box=box.SIMPLE, header_style='bold', pad_edge=False)
     for col in ('case', 'state', 'steps', 'job', 'next'):
         table.add_column(col, no_wrap=col != 'next', overflow='fold')
+    doing = 0
     for snap, plan in results:
         c = plan.ctx
         reached = c.get('reached')
         steps = (f"{reached}/{snap.max_steps}" if reached and snap.max_steps else str(reached or '-'))
-        jobs = ' '.join(f"{j.kind} {j.state.lower()}" for j in
+        jobs = ' '.join(f"{j.kind} {j.jobid} {j.state.lower()}" for j in
                         list(c.get('main_now', [])) + list(c.get('post_now', []))) or '-'
         nxt = []
         if plan.needs_you:
@@ -368,7 +369,12 @@ def execute_status(args) -> int:
             nxt.append(f"upload {_size_text(sum(plan.uploads.values()))}")
         if c.get('del_out') or c.get('del_binary') or c.get('thin'):
             nxt.append('clean up')
+        doing += any('needs you' not in item and 'waits' not in item for item in nxt)
         table.add_row(escape(plan.name), f"[{STATE_STYLE.get(plan.state, 'white')}]{plan.state}[/]",
                       steps, jobs, ', '.join(nxt) or '[green]nothing[/green]')
     console.print(table)
-    return 1 if problems or any(plan.needs_you for _, plan in results) else 0
+    needs = sum(plan.needs_you for _, plan in results)
+    console.print(f"[bold]{len(results)} case(s)[/bold] · {doing} with something to do · "
+                  + (f"[bold red]{needs} need(s) you[/bold red] (`auto show` says why)" if needs
+                     else "[green]none needs you[/green]"))
+    return 1 if problems or needs else 0

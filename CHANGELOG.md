@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### 📋 `auto status`
+
+- The `job` column names the job (`main 1234695 pending`, not `main pending`),
+  and a footer counts the cases, those with something to do and those that
+  need you, as `auto show` does.
+
 ### 🐛 `auto show`: a queued restart and the restart sets above it
 
 - With a restart queued from step T, the sets above T belong to the earlier run
