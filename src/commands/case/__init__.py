@@ -175,21 +175,17 @@ class CaseCommand(BaseCommand):
         history_parser = organise_subparsers.add_parser('history', add_help=False,
                                     help='OTHD/OISD history: archive/ → cleaned/ → compiled file')
         case_arg(history_parser, help='Case directory path')
-        history_parser.add_argument('--update', action='store_true',
-                                    help='Move .othd/.oisd from the run dir into {othd,oisd}_files/archive/ (.rcv to rcv_files/)')
-        history_parser.add_argument('--clean', nargs='?', const=True, metavar='RUNS',
-                                    help='Write cleaned/: each run without the steps a later run redid; '
-                                         'RUNS (1,2,3 or 1-3, ascending) cleans only those archive runs, '
-                                         'renamed 1..N, and replaces what cleaned/ held')
-        history_parser.add_argument('--compile', action='store_true',
-                                    help='Join cleaned/ into {othd,oisd}_files/{problem}.othd|oisd')
-        history_parser.add_argument('--verify', action='store_true',
-                                    help='Check archive/, cleaned/ and the compiled file, and for missing tsIds')
-        history_parser.add_argument('--prune', action='store_true',
-                                    help='Delete archive/ once cleaned/ checks out and is up to date')
+        history_parser.add_argument(
+            'actions', nargs='*', metavar='ACTION',
+            help='What to do, in this order: update (move .othd/.oisd from the run dir into '
+                 'archive/, .rcv to rcv_files/), clean [RUNS] (write cleaned/: each run without '
+                 'the steps a later run redid; RUNS, e.g. 1,2,3 or 1-3, cleans only those archive '
+                 'runs), compile (join cleaned/ into the {problem}.othd|oisd), verify (check '
+                 'archive/, cleaned/, the compiled file and missing tsIds), prune (delete '
+                 'archive/ once cleaned/ checks out)')
         time_window(history_parser,
-                    t1_kwargs=dict(metavar='STEP', help='Only --update files reaching timesteps >= STEP'),
-                    t2_kwargs=dict(metavar='STEP', help='Only --update files reaching timesteps <= STEP'))
+                    t1_kwargs=dict(metavar='STEP', help='update: only files reaching timesteps >= STEP'),
+                    t2_kwargs=dict(metavar='STEP', help='update: only files reaching timesteps <= STEP'))
         organise_flags(history_parser, 'history')
 
         # case organise out / case organise rst
@@ -217,12 +213,11 @@ class CaseCommand(BaseCommand):
         plt_parser = organise_subparsers.add_parser('plt', add_help=False,
                                     help='Delete PLT files in the run dir and/or binary/')
         case_arg(plt_parser, help='Case directory path')
-        plt_parser.add_argument('--delete-ascii', action='store_true',
-                                    help='Delete ASCII PLT files from the run dir whose binary PLT '
-                                         'is whole and newer (or verified on the remote)')
-        plt_parser.add_argument('--delete-binary', action='store_true',
-                                    help='Delete PLT files from binary/ within --t1/--t2 that have '
-                                         'a copy on the remote with the same md5')
+        plt_parser.add_argument(
+            'actions', nargs='*', metavar='ACTION',
+            help='ascii: delete the ASCII PLT files of the run dir whose binary PLT is whole and '
+                 'newer (or verified on the remote); binary: delete the PLT files of binary/ that '
+                 'have a copy on the remote with the same md5')
         context_flag(plt_parser, 'remote', '--remote', type=str, metavar='REMOTE',
                      help='The remote holding the copies (default: the only one in '
                           '.cases.yml; or use context with "use remote:name")')
@@ -230,12 +225,12 @@ class CaseCommand(BaseCommand):
         plt_parser.add_argument('--freq', type=int, metavar='N',
                                     help='Only the steps divisible by N')
         plt_parser.add_argument('--keep-freq', type=int, metavar='N',
-                                    help='With --delete-binary: keep the steps divisible by N')
+                                    help='With binary: keep the steps divisible by N')
         time_window(plt_parser, 
                     t1_kwargs=dict(metavar='STEP', help='Only target timesteps >= STEP'),
                     t2_kwargs=dict(metavar='STEP', help='Only target timesteps <= STEP'))
         plt_parser.add_argument('--no-verify', action='store_true',
-                                    help='With --delete-binary: do not ask the remote; delete the '
+                                    help='With binary: do not ask the remote; delete the '
                                          'whole PLT files here (they may have no copy there)')
         organise_flags(plt_parser, 'plt')
 
@@ -651,12 +646,12 @@ class CaseCommand(BaseCommand):
         console.print("    case create myCase --problem-name test")
         console.print("    case run CS4SG1U1")
         console.print("    case run CS4SG1U1 --no-monitor")
-        console.print("    case organise history CS4SG1U1 --update")
-        console.print("    case organise history CS4SG1U1 --clean --compile --verify")
+        console.print("    case organise history CS4SG1U1 update")
+        console.print("    case organise history CS4SG1U1 clean compile verify")
         console.print("    case organise out CS4SG1U1")
         console.print("    case organise rst CS4SG1U1")
-        console.print("    case organise plt CS4SG1U1 --delete-ascii")
-        console.print("    case organise plt CS4SG1U1 --delete-binary --t1 0 --t2 1000")
+        console.print("    case organise plt CS4SG1U1 ascii")
+        console.print("    case organise plt CS4SG1U1 binary --t1 0 --t2 1000")
         console.print("    case organise vtu CS4SG1U1")
         console.print("    case check run CS4SG1U1")
         console.print("    case check plt CS4SG1U1 --t1 0 --t2 1000")

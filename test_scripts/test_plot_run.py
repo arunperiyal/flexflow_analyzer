@@ -1,5 +1,5 @@
 """`plot --run`: read the run directory's .othd/.oisd (what a job is writing
-now, before `case organise history --update` archives it) instead of the
+now, before `case organise history update` archives it) instead of the
 history. A last step still being written is left out."""
 
 from argparse import Namespace

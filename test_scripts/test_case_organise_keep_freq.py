@@ -1,4 +1,4 @@
-"""`case organise plt --delete-binary --freq/--keep-freq` and `output --keep-freq`.
+"""`case organise plt binary --freq/--keep-freq` and `output --keep-freq`.
 
 --freq picks the binary/ steps that may go, --keep-freq spares the steps it
 divides; `output --keep-freq N` keeps the .rst steps divisible by N with no
@@ -16,7 +16,7 @@ import pytest
 from rich.console import Console
 
 from src.commands.case import CaseCommand
-from src.commands.case.organise_impl.command import _check_keep_flags
+from src.commands.case.organise_impl.command import _check_keep_flags, _read_actions
 from src.commands.case.organise_impl.organizer import CaseOrganizer
 from plt_files import write_plt
 
@@ -155,14 +155,17 @@ def parse():
 
 
 def test_parse_and_check(parse):
-    args = parse('plt', 'C1', '--delete-binary', '--t1', '4000', '--t2', '5000',
-                 '--freq', '1', '--keep-freq', '5')
-    assert (args.freq, args.keep_freq) == (1, 5) and _check_keep_flags(args, 'plt') is None
-    assert 'only applies with --delete-binary' in \
-        _check_keep_flags(parse('plt', 'C1', '--delete-ascii', '--keep-freq', '5'), 'plt')
-    assert _check_keep_flags(parse('plt', 'C1', '--delete-ascii', '--freq', '50'), 'plt') is None
-    assert 'must be 1 or more' in \
-        _check_keep_flags(parse('plt', 'C1', '--delete-binary', '--freq', '0'), 'plt')
+    def check(*words):
+        args = parse(*words)
+        assert _read_actions(args, 'plt') is None
+        return args, _check_keep_flags(args, 'plt')
+    args, problem = check('plt', 'C1', 'binary', '--t1', '4000', '--t2', '5000',
+                          '--freq', '1', '--keep-freq', '5')
+    assert (args.freq, args.keep_freq) == (1, 5) and problem is None
+    assert args.delete_binary and not args.delete_ascii
+    assert 'only applies to `binary`' in check('plt', 'C1', 'ascii', '--keep-freq', '5')[1]
+    assert check('plt', 'C1', 'ascii', '--freq', '50')[1] is None
+    assert 'must be 1 or more' in check('plt', 'C1', 'binary', '--freq', '0')[1]
     with pytest.raises(SystemExit):
         parse('rst', 'C1', '--keep-every', '2')
     assert parse('rst', 'C1', '--keep-freq', '500').keep_freq == 500
@@ -204,3 +207,27 @@ def test_output_keeps_out_newer_than_its_plt(tmp_path, run_dir):
     organise(tmp_path, 'out')
     left = steps(run_dir, '.out')
     assert 50 not in left and 100 in left
+
+
+def test_the_actions_are_words_after_the_case(parse, monkeypatch):
+    a = parse('plt', 'C1', 'ascii', 'binary')
+    assert _read_actions(a, 'plt') is None and a.delete_ascii and a.delete_binary and a.case == 'C1'
+    a = parse('history', 'C1', 'update', 'clean', '1,3', 'compile')
+    assert _read_actions(a, 'history') is None
+    assert (a.update, a.clean, a.compile, a.verify, a.prune) == (True, '1,3', True, False, False)
+    a = parse('history', 'C1', 'clean')
+    _read_actions(a, 'history')
+    assert a.clean is True
+    # the case from `use case:`: the first word lands in `case` and is an action
+    import src.cli.context as context
+    monkeypatch.setattr(context, 'current_case', lambda: '/the/case')
+    a = parse('plt', 'binary')
+    assert _read_actions(a, 'plt') is None and a.delete_binary and a.case == '/the/case'
+    # a word that is no action, and the old flags, are said
+    assert "'prune' is not an action (ascii, binary)" in _read_actions(parse('plt', 'C1', 'prune'), 'plt')
+    for old in ('--delete-binary', '--delete-ascii'):
+        with pytest.raises(SystemExit):
+            parse('plt', 'C1', old)
+    for old in ('--update', '--compile', '--prune', '--verify'):
+        with pytest.raises(SystemExit):
+            parse('history', 'C1', old)

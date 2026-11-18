@@ -6,6 +6,7 @@ Supports wildcard mode for batch operations on all cases.
 """
 
 import os
+import re
 import sys
 from pathlib import Path
 from datetime import datetime
@@ -44,6 +45,11 @@ def execute_organise(args):
     if not subcommand:
         print_organise_help()
         return
+
+    problem = _read_actions(args, subcommand)
+    if problem:
+        print(f"Error: {problem}", file=sys.stderr)
+        sys.exit(2)
 
     # Show help if no case directory provided
     if not args.case:
@@ -85,6 +91,42 @@ def execute_organise(args):
         sys.exit(1)
 
 
+# What `plt` and `history` are told to do is said in words after the case:
+#   case organise plt CASE ascii binary      case organise history CASE update clean 1-3 compile
+ACTIONS = {'plt': {'ascii': 'delete_ascii', 'binary': 'delete_binary'},
+           'history': {'update': 'update', 'clean': 'clean', 'compile': 'compile',
+                       'verify': 'verify', 'prune': 'prune'}}
+
+
+def _read_actions(args, subcommand):
+    """Set the flags the organizer reads (delete_ascii, update, ...) from the action
+    words; what is wrong with them, or None. With the case from `use case:` the first
+    word lands in `case`: an action word there is an action."""
+    allowed = ACTIONS.get(subcommand)
+    if allowed is None:
+        return None
+    for attr in allowed.values():
+        setattr(args, attr, False)
+    words = list(getattr(args, 'actions', None) or [])
+    if getattr(args, 'case', None) in allowed:
+        from src.cli.context import current_case
+        words.insert(0, args.case)
+        args.case = current_case()
+    i = 0
+    while i < len(words):
+        word = words[i]
+        if word not in allowed:
+            return (f"case organise {subcommand}: '{word}' is not an action "
+                    f"({', '.join(allowed)})")
+        if word == 'clean' and i + 1 < len(words) and re.fullmatch(r'[\d,\-]+', words[i + 1]):
+            args.clean = words[i + 1]         # the archive runs to clean: 1,2,3 or 1-3
+            i += 1
+        else:
+            setattr(args, allowed[word], True)
+        i += 1
+    return None
+
+
 def _check_keep_flags(args, subcommand):
     """What is wrong with --freq/--keep-freq, or None."""
     for flag in ('freq', 'keep_freq'):
@@ -93,7 +135,7 @@ def _check_keep_flags(args, subcommand):
             return f"--{flag.replace('_', '-')} must be 1 or more"
     if subcommand == 'plt' and not getattr(args, 'delete_binary', False):
         if getattr(args, 'keep_freq', None) is not None:
-            return "--keep-freq only applies with --delete-binary"
+            return "--keep-freq only applies to `binary`"
     return None
 
 

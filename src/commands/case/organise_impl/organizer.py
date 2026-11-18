@@ -184,8 +184,8 @@ class CaseOrganizer(HistoryMixin):
             delete_binary = getattr(self.args, 'delete_binary', False)
             if not delete_ascii and not delete_binary:
                 self.console.print(
-                    "[yellow]Nothing to do — pass --delete-ascii and/or "
-                    "--delete-binary[/yellow]"
+                    "[yellow]Nothing to do — name ascii and/or "
+                    "binary[/yellow]"
                 )
                 return
             if delete_ascii:
@@ -229,7 +229,7 @@ class CaseOrganizer(HistoryMixin):
 
     def _analyze_delete_binary_plt(self, t1: Optional[float] = None, t2: Optional[float] = None):
         """
-        plt --delete-binary: delete the PLT files of binary/ within --t1/--t2
+        plt binary: delete the PLT files of binary/ within --t1/--t2
         (--freq: the steps divisible by N) that have a copy on the remote with
         the same size and md5, both read now. A file with no such copy is
         listed and left; when the remote cannot be asked, nothing is deleted.
@@ -385,7 +385,7 @@ class CaseOrganizer(HistoryMixin):
 
     def _analyze_clean_plt(self, t1: Optional[float] = None, t2: Optional[float] = None):
         """
-        plt --delete-ascii: delete the ASCII PLT files of the run directory
+        plt ascii: delete the ASCII PLT files of the run directory
         within --t1/--t2 (--freq: the steps divisible by N) whose binary PLT
         stands in for them (core/chain.py): binary/ holds it whole and
         written after the ASCII file or, when binary/ no longer holds it, the
@@ -553,7 +553,7 @@ class CaseOrganizer(HistoryMixin):
         restart has since computed again. A step with nothing to stand in is
         kept and reported; the others go.
         """
-        # Find out and rst files (plt files are handled by `plt --delete-ascii`/`--delete-binary`, not `output`)
+        # Find out and rst files (plt files are handled by `plt ascii`/`binary`, not `output`)
         out_pattern = f'{problem}.*_*.out'
         rst_pattern = f'{problem}.*_*.rst'
 
@@ -653,7 +653,7 @@ class CaseOrganizer(HistoryMixin):
             self.console.print("  [dim]Convert them first (run post full --t1 .. --t2 ..), "
                                "then run this again.[/dim]")
 
-        # PLT files are handled exclusively by `plt --delete-ascii`/`--delete-binary`, not `output`
+        # PLT files are handled exclusively by `plt ascii`/`binary`, not `output`
 
     def _analyze_plt_files(self, plt_files: List[Path], problem: str):
         """

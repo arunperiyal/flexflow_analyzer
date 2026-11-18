@@ -291,4 +291,4 @@ class HistoryTransferMixin:
         why = (f"run(s) {', '.join(map(str, extra))} only in {dst.root}" if extra
                else "it was not up to date with its runs")
         self.console.print(f"[yellow]  {problem}.{ext}:[/yellow] {why}; the readers take "
-                           f"the runs until `case organise history --compile`")
+                           f"the runs until `case organise history compile`")

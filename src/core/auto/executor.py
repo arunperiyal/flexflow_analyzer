@@ -2,7 +2,7 @@
 The actions `auto apply` carries out for a case, each from the steps of the plan
 `decide` made a moment before (plan.steps and plan.ctx; docs/architecture/auto.md §13):
 
-    do_history   case organise history --update --clean --compile
+    do_history   case organise history update clean compile
     do_upload    send the files the plan lists, each checked, never deleting
     do_delete    delete the files the plan lists, each checked again just before (13.13)
     do_post      submit `run post` for the first stretch the plan lists

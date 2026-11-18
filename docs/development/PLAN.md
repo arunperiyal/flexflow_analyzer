@@ -567,7 +567,7 @@ The rules the commands will follow:
       what `auto` deletes); `auto`'s command updated
 - [x] `case check plt --remote` instead of `--verify`; `check` takes
       `-v` and the same `--t1/--t2/--freq` words where they apply
-- [ ] Actions as words: `organise plt ascii|binary`, `organise history
+- [x] Actions as words: `organise plt ascii|binary`, `organise history
       update|clean|compile|verify|prune` (the flags removed; `auto`'s
       commands in `decide.py`, the help, completion, the web UI's calls)
 - [ ] A test that audits the parsers: every command that deletes takes

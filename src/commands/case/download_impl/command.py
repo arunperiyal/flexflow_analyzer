@@ -298,7 +298,7 @@ the remote gets the restarts it lacks.
     web app) take it only while it is newer than archive/, cleaned/ and every
     run; so when it was not up to date where it came from, or the other side
     has runs it does not, it is made older than them there, and the readers
-    take the runs until the next `case organise history --compile`.
+    take the runs until the next `case organise history compile`.
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
     case upload history CS4SG1U1 --remote server
@@ -464,7 +464,7 @@ the restarts found only on the remote are added here.
     web app) take it only while it is newer than archive/, cleaned/ and every
     run; so when it was not up to date where it came from, or the other side
     has runs it does not, it is made older than them there, and the readers
-    take the runs until the next `case organise history --compile`.
+    take the runs until the next `case organise history compile`.
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
     case download history CS4SG1U1 --remote server

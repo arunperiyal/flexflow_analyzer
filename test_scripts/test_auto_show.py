@@ -59,7 +59,7 @@ def test_every_case_gets_what_the_readme_says(dummy):
     assert got['case9'].state == 'skipped'
     assert [i.text for i in got['case5'].items if i.kind == 'history'] == [
         'Move RUN_1/riser.othd and .oisd into archive/ as run 2, then clean and compile '
-        '(organise history --update --clean --compile)']
+        '(organise history update clean compile)']
 
 
 def test_a_job_named_for_case1_does_not_make_case1_busy(dummy):
@@ -244,7 +244,7 @@ def test_report_needs_and_flags_come_after_state(dummy):
     assert sec['plt'].actions == [
         'case check plt case6 --remote local',
         'case upload plt case6 --t1 450 --t2 500 --missing --remote local',
-        'case organise plt case6 --delete-binary --t1 450 --t2 500 --remote local']
+        'case organise plt case6 binary --t1 450 --t2 500 --remote local']
 
 
 def test_auto_commands_is_plain_text_to_read_or_save(dummy, monkeypatch, capsys):
@@ -258,7 +258,7 @@ def test_auto_commands_is_plain_text_to_read_or_save(dummy, monkeypatch, capsys)
     assert '#   waiting: post job' in out                         # case4
     assert '#   needs you: Main job' in out                       # case7
     assert 'auto apply:' not in out and 'not built yet' not in out
-    assert '--delete-binary --t1 450 --t2 500 --remote local    #' in out     # a command now
+    assert 'binary --t1 450 --t2 500 --remote local    #' in out     # a command now
     assert '#   by hand: auto apply does not delete unless asked' in out
 
 

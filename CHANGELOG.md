@@ -11,16 +11,23 @@ Breaking (the old forms are gone, no aliases):
 | `--no-confirm` (organise) | `--yes` (also `-y`) |
 | `case organise vtu` (listed only) and `vtu --clean` (deleted) | `case organise vtu` lists, asks and deletes; `--dry-run` only lists |
 | `vtu --keep-orphans` | the default: a `.vtu` with no `.plt` is kept; `--orphans` deletes it too |
+| `organise plt CASE --delete-ascii --delete-binary` | `organise plt CASE ascii binary` |
+| `organise history CASE --update --clean 1,3 --compile --verify --prune` | `organise history CASE update clean 1,3 compile verify prune` |
+| `case check plt CASE --verify --remote NAME` | `case check plt CASE --remote [NAME]` |
 
 `--examples` is gone from every `case` command (show, create, run, organise and
 its subcommands, upload, download): `-h` prints the help and then its examples.
 The `organise` subcommands share one definition of `--log`, `-y/--yes`,
 `--dry-run`, `-v` and `-h`.
 
-`case check plt --verify --remote NAME` is now `case check plt --remote [NAME]`:
-giving `--remote` is what asks for the comparison with the remote (a leftover
+Giving `case check plt --remote` is what asks for the comparison with the remote (a leftover
 `use remote:` does not turn it on); with no NAME it is the `use remote:`
 context, else the only remote `.cases.yml` lists.
+
+The actions run in the order the command has always run them (`update`,
+`clean`, `compile`, `verify`, `prune`), whatever order they are typed in. With
+`use case:` set, the case may be left out (`organise plt binary`). The old
+flags are refused.
 
 `vtu --leftovers` stays. `auto`'s commands follow (`case organise vtu CASE
 --leftovers`).
@@ -29,17 +36,17 @@ context, else the only remote `.cases.yml` lists.
 
 - When a folder's `.cases.yml` lists exactly one remote, `case check plt`,
   `case organise out/plt` and `auto` use it without `--remote` or `use
-  remote:`; `case check plt --verify` says "Using remote: NAME (the only one in
+  remote:`; `case check plt --remote` says "Using remote: NAME (the only one in
   .cases.yml)". With two or more, none is chosen for you (the error says so).
 - Fixed: `auto init --vtu-cache delete` wrote an `auto:` key `.cases.yml`
   refused to read back.
 
-### 🗑️ `case organise plt --delete-binary --no-verify`
+### 🗑️ `case organise plt binary --no-verify`
 
 - `--no-verify` does not ask the remote: the binary PLT files that are whole
   here are deleted whether or not a copy is there. For a machine that is not
   the server. It says so, a file cut short is still kept, and the usual
-  confirmation is asked (`--no-confirm` skips it). Without it nothing changes:
+  confirmation is asked (`--yes` skips it). Without it nothing changes:
   no remote, nothing deleted; the error now names the flag. `auto` never
   passes it, and `--delete-ascii` and `out` do not take it (nothing else would
   stand in for what they delete).

@@ -1,4 +1,4 @@
-"""case organise plt --delete-binary --no-verify: the remote is not asked."""
+"""case organise plt binary --no-verify: the remote is not asked."""
 
 import sys
 from argparse import Namespace

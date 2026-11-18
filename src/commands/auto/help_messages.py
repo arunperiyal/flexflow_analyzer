@@ -19,7 +19,7 @@ def print_auto_help():
         Action is a command you can run as it is, in the order `auto apply`
         takes them: check, post, upload, then the deletes (PLT files: `case
         check plt --verify`, `run post`, `case upload plt`, `case organise
-        plt --delete-ascii`, `--delete-binary`). What is not a command is a
+        plt ascii`, `binary`). What is not a command is a
         row: Waiting (a job to end first), Why, Delete and Thin (what the
         delete commands will take), By hand. Several
         cases: the summary table; each in full with --detail. --only plt,rst
@@ -75,7 +75,7 @@ def print_auto_help():
     already on the remote.
 
 {b}WHAT A CASE CAN GET{r}
-    {y}history{r}   organise history --update --clean --compile, when no main job
+    {y}history{r}   organise history update clean compile, when no main job
               of the case is running, pending or completing
     {y}post{r}      run post for the newest run's steps whose PLT is neither on the
               remote nor whole here, when their .out are all there

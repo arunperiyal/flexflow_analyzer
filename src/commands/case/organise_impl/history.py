@@ -187,7 +187,7 @@ class HistoryMixin:
                                "cannot name the history files[/red]")
             return
 
-        self._clean_runs = None   # `--clean 1,2,3`: the archive runs to clean, or None for all
+        self._clean_runs = None   # `clean 1,2,3`: the archive runs to clean, or None for all
         raw = getattr(self.args, 'clean', False)
         if isinstance(raw, str):
             try:
@@ -336,7 +336,7 @@ class HistoryMixin:
         A last step cut off by a killed job is left out. All runs must share
         one header (`mask`/`nOths` or `nOsfs`).
 
-        With `sources` (the archive runs of `--clean 1,2,3`) only those runs
+        With `sources` (the archive runs of `clean 1,2,3`) only those runs
         count, labelled 1..N in that order: the cleaned file names. Without
         them the cleaned/.runs.json of an earlier selection stands in, unless
         `ignore_record`.
@@ -604,7 +604,7 @@ class HistoryMixin:
         return True
 
     def _write_record(self, ext: str, plan: dict):
-        """cleaned/.runs.json after a `--clean 1,2,3`; a plain --clean drops it."""
+        """cleaned/.runs.json after a `clean 1,2,3`; a plain --clean drops it."""
         if getattr(self.args, 'dry_run', False):
             return
         explicit = self._clean_runs

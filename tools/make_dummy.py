@@ -306,7 +306,7 @@ def build(root: Path):
     job(c, 'main', 'TIMEOUT', ended_days=1)
     cases.append(('case5', 'main ended (TIMEOUT) yesterday; its .othd still in RUN_1; '
                   '.out 350-500; cloud up to 300',
-                  'history: --update (riser2), --clean, --compile, upload; post 350-500; needs you: '
+                  'history: update (riser2), clean, compile, upload; post 350-500; needs you: '
                   'stopped at 520 of 1000 with nothing queued'))
 
     # case6 -- the post job was killed at the walltime

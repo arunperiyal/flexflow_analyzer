@@ -1,7 +1,7 @@
 """
 `.restarts` in the case directory: where each run took over from the one
-before, kept for the analysis after `case organise history --clean` has
-cut the runs into one history and `--prune` has deleted the archived ones.
+before, kept for the analysis after `case organise history clean` has
+cut the runs into one history and `prune` has deleted the archived ones.
 
     # after  first  time          reached  replaced  part         previous     recorded
     4000     4001   2.0005e+02    5000     1000      riser2.othd  riser1.othd  2026-10-26 12:00
@@ -27,7 +27,7 @@ COLUMNS = ('after', 'first', 'time', 'reached', 'replaced', 'part', 'previous', 
 
 _HEADER = """\
 # Restarts of {case}: where each run took over from the one before.
-# Written by `case organise history --clean` (and kept through --prune, when
+# Written by `case organise history clean` (and kept through `prune`, when
 # the archived runs are gone). after: the run resumed after this step; first:
 # its first step, at simulation time `time`; reached: the step the run before
 # had got to;
