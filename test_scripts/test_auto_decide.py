@@ -554,6 +554,21 @@ def test_a_step_beyond_what_the_post_job_made_is_not_a_failed_post():
     assert plan.post == (600, 600, 'full')
 
 
+def test_the_plts_a_post_job_made_are_read_from_the_remote_when_binary_is_empty():
+    # binary/ is emptied after the upload and the log has no "started: steps" line: the steps
+    # the job made are the remote PLTs written while it ran; .out written meanwhile are new work
+    ended = _time.mktime(_time.strptime('2026-11-11 19:58:00', '%Y-%m-%d %H:%M:%S'))
+    done = Job('7', 'postcase', 'COMPLETED', '', '/c/case', '2026-11-11T19:58:00', '2026-11-11T19:50:00')
+    s = snap(ended=[done], cloud=cloud_with(*range(50, 451, 50)),
+             cloud_mtime={f'binary/riser.{t}.plt': ended - 60 for t in (400, 450)},
+             out_time={500: ended - 120, 550: ended - 120, 600: ended + 3600})
+    s.out = {t: [] for t in (500, 550, 600)}
+    s.settled = [500, 550, 600]
+    plan = decide(s, CONF, True, True)
+    assert not plan.needs_you
+    assert plan.post == (500, 600, 'full')
+
+
 def test_without_a_made_plt_the_old_alarm_still_rings():
     done = Job('7', 'postcase', 'COMPLETED', '', '/c/case', '2026-11-11T19:58:00', '2026-11-11T19:50:00')
     ended = _time.mktime(_time.strptime('2026-11-11 19:58:00', '%Y-%m-%d %H:%M:%S'))

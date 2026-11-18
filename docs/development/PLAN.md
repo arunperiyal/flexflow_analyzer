@@ -332,6 +332,20 @@ user's word to edit shellkit, and a branch there made by the user.
 
 ---
 
+### Phase 26: `auto show` posts steps a finished post job was never given (branch `auto-post-window`)
+
+From the user's `auto show` of CS4SG3U1P0 (2026-11-18): a post job that ended
+COMPLETED while the main job was still writing `.out` made `auto` say "ended
+COMPLETED after the .out of steps ... were written, yet they have no whole
+PLT" and suggest no `run post`, for steps written while that job ran. With no
+`post job N started: steps a..b` line, the window of the job came only from
+the local `binary/` PLTs, which are empty once uploaded.
+
+- [x] The window of a post job with no log line also comes from the PLTs on
+      the remote written while it ran (`snap.cloud_mtime`), not only from
+      `binary/`; test with an emptied `binary/`
+- [x] Tests, `CHANGELOG.md`
+
 ### Phase 12: `case check --remote`, verify against the remote (branch `check-remote`)
 
 Found on a real case (`BR0SG0U1P0`, PLTs moved to the remote by hand; none
