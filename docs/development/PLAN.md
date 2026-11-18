@@ -516,6 +516,64 @@ unrecorded, and the right words.
 - [ ] Tests (a dummy case with unrecorded, recorded and older-than-`.out`
       copies on the folder remote), help text, `CHANGELOG.md`
 
+### Phase 31: one flag vocabulary for `case`, `run` and `auto` (branch `flag-vocabulary`)
+
+From the user (2026-11-18): the commands have too many flags and they are not
+alike (survey of `case organise` and `case check`). The old flags and words are
+**removed, not kept as aliases**: a command given one says what to type now.
+
+What is inconsistent today:
+- Six flags repeat on every `organise` subcommand (`--log`, `--no-confirm`,
+  `--dry-run`, `-v`, `-h`, `--examples`); with `--t1/--t2`, `plt` takes about
+  16, `history` 15, `vtu` 13.
+- Three rules for when something is deleted: `out`/`rst` after a question,
+  `plt` only with `--delete-ascii`/`--delete-binary`, `vtu` only listed until
+  `--clean`, `history` only with one of five verb flags.
+- Verbs written as flags: `history --update/--clean/--compile/--verify/--prune`,
+  `plt --delete-ascii/--delete-binary`, `check plt --verify`.
+- "Don't ask" is `--no-confirm` in `case`, `--yes` in `run` and `auto`.
+- Flags that need another flag: `--keep-freq`, `--leftovers`, `--keep-orphans`,
+  `--no-verify`.
+- `--remote` is asked for even when `.cases.yml` lists only one remote.
+- `-v` and `--dry-run` exist on some commands and not others.
+
+The rules the commands will follow:
+- `case check X` reads and never changes a file; `case organise X` changes
+  files and always lists what it will do and asks first. `--dry-run` stops
+  after the list; `--yes` skips the question (everywhere, replacing
+  `--no-confirm`).
+- An action is a word, not a flag: `case organise plt ascii|binary`,
+  `case organise history update|clean|compile|verify|prune`,
+  `case organise vtu [leftovers]`. What stays a flag is an option:
+  `--t1/--t2`, `--freq`, `--keep-freq`, `--remote`.
+- `case organise vtu` removes leftovers and caches that have a PLT, never
+  those with none; `--orphans` is the one deliberate override. This replaces
+  `--leftovers` and `--keep-orphans`.
+- The common flags (`--t1/--t2`, `--dry-run`, `--yes`, `--log`, `-v`) are added
+  by one helper; `--examples` is gone, help always ends with the examples.
+- With exactly one remote in `.cases.yml` it is used and said ("Using remote:
+  cloud"); `--remote` is for choosing between several.
+- `case check plt --remote` replaces `--verify` (with Phase 12).
+
+- [ ] The single remote is the default (`core/cases_file.py`, `cloud.py`,
+      `conf.py`: the error says "which remote?" only when there are several
+      or none)
+- [ ] `case organise out/rst/plt/vtu/history`: list, ask, do; `--dry-run`,
+      `--yes`; `--no-confirm` removed (`organizer.py`, `history.py`)
+- [ ] The common flags from one helper (`src/commands/case/__init__.py`);
+      `--examples` removed and every help ends with its examples
+- [ ] `case organise vtu`: leftovers and caches with a PLT, `--orphans`;
+      `--leftovers` and `--keep-orphans` removed; `auto`'s command updated
+- [ ] `case check plt --remote` instead of `--verify`; `check` takes
+      `-v` and the same `--t1/--t2/--freq` words where they apply
+- [ ] Actions as words: `organise plt ascii|binary`, `organise history
+      update|clean|compile|verify|prune` (the flags removed; `auto`'s
+      commands in `decide.py`, the help, completion, the web UI's calls)
+- [ ] A test that audits the parsers: every command that deletes takes
+      `--dry-run` and `--yes`; no option is spelled two ways
+- [ ] Docs (`docs/usage/`, `docs/architecture/auto.md` at the end),
+      `CHANGELOG.md` (breaking: list each old form and its new one)
+
 ### Phase 12: `case check --remote`, verify against the remote (branch `check-remote`)
 
 Found on a real case (`BR0SG0U1P0`, PLTs moved to the remote by hand; none
