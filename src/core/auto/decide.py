@@ -899,6 +899,51 @@ def _deletions(w):
                      'thin')
 
 
+LEFTOVER_AGE = 24 * 3600        # a .partial/.deriving younger than this may be being written
+
+
+def _vtu(w):
+    """The .vtu files `field render` leaves in binary/ (docs/architecture/auto.md, 13.17).
+    Leftovers of a killed render (.partial, .deriving) go once a day old; a cache whose
+    PLT is here is rebuilt by the next render, so it goes only with auto.vtu_cache:
+    delete; one whose PLT is gone cannot be rebuilt and is only reported."""
+    snap, conf, plan = w.snap, w.conf, w.plan
+    if not snap.vtu:
+        return
+    leftovers = [v for v in snap.vtu if v.leftover and v.age >= LEFTOVER_AGE]
+    fresh = [v for v in snap.vtu if v.leftover and v.age < LEFTOVER_AGE]
+    caches = [v for v in snap.vtu if not v.leftover and v.plt]
+    orphans = [v for v in snap.vtu if not v.leftover and not v.plt]
+    go = leftovers + (caches if conf.vtu_cache == 'delete' else [])
+    size = lambda vs: _size_text(sum(v.size for v in vs))
+    plan.ctx['vtu'] = dict(leftovers=leftovers, fresh=fresh, caches=caches, orphans=orphans)
+    if go:
+        plan.ctx.setdefault('delete', {})['vtu'] = {v.rel: v.size for v in go}
+        what = []
+        if leftovers:
+            what.append(f"{len(leftovers)} leftover{'s' if len(leftovers) != 1 else ''} of a "
+                        f"killed render ({size(leftovers)})")
+        if conf.vtu_cache == 'delete' and caches:
+            what.append(f"{len(caches)} cache{'s' if len(caches) != 1 else ''} ({size(caches)})")
+        plan.add('delete', f".vtu: {' and '.join(what)}; the next render converts the PLT "
+                           f"again.", 'delete')
+        flags = ('--clean --keep-orphans' if conf.vtu_cache == 'delete' else '--clean --leftovers')
+        plan.step('plt', 'delete', 'delete-vtu', f"case organise vtu {snap.name} {flags}",
+                  note="leftovers a day old" + (", caches with a PLT here"
+                                                if conf.vtu_cache == 'delete' else ''))
+    if caches and conf.vtu_cache != 'delete':
+        plan.add('note', f".vtu: {len(caches)} cache{'s' if len(caches) != 1 else ''} "
+                         f"({size(caches)}) kept. Set auto.vtu_cache: delete "
+                         f"(auto init --vtu-cache delete) to clear them; a render rebuilds them.",
+                 'delete')
+    if orphans:
+        plan.add('note', f".vtu: {len(orphans)} with no PLT in binary/ ({size(orphans)}); "
+                         f"they cannot be rebuilt, so they are kept.", 'delete')
+    if fresh:
+        plan.add('note', f".vtu: {len(fresh)} leftover{'s' if len(fresh) != 1 else ''} "
+                         f"younger than a day are left: a render may be writing them.", 'delete')
+
+
 def _stopped_short(w):
     """A run that stopped before its last step, with nothing queued."""
     snap, conf, plan = w.snap, w.conf, w.plan
@@ -969,7 +1014,7 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
     w.last_main, w.last_post, w.has_history = last_main, last_post, has_history
     w.cloud, w.rst_remote = cloud, rst_remote
     for part in (_flags, _folder_rule, _history, _restart_view, _post, _plt_upload,
-                 _rst_upload, _input_upload, _broken_plts, _deletions, _stopped_short):
+                 _rst_upload, _input_upload, _broken_plts, _deletions, _vtu, _stopped_short):
         part(w)
     return plan
 

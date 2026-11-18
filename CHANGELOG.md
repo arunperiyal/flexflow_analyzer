@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### 🧹 `auto` and the `.vtu` caches
+
+- `auto show` counts the `.vtu` files `field render` leaves in `binary/` (the
+  PLT section's `VTU` row), and `auto apply --delete` clears a killed render's
+  leftovers (`.partial`, `.deriving`) once a day old. The caches whose PLT is
+  here go too with `auto.vtu_cache: delete` (`auto init --vtu-cache delete`;
+  the default is `keep`); a cache whose PLT is gone is never deleted.
+- `case organise vtu --clean` takes `--leftovers` (only the killed render's
+  files) and `--keep-orphans` (leave the ones with no PLT).
+
 ### 📋 `auto status`
 
 - The `job` column names the job (`main 1234695 pending`, not `main pending`),

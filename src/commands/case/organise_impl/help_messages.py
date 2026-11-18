@@ -164,6 +164,14 @@ Organize and clean up case directories. Pick one subcommand.
         {Colors.CYAN}--clean{Colors.RESET}
             Delete them (within --t1/--t2), after confirmation
 
+        {Colors.CYAN}--leftovers{Colors.RESET}  (with --clean)
+            Only the .partial/.deriving files a killed render left
+
+        {Colors.CYAN}--keep-orphans{Colors.RESET}  (with --clean)
+            Leave the .vtu whose .plt is gone: it cannot be rebuilt
+            (`auto` deletes with --leftovers, or --keep-orphans when
+            auto.vtu_cache is delete)
+
 {Colors.BOLD}TARGETING BY TIMESTEP:{Colors.RESET}
     --t1 STEP                 Only target timesteps >= STEP
     --t2 STEP                 Only target timesteps <= STEP

@@ -253,6 +253,19 @@ def _plt(v):
     s.row('Size', ' · '.join(sizes))
     if snap.binary_time:
         s.row('Newest', f"binary PLT made {ago(max(snap.binary_time.values()), now)}")
+    if c.get('vtu'):
+        v_ = c['vtu']
+        parts = [f"{len(v_[k])} {label} ({_size_text(sum(x.size for x in v_[k]))})"
+                 for k, label in (('caches', 'cache'), ('leftovers', 'leftover'),
+                                  ('fresh', 'young leftover'), ('orphans', 'with no PLT'))
+                 if v_[k]]
+        s.row('VTU', ' · '.join(parts))
+        gone_v = (plan.ctx.get('delete') or {}).get('vtu')
+        if gone_v:
+            s.row('Delete VTU', f"{len(gone_v)} file(s) ({_size_text(sum(gone_v.values()))}): "
+                                f"a render makes them again; none without its PLT")
+        elif v_['caches']:
+            s.row('Delete VTU', "none: auto.vtu_cache is keep (auto init --vtu-cache delete)")
     if c.get('post_now'):
         s.row('Waiting', f"post job {c['post_now'][0].jobid} is "
                          f"{c['post_now'][0].state.lower()}: nothing is posted or uploaded "
@@ -270,7 +283,8 @@ def _plt(v):
         s.row('Delete', ' · '.join(gone) + ": each only once the next file stands in for it "
                                            f"(binary PLT, then its copy on {remote})")
         s.row('By hand', BY_HAND)
-    for key in ('check-plt', 'post', 'upload-plt', 'delete-ascii', 'delete-binary'):
+    for key in ('check-plt', 'post', 'upload-plt', 'delete-ascii', 'delete-binary',
+                'delete-vtu'):
         s.actions += [step.command for step in plan.steps_of(key)]
     return [s]
 

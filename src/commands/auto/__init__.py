@@ -1,7 +1,7 @@
 """
 auto - the per-case workflow for a folder of cases (docs/architecture/auto.md §13)
 
-    auto init [--remote NAME] [--path DIR] [--keep-rst N] [--keep-newest-rst N] [--upload-rst N] [--disk-alert SIZE]
+    auto init [--remote NAME] [--path DIR] [--keep-rst N] [--keep-newest-rst N] [--upload-rst N] [--disk-alert SIZE] [--vtu-cache keep|delete]
                          set a remote's folder and auto's settings in .cases.yml
     auto show [case] [--remote NAME] [--detail] [--only SECTIONS]
                          what auto would do: labelled sections for a case; the summary
@@ -62,6 +62,9 @@ class AutoCommand(BaseCommand):
                                  'of --keep-rst)')
         parser.add_argument('--disk-alert', metavar='SIZE',
                             help='init: flag running cases whose run directory is bigger (e.g. 200G)')
+        parser.add_argument('--vtu-cache', choices=('keep', 'delete'), metavar='keep|delete',
+                            help='init: delete: the .vtu caches of binary/ may go too (keep, the '
+                                 'default: only a killed render\'s leftovers go)')
         parser.add_argument('--detail', action='store_true',
                             help='show: every case in full, not only the summary table')
         parser.add_argument('--only', metavar='SECTIONS',
