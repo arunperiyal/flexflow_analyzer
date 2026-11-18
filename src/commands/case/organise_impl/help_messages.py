@@ -144,6 +144,15 @@ Organize and clean up case directories. Pick one subcommand.
               • When the remote cannot be asked, nothing is deleted
               • It reads every file in full on both sides: slow on purpose
 
+        {Colors.CYAN}--no-verify{Colors.RESET}  (with --delete-binary)
+            Do not ask the remote at all: delete the binary PLT files that
+            are whole here, with or without a copy there. For a machine that
+            is not the server, where the files are not wanted. It says so,
+            and still asks for confirmation (--no-confirm skips that).
+              • --delete-ascii and out never take it: nothing else would
+                stand in for what they delete
+              • `auto` never passes it
+
         {Colors.CYAN}--remote NAME{Colors.RESET}
             The remote holding the copies; its folder comes from the case
             folder's .cases.yml
@@ -174,6 +183,7 @@ Organize and clean up case directories. Pick one subcommand.
 {Colors.BOLD}OTHER OPTIONS:{Colors.RESET}
     --dry-run                 Show what would be deleted without deleting anything
     --log                     Create log file of all deletions
+    --no-verify               plt --delete-binary: do not ask the remote (see above)
     --no-confirm              Skip confirmation prompts (history --clean/--compile/--prune included)
     -v, --verbose             Show detailed information
     -h, --help                Show this help message

@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### 🗑️ `case organise plt --delete-binary --no-verify`
+
+- `--no-verify` does not ask the remote: the binary PLT files that are whole
+  here are deleted whether or not a copy is there. For a machine that is not
+  the server. It says so, a file cut short is still kept, and the usual
+  confirmation is asked (`--no-confirm` skips it). Without it nothing changes:
+  no remote, nothing deleted; the error now names the flag. `auto` never
+  passes it, and `--delete-ascii` and `out` do not take it (nothing else would
+  stand in for what they delete).
+
 ### 📋 `auto status`
 
 - The `job` column names the job (`main 1234695 pending`, not `main pending`),

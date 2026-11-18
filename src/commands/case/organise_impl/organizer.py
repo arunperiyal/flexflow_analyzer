@@ -278,13 +278,20 @@ class CaseOrganizer(HistoryMixin):
             self.console.print(f"  [dim]No {problem}.*.plt files to delete in binary/ for the given range[/dim]")
             return
 
-        self.console.print(f"  Comparing {len(picked)} file(s) with their copies on the remote "
-                           f"(size and md5) ...")
         chain = self._chain(freq)
-        verdicts = [(step, f, chain.for_binary(step)) for step, f in picked]
-        if chain.remote.problem:
+        waived = getattr(self.args, 'no_verify', False)
+        if waived:
+            self.console.print(f"  [yellow]--no-verify:[/yellow] the remote is not asked; "
+                               f"{len(picked)} file(s) are judged by what is here only")
+            verdicts = [(step, f, chain.for_binary_unverified(step)) for step, f in picked]
+        else:
+            self.console.print(f"  Comparing {len(picked)} file(s) with their copies on the "
+                               f"remote (size and md5) ...")
+            verdicts = [(step, f, chain.for_binary(step)) for step, f in picked]
+        if not waived and chain.remote.problem:
             self.console.print(f"  [red]✗[/red]  The remote could not be asked, so nothing in "
-                               f"binary/ is deleted: {chain.remote.problem}")
+                               f"binary/ is deleted: {chain.remote.problem}  "
+                               f"[dim](--no-verify deletes without asking the remote)[/dim]")
             return
 
         from rich.table import Table as _Table
@@ -300,7 +307,11 @@ class CaseOrganizer(HistoryMixin):
                 left += 1
                 tbl.add_row("[yellow]⚠[/yellow]", f.name, f"[yellow]keep — {verdict.why}[/yellow]")
         self.console.print(tbl)
-        if left:
+        if waived:
+            self.console.print(f"  [yellow]Copies on the remote were not checked "
+                               f"(--no-verify): a file deleted now may have no copy there."
+                               f"[/yellow]")
+        elif left:
             self.console.print(f"  [yellow]Keeping {left} file(s) with no verified copy on the "
                                f"remote.[/yellow] [dim]`case check plt --verify` says what is "
                                f"wrong with each; `case upload plt --missing` sends what is "

@@ -182,6 +182,15 @@ class Chain:
         return StandIn(False, why=self.remote.problem or "no verified copy on the remote",
                        found=self.remote.problem is None)
 
+    def for_binary_unverified(self, step: int) -> StandIn:
+        """--no-verify: the remote is not asked, so only this file is judged: it
+        stands in for nothing, but may go when it is a whole PLT (a file cut
+        short is kept, as it is on the remote's side too)."""
+        check = self.binary_check(step)
+        if check.ok:
+            return StandIn(True, 'waived', "whole here; its copy on the remote was not checked")
+        return StandIn(False, why=f"it is {check.reason}", found=True)
+
 
 def remote_copies(case_dir, problem: str, remote_name: Optional[str], window=None,
                   freq: Optional[int] = None, run_dir=None) -> RemoteCopies:

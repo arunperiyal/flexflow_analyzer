@@ -388,24 +388,24 @@ remote link only. It never changes what `auto` does.
 - It is printed, not silent: a line "remote copy not checked (--no-verify)"
   in the step and in the summary, so a deleted file is known to have had no
   proof.
-- It asks once ("N binary PLT(s) have no checked copy on the remote; delete?")
-  unless `--yes` is given, since a deletion cannot be undone.
+- It uses the confirmation `case organise` already asks ("Delete N files?",
+  skipped by `--no-confirm`), since a deletion cannot be undone.
 - It is not read from `.cases.yml` or `auto`: `auto` never passes it, so the
   server's rule is unchanged.
-- The same flag where the chain is used: `case organise plt --delete-binary`,
-  `--delete-ascii` (only the binary link is waived), `case organise out`,
-  `case organise rst`; and `case check plt --verify` is not changed (it is the
-  check itself).
+- Only `case organise plt --delete-binary` takes it: there the remote copy is
+  the only thing that stands in for the file. For `--delete-ascii`, `out` and
+  `rst` the local binary PLT is what stands in, so waiving the remote would
+  change nothing; and `case check plt --verify` is the check itself.
 
-- [ ] Confirm with the user: the name (`--no-verify`), the confirmation, and
+- [x] Confirm with the user: the name (`--no-verify`), the confirmation, and
       which commands take it
-- [ ] `RemoteCopies` can be told not to ask (`core/chain.py`): a link that is
+- [x] `RemoteCopies` can be told not to ask (`core/chain.py`): a link that is
       waived stands in as `by='waived'`, never as `remote`
-- [ ] `case organise plt --delete-binary --no-verify`, with the notice and
-      the confirmation (`--yes` skips it)
-- [ ] The same flag on `--delete-ascii`, `organise out` and `organise rst`
-- [ ] `auto` is untouched: a test that no `auto` step carries the flag
-- [ ] Tests, help text, completion, `CHANGELOG.md`
+- [x] `case organise plt --delete-binary --no-verify`, with the notice and
+      the existing confirmation
+- [x] Not on `--delete-ascii`, `organise out` and `organise rst` (see above)
+- [x] `auto` is untouched: a test that no `auto` step carries the flag
+- [x] Tests, help text, completion, `CHANGELOG.md`
 
 ### Phase 12: `case check --remote`, verify against the remote (branch `check-remote`)
 
