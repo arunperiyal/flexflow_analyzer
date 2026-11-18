@@ -837,12 +837,16 @@ def _deletions(w):
             keep = set()
             if snap.restart_tsid is not None:
                 keep.add(snap.restart_tsid)
+            # sets above a queued restart point are the earlier run's, which the queued job
+            # computes again: they are not among the newest, and not what is kept as newest
             complete = sorted(t for t, n in snap.rst.items() if snap.nsg and n == snap.nsg
-                              and not stale_rst(t))
+                              and not stale_rst(t) and not provisional(t))
             newest_sets = complete[-conf.keep_newest_rst:]
             keep.update(newest_sets)
             plan.ctx['rst_newest_kept'] = newest_sets
-            keep.add(max(snap.rst))
+            current = [t for t in snap.rst if not provisional(t)]
+            if current:
+                keep.add(max(current))
             if state == 'stopped' and reached:       # the set a restart would start from
                 back = [t for t in complete if t <= reached]
                 if back:

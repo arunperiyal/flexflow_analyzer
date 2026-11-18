@@ -75,7 +75,7 @@ main jobs.
       `<folder>/auto_logs/` (newest by default, one case's lines, `--list` for
       every run, `--log N` for the Nth newest)
 - [ ] `auto status`: polish the layout
-- [ ] With a queued restart, `Complete` / `Also kept` should not count the
+- [x] With a queued restart, `Complete` / `Also kept` should not count the
       earlier run's newer restart set
 - [ ] Tests, help text, completion, `CHANGELOG.md`
 

@@ -378,6 +378,17 @@ def test_a_cut_short_newest_set_does_not_count_among_the_newest_complete():
     assert plan.ctx['rst_newest_kept'] == [4950, 5000] and 5050 not in plan.ctx['thin']
 
 
+def test_a_set_above_a_queued_restart_is_not_among_the_newest_kept():
+    # restart queued from 700; set 750 is the earlier run's and is computed again
+    s = rst_snap([500, 550, 600, 650, 700, 750], remote=[], max_steps=1000, restart_tsid=700,
+                 archive_range=(1, 760), jobs=[job('maincase', 'PENDING')])
+    conf = AutoConf(source=Path('.auto.conf'), remote='local', path='/cloud', keep_rst=500)
+    plan = decide(s, conf, True, True)
+    assert plan.ctx['rst_newest_kept'] == [650, 700]          # not [700, 750]
+    assert 750 not in plan.ctx['thin'] and 650 not in plan.ctx['thin']
+    assert 550 in plan.ctx['thin'] and 600 in plan.ctx['thin']
+
+
 # --- real-cluster findings ---------------------------------------------------------
 
 def test_a_running_case_reports_its_own_position_not_an_earlier_runs_end():

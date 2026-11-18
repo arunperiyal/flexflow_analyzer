@@ -309,22 +309,26 @@ def _rst(v):
     s = Section('rst', 'RST files', ' · '.join(grids))
     if snap.rst:
         old = set(c.get('stale_rst') or [])
+        # a queued restart computes the steps above its point again: those sets are the
+        # earlier run's, so they are not the newest complete set
+        queued = {t for t in snap.rst if c.get('pending') and snap.restart_tsid is not None
+                  and t > snap.restart_tsid}
         complete = sorted(t for t, n in snap.rst.items() if snap.nsg and n == snap.nsg
-                          and t not in old)
-        partial = sorted(t for t, n in snap.rst.items() if t not in complete and t not in old)
+                          and t not in old and t not in queued)
+        partial = sorted(t for t, n in snap.rst.items() if t not in complete
+                         and t not in old and t not in queued)
         s.row('Present', f"{len(snap.rst)} sets: {steps_text(sorted(snap.rst))}")
-        newest_note = ''
-        if complete and c.get('pending') and snap.restart_tsid is not None \
-                and max(complete) > snap.restart_tsid:
-            newest_note = (f" (the queued job restarts from {snap.restart_tsid} and computes "
-                           f"it again)")
-        s.row('Complete', (f"newest {max(complete)}{newest_note}" if complete else 'none')
+        s.row('Complete', (f"newest {max(complete)}" if complete else 'none')
               + (f" · incomplete: {steps_text(partial)}" if partial else ''))
         if snap.restart_tsid is not None:
             s.row('Restart', f"restartTsId {snap.restart_tsid} (kept)")
         if old:
             s.row('Old run', f"{steps_text(sorted(old))}: above the solver's step, written "
                                  f"before the restart; not counted, sent or deleted")
+        if queued:
+            s.row('Old run', f"{steps_text(sorted(queued))}: above the queued restart point "
+                             f"{snap.restart_tsid}, which the queued job computes again; not "
+                             f"counted, sent or deleted")
         if c.get('rst_newest_kept'):
             sets = c['rst_newest_kept']
             s.row('Also kept', f"{', '.join(map(str, reversed(sets)))} "

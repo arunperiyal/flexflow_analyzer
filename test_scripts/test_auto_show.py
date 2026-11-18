@@ -215,8 +215,8 @@ def test_report_sections_of_a_queued_case(dummy):
     assert sec['rst'].actions[0] == ('case upload rst case3 --t1 400 --t2 400 --freq 400 '
                                      '--missing --remote local')
     assert sec['rst'].actions[1] == ('case organise rst case3 --keep-freq 200 '
-                                     '--keep-newest 2 --t1 550 --t2 650')
-    assert dict(sec['rst'].rows)['Thin'] == 'steps 550, 650: not multiples of 200'
+                                     '--keep-newest 2 --t1 550 --t2 550')
+    assert dict(sec['rst'].rows)['Thin'] == 'step 550: not multiples of 200'
     assert dict(sec['history'].rows)['Run dir'].startswith('riser.othd steps 501–760')
 
 
@@ -301,12 +301,14 @@ def test_a_single_step_reads_as_a_step(dummy):
     from src.core.auto.decide import steps_phrase
     assert steps_phrase([5740]) == 'Step 5740'
     sec = report_of(dummy, 'case3')
-    assert dict(sec['rst'].rows)['Thin'].startswith('steps 550, 650')
+    # 650 is one of the two newest sets of the run (700 is the restart point); 750 is the earlier run's
+    assert dict(sec['rst'].rows)['Thin'].startswith('step 550')
 
 
-def test_the_newest_set_a_queued_restart_will_recompute_is_said_so(dummy):
+def test_the_sets_a_queued_restart_will_recompute_are_not_the_newest(dummy):
     rows = dict(report_of(dummy, 'case3')['rst'].rows)
-    assert rows['Complete'] == 'newest 750 (the queued job restarts from 700 and computes it again)'
+    assert rows['Complete'].startswith('newest ') and int(rows['Complete'].split()[1]) <= 700
+    assert rows['Old run'].startswith('750: above the queued restart point 700')
     assert dict(report_of(dummy, 'case5')['rst'].rows)['Complete'] == 'newest 500'
 
 
