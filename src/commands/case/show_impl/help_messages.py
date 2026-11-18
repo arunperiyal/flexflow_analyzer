@@ -17,7 +17,6 @@ Display information about a FlexFlow case directory.
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
     {Colors.YELLOW}-v, --verbose{Colors.RESET}          Show detailed information
-    {Colors.YELLOW}--examples{Colors.RESET}             Show usage examples
     {Colors.YELLOW}-h, --help{Colors.RESET}             Show this help message
 
 {Colors.BOLD}DESCRIPTION:{Colors.RESET}

@@ -701,9 +701,6 @@ def execute_new(args):
     # Check for help flags FIRST (before any validation)
     if hasattr(args, 'help') and args.help:
         print_new_help()
-        return
-    
-    if hasattr(args, 'examples') and args.examples:
         print_new_examples()
         return
     

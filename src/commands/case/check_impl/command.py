@@ -34,10 +34,6 @@ def execute_case_check(args):
         print_check_help()
         return
 
-    if hasattr(args, 'examples') and args.examples:
-        print_check_help()
-        return
-
     subcommand = getattr(args, 'check_subcommand', None)
     if not subcommand:
         print_check_help()

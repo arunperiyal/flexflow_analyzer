@@ -12,6 +12,11 @@ Breaking (the old forms are gone, no aliases):
 | `case organise vtu` (listed only) and `vtu --clean` (deleted) | `case organise vtu` lists, asks and deletes; `--dry-run` only lists |
 | `vtu --keep-orphans` | the default: a `.vtu` with no `.plt` is kept; `--orphans` deletes it too |
 
+`--examples` is gone from every `case` command (show, create, run, organise and
+its subcommands, upload, download): `-h` prints the help and then its examples.
+The `organise` subcommands share one definition of `--log`, `-y/--yes`,
+`--dry-run`, `-v` and `-h`.
+
 `vtu --leftovers` stays. `auto`'s commands follow (`case organise vtu CASE
 --leftovers`).
 

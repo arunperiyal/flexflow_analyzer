@@ -29,7 +29,6 @@ Create a new case directory from a reference case template.
     {Colors.YELLOW}--dry-run{Colors.RESET}                Show what would be created without creating
     {Colors.YELLOW}-v, --verbose{Colors.RESET}            Enable verbose output
     {Colors.YELLOW}-h, --help{Colors.RESET}               Show this help message
-    {Colors.YELLOW}--examples{Colors.RESET}               Show usage examples
 
 {Colors.BOLD}DESCRIPTION:{Colors.RESET}
     Creates a new case directory by copying files from a reference case template.
@@ -86,7 +85,6 @@ Create a new case directory from a reference case template.
     {Colors.GREEN}case create myCase --ref-case examples/standard --force{Colors.RESET}
 
 {Colors.BOLD}SEE ALSO:{Colors.RESET}
-    case create --examples    {Colors.DIM}# More detailed examples{Colors.RESET}
     examples/standard/README.md        {Colors.DIM}# Template documentation{Colors.RESET}
 """
     print(help_text)

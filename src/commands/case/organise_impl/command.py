@@ -36,10 +36,6 @@ def execute_organise(args):
     # Handle help flag
     if hasattr(args, 'help') and args.help:
         print_organise_help()
-        return
-
-    # Handle examples flag
-    if hasattr(args, 'examples') and args.examples:
         print_organise_examples()
         return
 

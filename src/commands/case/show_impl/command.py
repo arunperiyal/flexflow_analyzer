@@ -29,10 +29,6 @@ def execute_info(args):
     # Handle help flag
     if hasattr(args, 'help') and args.help:
         print_info_help()
-        return
-
-    # Handle examples flag
-    if hasattr(args, 'examples') and args.examples:
         print_info_examples()
         return
 

@@ -197,7 +197,6 @@ Organize and clean up case directories. Pick one subcommand.
     --yes              Skip confirmation prompts (history --clean/--compile/--prune included)
     -v, --verbose             Show detailed information
     -h, --help                Show this help message
-    --examples                Show usage examples
 
 {Colors.BOLD}CONTEXT:{Colors.RESET}
     Set case context:     use case CS4SG1U1

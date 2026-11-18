@@ -560,7 +560,7 @@ The rules the commands will follow:
       or none)
 - [x] `case organise out/rst/plt/vtu/history`: list, ask, do; `--dry-run`,
       `--yes`; `--no-confirm` removed (`organizer.py`, `history.py`)
-- [ ] The common flags from one helper (`src/commands/case/__init__.py`);
+- [x] The common flags from one helper (`src/commands/case/__init__.py`);
       `--examples` removed and every help ends with its examples
 - [x] `case organise vtu`: leftovers and caches with a PLT, `--orphans`;
       `--clean` and `--keep-orphans` removed (`--leftovers` stays: it picks

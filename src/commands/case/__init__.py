@@ -8,6 +8,7 @@ import sys
 from ..base import BaseCommand
 from src.cli.completers import described, file_flags
 from src.cli.context import case_arg, context_flag, freq_arg, time_window
+from .common_flags import organise_flags
 
 
 # `case upload|download [plt|rst|input|history] [case]`: what to carry. Nothing named is
@@ -119,8 +120,6 @@ class CaseCommand(BaseCommand):
                                 help='Enable verbose output')
         show_parser.add_argument('-h', '--help', action='store_true',
                                 help='Show help for show command')
-        show_parser.add_argument('--examples', action='store_true',
-                                help='Show usage examples')
 
         # case create (was: new)
         create_parser = case_subparsers.add_parser('create', add_help=False,
@@ -146,8 +145,6 @@ class CaseCommand(BaseCommand):
                                   help='Enable verbose output')
         create_parser.add_argument('-h', '--help', action='store_true',
                                   help='Show help for create command')
-        create_parser.add_argument('--examples', action='store_true',
-                                  help='Show usage examples')
 
         # case run
         run_parser = case_subparsers.add_parser('run', add_help=False,
@@ -165,16 +162,12 @@ class CaseCommand(BaseCommand):
                                help='Enable verbose output')
         run_parser.add_argument('-h', '--help', action='store_true',
                                help='Show help for run command')
-        run_parser.add_argument('--examples', action='store_true',
-                               help='Show usage examples')
 
         # case organise
         organise_parser = case_subparsers.add_parser('organise', add_help=False,
                                                      help='Organize and clean up case directory')
         organise_parser.add_argument('-h', '--help', action='store_true',
                                     help='Show help for organise command')
-        organise_parser.add_argument('--examples', action='store_true',
-                                    help='Show usage examples')
         organise_subparsers = organise_parser.add_subparsers(dest='organise_subcommand',
                                                              help='Organise subcommands')
 
@@ -197,18 +190,7 @@ class CaseCommand(BaseCommand):
         time_window(history_parser,
                     t1_kwargs=dict(metavar='STEP', help='Only --update files reaching timesteps >= STEP'),
                     t2_kwargs=dict(metavar='STEP', help='Only --update files reaching timesteps <= STEP'))
-        history_parser.add_argument('--log', action='store_true',
-                                    help='Create log file of deletions')
-        history_parser.add_argument('-y', '--yes', action='store_true',
-                                    help='Skip confirmation prompts')
-        history_parser.add_argument('--dry-run', action='store_true',
-                                    help='Show what would be done without changing anything')
-        history_parser.add_argument('-v', '--verbose', action='store_true',
-                                    help='Enable verbose output')
-        history_parser.add_argument('-h', '--help', action='store_true',
-                                    help='Show help for history command')
-        history_parser.add_argument('--examples', action='store_true',
-                                    help='Show usage examples')
+        organise_flags(history_parser, 'history')
 
         # case organise out / case organise rst
         for word, what in (('out', '.out files (kept until a PLT stands in for them)'),
@@ -229,13 +211,7 @@ class CaseCommand(BaseCommand):
             time_window(sub,
                         t1_kwargs=dict(metavar='STEP', help='Only target timesteps >= STEP'),
                         t2_kwargs=dict(metavar='STEP', help='Only target timesteps <= STEP'))
-            sub.add_argument('--log', action='store_true', help='Create log file of deletions')
-            sub.add_argument('-y', '--yes', action='store_true', help='Skip confirmation prompts')
-            sub.add_argument('--dry-run', action='store_true',
-                             help='Show what would be deleted without deleting anything')
-            sub.add_argument('-v', '--verbose', action='store_true', help='Enable verbose output')
-            sub.add_argument('-h', '--help', action='store_true', help=f'Show help for {word}')
-            sub.add_argument('--examples', action='store_true', help='Show usage examples')
+            organise_flags(sub, 'out/rst')
 
         # case organise plt
         plt_parser = organise_subparsers.add_parser('plt', add_help=False,
@@ -258,21 +234,10 @@ class CaseCommand(BaseCommand):
         time_window(plt_parser, 
                     t1_kwargs=dict(metavar='STEP', help='Only target timesteps >= STEP'),
                     t2_kwargs=dict(metavar='STEP', help='Only target timesteps <= STEP'))
-        plt_parser.add_argument('--log', action='store_true',
-                                    help='Create log file of deletions')
         plt_parser.add_argument('--no-verify', action='store_true',
                                     help='With --delete-binary: do not ask the remote; delete the '
                                          'whole PLT files here (they may have no copy there)')
-        plt_parser.add_argument('-y', '--yes', action='store_true',
-                                    help='Skip confirmation prompts')
-        plt_parser.add_argument('--dry-run', action='store_true',
-                                    help='Show what would be deleted without deleting anything')
-        plt_parser.add_argument('-v', '--verbose', action='store_true',
-                                    help='Enable verbose output')
-        plt_parser.add_argument('-h', '--help', action='store_true',
-                                    help='Show help for plt command')
-        plt_parser.add_argument('--examples', action='store_true',
-                                    help='Show usage examples')
+        organise_flags(plt_parser, 'plt')
 
         # case organise vtu
         vtu_parser = organise_subparsers.add_parser('vtu', add_help=False,
@@ -285,18 +250,7 @@ class CaseCommand(BaseCommand):
         time_window(vtu_parser,
                     t1_kwargs=dict(metavar='STEP', help='Only target timesteps >= STEP'),
                     t2_kwargs=dict(metavar='STEP', help='Only target timesteps <= STEP'))
-        vtu_parser.add_argument('--log', action='store_true',
-                                    help='Create log file of deletions')
-        vtu_parser.add_argument('-y', '--yes', action='store_true',
-                                    help='Skip confirmation prompts')
-        vtu_parser.add_argument('--dry-run', action='store_true',
-                                    help='Show what would be deleted without deleting anything')
-        vtu_parser.add_argument('-v', '--verbose', action='store_true',
-                                    help='Enable verbose output')
-        vtu_parser.add_argument('-h', '--help', action='store_true',
-                                    help='Show help for vtu command')
-        vtu_parser.add_argument('--examples', action='store_true',
-                                    help='Show usage examples')
+        organise_flags(vtu_parser, 'vtu')
 
         # case check
         check_parser = case_subparsers.add_parser('check', add_help=False,
@@ -563,8 +517,6 @@ class CaseCommand(BaseCommand):
                                   help='Resume the last interrupted transfer')
         upload_parser.add_argument('-h', '--help', action='store_true',
                                   help='Show help for upload command')
-        upload_parser.add_argument('--examples', action='store_true',
-                                  help='Show usage examples')
 
         # case download
         download_parser = case_subparsers.add_parser('download', add_help=False,
@@ -597,8 +549,6 @@ class CaseCommand(BaseCommand):
                                     help='Resume the last interrupted transfer')
         download_parser.add_argument('-h', '--help', action='store_true',
                                     help='Show help for download command')
-        download_parser.add_argument('--examples', action='store_true',
-                                    help='Show usage examples')
 
         file_flags(create_parser, {'--ref-case': (), '--from-config': ('.yml', '.yaml')})
 
