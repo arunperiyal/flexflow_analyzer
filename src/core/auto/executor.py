@@ -47,7 +47,7 @@ def do_history(snap, plan) -> Step:
     mode, which = plan.ctx['organise']
     stages = ('update', 'clean', 'compile') if mode == 'update' else ('clean', 'compile')
     flags = dict(update=False, clean=False, compile=False, verify=False, prune=False,
-                 dry_run=False, no_confirm=True, log=False, verbose=False, t1=None, t2=None)
+                 dry_run=False, yes=True, log=False, verbose=False, t1=None, t2=None)
     flags.update({stage: True for stage in stages})
     case = SimpleNamespace(case_directory=str(snap.dir), problem_name=snap.problem,
                            config={'dir': f"./{snap.run_rel}"})

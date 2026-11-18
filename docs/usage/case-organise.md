@@ -73,7 +73,7 @@ favour of the later run. This also covers a restart appended inside one file.
   the rest are written through a temporary file
 - Once `archive/` is pruned, a cleaned file is its run's only copy: cutting
   one shorter (a new run restarted inside it) asks first, unless
-  `--no-confirm`
+  `--yes`
 
 #### `history --clean RUNS`
 
@@ -130,7 +130,7 @@ anything else is wrong, `--prune` does not run.
 Deletes `archive/` for each type whose `cleaned/` reads through and is up to
 date with it — every step that counts is then in `cleaned/`. It checks this
 itself, with or without `--verify`. Lists the files and asks once, unless
-`--no-confirm`; `--dry-run` only lists them. `rcv_files/` is not touched.
+`--yes`; `--dry-run` only lists them. `rcv_files/` is not touched.
 
 Later jobs add to `archive/` again; the next `--clean` folds them into
 `cleaned/`, reading the pruned runs from `cleaned/` itself.
@@ -265,7 +265,7 @@ runs as its own step with its own entry in the confirmation summary.
 5. Mark `.rst` files for deletion if their step is not a multiple of the keep
    interval, and `.out` files if their step has a `.plt` (in `binary/` or the
    run directory); list the steps whose `.out` stay for want of one
-6. Show summary and ask for confirmation (unless `--no-confirm`)
+6. Show summary and ask for confirmation (unless `--yes`)
 7. Delete marked files
 
 ### Running `plt`
@@ -277,7 +277,7 @@ runs as its own step with its own entry in the confirmation summary.
    `--t1`/`--t2`/`--freq` (or take all of them if no bound is given), compare
    each with its copy on the remote, mark for deletion only those that match
 3. Show summary (both steps' file counts, if both ran) and ask for
-   confirmation (unless `--no-confirm`)
+   confirmation (unless `--yes`)
 4. Delete marked files
 
 ## Timestep Targeting (`--t1`/`--t2`)
@@ -318,7 +318,7 @@ case organise rst CS4SG1U1                                      # Thin the .rst
 case organise history CS4SG1U1 --update --t1 0 --t2 1000        # Only archive files in [0, 1000]
 case organise rst CS4SG1U1 --keep-freq 5000                   # Custom retention
 case organise out CS4SG1U1 --t2 5000                            # Only clean up to timestep 5000
-case organise history CS4SG1U1 --prune --no-confirm             # Skip confirmation
+case organise history CS4SG1U1 --prune --yes             # Skip confirmation
 case organise history CS4SG1U1 --prune --log                    # Log deletions to file
 case organise plt CS4SG1U1 --delete-ascii                       # Delete run-dir PLT with newer binary/ copy
 case organise plt CS4SG1U1 --delete-binary --t1 0 --t2 1000     # Delete binary/ PLT for a timestep range
@@ -344,7 +344,7 @@ case organise plt CS4SG1U1       # → "Nothing to do — pass --delete-ascii an
 - `history --prune` only deletes `archive/` when `cleaned/` holds every step
   that counts, and asks first
 - `out`, `rst` and `plt` show a summary before acting and ask for confirmation —
-  all unless `--no-confirm` is given
+  all unless `--yes` is given
 - `--delete-binary` deletes a file only when its copy on the remote has the
   same md5; with no remote to ask it deletes nothing
 - A `t1`/`t2` context left over from something else never silently narrows

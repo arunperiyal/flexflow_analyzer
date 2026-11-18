@@ -23,7 +23,7 @@ class _Logger:
 
 def organise(case_dir, out=None, **flags):
     args = Namespace(delete_ascii=False, delete_binary=True, freq=None, keep_freq=None,
-                     dry_run=False, no_confirm=True, log=False, verbose=False,
+                     dry_run=False, yes=True, log=False, verbose=False,
                      t1=None, t2=None, no_verify=False, remote=None)
     for key, value in flags.items():
         setattr(args, key, value)

@@ -18,7 +18,7 @@ class _Logger:
 
 
 def organise(case_dir, **flags):
-    args = Namespace(clean=False, dry_run=False, no_confirm=True, log=False,
+    args = Namespace(leftovers=False, orphans=False, dry_run=False, yes=True, log=False,
                      verbose=False, t1=None, t2=None)
     for key, value in flags.items():
         setattr(args, key, value)
@@ -44,30 +44,38 @@ def left(binary):
     return sorted(p.name for p in binary.iterdir())
 
 
-def test_without_clean_only_lists(tmp_path, binary):
-    organise(tmp_path)
+def test_dry_run_deletes_nothing(tmp_path, binary):
+    organise(tmp_path, dry_run=True)
     assert left(binary) == sorted(NAMES)
 
 
-def test_clean_deletes_the_caches_only(tmp_path, binary):
-    organise(tmp_path, clean=True)
+def test_it_deletes_the_caches_and_leftovers_but_keeps_those_with_no_plt(tmp_path, binary):
+    organise(tmp_path)
+    # only riser.100.plt is there: riser.200/.500 have none, so they stay
+    assert left(binary) == ['mine.vtu', 'riser.100.plt', 'riser.200.vtu', 'riser.500.vtu',
+                            'riser.vtu']
+
+
+def test_orphans_go_with_the_flag(tmp_path, binary):
+    organise(tmp_path, orphans=True)
     assert left(binary) == ['mine.vtu', 'riser.100.plt', 'riser.vtu']
 
 
-def test_clean_within_the_window(tmp_path, binary):
-    organise(tmp_path, clean=True, t1=200, t2=400)
+def test_leftovers_only(tmp_path, binary):
+    organise(tmp_path, leftovers=True)
+    assert 'riser.300.partial.vtu' not in left(binary) and 'riser.400.deriving.vtu' not in left(binary)
+    assert {'riser.100.vtu', 'riser.100.z0.vtu', 'riser.200.vtu', 'riser.500.vtu'} <= set(left(binary))
+
+
+def test_within_the_window(tmp_path, binary):
+    organise(tmp_path, orphans=True, t1=200, t2=400)
     assert left(binary) == sorted(['riser.100.vtu', 'riser.100.z0.vtu', 'riser.500.vtu',
                                    'mine.vtu', 'riser.vtu', 'riser.100.plt'])
-
-
-def test_dry_run_deletes_nothing(tmp_path, binary):
-    organise(tmp_path, clean=True, dry_run=True)
-    assert left(binary) == sorted(NAMES)
 
 
 def test_parser():
     import argparse
     parser = argparse.ArgumentParser()
     CaseCommand().setup_parser(parser.add_subparsers(dest='command'))
-    a = parser.parse_args(['case', 'organise', 'vtu', 'C1', '--clean', '--t2', '300'])
-    assert (a.organise_subcommand, a.case, a.clean, a.t2) == ('vtu', 'C1', True, 300.0)
+    a = parser.parse_args(['case', 'organise', 'vtu', 'C1', '--orphans', '--yes', '--t2', '300'])
+    assert (a.organise_subcommand, a.case, a.orphans, a.yes, a.t2) == ('vtu', 'C1', True, True, 300.0)

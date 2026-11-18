@@ -927,8 +927,8 @@ def _vtu(w):
             what.append(f"{len(caches)} cache{'s' if len(caches) != 1 else ''} ({size(caches)})")
         plan.add('delete', f".vtu: {' and '.join(what)}; the next render converts the PLT "
                            f"again.", 'delete')
-        flags = ('--clean --keep-orphans' if conf.vtu_cache == 'delete' else '--clean --leftovers')
-        plan.step('plt', 'delete', 'delete-vtu', f"case organise vtu {snap.name} {flags}",
+        flags = '' if conf.vtu_cache == 'delete' else ' --leftovers'
+        plan.step('plt', 'delete', 'delete-vtu', f"case organise vtu {snap.name}{flags}",
                   note="leftovers a day old" + (", caches with a PLT here"
                                                 if conf.vtu_cache == 'delete' else ''))
     if caches and conf.vtu_cache != 'delete':

@@ -202,11 +202,6 @@ class CaseOrganizer(HistoryMixin):
             self.console.print("[bold]Step: .vtu caches in binary/[/bold]")
             self._analyze_vtu(t1, t2)
             self.console.print()
-            if not getattr(self.args, 'clean', False):
-                if self.files_to_delete:
-                    self.console.print("[dim]Listed only: --clean deletes them[/dim]")
-                self.files_to_delete = []
-                return
 
         has_deletions = len(self.files_to_delete) > 0
         dry_run = getattr(self.args, 'dry_run', False)
@@ -221,7 +216,7 @@ class CaseOrganizer(HistoryMixin):
             )
             return
 
-        if has_deletions and not self.args.no_confirm:
+        if has_deletions and not self.args.yes:
             if not self._confirm_deletion():
                 self.console.print("[yellow]Operation cancelled[/yellow]")
                 return
@@ -330,7 +325,8 @@ class CaseOrganizer(HistoryMixin):
         the .partial/.deriving leftovers of a run killed mid-write. They are
         a cache: the next render converts the PLT again, so deleting them
         loses nothing but that time. Only these names are touched; another
-        .vtu in binary/ is someone's own file.
+        .vtu in binary/ is someone's own file. A cache whose .plt is gone
+        cannot be rebuilt and stays, unless --orphans.
         """
         binary_dir = self.case_dir / 'binary'
         if not binary_dir.exists():
@@ -342,24 +338,30 @@ class CaseOrganizer(HistoryMixin):
             return
 
         pattern = re.compile(rf'^{re.escape(problem)}\.(\d+)(\.z\d+)?(\.partial|\.deriving)?\.vtu$')
-        found = []
+        found, orphans = [], []
         for path in binary_dir.glob(f'{problem}.*.vtu'):
             match = pattern.match(path.name)
             if not match or not self._step_in_bounds(int(match.group(1)), t1, t2):
                 continue
             if getattr(self.args, 'leftovers', False) and not match.group(3):
                 continue                # only what a killed render left
-            if getattr(self.args, 'keep_orphans', False) and not match.group(3) \
+            if not match.group(3) and not getattr(self.args, 'orphans', False) \
                     and not (binary_dir / f'{problem}.{match.group(1)}.plt').exists():
-                continue                # a cache that cannot be rebuilt stays
+                orphans.append(path)        # a cache that cannot be rebuilt stays
+                continue
             found.append((int(match.group(1)), path, match))
+        if orphans:
+            self.console.print(f"  [yellow]Keeping {len(orphans)} .vtu with no .plt "
+                               f"(they cannot be rebuilt):[/yellow] "
+                               f"{', '.join(sorted(p.name for p in orphans)[:5])}"
+                               f"{', ...' if len(orphans) > 5 else ''}  "
+                               f"[dim](--orphans deletes them too)[/dim]")
         if not found:
             self.console.print(f"  [dim]No .vtu caches in binary/"
                                f"{' for the given range' if t1 is not None or t2 is not None else ''}[/dim]")
             return
 
         found.sort(key=lambda f: (f[0], f[1].name))
-        clean = getattr(self.args, 'clean', False)
         tbl = Table(box=box.SIMPLE, show_header=True, header_style="bold")
         tbl.add_column("", width=2)
         tbl.add_column("File", style="cyan")
@@ -374,7 +376,7 @@ class CaseOrganizer(HistoryMixin):
                     else f"zone {match.group(2)[2:]}" if match.group(2) else "")
             if not plt.exists():
                 note = (note + "; " if note else "") + "no .plt: not rebuildable"
-            tbl.add_row("[red]✗[/red]" if clean else "", path.name, self._format_size(size), note)
+            tbl.add_row("[red]✗[/red]", path.name, self._format_size(size), note)
             self.files_to_delete.append(path)
             self.stats['vtu_deleted'] += 1
             self.stats['vtu_space_freed'] += size

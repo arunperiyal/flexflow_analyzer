@@ -1032,7 +1032,7 @@ the binary PLT is still here); `decide._vtu` sorts them:
 
 The files go through the delete stage of 13.13 (`plan.ctx['delete']['vtu']`,
 rule C5, `auto apply --delete`, target `plt`) with no remote check: a render
-makes them again. The step shown is `case organise vtu <case> --clean
---leftovers`, or `--clean --keep-orphans` with `vtu_cache: delete`; the age
+makes them again. The step shown is `case organise vtu <case> --leftovers`,
+or `case organise vtu <case>` with `vtu_cache: delete`; the age
 rule is auto's own. `auto show` adds `VTU` and `Delete VTU` rows to the PLT
 section. Names other than the render's are never touched.

@@ -29,7 +29,7 @@ class _Logger:
 def organise(case_dir, subcommand, config=None, **flags):
     args = Namespace(delete_ascii=False, delete_binary=False, freq=None, keep_freq=None,
                      all_out=False, keep_out=False,
-                     dry_run=False, no_confirm=True, log=False,
+                     dry_run=False, yes=True, log=False,
                      verbose=False, t1=None, t2=None)
     for key, value in flags.items():
         setattr(args, key, value)

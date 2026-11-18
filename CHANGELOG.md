@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### ⚠️ `case organise`: `--yes`, and `vtu` asks and deletes
+
+Breaking (the old forms are gone, no aliases):
+
+| Before | Now |
+|---|---|
+| `--no-confirm` (organise) | `--yes` (also `-y`) |
+| `case organise vtu` (listed only) and `vtu --clean` (deleted) | `case organise vtu` lists, asks and deletes; `--dry-run` only lists |
+| `vtu --keep-orphans` | the default: a `.vtu` with no `.plt` is kept; `--orphans` deletes it too |
+
+`vtu --leftovers` stays. `auto`'s commands follow (`case organise vtu CASE
+--leftovers`).
+
 ### 🌐 The only remote is the default
 
 - When a folder's `.cases.yml` lists exactly one remote, `case check plt`,

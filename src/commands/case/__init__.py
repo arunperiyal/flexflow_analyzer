@@ -199,7 +199,7 @@ class CaseCommand(BaseCommand):
                     t2_kwargs=dict(metavar='STEP', help='Only --update files reaching timesteps <= STEP'))
         history_parser.add_argument('--log', action='store_true',
                                     help='Create log file of deletions')
-        history_parser.add_argument('--no-confirm', action='store_true',
+        history_parser.add_argument('-y', '--yes', action='store_true',
                                     help='Skip confirmation prompts')
         history_parser.add_argument('--dry-run', action='store_true',
                                     help='Show what would be done without changing anything')
@@ -230,7 +230,7 @@ class CaseCommand(BaseCommand):
                         t1_kwargs=dict(metavar='STEP', help='Only target timesteps >= STEP'),
                         t2_kwargs=dict(metavar='STEP', help='Only target timesteps <= STEP'))
             sub.add_argument('--log', action='store_true', help='Create log file of deletions')
-            sub.add_argument('--no-confirm', action='store_true', help='Skip confirmation prompts')
+            sub.add_argument('-y', '--yes', action='store_true', help='Skip confirmation prompts')
             sub.add_argument('--dry-run', action='store_true',
                              help='Show what would be deleted without deleting anything')
             sub.add_argument('-v', '--verbose', action='store_true', help='Enable verbose output')
@@ -263,7 +263,7 @@ class CaseCommand(BaseCommand):
         plt_parser.add_argument('--no-verify', action='store_true',
                                     help='With --delete-binary: do not ask the remote; delete the '
                                          'whole PLT files here (they may have no copy there)')
-        plt_parser.add_argument('--no-confirm', action='store_true',
+        plt_parser.add_argument('-y', '--yes', action='store_true',
                                     help='Skip confirmation prompts')
         plt_parser.add_argument('--dry-run', action='store_true',
                                     help='Show what would be deleted without deleting anything')
@@ -276,20 +276,18 @@ class CaseCommand(BaseCommand):
 
         # case organise vtu
         vtu_parser = organise_subparsers.add_parser('vtu', add_help=False,
-                                    help='List or delete the .vtu caches field render keeps in binary/')
+                                    help='Delete the .vtu caches field render keeps in binary/')
         case_arg(vtu_parser, help='Case directory path')
-        vtu_parser.add_argument('--clean', action='store_true',
-                                    help='Delete them (within --t1/--t2); without it they are only listed')
         vtu_parser.add_argument('--leftovers', action='store_true',
                                     help='Only the .partial/.deriving files a killed render left')
-        vtu_parser.add_argument('--keep-orphans', action='store_true',
-                                    help='Leave the .vtu whose .plt is gone (it cannot be rebuilt)')
+        vtu_parser.add_argument('--orphans', action='store_true',
+                                    help='Also the .vtu whose .plt is gone (it cannot be rebuilt)')
         time_window(vtu_parser,
                     t1_kwargs=dict(metavar='STEP', help='Only target timesteps >= STEP'),
                     t2_kwargs=dict(metavar='STEP', help='Only target timesteps <= STEP'))
         vtu_parser.add_argument('--log', action='store_true',
                                     help='Create log file of deletions')
-        vtu_parser.add_argument('--no-confirm', action='store_true',
+        vtu_parser.add_argument('-y', '--yes', action='store_true',
                                     help='Skip confirmation prompts')
         vtu_parser.add_argument('--dry-run', action='store_true',
                                     help='Show what would be deleted without deleting anything')
@@ -708,7 +706,7 @@ class CaseCommand(BaseCommand):
         console.print("    case organise rst CS4SG1U1")
         console.print("    case organise plt CS4SG1U1 --delete-ascii")
         console.print("    case organise plt CS4SG1U1 --delete-binary --t1 0 --t2 1000")
-        console.print("    case organise vtu CS4SG1U1 --clean")
+        console.print("    case organise vtu CS4SG1U1")
         console.print("    case check run CS4SG1U1")
         console.print("    case check plt CS4SG1U1 --t1 0 --t2 1000")
         console.print("    case check out CS4SG1U1")

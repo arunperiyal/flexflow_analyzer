@@ -151,7 +151,7 @@ Organize and clean up case directories. Pick one subcommand.
             Do not ask the remote at all: delete the binary PLT files that
             are whole here, with or without a copy there. For a machine that
             is not the server, where the files are not wanted. It says so,
-            and still asks for confirmation (--no-confirm skips that).
+            and still asks for confirmation (--yes skips that).
               • --delete-ascii and out never take it: nothing else would
                 stand in for what they delete
               • `auto` never passes it
@@ -171,19 +171,17 @@ Organize and clean up case directories. Pick one subcommand.
         leftovers of an interrupted run). A cache: deleting them loses
         nothing, the next render converts the PLT again. Other .vtu files
         in binary/ are not touched.
-          • Without --clean: lists them with their sizes
-          • A .vtu whose .plt is gone is marked: it cannot be rebuilt
+          • Lists them with their sizes, asks, then deletes (--dry-run lists
+            only)
+          • A .vtu whose .plt is gone cannot be rebuilt: it is kept and said
 
-        {Colors.CYAN}--clean{Colors.RESET}
-            Delete them (within --t1/--t2), after confirmation
-
-        {Colors.CYAN}--leftovers{Colors.RESET}  (with --clean)
+        {Colors.CYAN}--leftovers{Colors.RESET}
             Only the .partial/.deriving files a killed render left
+            (`auto` deletes with this, or without it when auto.vtu_cache
+            is delete)
 
-        {Colors.CYAN}--keep-orphans{Colors.RESET}  (with --clean)
-            Leave the .vtu whose .plt is gone: it cannot be rebuilt
-            (`auto` deletes with --leftovers, or --keep-orphans when
-            auto.vtu_cache is delete)
+        {Colors.CYAN}--orphans{Colors.RESET}
+            Also the .vtu whose .plt is gone
 
 {Colors.BOLD}TARGETING BY TIMESTEP:{Colors.RESET}
     --t1 STEP                 Only target timesteps >= STEP
@@ -196,7 +194,7 @@ Organize and clean up case directories. Pick one subcommand.
     --dry-run                 Show what would be deleted without deleting anything
     --log                     Create log file of all deletions
     --no-verify               plt --delete-binary: do not ask the remote (see above)
-    --no-confirm              Skip confirmation prompts (history --clean/--compile/--prune included)
+    --yes              Skip confirmation prompts (history --clean/--compile/--prune included)
     -v, --verbose             Show detailed information
     -h, --help                Show this help message
     --examples                Show usage examples
@@ -219,7 +217,7 @@ Organize and clean up case directories. Pick one subcommand.
       same md5; --delete-ascii and out only what a later file stands in for
     • A t1/t2 context left over from something else never silently narrows
       history --clean — it always cleans the whole history
-    • Use --no-confirm to skip confirmation
+    • Use --yes to skip confirmation
     • Fails if any OTHD/OISD file cannot be read (prevents data loss)
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
@@ -239,9 +237,8 @@ Organize and clean up case directories. Pick one subcommand.
     # Delete PLT files from binary/ for a timestep range
     case organise plt CS4SG1U1 --delete-binary --t1 0 --t2 1000
 
-    # List, then delete, the .vtu caches field render left in binary/
+    # Delete the .vtu caches field render left in binary/ (--dry-run only lists)
     case organise vtu CS4SG1U1
-    case organise vtu CS4SG1U1 --clean
 
     # Only target a timestep range
     case organise out CS4SG1U1 --t1 0 --t2 1000
@@ -321,9 +318,9 @@ def print_organise_examples():
     # Both directions in one call
     case organise plt CS4SG1U1 --delete-ascii --delete-binary --t1 1000 --t2 2000
 
-    # The .vtu caches of field render: list them, delete those up to step 3000
-    case organise vtu CS4SG1U1
-    case organise vtu CS4SG1U1 --clean --t2 3000
+    # The .vtu caches of field render: list them, then delete those up to step 3000
+    case organise vtu CS4SG1U1 --dry-run
+    case organise vtu CS4SG1U1 --t2 3000
 
 {Colors.BOLD}Using Context:{Colors.RESET}
 
@@ -375,8 +372,8 @@ def print_organise_examples():
 
 {Colors.BOLD}Notes:{Colors.RESET}
     • history --update and --verify run immediately
-    • history --clean, --compile and --prune, and out, rst, plt and vtu --clean, ask for
-      confirmation unless --no-confirm (auto apply passes it: it asks once itself)
+    • history --clean, --compile and --prune, and out, rst, plt and vtu, ask for
+      confirmation unless --yes (auto apply passes it: it asks once itself)
     • --delete-ascii never touches binary/; --delete-binary never touches the run dir
     • --delete-binary with no --t1/--t2/--freq/--keep-freq takes every PLT file in binary/
       that has a verified copy on the remote
