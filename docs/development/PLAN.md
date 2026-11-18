@@ -618,7 +618,7 @@ shellkit (its own branch `row-pipes`, tag v0.1.8, then the pin here):
       merge and tag v0.1.8)
 
 flexflow_manager:
-- [ ] Pin shellkit 0.1.8
+- [x] Pin shellkit 0.1.8
 - [x] `data stats` emits rows (it already took `case:*`, one section per case) for `maxloc`, `minloc` and `zeroloc` (`case` and
       `time` of the PLT chosen; for `zeroloc` the descending crossing first)
 - [x] `case download plt` (and `field render`, `plot`) take that `time` from
