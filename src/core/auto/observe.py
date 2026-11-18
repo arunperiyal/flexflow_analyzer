@@ -10,6 +10,7 @@ whose config cannot be read gets `error` set and nothing else.
 """
 
 import re
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
@@ -32,6 +33,17 @@ class History:
     @property
     def any(self) -> bool:
         return bool(self.archive or self.cleaned or self.compiled)
+
+
+@dataclass
+class VtuFile:
+    """A .vtu `field render`/`field convert` left in binary/."""
+    rel: str                    # binary/riser.5000.vtu
+    step: int
+    size: int
+    age: float                  # seconds since it was written, at observe time
+    leftover: bool              # .partial / .deriving: a render killed mid-write
+    plt: bool                   # its binary PLT is still here (so it can be rebuilt)
 
 
 @dataclass
@@ -77,6 +89,7 @@ class CaseSnapshot:
     live_files: Dict[str, int] = field(default_factory=dict)  # the run dir's .othd/.oisd
     rst_files: Dict[int, Dict[str, int]] = field(default_factory=dict)
     cloud: Optional[Dict[str, int]] = None                    # None: not known
+    vtu: List[VtuFile] = field(default_factory=list)          # the .vtu caches of binary/
 
     def active(self, kind: str) -> List[slurm.Job]:
         return [j for j in self.jobs if j.kind == kind and j.active]
@@ -323,6 +336,13 @@ def observe_case(case_dir, jobs: List[slurm.Job], ended: List[slurm.Job],
             if m:
                 snap.binary[int(m.group(1))] = check_plt(f)
                 snap.binary_time[int(m.group(1))] = _mtime(f) or 0.0
+        vtu_pat = re.compile(rf'^{re.escape(p)}\.(\d+)(\.z\d+)?(\.partial|\.deriving)?\.vtu$')
+        for f in sorted(binary.iterdir()):      # only the names the render makes; others are theirs
+            m = vtu_pat.match(f.name)
+            if m:
+                step = int(m.group(1))
+                snap.vtu.append(VtuFile(f"binary/{f.name}", step, _size(f) or 0,
+                                        max(0.0, time.time() - (_mtime(f) or 0.0)), bool(m.group(3)), step in snap.binary))
 
     # the steps each post job was given, from the line postFlex.sh logs:
     # "post job 1225966 started: steps 4050..4550 every 50"

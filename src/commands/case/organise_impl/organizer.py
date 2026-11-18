@@ -345,8 +345,14 @@ class CaseOrganizer(HistoryMixin):
         found = []
         for path in binary_dir.glob(f'{problem}.*.vtu'):
             match = pattern.match(path.name)
-            if match and self._step_in_bounds(int(match.group(1)), t1, t2):
-                found.append((int(match.group(1)), path, match))
+            if not match or not self._step_in_bounds(int(match.group(1)), t1, t2):
+                continue
+            if getattr(self.args, 'leftovers', False) and not match.group(3):
+                continue                # only what a killed render left
+            if getattr(self.args, 'keep_orphans', False) and not match.group(3) \
+                    and not (binary_dir / f'{problem}.{match.group(1)}.plt').exists():
+                continue                # a cache that cannot be rebuilt stays
+            found.append((int(match.group(1)), path, match))
         if not found:
             self.console.print(f"  [dim]No .vtu caches in binary/"
                                f"{' for the given range' if t1 is not None or t2 is not None else ''}[/dim]")

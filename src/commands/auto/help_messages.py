@@ -8,7 +8,7 @@ def print_auto_help():
 {b}{c}auto — check every case in this folder and do its next safe step{r}
 
 {b}USAGE:{r}
-    auto init [--remote NAME] [--path DIR] [--keep-rst N] [--keep-newest-rst N] [--upload-rst N] [--disk-alert SIZE] [--force]
+    auto init [--remote NAME] [--path DIR] [--keep-rst N] [--keep-newest-rst N] [--upload-rst N] [--disk-alert SIZE] [--vtu-cache keep|delete] [--force]
         set, in this folder's .cases.yml, the remote's folder for these cases
         (default: the remote's `remote set-path`) and auto's settings
     auto show [case] [--remote NAME] [--detail] [--only SECTIONS]
@@ -99,6 +99,10 @@ def print_auto_help():
                                this, plus a finished run's final set (a multiple of
                                keep_rst; unset: no restart sets uploaded)
       disk_alert: 200G         flag running cases whose run directory is bigger
+      vtu_cache: delete        the .vtu caches `field render` leaves in binary/: `keep` (the
+                               default) deletes only a killed render's leftovers (.partial,
+                               .deriving, a day old), `delete` also the caches whose PLT is
+                               here; one whose PLT is gone is never deleted
       qos / account / partition  only if set: passed to post jobs
 
 {b}EXIT CODE{r}: 0 nothing needs you; 1 a case needs you, or the queue could

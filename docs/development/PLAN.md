@@ -456,17 +456,17 @@ Suggested shape, for the user to confirm:
 - A `.vtu` whose PLT is gone cannot be rebuilt: `auto show` reports it, and
   `auto` never deletes it.
 - `auto show` says how many caches there are and how much space they take.
-- It runs where `.vtu` files are made (the personal machine), not on the
-  server; `auto` never uploads them.
+- It needs no remote check and `auto` never uploads them; they exist only
+  where a render ran. The delete stage still opens the remote first.
 
-- [ ] Confirm with the user: which of the above, and the config word
-- [ ] Observe: the snapshot lists the `.vtu` files of `binary/` (kind, step,
+- [x] Confirm with the user: which of the above, and the config word
+- [x] Observe: the snapshot lists the `.vtu` files of `binary/` (kind, step,
       size, age, whether the PLT is there)
-- [ ] Decide: the leftovers go; the caches go when configured; the orphans are
+- [x] Decide: the leftovers go; the caches go when configured; the orphans are
       reported and kept; a step the plan still needs is not touched
-- [ ] `auto show` and `auto status` report them; the executor deletes through
+- [x] `auto show` and `auto status` report them; the executor deletes through
       the same path as `case organise vtu --clean`
-- [ ] Tests (a dummy case with each kind), help text, `docs/architecture/auto.md`
+- [x] Tests (a dummy case with each kind), help text, `docs/architecture/auto.md`
       (new section at the end), `CHANGELOG.md`
 
 ### Phase 12: `case check --remote`, verify against the remote (branch `check-remote`)

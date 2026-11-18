@@ -162,7 +162,7 @@ def do_delete(snap, plan, conf, cloud, ledger, say: Callable[[str], None]) -> St
     todo = plan.ctx.get('delete') or {}
     p, name, remote = snap.problem, snap.name, conf.remote
     state = {'streak': 0, 'stopped': False, 'mismatch': 0}
-    counts = {'ascii': 0, 'binary': 0, 'out': 0, 'sets': set()}
+    counts = {'ascii': 0, 'binary': 0, 'out': 0, 'vtu': 0, 'sets': set()}
     freed = {'copy': 0, 'rst': 0}
     left = []
 
@@ -305,6 +305,11 @@ def do_delete(snap, plan, conf, cloud, ledger, say: Callable[[str], None]) -> St
             if unlink(rel, 'C3 .out', 0, res[2]):
                 counts['out'] += 1
                 freed['copy'] += todo['out'][rel]
+    # C5: .vtu caches: they hold nothing the PLT does not (a render makes them again)
+    for rel in sorted(todo.get('vtu', {})):
+        if unlink(rel, 'C5 .vtu cache', 0, "a render makes it again"):
+            counts['vtu'] += 1
+            freed['copy'] += todo['vtu'][rel]
     # C4: restart sets off the keep_rst grid: no copy, said so
     for rel in sorted(todo.get('rst', {})):
         if state['stopped']:
@@ -316,7 +321,8 @@ def do_delete(snap, plan, conf, cloud, ledger, say: Callable[[str], None]) -> St
         left.append(('', 'three remote failures in a row: stopped'))
 
     parts = [f"{n} {what}" for n, what in ((counts['ascii'], 'ASCII PLT'), (counts['binary'], 'binary PLT'),
-                                           (counts['out'], '.out'), (len(counts['sets']), 'restart sets'))
+                                           (counts['out'], '.out'), (counts['vtu'], '.vtu'),
+                                           (len(counts['sets']), 'restart sets'))
              if n]
     total = freed['copy'] + freed['rst']
     if parts:

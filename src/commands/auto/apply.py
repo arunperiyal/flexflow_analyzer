@@ -42,7 +42,7 @@ TARGETS = (('history', 'organise and upload the history'),
            ('rst', 'restart sets'),
            ('all', 'every target above, in `auto show` order'))
 NOT_RUN = ('check', 'delete')       # step kinds `apply` does not run (delete: only with --delete)
-DELETE_OF = {'plt': ('ascii', 'binary'), 'output': ('out',), 'rst': ('rst',)}   # target -> ctx['delete'] keys
+DELETE_OF = {'plt': ('ascii', 'binary', 'vtu'), 'output': ('out',), 'rst': ('rst',)}   # target -> ctx['delete'] keys
 
 
 def split_target(args):
@@ -95,7 +95,7 @@ def _kinds(args):
     return wanted
 
 
-def _delete_words(files, size, sets, rst_size, remote):
+def _delete_words(files, size, sets, rst_size, remote, vtu=0, vtu_size=0):
     """'up to 12 files (1.2 GB) with a checked copy and 3 restart sets (2 KB) with none'."""
     parts = []
     if files:
@@ -105,16 +105,22 @@ def _delete_words(files, size, sets, rst_size, remote):
         parts.append(f"{sets} restart set{'s' if sets != 1 else ''} "
                      f"({_size_text_of({'x': rst_size})}) that "
                      f"{'has' if sets == 1 else 'have'} no copy (off the keep_rst grid)")
+    if vtu:
+        parts.append(f"{vtu} .vtu file{'s' if vtu != 1 else ''} ({_size_text_of({'x': vtu_size})}) "
+                     f"a render makes again")
     return 'up to ' + ' and '.join(parts) if files else ' and '.join(parts)
 
 
 def delete_totals(plan):
-    """What the plan would delete: (files with a copy, their bytes, restart sets, their bytes)."""
+    """What the plan would delete: (files with a copy, their bytes, restart sets, their bytes,
+    .vtu files, their bytes)."""
     import re
     d = plan.ctx.get('delete') or {}
     copy = {**d.get('ascii', {}), **d.get('binary', {}), **d.get('out', {})}
     sets = {re.search(r'\.(\d+)_\d+\.rst$', r).group(1) for r in d.get('rst', {})}
-    return len(copy), sum(copy.values()), len(sets), sum(d.get('rst', {}).values())
+    vtu = d.get('vtu', {})
+    return len(copy), sum(copy.values()), len(sets), sum(d.get('rst', {}).values()), \
+        len(vtu), sum(vtu.values())
 
 
 RULE = {'ascii': 'C1', 'binary': 'C2', 'out': 'C3'}
@@ -131,6 +137,9 @@ def _delete_breakdown(plan):
             lines.append(f"{RULE[key]} "
                          f"{label}, {steps_phrase(steps or []).lower()}: {len(d[key])} files, "
                          f"{_size_text(sum(d[key].values()))}")
+    if d.get('vtu'):
+        lines.append(f"C5 .vtu files: {len(d['vtu'])} files, "
+                     f"{_size_text(sum(d['vtu'].values()))}")
     if d.get('rst'):
         lines.append(f"C4 restart sets {steps_phrase(c.get('cand_thin') or []).lower()}: no copy, off the "
                      f"keep_rst grid ({_size_text(sum(d['rst'].values()))})")
@@ -200,9 +209,9 @@ def _intended(plan, only):
         out.append(('upload', f"{len(sending)} files, {_size_text_of(sending)}"))
         out += [('detail', line) for line in _upload_breakdown(plan)]
     if 'delete' in only:
-        n, size, sets, rst_size = delete_totals(plan)
-        if n or sets:
-            out.append(('delete', _delete_words(n, size, sets, rst_size, '')))
+        n, size, sets, rst_size, vtu, vtu_size = delete_totals(plan)
+        if n or sets or vtu:
+            out.append(('delete', _delete_words(n, size, sets, rst_size, '', vtu, vtu_size)))
             out += [('detail', line) for line in _delete_breakdown(plan)]
         elif plan.ctx.get('delete_hold'):
             out.append(('detail', "delete: held back, the case needs you (auto show)"))
@@ -330,13 +339,14 @@ def execute_apply(args) -> int:
     if not getattr(args, 'yes', False):
         question = f"Do this for {len(todo)} case(s)? Nothing is deleted. [y/N] "
         if 'delete' in only:
-            files = size = sets = rst_size = 0
+            files = size = sets = rst_size = vtu = vtu_size = 0
             for _, plan, _ in todo:
-                a, b, c, d = delete_totals(plan)
+                a, b, c, d, e, f = delete_totals(plan)
                 files, size, sets, rst_size = files + a, size + b, sets + c, rst_size + d
-            if files or sets:
+                vtu, vtu_size = vtu + e, vtu_size + f
+            if files or sets or vtu:
                 question = (f"Do this for {len(todo)} case(s)? This DELETES "
-                            f"{_delete_words(files, size, sets, rst_size, remote)}. [y/N] ")
+                            f"{_delete_words(files, size, sets, rst_size, remote, vtu, vtu_size)}. [y/N] ")
         try:
             answer = input(question)
         except EOFError:

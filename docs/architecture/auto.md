@@ -1016,3 +1016,23 @@ old word and the two flags are gone. The command lines of 13.14 become:
 The `.out` step no longer needs `auto.keep_rst`: it is not about restart
 sets. Earlier sections keep the old command in the text they were written
 with.
+
+### 13.17 The `.vtu` caches in `binary/` (2026-11-18)
+
+`field render` and `field convert` leave `{problem}.{step}.vtu` (and `.z{N}.vtu`
+per zone) beside the PLTs, and `.partial`/`.deriving` files when a render is
+killed mid-write. `observe` lists them (`snap.vtu`: step, size, age, whether
+the binary PLT is still here); `decide._vtu` sorts them:
+
+| Kind | What auto does |
+|---|---|
+| leftover (`.partial`, `.deriving`) a day old or more | deleted (younger: a render may be writing it) |
+| cache whose PLT is here | deleted only with `auto.vtu_cache: delete`; default `keep`, and a note says how many and how much |
+| cache whose PLT is gone | never deleted: it cannot be rebuilt (a note) |
+
+The files go through the delete stage of 13.13 (`plan.ctx['delete']['vtu']`,
+rule C5, `auto apply --delete`, target `plt`) with no remote check: a render
+makes them again. The step shown is `case organise vtu <case> --clean
+--leftovers`, or `--clean --keep-orphans` with `vtu_cache: delete`; the age
+rule is auto's own. `auto show` adds `VTU` and `Delete VTU` rows to the PLT
+section. Names other than the render's are never touched.

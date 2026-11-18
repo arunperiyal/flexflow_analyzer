@@ -35,6 +35,7 @@ def execute_init(args) -> int:
                                    upload_rst=getattr(args, 'upload_rst', None),
                                    keep_newest_rst=getattr(args, 'keep_newest_rst', None),
                                    disk_alert=getattr(args, 'disk_alert', None),
+                                   vtu_cache=getattr(args, 'vtu_cache', None),
                                    replace=getattr(args, 'force', False))
     except AutoConfError as e:
         console.print(f"[red]Error:[/red] {escape(str(e))}")

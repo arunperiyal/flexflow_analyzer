@@ -280,6 +280,10 @@ class CaseCommand(BaseCommand):
         case_arg(vtu_parser, help='Case directory path')
         vtu_parser.add_argument('--clean', action='store_true',
                                     help='Delete them (within --t1/--t2); without it they are only listed')
+        vtu_parser.add_argument('--leftovers', action='store_true',
+                                    help='Only the .partial/.deriving files a killed render left')
+        vtu_parser.add_argument('--keep-orphans', action='store_true',
+                                    help='Leave the .vtu whose .plt is gone (it cannot be rebuilt)')
         time_window(vtu_parser,
                     t1_kwargs=dict(metavar='STEP', help='Only target timesteps >= STEP'),
                     t2_kwargs=dict(metavar='STEP', help='Only target timesteps <= STEP'))
