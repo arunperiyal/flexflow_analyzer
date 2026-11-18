@@ -627,6 +627,47 @@ flexflow_manager:
 - [x] Help for `data stats` (the pipe, with the example above), `docs/usage/`,
       `CHANGELOG.md`
 
+### Phase 33: `data check steady` offers rows (branch `steady-rows`)
+
+From the user (2026-11-19), after Phase 32 (rows between commands). `data check
+steady` already says from which tsId the rest of a window is steady ("the --t1
+to use"). Offering that as a row lets the next command work on the settled part
+of every case:
+
+    use case:* node:25 var:dy; data check steady | data stats --func rms,std
+
+- [ ] `data check steady` offers `{case, t1: the steady tsId}` per case and
+      variable where it found one (none for "-", which is said, not skipped
+      silently); it needs no new flag
+- [ ] The row's `t1` is honoured when `last` is also set in the context: check
+      what `data stats` and `data table` do with `t1` and `last` together
+      (`last_arg` ignores a context `last` only when `t1`/`t2` were typed) and
+      make the row win, with a test
+- [ ] A test through the pipe on two registry cases, `data check steady |
+      data stats --func rms` (each case's stats start at its own steady step)
+- [ ] Help for `data check steady` (the pipe, with the example), `docs/usage/`,
+      `CHANGELOG.md`
+
+### Phase 34: `auto status` offers rows (branch `status-rows`)
+
+From the user (2026-11-19). `auto status` lists every case with what is next;
+offering the cases that need something lets the next command act on only those:
+
+    auto status --only needs | case show
+    auto status --only todo | auto apply plt
+
+- [ ] `auto status` offers `{case}` per case, picked by `--only
+      needs|todo|running|all` (default `all`): `needs` is the cases that need
+      you, `todo` those with something to do, `running` those with a job in the
+      queue. The one flag chooses which cases; nothing else is added
+- [ ] The table is still printed first and the exit code is unchanged
+- [ ] `auto apply` and `case show` as the second command: a test through the
+      pipe on the dummy cases (`needs` gives the dummy cases that need you)
+- [ ] The second command's own questions are not skipped: `auto apply` asks per
+      case unless `--yes` (said in the help)
+- [ ] Help for `auto status`, `docs/architecture/auto.md` (new section at the
+      end), `CHANGELOG.md`
+
 ### Phase 12: `case check --remote`, verify against the remote (branch `check-remote`)
 
 Found on a real case (`BR0SG0U1P0`, PLTs moved to the remote by hand; none
