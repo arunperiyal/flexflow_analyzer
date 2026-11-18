@@ -604,26 +604,27 @@ a command; every later one runs in the OS shell on the text of the first. So:
   `field render`, `plot`, `data table`, `case show`...), not only this one.
 
 Then `use case:* last:1000 node:25 var:dy; data stats --func maxloc | case
-download plt` does every case: `data stats` takes `case:*` (it does not today)
-and emits one row per case with the PLT it chose (the first of its ranked
+download plt` does every case: `data stats` already takes `case:*`, and now
+emits one row per case with the PLT it chose (the first of its ranked
 files, so a file that exists, as `maxloc` already picks).
 
 shellkit (its own branch `row-pipes`, tag v0.1.8, then the pin here):
-- [ ] `Runtime.emit(rows)` for a command, and `execute_pipe` runs a shell
+- [x] `Runtime.emit(rows)` for a command, and `execute_pipe` runs a shell
       command segment once per row with the row's keys as context
-- [ ] The failure of one row is reported and the rest still run; the status
+- [x] The failure of one row is reported and the rest still run; the status
       is the worst one; no rows says "nothing to pass on"
-- [ ] Tests, `help` text for `|` ("rows"), `DESIGN.md`, version 0.1.8
+- [x] Tests, `help` text for `|` ("rows"), `DESIGN.md`, version 0.1.8 (shellkit
+      branch `row-pipes`, commits `e5dc4ba`, `b386d50`; waiting for the user to
+      merge and tag v0.1.8)
 
 flexflow_manager:
 - [ ] Pin shellkit 0.1.8
-- [ ] `data stats` takes `case:*` (one result per case, each in its own
-      section) and emits rows for `maxloc`, `minloc` and `zeroloc` (`case` and
+- [x] `data stats` emits rows (it already took `case:*`, one section per case) for `maxloc`, `minloc` and `zeroloc` (`case` and
       `time` of the PLT chosen; for `zeroloc` the descending crossing first)
-- [ ] `case download plt` (and `field render`, `plot`) take that `time` from
-      the context as they already do; a test with two dummy cases through the
-      pipe
-- [ ] Help for `data stats` (the pipe, with the example above), `docs/usage/`,
+- [x] `case download plt` (and `field render`, `plot`) take that `time` from
+      the context as they already do; a test with two registry cases through the
+      pipe (`case show` as the second command)
+- [x] Help for `data stats` (the pipe, with the example above), `docs/usage/`,
       `CHANGELOG.md`
 
 ### Phase 12: `case check --remote`, verify against the remote (branch `check-remote`)
