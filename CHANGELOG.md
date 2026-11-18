@@ -17,6 +17,11 @@ its subcommands, upload, download): `-h` prints the help and then its examples.
 The `organise` subcommands share one definition of `--log`, `-y/--yes`,
 `--dry-run`, `-v` and `-h`.
 
+`case check plt --verify --remote NAME` is now `case check plt --remote [NAME]`:
+giving `--remote` is what asks for the comparison with the remote (a leftover
+`use remote:` does not turn it on); with no NAME it is the `use remote:`
+context, else the only remote `.cases.yml` lists.
+
 `vtu --leftovers` stays. `auto`'s commands follow (`case organise vtu CASE
 --leftovers`).
 

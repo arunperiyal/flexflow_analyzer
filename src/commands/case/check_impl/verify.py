@@ -1,4 +1,4 @@
-"""`case check plt <case> --verify`: the binary PLTs in binary/ against their
+"""`case check plt <case> --remote [NAME]`: the binary PLTs in binary/ against their
 copies on the remote, by size and md5 read now on both sides
 (src/core/transfer/verify.py). Exit code 0 only when every one is verified."""
 
@@ -24,6 +24,13 @@ def _steps(names) -> str:
     return f"{', '.join(steps[:3])} ... {steps[-1]} ({len(steps)})"
 
 
+def _context_remote():
+    """`--remote` with no name: the `use remote:` context, else None (the only remote)."""
+    from shellkit import current_runtime
+    rt = current_runtime()
+    return rt.get('remote') if rt else None
+
+
 def execute_verify(args) -> int:
     from src.cli.context import current_case, current_dir
     from src.core.simflow_config import SimflowConfig
@@ -36,7 +43,7 @@ def execute_verify(args) -> int:
     name = getattr(args, 'case', None) or current_case()
     if not name:
         console.print("[red]Error:[/red] No case directory specified.")
-        console.print("Usage:  case check plt <dir> --verify --remote NAME")
+        console.print("Usage:  case check plt <dir> --remote [NAME]")
         return 1
     if is_wildcard_case(name):
         cases = [Path(c['path']) for c in load_cases_from_directory(current_dir())]
@@ -45,7 +52,7 @@ def execute_verify(args) -> int:
             return 1
     else:
         cases = [Path(name)]
-    remote = getattr(args, 'remote', None)
+    remote = getattr(args, 'remote', None) or _context_remote()
     window = _window(getattr(args, 't1', None), getattr(args, 't2', None))
     freq = getattr(args, 'freq', None)
     verbose = bool(getattr(args, 'verbose', False))

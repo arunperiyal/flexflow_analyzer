@@ -861,7 +861,7 @@ def _deletions(w):
         # file that is not meant to go.
         name, remote = snap.name, conf.remote
         if binary or plan.steps_of('upload-plt'):
-            plan.step('plt', 'check', 'check-plt', f"case check plt {name} --verify --remote {remote}",
+            plan.step('plt', 'check', 'check-plt', f"case check plt {name} --remote {remote}",
                       note="the binary PLTs here against their copies on the remote, by md5")
         for a, b in runs_apart(ascii, []):
             plan.step('plt', 'delete', 'delete-ascii',

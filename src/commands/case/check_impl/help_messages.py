@@ -74,7 +74,7 @@ Pick one subcommand.
             restart computed again, so it does not join up with the frames around
             it. Steps before the first .out/.rst left past R cannot be dated.
 
-    {Colors.CYAN}plt --verify{Colors.RESET}
+    {Colors.CYAN}plt --remote [NAME]{Colors.RESET}
         Compare each binary PLT in binary/ with its copy on the remote
         ({Colors.YELLOW}--remote NAME{Colors.RESET}, or {Colors.DIM}use remote:NAME{Colors.RESET}, or the only one the
         case folder's .cases.yml lists; its folder comes from there), reading both sides now:
@@ -158,8 +158,8 @@ Pick one subcommand.
     case check plt CS4SG1U1 --t1 0 --t2 1000
 
     # Compare the binary PLTs with their copies on the remote (size and md5)
-    case check plt CS4SG1U1 --verify --remote cloud
-    case check plt CS4SG1U1 --verify --remote cloud --t1 8950 --t2 9900 --freq 50
+    case check plt CS4SG1U1 --remote cloud
+    case check plt CS4SG1U1 --remote cloud --t1 8950 --t2 9900 --freq 50
 
     # Check .def File() references exist
     case check def CS4SG1U1

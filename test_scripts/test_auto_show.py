@@ -242,7 +242,7 @@ def test_report_needs_and_flags_come_after_state(dummy):
     assert dict(sec['plt'].rows)['Binary'] == 'present 450, 500 · broken 550'
     # the check first, then the upload, then the delete that follows from it
     assert sec['plt'].actions == [
-        'case check plt case6 --verify --remote local',
+        'case check plt case6 --remote local',
         'case upload plt case6 --t1 450 --t2 500 --missing --remote local',
         'case organise plt case6 --delete-binary --t1 450 --t2 500 --remote local']
 

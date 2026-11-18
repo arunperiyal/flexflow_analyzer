@@ -1,4 +1,4 @@
-"""`case check plt --verify`: each binary PLT against its copy on the remote, by
+"""`case check plt --remote`: each binary PLT against its copy on the remote, by
 size and md5 read now on both sides. What matches goes in the ledger as
 verified; what does not comes out of it. Exit code 0 only when all match."""
 
@@ -209,7 +209,7 @@ def test_steps_of_the_series_in_neither_place(world):
 # --- the command -----------------------------------------------------------------
 
 def run(world, **kw):
-    ns = dict(check_subcommand='plt', case=str(world.case), verify=True, remote='local',
+    ns = dict(check_subcommand='plt', case=str(world.case), remote='local',
               t1=None, t2=None, freq=None, verbose=False, help=False, examples=False)
     ns.update(kw)
     return execute_case_check(SimpleNamespace(**ns))
@@ -231,7 +231,7 @@ def test_the_command_exits_1_and_names_what_is_wrong(world, capsys):
 
 
 def test_the_only_listed_remote_is_used_and_said(world, capsys):
-    assert run(world, remote=None) == 0
+    assert run(world, remote='') == 0
     assert 'Using remote: local (the only one in .cases.yml)' in capsys.readouterr().out
 
 
@@ -239,7 +239,7 @@ def test_the_command_needs_a_remote_it_knows(world, capsys):
     cases = yaml.safe_load((world.folder / '.cases.yml').read_text())
     cases['remotes']['other'] = str(world.folder / 'o')       # two: none is chosen for you
     (world.folder / '.cases.yml').write_text(yaml.safe_dump(cases))
-    assert run(world, remote=None) == 1
+    assert run(world, remote='') == 1
     assert 'which remote?' in capsys.readouterr().out
     assert run(world, remote='nowhere') == 1
     out = ' '.join(capsys.readouterr().out.split())
@@ -248,12 +248,12 @@ def test_the_command_needs_a_remote_it_knows(world, capsys):
     # a folder with no remote at all
     (world.folder / '.cases.yml').write_text(yaml.safe_dump(
         {'cases': [{'name': 'CS1', 'path': 'CS1'}], 'remotes': {}, 'auto': {}}))
-    assert run(world, remote=None) == 1
+    assert run(world, remote='') == 1
     assert 'no remote is set for this folder' in ' '.join(capsys.readouterr().out.split())
     assert run(world, remote='cloud') == 1
     assert 'it lists none' in ' '.join(capsys.readouterr().out.split())
 
 
-def test_without_verify_the_plain_check_still_runs(world, capsys):
-    assert run(world, verify=False) is None
+def test_without_remote_the_plain_check_still_runs(world, capsys):
+    assert run(world, remote=None) is None
     assert 'PLT file check' in capsys.readouterr().out

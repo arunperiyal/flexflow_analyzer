@@ -9,7 +9,7 @@ verified; what does not is taken out of it.
                         # PLT only there is as the ledger recorded it, no step is lost
     result.summary()    # one line
 
-`case check plt --verify` prints it; `auto` reads it before anything that
+`case check plt --remote` prints it; `auto` reads it before anything that
 relies on the remote copy.
 """
 

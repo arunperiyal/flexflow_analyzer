@@ -303,12 +303,13 @@ class CaseCommand(BaseCommand):
         time_window(plt_check_parser, 
                     t1_kwargs=dict(metavar='STEP', help='Only check timesteps >= STEP'),
                     t2_kwargs=dict(metavar='STEP', help='Only check timesteps <= STEP'))
-        plt_check_parser.add_argument('--verify', action='store_true',
-                                    help='Compare each PLT in binary/ with its copy on the '
-                                         'remote, by size and md5')
-        context_flag(plt_check_parser, 'remote', '--remote', type=str, metavar='REMOTE',
-                     help='With --verify: the remote to compare with '
-                          '(or use context with "use remote:name")')
+        # a plain option, not the `remote` context: its being given is what asks for the
+        # comparison, so `use remote:` left over from earlier does not turn it on
+        plt_check_parser.add_argument('--remote', nargs='?', const='', default=None,
+                                      metavar='NAME',
+                                      help='Also compare each PLT in binary/ with its copy on '
+                                           'the remote, by size and md5 (NAME: else `use remote:`, '
+                                           'else the only remote .cases.yml lists)')
         plt_check_parser.add_argument('-v', '--verbose', action='store_true',
                                     help='Enable verbose output')
         plt_check_parser.add_argument('-h', '--help', action='store_true',

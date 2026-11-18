@@ -502,7 +502,7 @@ unrecorded, and the right words.
 - [ ] Say how to get a record: for each step the command that makes the
       remote copy count (see the next task), instead of "post again"
 - [ ] A way to record copies that are only there, with the user vouching:
-      `case check plt --verify --adopt [--t1 A --t2 B]` writes the ledger
+      `case check plt --remote --adopt [--t1 A --t2 B]` writes the ledger
       entry from the remote's size, md5 and write time (it cannot compare with
       a local file: it says so), and says what it did not prove. Decide with
       the user whether this, or `--trust-remote` on `case organise out`, or
@@ -565,7 +565,7 @@ The rules the commands will follow:
 - [x] `case organise vtu`: leftovers and caches with a PLT, `--orphans`;
       `--clean` and `--keep-orphans` removed (`--leftovers` stays: it picks
       what `auto` deletes); `auto`'s command updated
-- [ ] `case check plt --remote` instead of `--verify`; `check` takes
+- [x] `case check plt --remote` instead of `--verify`; `check` takes
       `-v` and the same `--t1/--t2/--freq` words where they apply
 - [ ] Actions as words: `organise plt ascii|binary`, `organise history
       update|clean|compile|verify|prune` (the flags removed; `auto`'s

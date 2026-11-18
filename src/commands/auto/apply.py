@@ -6,7 +6,7 @@
     target: history | plt | output | input | rst | all. Each runs the steps
     `auto show` lists for that part of the case (plan.steps, filtered by
     their target), in the order below. With no target nothing is done and the
-    targets are listed. The check and delete steps (`case check plt --verify`,
+    targets are listed. The check and delete steps (`case check plt --remote`,
     `case organise ...`) are listed as not run by apply. --delete (or --only
     delete) adds the delete stage, after the upload: files whose copy on the
     remote passes an md5 check made then, and the restart sets off the

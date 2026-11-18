@@ -187,7 +187,7 @@ before. A file may be deleted only when the next one stands in for it:
   and reported; the others are deleted.
 - Repair goes the other way: a broken binary PLT is made again from its
   ASCII PLT (`run post convert`), a broken ASCII PLT from the `.out` (`run
-  post full`). `case check plt --verify` says which.
+  post full`). `case check plt --remote` says which.
 
 The natural order is therefore `case organise out`, then `plt
 --delete-ascii`, then `plt --delete-binary`.
@@ -216,7 +216,7 @@ considered; with `--freq N`, only the steps divisible by N.
 
 Deletes the PLT files of `binary/` within `--t1`/`--t2` that have a copy on
 the remote with the same size and md5, both read at that moment (the check
-`case check plt --verify` makes):
+`case check plt --remote` makes):
 
 - Needs `--remote NAME` (or `use remote:NAME`); the remote's folder comes
   from the case folder's `.cases.yml`

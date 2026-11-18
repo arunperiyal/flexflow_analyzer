@@ -308,7 +308,7 @@ class CaseOrganizer(HistoryMixin):
                                f"[/yellow]")
         elif left:
             self.console.print(f"  [yellow]Keeping {left} file(s) with no verified copy on the "
-                               f"remote.[/yellow] [dim]`case check plt --verify` says what is "
+                               f"remote.[/yellow] [dim]`case check plt --remote` says what is "
                                f"wrong with each; `case upload plt --missing` sends what is "
                                f"not there.[/dim]")
 
