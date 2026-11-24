@@ -574,9 +574,21 @@ class CaseOrganizer(HistoryMixin):
                 out_by_step.setdefault(s, []).append(f)
         verdict: Dict[int, Optional[Tuple[str, str]]] = {}
 
+        waived = self.what == 'out' and getattr(self.args, 'no_verify', False)
+        unbacked: List[int] = []        # --no-verify: steps with no PLT file here
+
         def keep_out_because(step: int) -> Optional[Tuple[str, str]]:
             """(kind, detail) when the step's .out must stay; kind is 'none'
-            (no PLT of the step anywhere) or 'bad' (one is there, not good)."""
+            (no PLT of the step anywhere) or 'bad' (one is there, not good).
+            --no-verify: never, whatever the PLTs are; steps with no PLT file
+            here at all are counted for the notice."""
+            if waived:
+                ascii_plt = chain.ascii_path(step)
+                if not ((ascii_plt is not None and ascii_plt.is_file())
+                        or chain.binary_path(step).is_file()):
+                    unbacked.append(step)
+                stood[step] = 'PLT not checked (--no-verify)'
+                return None
             if step not in verdict:
                 stand_in = chain.for_out(step, out_by_step.get(step, []))
                 if stand_in.ok:
@@ -633,6 +645,12 @@ class CaseOrganizer(HistoryMixin):
             steps = sorted(steps)
             return ', '.join(map(str, steps[:10])) + (', ...' if len(steps) > 10 else '')
 
+        if waived:
+            self.console.print("  [yellow]--no-verify:[/yellow] no PLT was asked for; every "
+                               ".out in range goes")
+            if unbacked:
+                self.console.print(f"  [yellow]{len(set(unbacked))} step(s) have no PLT here, so "
+                                   f"their field data is lost:[/yellow] {listed(set(unbacked))}")
         if 'bad' in kept_out:
             bad = kept_out['bad']
             self.console.print(f"  [red]Keeping .out of {len(bad)} step(s) whose PLT "

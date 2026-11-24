@@ -689,7 +689,7 @@ Shape: the same per-command waiver as Phase 28, never read by `auto`.
   cannot be wiped by one flag.
 - Not on `rst`, `history` or `vtu`; `auto` never passes it (a test).
 
-- [ ] `case organise out --no-verify`: parser, range required, the `.out` of
+- [x] `case organise out --no-verify`: parser, range required, the `.out` of
       every step in range deleted, the notice (`organizer.py`, `__init__.py`)
 - [ ] Tests on a dummy case: steps with no PLT, with a cut-short PLT and with a
       whole PLT all go; without a range it is refused; `rst` refuses the flag;

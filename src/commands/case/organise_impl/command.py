@@ -136,6 +136,10 @@ def _check_keep_flags(args, subcommand):
     if subcommand == 'plt' and not getattr(args, 'delete_binary', False):
         if getattr(args, 'keep_freq', None) is not None:
             return "--keep-freq only applies to `binary`"
+    if subcommand == 'out' and getattr(args, 'no_verify', False):
+        if getattr(args, 't1', None) is None and getattr(args, 't2', None) is None:
+            return ("--no-verify deletes .out without a PLT, so it needs a range: "
+                    "give --t1 and/or --t2")
     return None
 
 

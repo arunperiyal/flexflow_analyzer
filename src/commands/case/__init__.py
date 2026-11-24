@@ -213,6 +213,10 @@ class CaseCommand(BaseCommand):
             time_window(sub,
                         t1_kwargs=dict(metavar='STEP', help='Only target timesteps >= STEP'),
                         t2_kwargs=dict(metavar='STEP', help='Only target timesteps <= STEP'))
+            if word == 'out':
+                sub.add_argument('--no-verify', action='store_true',
+                                 help='Delete every .out in --t1/--t2 without a PLT standing in '
+                                      'for it (steps with no PLT lose their field data)')
             organise_flags(sub, 'out/rst')
 
         # case organise plt
