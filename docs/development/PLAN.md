@@ -691,7 +691,7 @@ Shape: the same per-command waiver as Phase 28, never read by `auto`.
 
 - [x] `case organise out --no-verify`: parser, range required, the `.out` of
       every step in range deleted, the notice (`organizer.py`, `__init__.py`)
-- [ ] Tests on a dummy case: steps with no PLT, with a cut-short PLT and with a
+- [x] Tests on a dummy case: steps with no PLT, with a cut-short PLT and with a
       whole PLT all go; without a range it is refused; `rst` refuses the flag;
       no `auto` step carries it
 - [ ] Help text, completion, `CHANGELOG.md`
