@@ -198,3 +198,53 @@ def test_the_whole_chain_in_order_leaves_only_the_remote_copies(world):
     organise(world, 'plt', delete_binary=True)
     assert left(world.run, '.out') == [] and left(world.run, '.plt') == []
     assert left(world.binary, '.plt') == [] and left(world.there, '.plt') == list(STEPS)
+
+
+# --- out --no-verify ------------------------------------------------------------------
+
+def test_out_no_verify_deletes_every_out_in_range_with_or_without_a_plt(world):
+    (world.run / 'riser.200.plt').unlink()                      # no ASCII PLT ...
+    (world.binary / 'riser.200.plt').unlink()                   # ... and no binary one
+    cut = world.run / 'riser.300.plt'
+    cut.write_bytes(cut.read_bytes()[:40])                      # ASCII PLT cut short
+    shutil.rmtree(world.there)
+    kept_before = left(world.run, '.out')
+    assert kept_before == list(STEPS)
+    out = organise(world, 'out', no_verify=True, t1=200)
+    assert left(world.run, '.out') == [100]                     # outside the range: untouched
+    assert 'PLT not asked' not in out and '--no-verify' in out
+    assert '1 step(s) have no PLT here, so their field data is lost: 200' in out
+
+
+def test_out_without_no_verify_still_keeps_a_step_with_no_plt(world):
+    (world.run / 'riser.200.plt').unlink()
+    (world.binary / 'riser.200.plt').unlink()
+    shutil.rmtree(world.there)
+    organise(world, 'out')
+    assert left(world.run, '.out') == [200]
+
+
+def test_out_no_verify_dry_run_deletes_nothing(world):
+    organise(world, 'out', no_verify=True, t1=100, dry_run=True)
+    assert left(world.run, '.out') == list(STEPS)
+
+
+def test_no_verify_on_out_needs_a_range_and_rst_refuses_the_flag():
+    import argparse
+    from src.commands.case import CaseCommand
+    from src.commands.case.organise_impl.command import _check_keep_flags
+    parser = argparse.ArgumentParser()
+    CaseCommand().setup_parser(parser.add_subparsers(dest='command'))
+
+    def parse(*words):
+        args = parser.parse_args(['case', 'organise', *words])
+        for name in ('t1', 't2'):                       # context resolves these when run
+            if not isinstance(getattr(args, name), (int, float)):
+                setattr(args, name, None)
+        return args
+    assert 'needs a range' in _check_keep_flags(parse('out', 'C1', '--no-verify'), 'out')
+    assert _check_keep_flags(parse('out', 'C1', '--no-verify', '--t1', '9850'), 'out') is None
+    assert _check_keep_flags(parse('out', 'C1', '--no-verify', '--t2', '500'), 'out') is None
+    assert _check_keep_flags(parse('out', 'C1'), 'out') is None
+    with pytest.raises(SystemExit):
+        parse('rst', 'C1', '--no-verify', '--t1', '1')

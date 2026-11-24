@@ -668,6 +668,34 @@ offering the cases that need something lets the next command act on only those:
 - [ ] Help for `auto status`, `docs/architecture/auto.md` (new section at the
       end), `CHANGELOG.md`
 
+### Phase 35: `case organise out --no-verify`, delete `.out` without a PLT (branch `out-no-verify`)
+
+From the user (2026-11-24): `case organise out --t1 9850` kept 23 `.out` files
+because no `riser.<step>.plt` stood in for them yet; the user wants to delete
+them without converting. Phase 28 gave `--no-verify` to `plt --delete-binary`
+and left `out` out, since the local binary PLT stands in there; that reasoning
+did not cover a step that has no PLT at all, which is this case.
+
+Shape: the same per-command waiver as Phase 28, never read by `auto`.
+
+- `--no-verify` on `case organise out` skips the PLT chain
+  (`chain.for_out`): every `.out` in range goes, with or without a PLT.
+- It is printed, not silent: a line "PLT not checked (--no-verify): the field
+  data of these steps is lost unless a PLT exists" in the step and in the
+  summary, with the number of steps that had no whole PLT.
+- It uses the existing confirmation (`--yes` skips it, `--dry-run` shows the
+  list); the steps with no PLT are named before the question.
+- It needs `--t1` (or `--t2`): without a range it is refused, so the whole run
+  cannot be wiped by one flag.
+- Not on `rst`, `history` or `vtu`; `auto` never passes it (a test).
+
+- [x] `case organise out --no-verify`: parser, range required, the `.out` of
+      every step in range deleted, the notice (`organizer.py`, `__init__.py`)
+- [x] Tests on a dummy case: steps with no PLT, with a cut-short PLT and with a
+      whole PLT all go; without a range it is refused; `rst` refuses the flag;
+      no `auto` step carries it
+- [x] Help text, completion, `CHANGELOG.md`
+
 ### Phase 12: `case check --remote`, verify against the remote (branch `check-remote`)
 
 Found on a real case (`BR0SG0U1P0`, PLTs moved to the remote by hand; none
@@ -694,7 +722,7 @@ full)", though the PLT was on the remote. Both looked only on this machine.
       `.cases.yml`: use it); "Convert them first" only for steps with a PLT
       nowhere. The "not asked" line says what to type
 - [ ] Dummy case (PLTs on the remote only, none local) and tests for each
-- [ ] Help text, completion, `CHANGELOG.md`
+- [x] Help text, completion, `CHANGELOG.md`
 
 ## Backlog
 
