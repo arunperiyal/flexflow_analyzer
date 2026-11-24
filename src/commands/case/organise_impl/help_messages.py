@@ -95,6 +95,13 @@ Organize and clean up case directories. Pick one subcommand.
         restart), keeps its .out and is listed; the other steps go. The
         .rst are not touched.
 
+        {Colors.CYAN}--no-verify{Colors.RESET}
+            Delete every .out in --t1/--t2 without a PLT standing in for it,
+            for steps you do not want to convert. The steps with no PLT here
+            lose their field data and are listed first. It needs --t1 and/or
+            --t2, asks for confirmation (--yes skips that, --dry-run lists)
+            and is never passed by `auto`.
+
         {Colors.CYAN}--remote NAME{Colors.RESET}
             The remote to ask about a binary PLT that binary/ no longer
             holds. Not needed when .cases.yml lists only one remote: it is
@@ -152,8 +159,8 @@ Organize and clean up case directories. Pick one subcommand.
             are whole here, with or without a copy there. For a machine that
             is not the server, where the files are not wanted. It says so,
             and still asks for confirmation (--yes skips that).
-              • ascii and out never take it: nothing else would
-                stand in for what they delete
+              • ascii never takes it: nothing else would stand in for what
+                it deletes. `out` has its own (see above)
               • `auto` never passes it
 
         {Colors.CYAN}--remote NAME{Colors.RESET}
@@ -193,7 +200,7 @@ Organize and clean up case directories. Pick one subcommand.
 {Colors.BOLD}OTHER OPTIONS:{Colors.RESET}
     --dry-run                 Show what would be deleted without deleting anything
     --log                     Create log file of all deletions
-    --no-verify               plt binary: do not ask the remote (see above)
+    --no-verify               plt binary: do not ask the remote; out: no PLT needed (see above)
     --yes              Skip confirmation prompts (history clean/compile/prune included)
     -v, --verbose             Show detailed information
     -h, --help                Show this help message
@@ -352,6 +359,7 @@ def print_organise_examples():
 
     • riser.500_1.out      → Delete (riser.500.plt is whole and newer)
     • riser.550_1.out      → Keep   (no riser.550.plt yet -- convert it first)
+    • riser.550_1.out      → Delete with --no-verify --t1 500 (no PLT needed)
 
 {Colors.BOLD}What plt ascii Does:{Colors.RESET}
 

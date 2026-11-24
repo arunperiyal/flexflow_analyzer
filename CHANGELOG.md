@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### 🗑️ `case organise out --no-verify`
+
+- Deletes every `.out` in `--t1`/`--t2` without a PLT standing in for it, for
+  steps you do not want to convert. It needs a range, lists the steps that
+  have no PLT (their field data is lost), asks for confirmation (`--yes`
+  skips it, `--dry-run` lists) and is never passed by `auto`.
+
 ### 🔗 Pipe rows between commands
 
 - `data stats --func maxloc` (also `minloc`, `zeroloc`) now offers the PLT it

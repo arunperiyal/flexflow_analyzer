@@ -694,7 +694,7 @@ Shape: the same per-command waiver as Phase 28, never read by `auto`.
 - [x] Tests on a dummy case: steps with no PLT, with a cut-short PLT and with a
       whole PLT all go; without a range it is refused; `rst` refuses the flag;
       no `auto` step carries it
-- [ ] Help text, completion, `CHANGELOG.md`
+- [x] Help text, completion, `CHANGELOG.md`
 
 ### Phase 12: `case check --remote`, verify against the remote (branch `check-remote`)
 
@@ -722,7 +722,7 @@ full)", though the PLT was on the remote. Both looked only on this machine.
       `.cases.yml`: use it); "Convert them first" only for steps with a PLT
       nowhere. The "not asked" line says what to type
 - [ ] Dummy case (PLTs on the remote only, none local) and tests for each
-- [ ] Help text, completion, `CHANGELOG.md`
+- [x] Help text, completion, `CHANGELOG.md`
 
 ## Backlog
 
