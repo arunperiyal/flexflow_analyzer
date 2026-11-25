@@ -668,6 +668,19 @@ offering the cases that need something lets the next command act on only those:
 - [ ] Help for `auto status`, `docs/architecture/auto.md` (new section at the
       end), `CHANGELOG.md`
 
+### Phase 36: tab completion of `case organise plt` (branch `plt-completion`)
+
+Bug from the user (2026-11-25): auto-completion on `case organise plt` does not
+work. The `ascii` / `binary` words have a completer (`plt_actions.completer`
+in `src/commands/case/__init__.py`), so find out what fails: the words, the
+flags after them, or the case argument. Note: the subcommand is spelled
+`organise`; `organize` is not a registered name, which may be part of it.
+
+- [ ] Reproduce in the shell (`case organise plt <Tab>`, after a case, after a
+      word, after `--`) and write down which of the three fails
+- [ ] Fix it, with a test that asks the completer for each position
+- [ ] `CHANGELOG.md`
+
 ### Phase 12: `case check --remote`, verify against the remote (branch `check-remote`)
 
 Found on a real case (`BR0SG0U1P0`, PLTs moved to the remote by hand; none
