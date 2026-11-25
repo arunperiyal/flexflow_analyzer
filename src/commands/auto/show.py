@@ -334,11 +334,33 @@ def execute_commands(args) -> int:
     return 1 if problems else 0
 
 
+STATUS_ONLY = ('all', 'needs', 'todo', 'running')
+
+
+def _status_offer(results, only):
+    """Offer the cases picked by --only to the command after a `|`
+    (`auto status --only needs | case show`), one row {case} each. Nothing is
+    offered outside the shell, or by a shellkit without rows (0.1.8)."""
+    from shellkit import current_runtime
+    rt = current_runtime()
+    if rt is None or not hasattr(rt, 'emit'):
+        return
+    picked = [snap.dir for snap, plan, flags in results if only == 'all' or flags[only]]
+    if picked:
+        rt.emit([{'case': str(d)} for d in picked])
+
+
 def execute_status(args) -> int:
-    """One line per case: state, steps, jobs, what is next."""
+    """One line per case: state, steps, jobs, what is next. The cases picked by
+    --only needs|todo|running|all (default all) are offered to a command after `|`."""
     from rich.table import Table
     from rich import box
     from src.core.auto.decide import _size_text
+    only = getattr(args, 'only', None) or 'all'
+    if only not in STATUS_ONLY:
+        Console().print(f"[red]Error:[/red] auto status --only is one of "
+                        f"{', '.join(STATUS_ONLY)}, not '{escape(only)}'")
+        return 2
     got = _collect(args)
     if isinstance(got, int):
         return got
@@ -350,6 +372,7 @@ def execute_status(args) -> int:
     for col in ('case', 'state', 'steps', 'job', 'next'):
         table.add_column(col, no_wrap=col != 'next', overflow='fold')
     doing = 0
+    flagged = []                    # (snap, plan, {needs, todo, running})
     for snap, plan in results:
         c = plan.ctx
         reached = c.get('reached')
@@ -369,7 +392,10 @@ def execute_status(args) -> int:
             nxt.append(f"upload {_size_text(sum(plan.uploads.values()))}")
         if c.get('del_out') or c.get('del_binary') or c.get('thin'):
             nxt.append('clean up')
-        doing += any('needs you' not in item and 'waits' not in item for item in nxt)
+        todo = any('needs you' not in item and 'waits' not in item for item in nxt)
+        doing += todo
+        flagged.append((snap, plan, {'needs': bool(plan.needs_you), 'todo': todo,
+                                     'running': bool(c.get('main_now') or c.get('post_now'))}))
         table.add_row(escape(plan.name), f"[{STATE_STYLE.get(plan.state, 'white')}]{plan.state}[/]",
                       steps, jobs, ', '.join(nxt) or '[green]nothing[/green]')
     console.print(table)
@@ -377,4 +403,5 @@ def execute_status(args) -> int:
     console.print(f"[bold]{len(results)} case(s)[/bold] · {doing} with something to do · "
                   + (f"[bold red]{needs} need(s) you[/bold red] (`auto show` says why)" if needs
                      else "[green]none needs you[/green]"))
+    _status_offer(flagged, only)
     return 1 if problems or needs else 0
