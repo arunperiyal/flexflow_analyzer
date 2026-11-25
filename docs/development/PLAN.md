@@ -678,10 +678,13 @@ in `src/commands/case/__init__.py`), so find out what fails: the words, the
 flags after them, or the case argument. Note: the subcommand is spelled
 `organise`; `organize` is not a registered name, which may be part of it.
 
-- [ ] Reproduce in the shell (`case organise plt <Tab>`, after a case, after a
-      word, after `--`) and write down which of the three fails
-- [ ] Fix it, with a test that asks the completer for each position
-- [ ] `CHANGELOG.md`
+- [x] Reproduce in the shell (`case organise plt <Tab>`, after a case, after a
+      word, after `--`) and write down which of the three fails. Found: the words
+      and flags after a case were fine; the first word is read as an action when
+      the case comes from `use case:`, and there Tab offered only directories, and
+      `plt a<Tab>` nothing (same for `history`)
+- [x] Fix it, with a test that asks the completer for each position
+- [x] `CHANGELOG.md`
 
 ### Phase 12: `case check --remote`, verify against the remote (branch `check-remote`)
 
