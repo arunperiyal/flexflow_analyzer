@@ -353,6 +353,27 @@ def test_case_positional_completes_directories(rt):
     assert texts(rt, 'case show Ca') == ['CaseA/', 'CaseB/']
 
 
+def test_organise_action_words_complete_in_every_position(rt):
+    # after the case word
+    assert texts(rt, 'case organise plt CaseA ') == ['ascii', 'binary']
+    assert texts(rt, 'case organise plt CaseA a') == ['ascii']
+    assert texts(rt, 'case organise history CaseA c') == ['clean', 'compile']
+    # no case set: the first word is a case, so only cases are offered
+    assert texts(rt, 'case organise plt ') == ['CaseA/', 'CaseB/']
+    assert texts(rt, 'case organise plt a') == []
+    # with `use case:` that first word is an action (the command reads it so), and
+    # the case directories are still offered beside the words
+    use(rt, 'case:CaseA')
+    assert texts(rt, 'case organise plt ') == ['ascii', 'binary', 'CaseA/', 'CaseB/']
+    assert texts(rt, 'case organise plt a') == ['ascii']
+    assert texts(rt, 'case organise plt b') == ['binary']
+    assert texts(rt, 'case organise history ')[:5] == ['update', 'clean', 'compile',
+                                                       'verify', 'prune']
+    assert texts(rt, 'case organise history CaseA ')[:2] == ['update', 'clean']
+    assert 'ascii' not in texts(rt, 'case organise out ')       # only plt and history take words
+    assert {'--t1', '--freq'} <= set(texts(rt, 'case organise plt --'))
+
+
 def test_remote_completion(rt, monkeypatch):
     from src.utils import remote_config
     monkeypatch.setattr(remote_config.RemoteConfig, 'get_all_remotes',
