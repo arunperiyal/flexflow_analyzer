@@ -27,8 +27,16 @@ def print_auto_help():
         inputs).
     auto commands [case]   just the Action commands, numbered, as plain text
                            (`auto commands '*' > todo.sh` to read before running)
-    auto status [case]     one line per case: state, steps, jobs (with ids), what is next;
-                           a footer counts the cases and those that need you
+    auto status [case] [--only needs|todo|running|all]
+                           one line per case: state, steps, jobs (with ids), what is next;
+                           a footer counts the cases and those that need you. The cases
+                           picked by --only (default all: needs = need you, todo = have
+                           something to do, running = have a job in the queue) go to a
+                           command after a `|`, which runs once for each:
+                               auto status * --only needs | case show
+                               auto status * --only todo | auto apply plt
+                           the second command still asks its own questions (auto apply
+                           asks per case unless --yes). Needs shellkit 0.1.8
     auto apply <target> [case] [--remote NAME] [--delete] [--dry-run] [--yes]
         target: history, plt, output, input, rst or all. With no target nothing
         is done and the targets are listed. A target word is always a target
