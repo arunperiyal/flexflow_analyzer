@@ -83,11 +83,23 @@ steady oscillation, or a steady value -- and from which tsId it has.
     judged). It is looked for inside the window: with --last, it is about the
     window start when all of it is steady. "-" when no rest passes.
 
+{Colors.BOLD}PIPING:{Colors.RESET}
+    Each variable with a steady start offers it to the command after a `|`,
+    which then runs once per case with {Colors.YELLOW}t1{Colors.RESET} set to that tsId (and `var`
+    when several variables were checked), so it works on the settled part:
+
+        use case:* node:25 var:dy; data check steady | data stats --func rms,std
+
+    A variable whose "from" is "-" offers nothing, and it is said. With
+    `use last:N` the window still ends where it did; the row's t1 lies inside
+    it. Needs shellkit 0.1.8; without it the table still prints.
+
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
     data check steady CS4SG1U1 --var dy --node 24
     data check steady CS4SG1U1 --var dx,dy --node 24 --last 4000
     data check steady CS4SG1U1 --var tt --oisd --tol 0.1 -v
     data check steady * --var dy --last 4000
+    data check steady * --var dy --node 25 | data stats --var dy --func rms,std
 """)
 
 
@@ -104,4 +116,8 @@ def print_steady_examples():
   {Colors.BOLD}From the shell context:{Colors.RESET}
     use case:CS4SG1U1 var:dy node:24 last:4000
     data check steady
+
+  {Colors.BOLD}The statistics of the settled part of every case:{Colors.RESET}
+    use case:* node:25 var:dy
+    data check steady | data stats --func rms,std
 """)

@@ -636,16 +636,18 @@ of every case:
 
     use case:* node:25 var:dy; data check steady | data stats --func rms,std
 
-- [ ] `data check steady` offers `{case, t1: the steady tsId}` per case and
+- [x] `data check steady` offers `{case, t1: the steady tsId}` per case and
       variable where it found one (none for "-", which is said, not skipped
       silently); it needs no new flag
-- [ ] The row's `t1` is honoured when `last` is also set in the context: check
+- [x] The row's `t1` is honoured when `last` is also set in the context: check
       what `data stats` and `data table` do with `t1` and `last` together
       (`last_arg` ignores a context `last` only when `t1`/`t2` were typed) and
-      make the row win, with a test
-- [ ] A test through the pipe on two registry cases, `data check steady |
+      make the row win, with a test. Found: no code needed, the check and the
+      next command read the same `last`, so the steady step lies inside its
+      window and `last` cuts nothing; the test pins it
+- [x] A test through the pipe on two registry cases, `data check steady |
       data stats --func rms` (each case's stats start at its own steady step)
-- [ ] Help for `data check steady` (the pipe, with the example), `docs/usage/`,
+- [x] Help for `data check steady` (the pipe, with the example), `docs/usage/`,
       `CHANGELOG.md`
 
 ### Phase 34: `auto status` offers rows (branch `status-rows`)

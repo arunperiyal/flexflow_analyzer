@@ -17,6 +17,11 @@
   `use case:* last:1000 node:25 var:dy; data stats --func maxloc | case
   download plt`. Needs shellkit 0.1.8; a `|` into `grep` and the like is
   unchanged.
+- `data check steady` offers the tsId from which the rest of the window is
+  steady, per case, as `t1` (with `var` when several variables are checked), so
+  the next command works on the settled part:
+  `use case:* node:25 var:dy; data check steady | data stats --func rms,std`.
+  A variable with no steady start offers nothing, and it is said.
 
 ### ⚠️ `case organise`: `--yes`, and `vtu` asks and deletes
 
