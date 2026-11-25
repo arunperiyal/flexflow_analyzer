@@ -647,7 +647,7 @@ of every case:
       window and `last` cuts nothing; the test pins it
 - [x] A test through the pipe on two registry cases, `data check steady |
       data stats --func rms` (each case's stats start at its own steady step)
-- [ ] Help for `data check steady` (the pipe, with the example), `docs/usage/`,
+- [x] Help for `data check steady` (the pipe, with the example), `docs/usage/`,
       `CHANGELOG.md`
 
 ### Phase 34: `auto status` offers rows (branch `status-rows`)
