@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### 🐛 Tab completion of `case organise plt` and `history`
+
+- With the case set by `use case:`, `case organise plt <Tab>` offered only
+  directories and `plt a<Tab>` nothing, because the first word is read as an
+  action. It now offers `ascii` / `binary` (and `update`, `clean`, ... for
+  `history`) beside the case directories. After a typed case it worked already.
+
 ### 🗑️ `case organise out --no-verify`
 
 - Deletes every `.out` in `--t1`/`--t2` without a PLT standing in for it, for

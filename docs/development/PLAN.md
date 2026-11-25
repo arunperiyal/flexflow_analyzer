@@ -684,7 +684,7 @@ flags after them, or the case argument. Note: the subcommand is spelled
       the case comes from `use case:`, and there Tab offered only directories, and
       `plt a<Tab>` nothing (same for `history`)
 - [x] Fix it, with a test that asks the completer for each position
-- [ ] `CHANGELOG.md`
+- [x] `CHANGELOG.md`
 
 ### Phase 12: `case check --remote`, verify against the remote (branch `check-remote`)
 
