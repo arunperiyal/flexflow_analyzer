@@ -130,3 +130,41 @@ def test_bad_limits(case):
         execute_check(args(case=str(case), var=["dy"], blocks=1))
     with pytest.raises(SystemExit):
         execute_check(args(case=str(case), var=["dy"], min_cycles=2))
+
+
+# --- rows for the command after a `|` (shellkit 0.1.8) ---------------------------------
+
+from types import SimpleNamespace
+
+
+@pytest.fixture
+def offered(monkeypatch):
+    rows = []
+    monkeypatch.setattr('shellkit.current_runtime',
+                        lambda: SimpleNamespace(emit=lambda r: rows.extend(r)))
+    return rows
+
+
+def test_offers_the_steady_tsid_of_the_case(case, offered):
+    execute_check(args(case=str(case), var=["dy"]))
+    assert len(offered) == 1 and set(offered[0]) == {'case', 't1'}
+    assert offered[0]['case'] == str(case) and 500 < offered[0]['t1'] < 3000
+
+
+def test_no_steady_start_offers_nothing_and_says_so(tmp_path, offered, capsys):
+    d = tmp_path / "CS2"
+    (d / "othd_files").mkdir(parents=True)
+    tsids = np.arange(1, 6001)
+    x = np.exp(tsids / 1500.0) * np.sin(2 * np.pi * tsids * 0.01)   # never settles
+    (d / "othd_files" / "riser1.othd").write_text(_othd(tsids, x))
+    (d / "simflow.config").write_text("problem = riser\nnp = 1\n")
+    execute_check(args(case=str(d), var=["dy"]))
+    assert offered == [] and 'nothing offered' in plain(capsys)
+
+
+def test_without_a_shell_or_with_an_older_one_the_table_is_still_shown(case, monkeypatch, capsys):
+    monkeypatch.setattr('shellkit.current_runtime', lambda: None)
+    execute_check(args(case=str(case), var=["dy"]))
+    monkeypatch.setattr('shellkit.current_runtime', lambda: SimpleNamespace())   # no emit
+    execute_check(args(case=str(case), var=["dy"]))
+    assert plain(capsys).count("amplitude growing") == 2

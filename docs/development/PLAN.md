@@ -636,7 +636,7 @@ of every case:
 
     use case:* node:25 var:dy; data check steady | data stats --func rms,std
 
-- [ ] `data check steady` offers `{case, t1: the steady tsId}` per case and
+- [x] `data check steady` offers `{case, t1: the steady tsId}` per case and
       variable where it found one (none for "-", which is said, not skipped
       silently); it needs no new flag
 - [ ] The row's `t1` is honoured when `last` is also set in the context: check
