@@ -965,6 +965,34 @@ def _stopped_short(w):
                           f"({how}). Queue a restart with `{ask}`?{why}")
 
 
+def _steady(w):
+    """A case that reached maxTimeSteps and has nothing queued: has it settled?
+    (auto.md 13.24). Only when auto.steady_var is set. Never queues anything."""
+    snap, conf, plan = w.snap, w.conf, w.plan
+    if not conf.steady_var or w.state != 'done':
+        return
+    from .steady import judge
+    got = judge(snap.dir, conf.steady_var, conf.steady_last, tol=conf.steady_tol,
+                mean_tol=conf.steady_mean_tol, min_cycles=conf.steady_min_cycles, blocks=4)
+    var, span = conf.steady_var, f"the last {conf.steady_last} steps"
+    if got.verdict == 'steady':
+        plan.add('note', f"{var} is steady over {span} (steps {got.first} to {got.last_step}, "
+                         f"{got.cycles} cycles).", 'steady')
+        return
+    if not got.verdict:
+        plan.add('needs', f"The steady check of {var} could not be made: "
+                          f"{'; '.join(got.reasons)}.", 'steady')
+        return
+    sets = sorted(t for t, n in snap.rst.items() if snap.nsg and n == snap.nsg
+                  and t <= (w.reached or 0) and not w.stale_rst(t))
+    more = (snap.max_steps or 0) + conf.steady_last
+    restart = f"run main restart --case {snap.name} --time {sets[-1] if sets else '<tsId>'}"
+    why = '; '.join(got.reasons) or got.verdict
+    plan.add('needs', f"{var} is {got.verdict} over {span} ({why}). To run longer: "
+                      f"`def time maxTime --case {snap.name} --value {more}`, then `{restart}`.",
+             'steady')
+
+
 def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan:
     if snap.error:
         plan = CasePlan(snap.name, 'skipped')
@@ -1014,7 +1042,7 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
     w.last_main, w.last_post, w.has_history = last_main, last_post, has_history
     w.cloud, w.rst_remote = cloud, rst_remote
     for part in (_flags, _folder_rule, _history, _restart_view, _post, _plt_upload,
-                 _rst_upload, _input_upload, _broken_plts, _deletions, _vtu, _stopped_short):
+                 _rst_upload, _input_upload, _broken_plts, _deletions, _vtu, _stopped_short, _steady):
         part(w)
     return plan
 

@@ -55,20 +55,6 @@ organise out` (Phase 14). Both paths now exist side by side.
       rule, the queued-restart hold-back and the one question with totals
 
 
-### Phase 7: `auto`, the steady check (branch `auto-steady`)
-
-`data check steady` exists; `auto` does not use it yet. `auto` never queues
-main jobs.
-
-- [ ] Design section at the end of `auto.md`: settings under `auto:` in
-      `.cases.yml` (variable, last N frames, tolerance)
-- [ ] Observe: run the steady check over the last N frames of OTHD/OISD, only
-      for cases that reached `maxTimeSteps`
-- [ ] Decide and report: not steady goes to "Needs you" with
-      `def time maxTimeSteps <N>` then `run main restart <last step>`
-- [ ] Dummy cases (steady, not steady) and tests
-- [ ] Help text and `CHANGELOG.md`
-
 ### Phase 9: files for FlowReel (branch `flowreel-export`)
 
 Design: `docs/architecture/flowreel.md`. Check the key names against FlowReel's
@@ -188,6 +174,7 @@ As noted on 2026-11-26.
 | 3 | `plan-file` | This file; `problems.md` removed (its problem was fixed in `389ef30`); the `prompt.md` note (`run post --remote`, `--t1` / `--t2`) found already built |
 | 4 | `repo-cleanup` | Removed `module_backup/`, `main_old.py`, the shadowed command files, root `mainFlex.sh` and `sample.yaml`; `.gitignore` tidied. The `config` command was left (backlog). Still open, on the user's word: delete the local branches already merged |
 | 5 | `web-render-tests` | The two failing render tests: the route they fetched was removed on purpose in `70d5224`; the tests now go through `save` and `render-file/<token>` |
+| 7 | `auto-steady` | `auto` judges a finished case with the steady check; not steady goes to Needs you with the commands to run longer (§13.24) |
 | 12 | `checked-transfer` | `case upload` and `auto` send through one checked path (`src/core/transfer/`: temporary name, size and md5, rename) and one ledger, whose entries now hold the local `mtime` and the remote `path`; `--to` / `--from` became `--remote`; the crash of `case upload --help` fixed |
 | 13 | `plt-verify` | `case upload plt` / `case download plt` (the old word `binary` still works); `case check plt --verify --remote NAME` compares each binary PLT with its remote copy by size and md5, writes the ledger and exits 0 only when all are verified (`verify_plts()` in `src/core/transfer/verify.py`) |
 | 18 | `plt-verify-chain` | `case check plt --verify` after the user's review: md5 by reading the copy back when the remote has no `md5sum`; PLTs only on the remote compared with the ledger's record (an emptied `binary/` is fine); steps in neither place listed; a broken PLT says how to make it again (`run post convert`, else `run post full`); a remote that is not set says so |
