@@ -175,34 +175,6 @@ unrecorded, and the right words.
 - [ ] Tests (a dummy case with unrecorded, recorded and older-than-`.out`
       copies on the folder remote), help text, `CHANGELOG.md`
 
-### Phase 12: `case check --remote`, verify against the remote (branch `check-remote`)
-
-Found on a real case (`BR0SG0U1P0`, PLTs moved to the remote by hand; none
-left here). `case check plt` printed "no riser.<step>.plt ... 1400 expected",
-and `case organise output --all-out` (no remote chosen) said "The remote was
-not asked" and kept the `.out` of step 5740 with "Convert them first (run post
-full)", though the PLT was on the remote. Both looked only on this machine.
-
-- [ ] Design: how `check` reads the remote (the `remote` / `.cases.yml`
-      folder as `auto` does, read-only), and what a file moved by hand counts
-      as; add it as a section at the end of `auto.md` or a short note in
-      `docs/architecture/`
-- [ ] Rename `case check out` to `case check output` (parser, help, completion,
-      `case check all`, docs); keep `out` as an alias for now
-- [ ] `case check history --remote NAME`: compare the history files here with
-      the remote's
-- [ ] `case check plt --remote NAME`: a `remote` row next to `binary/` and
-      `./RUN_n/`; without a remote, say the remote was not looked at, not
-      "no PLT; N expected"
-- [ ] `case check output --remote NAME`: for each `.out`, whether its PLT is
-      here or on the remote; steps with neither are listed as "convert first"
-- [ ] `case organise output`: before deleting `.out` files, look for their
-      PLTs on the remote (`--remote` or `use remote:`; one remote in
-      `.cases.yml`: use it); "Convert them first" only for steps with a PLT
-      nowhere. The "not asked" line says what to type
-- [ ] Dummy case (PLTs on the remote only, none local) and tests for each
-- [x] Help text, completion, `CHANGELOG.md`
-
 ## Backlog
 
 Not split into tasks yet. Each needs a decision before it becomes a phase.
@@ -296,6 +268,7 @@ As noted on 2026-11-26.
 | 29 | `auto-vtu` | `auto` cleans up the `.vtu` caches (§13.17) |
 | 31 | `flag-vocabulary` | One flag vocabulary for `case`, `run` and `auto`: actions are words, `--yes`, one remote is the default (§13.18) |
 | 32 | `pipe-rows` | Pipe rows between commands (shellkit 0.1.8): `data stats --func maxloc \| case download plt` |
+| 12 | `check-remote` | `case check history --remote` and `case check out --remote` (a PLT column: ASCII here, binary here, or the verified copy on the remote; the rest "convert first"); `case check plt --remote` came with Phases 13 and 18 (`auto.md` §13.22) |
 
 ---
 

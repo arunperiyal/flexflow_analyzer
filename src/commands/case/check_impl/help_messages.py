@@ -41,6 +41,10 @@ Pick one subcommand.
           {Colors.YELLOW}--cleaned{Colors.RESET}   only cleaned/
           {Colors.YELLOW}--compiled{Colors.RESET}  only the compiled file
         The flags combine; with none, every group is shown.
+          {Colors.YELLOW}--remote [NAME]{Colors.RESET}  also compare each history file here with its copy on the
+                         remote, by size and md5 read now: identical, differs, not
+                         on the remote, or only on the remote (archive/ pruned
+                         here?). Read-only; NAME as for `plt --remote`
 
     {Colors.CYAN}config{Colors.RESET}
         Validate simflow.config for consistency:
@@ -123,6 +127,11 @@ Pick one subcommand.
           • {Colors.YELLOW}--freq N{Colors.RESET} expects a step every N timesteps (N, 2N, ... up to --t2
             or the last step found) and lists each one with neither file
             as missing
+          • {Colors.YELLOW}--remote [NAME]{Colors.RESET} adds a PLT column: what stands in for each .out
+            (its ASCII PLT here, its binary PLT here, or its verified copy on
+            the remote) as `case organise out` judges it, and lists the steps
+            with none as "convert first". The remote is asked only for a step
+            with no good PLT here; NAME as for `plt --remote`
 
     {Colors.CYAN}data{Colors.RESET}
         The completeness of the case's data files (was `case status`).
@@ -150,6 +159,9 @@ Pick one subcommand.
     # Only cleaned/ and the compiled file
     case check history --case CS4SG1U1 --cleaned --compiled
 
+    # Compare the history with its copy on the remote (size and md5)
+    case check history --case CS4SG1U1 --remote cloud
+
     # Validate simflow.config
     case check config --case CS4SG1U1
 
@@ -168,6 +180,9 @@ Pick one subcommand.
     # List timesteps with .out/.rst files in the run directory
     case check out --case CS4SG1U1
     case check out --case CS4SG1U1 --t1 0 --t2 1000
+
+    # ... and which of them have a PLT here or on the remote (the rest: convert first)
+    case check out --case CS4SG1U1 --remote cloud
     case check out --case CS4SG1U1 --freq 1000          # flag missing restart steps
 
     # Data file completeness (was `case status`)

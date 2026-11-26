@@ -1105,3 +1105,21 @@ with.
 
 `auto status --case * --only needs | case show` (13.19) and `auto status ... | auto apply plt` pass a case
 to the next command as `{case}` in the row; the next command's own `--case`, if typed, wins.
+
+### 13.22 `case check history|out --remote` (2026-11-26)
+
+`case check` reads the remote the way `auto` does, and only reads: the folder of the case's
+`.cases.yml`, `--remote NAME` or `use remote:`, else the only remote it lists (13.18). A bare
+`--remote` asks for the comparison; a `use remote:` left over from earlier does not turn it on.
+
+- `case check history --case C --remote`: for each file of the chosen groups (`--archive`,
+  `--cleaned`, `--compiled`) the size and the md5 here and there, read now. Identical, differs
+  (the size or the md5), not on the remote, or only on the remote (archive/ pruned here; `case
+  download history --archive` brings it back). It writes nothing, not even the ledger.
+- `case check out --case C --remote`: a PLT column next to each `.out`: its ASCII PLT here, its
+  binary PLT here, or its verified copy on the remote, judged by `core/chain.py` exactly as `case
+  organise out` does, so what `check` shows is what `organise` would delete. A step with none is
+  listed as "convert first" with the `run post full --case C --t1 A --t2 B` that makes it. The
+  remote is asked only when a step has no good PLT here. A copy only on the remote counts when the
+  ledger recorded it verified (13.13); one that is not recorded is not counted (Phase 30).
+- `case check plt --remote` (13.14) is unchanged.

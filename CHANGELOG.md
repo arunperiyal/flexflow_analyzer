@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### 🔎 `case check history|out --remote`
+
+- `case check history --remote [NAME]` compares each history file with its copy
+  on the remote, by size and md5 read now: identical, differs, not on the remote,
+  or only on the remote (`archive/` pruned here?). `--archive`, `--cleaned` and
+  `--compiled` pick the groups as before. Read-only.
+- `case check out --remote [NAME]` adds a PLT column: what stands in for each
+  `.out` (its ASCII PLT here, its binary PLT here, or its verified copy on the
+  remote), as `case organise out` judges it. The steps with none are listed as
+  "convert first" with the `run post full` that makes them; the remote is asked
+  only for a step with no good PLT here. Without `--remote` nothing changes.
+
 ### 🧪 One test walks every command
 
 `test_scripts/test_command_rules.py` checks `.claude/rules/command-design.md` over
