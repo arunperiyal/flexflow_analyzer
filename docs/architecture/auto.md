@@ -1073,3 +1073,19 @@ questions: `auto apply` asks per case unless `--yes` (or `--dry-run`).
 auto status * --only needs   | case show
 auto status * --only todo    | auto apply plt
 ```
+
+### 13.20 The `case organise` command lines after Phase 37 (2026-11-26)
+
+The case is `--case NAME`, never a word (`.claude/rules/command-design.md`). The hand commands
+`auto show` lists for `case organise` changed their spelling; what they do did not. 13.18 keeps the
+forms it was written with.
+
+| Before (13.18) | Now |
+|---|---|
+| `case organise history C update clean compile` | `case organise history update clean compile --case C` |
+| `case organise plt C ascii --t1 A --t2 B --remote R` | `case organise plt ascii --case C --t1 A --t2 B --remote R` |
+| `case organise plt C binary ...` | `case organise plt binary --case C ...` |
+| `case organise out C ...`, `rst C ...`, `vtu C ...` | `case organise out --case C ...` (also `rst`, `vtu`) |
+
+`auto apply` reads the same steps, so its `history` line is `organise history update clean compile`.
+`case upload`, `case check` and `run post` keep the case as a word until Phase 38.

@@ -13,10 +13,16 @@ def print_organise_help():
 Organize and clean up case directories. Pick one subcommand.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    case organise <{Colors.YELLOW}subcommand{Colors.RESET}> [{Colors.YELLOW}case_directory{Colors.RESET}] [options]
+    case organise <{Colors.YELLOW}subcommand{Colors.RESET}> [{Colors.YELLOW}actions{Colors.RESET}] [--case NAME] [options]
 
-{Colors.BOLD}ARGUMENTS:{Colors.RESET}
-    {Colors.YELLOW}case_directory{Colors.RESET}        Path to case directory (optional if context is set)
+{Colors.BOLD}THE CASE:{Colors.RESET}
+    {Colors.YELLOW}--case NAME{Colors.RESET}           The case directory; * for every case in .cases.yml (each asks
+                           its own question). Left out, the `use case:` one is taken;
+                           typed, it overrides `use`. A case is never a word:
+                           `history CS1 update` is refused and says to use --case.
+    Every flag is typed in full (no abbreviations). A flag left out is filled
+    from `use` (t1, t2, freq, remote); a typed one wins. The values used are
+    printed before the question, each as (typed) or (use).
 
 {Colors.BOLD}SUBCOMMANDS:{Colors.RESET}
 
@@ -28,7 +34,7 @@ Organize and clean up case directories. Pick one subcommand.
                                                  later run redid
             othd_files/{{problem}}.othd            cleaned/ joined: one file
 
-        N numbers the jobs in the order they ran. Pass at least one flag;
+        N numbers the jobs in the order they ran. Pass at least one action word;
         they combine and always run in the order
         update → clean → compile → verify → prune.
         Parts still in the old layout (othd_files/{{problem}}N.othd) are moved
@@ -228,26 +234,26 @@ Organize and clean up case directories. Pick one subcommand.
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
     # Move the latest .othd/.oisd/.rcv from the run dir into archive/
-    case organise history CS4SG1U1 update
+    case organise history update --case CS4SG1U1
 
     # Clean and join the runs, check everything, then drop archive/
-    case organise history CS4SG1U1 clean compile verify prune
+    case organise history clean compile verify prune --case CS4SG1U1
 
     # Delete the .out files a PLT stands in for, and thin the .rst
-    case organise out CS4SG1U1
-    case organise rst CS4SG1U1
+    case organise out --case CS4SG1U1
+    case organise rst --case CS4SG1U1
 
     # Delete PLT files from run dir where binary/ has a newer copy
-    case organise plt CS4SG1U1 ascii
+    case organise plt ascii --case CS4SG1U1
 
     # Delete PLT files from binary/ for a timestep range
-    case organise plt CS4SG1U1 binary --t1 0 --t2 1000
+    case organise plt binary --case CS4SG1U1 --t1 0 --t2 1000
 
     # Delete the .vtu caches field render left in binary/ (--dry-run only lists)
-    case organise vtu CS4SG1U1
+    case organise vtu --case CS4SG1U1
 
     # Only target a timestep range
-    case organise out CS4SG1U1 --t1 0 --t2 1000
+    case organise out --case CS4SG1U1 --t1 0 --t2 1000
 
     # Use context
     use case CS4SG1U1
@@ -270,63 +276,63 @@ def print_organise_examples():
     #   riser.othd  → othd_files/archive/riser6.othd
     #   riser.oisd  → oisd_files/archive/riser6.oisd
     #   riser.rcv   → rcv_files/riser6.rcv (if present)
-    case organise history CS4SG1U1 update
+    case organise history update --case CS4SG1U1
 
     # Each run without what later runs redid, into cleaned/
-    case organise history CS4SG1U1 clean
+    case organise history clean --case CS4SG1U1
 
     # Only runs 1, 2 and 6 (3, 4, 5 abandoned): cleaned/ becomes riser1..3
-    case organise history CS4SG1U1 clean 1,2,6 compile
+    case organise history clean 1,2,6 compile --case CS4SG1U1
 
     # One file per type: othd_files/riser.othd, oisd_files/riser.oisd
-    case organise history CS4SG1U1 clean compile
+    case organise history clean compile --case CS4SG1U1
 
     # Check archive/, cleaned/ and the compiled files
-    case organise history CS4SG1U1 verify
+    case organise history verify --case CS4SG1U1
 
     # The whole round, deleting archive/ at the end (asks first)
-    case organise history CS4SG1U1 update clean compile verify prune
+    case organise history update clean compile verify prune --case CS4SG1U1
 
     # See what would happen, changing nothing
-    case organise history CS4SG1U1 clean compile --dry-run
+    case organise history clean compile --case CS4SG1U1 --dry-run
 
 {Colors.BOLD}Cleaning the .out and .rst files:{Colors.RESET}
 
     # Delete the .out a whole, newer PLT stands in for (the others stay)
-    case organise out CS4SG1U1
+    case organise out --case CS4SG1U1
 
     # Thin the .rst (keeps those every freq*10, the restart point and the newest 2)
-    case organise rst CS4SG1U1
+    case organise rst --case CS4SG1U1
 
     # Keep only the .rst of the steps divisible by 5000
-    case organise rst CS4SG1U1 --keep-freq 5000
+    case organise rst --case CS4SG1U1 --keep-freq 5000
 
     # Only clean up to timestep 5000
-    case organise out CS4SG1U1 --t2 5000
+    case organise out --case CS4SG1U1 --t2 5000
 
     # Create log file of deletions
-    case organise rst CS4SG1U1 --log
+    case organise rst --case CS4SG1U1 --log
 
 {Colors.BOLD}Cleaning PLT Files:{Colors.RESET}
 
     # Delete run-dir PLT files that have a newer copy in binary/
-    case organise plt CS4SG1U1 ascii
+    case organise plt ascii --case CS4SG1U1
 
     # Only within a timestep window
-    case organise plt CS4SG1U1 ascii --t1 1000 --t2 2000
+    case organise plt ascii --case CS4SG1U1 --t1 1000 --t2 2000
 
     # Unconditionally delete PLT files from binary/ for a timestep window
-    case organise plt CS4SG1U1 binary --t1 1000 --t2 2000
+    case organise plt binary --case CS4SG1U1 --t1 1000 --t2 2000
 
     # Thin binary/ out: in 4000-5000, keep only the steps divisible by 5
-    case organise plt CS4SG1U1 binary --t1 4000 --t2 5000 --freq 1 --keep-freq 5
+    case organise plt binary --case CS4SG1U1 --t1 4000 --t2 5000 --freq 1 --keep-freq 5
 
     # Both directions in one call
-    case organise plt CS4SG1U1 ascii binary --t1 1000 --t2 2000
+    case organise plt ascii binary --case CS4SG1U1 --t1 1000 --t2 2000
 
     # The .vtu caches of field render: list them, then delete those up to step 3000
-    case organise vtu CS4SG1U1 --dry-run
-    case organise vtu CS4SG1U1 --t2 3000
+    case organise vtu --case CS4SG1U1 --dry-run
+    case organise vtu --case CS4SG1U1 --t2 3000
 
 {Colors.BOLD}Using Context:{Colors.RESET}
 

@@ -714,7 +714,7 @@ After this phase:
       question; over `*` it asks once per case
 - [x] Remove `words_in_case_slot` (Phase 36's workaround); a completion test for
       every position of every organise command
-- [ ] Help, `docs/usage/`, the other help texts that show the old form,
+- [x] Help, `docs/usage/`, the other help texts that show the old form,
       `CHANGELOG.md`
 
 ### Phase 38: the other commands follow the rules (branches decided per group)
