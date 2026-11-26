@@ -244,7 +244,7 @@ Quantities derived from a surface zone's own elements (Tecplot-free).
       --output cyl_forces.pvd
 
   {Colors.BOLD}Sectional Cd/Cl, one table per timestep:{Colors.RESET}
-    case domain BR0SG0U1P0 --init            {Colors.DIM}# once{Colors.RESET}
+    case domain --case BR0SG0U1P0 --init            {Colors.DIM}# once{Colors.RESET}
     case domain body --name cyl --radius 0.5 {Colors.DIM}# the case states neither{Colors.RESET}
     case domain field --velocity 0,0,1
     field compute force_coeff BR0SG0U1P0 --zone cyl \\

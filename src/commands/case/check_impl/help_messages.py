@@ -14,10 +14,11 @@ Inspect OTHD/OISD time step ranges and validate simflow.config consistency.
 Pick one subcommand.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    case check <{Colors.YELLOW}subcommand{Colors.RESET}> [{Colors.YELLOW}case_directory{Colors.RESET}] [options]
+    case check <{Colors.YELLOW}subcommand{Colors.RESET}> [--case {Colors.YELLOW}NAME{Colors.RESET}] [options]
 
-{Colors.BOLD}ARGUMENTS:{Colors.RESET}
-    {Colors.YELLOW}case_directory{Colors.RESET}    Path to case directory (optional if context is set)
+{Colors.BOLD}THE CASE:{Colors.RESET}
+    {Colors.YELLOW}--case NAME{Colors.RESET}    The case directory (default: `use case:`; a typed one wins).
+                     Never a word: `case check plt CS1` is refused.
 
 {Colors.BOLD}SUBCOMMANDS:{Colors.RESET}
 
@@ -86,7 +87,7 @@ Pick one subcommand.
           • {Colors.RED}differs{Colors.RESET}: another size or another md5 (a restart that wrote
             the local file again, a damaged copy)
           • {Colors.RED}not on the remote{Colors.RESET}: no copy yet; send it with
-            {Colors.DIM}case upload plt <case> --missing{Colors.RESET}
+            {Colors.DIM}case upload plt --case <case> --missing{Colors.RESET}
           • {Colors.RED}broken here{Colors.RESET}: the local file is empty or cut short; it is
             never verified, since its copy is the same broken file. The line
             under it says how to make it again, going back along the chain:
@@ -141,39 +142,39 @@ Pick one subcommand.
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
     # Check run directory OTHD/OISD files
-    case check run CS4SG1U1
+    case check run --case CS4SG1U1
 
     # Show the OTHD/OISD history files, one table per group
-    case check history CS4SG1U1
+    case check history --case CS4SG1U1
 
     # Only cleaned/ and the compiled file
-    case check history CS4SG1U1 --cleaned --compiled
+    case check history --case CS4SG1U1 --cleaned --compiled
 
     # Validate simflow.config
-    case check config CS4SG1U1
+    case check config --case CS4SG1U1
 
     # Check PLT files against expected set
-    case check plt CS4SG1U1
-    case check plt CS4SG1U1 --freq 50
-    case check plt CS4SG1U1 --t1 0 --t2 1000
+    case check plt --case CS4SG1U1
+    case check plt --case CS4SG1U1 --freq 50
+    case check plt --case CS4SG1U1 --t1 0 --t2 1000
 
     # Compare the binary PLTs with their copies on the remote (size and md5)
-    case check plt CS4SG1U1 --remote cloud
-    case check plt CS4SG1U1 --remote cloud --t1 8950 --t2 9900 --freq 50
+    case check plt --case CS4SG1U1 --remote cloud
+    case check plt --case CS4SG1U1 --remote cloud --t1 8950 --t2 9900 --freq 50
 
     # Check .def File() references exist
-    case check def CS4SG1U1
+    case check def --case CS4SG1U1
 
     # List timesteps with .out/.rst files in the run directory
-    case check out CS4SG1U1
-    case check out CS4SG1U1 --t1 0 --t2 1000
-    case check out CS4SG1U1 --freq 1000          # flag missing restart steps
+    case check out --case CS4SG1U1
+    case check out --case CS4SG1U1 --t1 0 --t2 1000
+    case check out --case CS4SG1U1 --freq 1000          # flag missing restart steps
 
     # Data file completeness (was `case status`)
-    case check data CS4SG1U1
+    case check data --case CS4SG1U1
 
     # Run everything
-    case check all CS4SG1U1
+    case check all --case CS4SG1U1
 
     # Using context
     use case CS4SG1U1

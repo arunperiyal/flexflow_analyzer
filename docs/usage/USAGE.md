@@ -161,7 +161,7 @@ ff <command> <subcommand> [options] [arguments]
 Display comprehensive information about a simulation case:
 
 ```bash
-ff case show CS4SG1U1
+ff case show --case CS4SG1U1
 ```
 
 **Output includes:**
@@ -172,8 +172,8 @@ ff case show CS4SG1U1
 
 **Options:**
 ```bash
-ff case show CS4SG1U1 --verbose    # Detailed output
-ff case show CS4SG1U1 --json       # JSON format
+ff case show --case CS4SG1U1 --verbose    # Detailed output
+ff case show --case CS4SG1U1 --json       # JSON format
 ```
 
 ### Create New Case
@@ -210,7 +210,7 @@ MY_NEW_CASE/
 Submit and monitor SLURM simulation jobs:
 
 ```bash
-ff case run CS4SG1U1
+ff case run --case CS4SG1U1
 ```
 
 **First run:**
@@ -222,22 +222,22 @@ ff case run CS4SG1U1
 
 ```bash
 # Monitor automatically (default)
-ff case run CS4SG1U1
+ff case run --case CS4SG1U1
 
 # Submit without monitoring
-ff case run CS4SG1U1 --no-monitor
+ff case run --case CS4SG1U1 --no-monitor
 
 # Clean start (removes existing OTHD files)
-ff case run CS4SG1U1 --clean
+ff case run --case CS4SG1U1 --clean
 
 # Restart from specific timestep
-ff case run CS4SG1U1 --from-step 5000
+ff case run --case CS4SG1U1 --from-step 5000
 
 # Dry run (preview without submitting)
-ff case run CS4SG1U1 --dry-run
+ff case run --case CS4SG1U1 --dry-run
 
 # Custom job parameters
-ff case run CS4SG1U1 --nodes 4 --ntasks 128
+ff case run --case CS4SG1U1 --nodes 4 --ntasks 128
 ```
 
 **Monitoring:**
@@ -744,7 +744,7 @@ export FLEXFLOW_OUTPUT_DIR=/path/to/output
 # Enable debug mode
 export FLEXFLOW_DEBUG=1
 
-ff case show CS4SG1U1
+ff case show --case CS4SG1U1
 ```
 
 ## Tips and Best Practices
@@ -783,7 +783,7 @@ ff case show CS4SG1U1
 
 **Quick case inspection:**
 ```bash
-ff case show CS4SG1U1 && \
+ff case show --case CS4SG1U1 && \
 ff check CS4SG1U1/output/riser.othd && \
 ff data show CS4SG1U1 --limit 10
 ```

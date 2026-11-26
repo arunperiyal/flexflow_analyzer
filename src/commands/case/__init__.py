@@ -39,14 +39,6 @@ def _stepped(args):
     return _mode(args) in ('binary', 'rst')
 
 
-def _transfer_case(store, ns):
-    """The case context, unless the first word was the case itself."""
-    what = getattr(ns, 'what', None)
-    if what is not None and _mode(ns) is None:
-        return None
-    return store.get('case') if store.is_set('case') else None
-
-
 def _transfer_positionals(parser, direction):
     modes = TRANSFER_MODES[direction]
 
@@ -55,9 +47,9 @@ def _transfer_positionals(parser, direction):
     parser.add_argument('what', nargs='?', metavar='|'.join(m for m, _ in modes),
                         help='What to carry: ' + '; '.join(f"{m}: {h}" for m, h in modes)
                         ).completer = complete
-    case_arg(parser, resolve=_transfer_case,
-             help=('Local case directory path' if direction == 'upload'
-                   else 'Local case directory path (destination)'))
+    case_flag(parser, help=('The local case directory (default: use case:)' if direction == 'upload'
+                            else 'The local case directory, the destination (default: use case:)'))
+    _no_words(parser)
     for name, where in (('archive', 'archive/'), ('cleaned', 'cleaned/'),
                         ('compiled', 'the compiled file')):
         parser.add_argument(f'--{name}', action='store_true',
@@ -78,19 +70,6 @@ def _transfer_positionals(parser, direction):
 
 
 STATUS_STATES = ('new', 'meshing', 'running', 'stopped', 'done', 'failed', 'archived')
-
-
-def _status_words(rt, prefix):
-    from shellkit.completion import path_candidates
-    return [('update', "Edit the notes, or -m TEXT / --state STATE")] + path_candidates(rt, prefix)
-
-
-def _status_case(store, ns):
-    """The case context -- unless the first word was the case itself."""
-    what = getattr(ns, 'what', None)
-    if what is not None and what != 'update':
-        return None
-    return store.get('case') if store.is_set('case') else None
 
 
 def _no_words(parser):
@@ -121,7 +100,8 @@ class CaseCommand(BaseCommand):
         # case show (was: info)
         show_parser = case_subparsers.add_parser('show', add_help=False,
                                                  help='Show case information')
-        case_arg(show_parser, help='Case directory path')
+        case_flag(show_parser)
+        _no_words(show_parser)
         show_parser.add_argument('-v', '--verbose', action='store_true',
                                 help='Enable verbose output')
         show_parser.add_argument('-h', '--help', action='store_true',
@@ -155,7 +135,8 @@ class CaseCommand(BaseCommand):
         # case run
         run_parser = case_subparsers.add_parser('run', add_help=False,
                                                help='Submit and monitor SLURM jobs')
-        case_arg(run_parser, help='Case directory path')
+        case_flag(run_parser)
+        _no_words(run_parser)
         run_parser.add_argument('--no-monitor', action='store_true',
                                help='Submit jobs without monitoring')
         run_parser.add_argument('--clean', action='store_true',
@@ -279,7 +260,8 @@ class CaseCommand(BaseCommand):
         # case check run
         run_check_parser = check_subparsers.add_parser('run', add_help=False,
                                     help='Check .othd/.oisd in the active run directory')
-        case_arg(run_check_parser, help='Case directory path')
+        case_flag(run_check_parser)
+        _no_words(run_check_parser)
         run_check_parser.add_argument('-v', '--verbose', action='store_true',
                                     help='Enable verbose output')
         run_check_parser.add_argument('-h', '--help', action='store_true',
@@ -288,7 +270,8 @@ class CaseCommand(BaseCommand):
         # case check history
         history_check_parser = check_subparsers.add_parser('history', add_help=False,
                                     help='Show the time step range of every OTHD/OISD history file')
-        case_arg(history_check_parser, help='Case directory path')
+        case_flag(history_check_parser)
+        _no_words(history_check_parser)
         history_check_parser.add_argument('--archive', action='store_true',
                                     help='Show only archive/ (combinable; none shows every group)')
         history_check_parser.add_argument('--cleaned', action='store_true',
@@ -303,7 +286,8 @@ class CaseCommand(BaseCommand):
         # case check config
         config_check_parser = check_subparsers.add_parser('config', add_help=False,
                                     help='Validate simflow.config consistency')
-        case_arg(config_check_parser, help='Case directory path')
+        case_flag(config_check_parser)
+        _no_words(config_check_parser)
         config_check_parser.add_argument('-v', '--verbose', action='store_true',
                                     help='Enable verbose output')
         config_check_parser.add_argument('-h', '--help', action='store_true',
@@ -312,7 +296,8 @@ class CaseCommand(BaseCommand):
         # case check plt
         plt_check_parser = check_subparsers.add_parser('plt', add_help=False,
                                     help='Check PLT files in binary/ and run dir against expected set')
-        case_arg(plt_check_parser, help='Case directory path')
+        case_flag(plt_check_parser)
+        _no_words(plt_check_parser)
         freq_arg(plt_check_parser, metavar='N',
                  help='PLT output frequency to check against, '
                       'overriding outFreq from simflow.config')
@@ -334,7 +319,8 @@ class CaseCommand(BaseCommand):
         # case check def
         def_check_parser = check_subparsers.add_parser('def', add_help=False,
                                     help='Check that all File() references in the .def file exist')
-        case_arg(def_check_parser, help='Case directory path')
+        case_flag(def_check_parser)
+        _no_words(def_check_parser)
         def_check_parser.add_argument('-v', '--verbose', action='store_true',
                                     help='Enable verbose output')
         def_check_parser.add_argument('-h', '--help', action='store_true',
@@ -343,7 +329,8 @@ class CaseCommand(BaseCommand):
         # case check out
         out_check_parser = check_subparsers.add_parser('out', add_help=False,
                                     help='List timesteps for which .out/.rst files are present in the run directory')
-        case_arg(out_check_parser, help='Case directory path')
+        case_flag(out_check_parser)
+        _no_words(out_check_parser)
         out_check_parser.add_argument('--t1', type=float, metavar='STEP',
                                     help='Only check timesteps >= STEP')
         out_check_parser.add_argument('--t2', type=float, metavar='STEP',
@@ -361,7 +348,8 @@ class CaseCommand(BaseCommand):
         # case check data (was `case status`)
         data_check_parser = check_subparsers.add_parser('data', add_help=False,
                                     help='Check case data file completeness (was: case status)')
-        case_arg(data_check_parser, help='Case directory path')
+        case_flag(data_check_parser)
+        _no_words(data_check_parser)
         data_check_parser.add_argument('-v', '--verbose', action='store_true',
                                     help='Enable verbose output')
         data_check_parser.add_argument('-h', '--help', action='store_true',
@@ -370,7 +358,8 @@ class CaseCommand(BaseCommand):
         # case check all
         all_check_parser = check_subparsers.add_parser('all', add_help=False,
                                     help='Run every check (run + history + config + plt + def + out)')
-        case_arg(all_check_parser, help='Case directory path')
+        case_flag(all_check_parser)
+        _no_words(all_check_parser)
         freq_arg(all_check_parser, metavar='N',
                  help='PLT output frequency to check against, '
                       'overriding outFreq from simflow.config')
@@ -382,10 +371,12 @@ class CaseCommand(BaseCommand):
         # case status [update] [case]
         status_parser = case_subparsers.add_parser('status', add_help=False,
                                                    help="The case's notes (.casestatus.md) and where it is")
-        status_parser.add_argument('what', nargs='?', metavar='update|case',
-                                   help="'update' to change the notes, else the case"
-                                   ).completer = _status_words
-        case_arg(status_parser, resolve=_status_case, help='Case directory path')
+        status_parser.add_argument('what', nargs='?', metavar='update',
+                                   help="'update' to change the notes; without it, show them"
+                                   ).completer = described(
+            ('update', 'Edit the notes, or -m TEXT / --state STATE'))
+        case_flag(status_parser)
+        _no_words(status_parser)
         status_parser.add_argument('-m', '--message', metavar='TEXT',
                                    help='update: add a timestamped line to the log')
         status_parser.add_argument('--state', choices=STATUS_STATES,
@@ -406,7 +397,8 @@ class CaseCommand(BaseCommand):
         # case out
         write_parser = case_subparsers.add_parser('out', add_help=False,
                                                   help='Inspect a case\'s declared outputs and map them')
-        case_arg(write_parser, help='Case directory path')
+        case_flag(write_parser)
+        _no_words(write_parser)
         write_parser.add_argument('--list', action='store_true',
                                   help='Table of the outputTimeHistory blocks: name, input '
                                        'file, predicted othId, type, map file and probe')
@@ -435,7 +427,7 @@ class CaseCommand(BaseCommand):
         # case domain
         # `body`/`field` and the case share the two positional slots and are told
         # apart in the command, not here: making them a sub-parser would make
-        # `case domain <case> --init` an "invalid choice" error naming the case.
+        # `case domain --case <case> --init` an "invalid choice" error naming the case.
         domain_parser = case_subparsers.add_parser(
             'domain', add_help=False,
             help="Declare what the case's domain is made of, in domain.yml")
@@ -443,7 +435,8 @@ class CaseCommand(BaseCommand):
                                    help='body or field; omit for a summary of both'
                                    ).completer = described(
             ('body', 'Bodies in the domain'), ('field', 'The continuum they sit in'))
-        domain_parser.add_argument('case', nargs='?', help='Case directory path')
+        case_flag(domain_parser)
+        _no_words(domain_parser)
         domain_parser.add_argument('--init', action='store_true',
                                    help='Write domain.yml from the case .def and PLT zones')
         domain_parser.add_argument('--check', action='store_true',
@@ -577,6 +570,13 @@ class CaseCommand(BaseCommand):
 
     def execute(self, args):
         """Execute case command"""
+        stray = list(getattr(args, 'words', None) or [])
+        if stray:
+            sub = ' '.join(w for w in (getattr(args, 'case_subcommand', None),
+                                       getattr(args, 'check_subcommand', None)) if w)
+            print(f"Error: case {sub}: unexpected word '{stray[0]}'; the case is a flag "
+                  f"now: --case {stray[0]}", file=sys.stderr)
+            sys.exit(2)
         if hasattr(args, 'case_subcommand') and args.case_subcommand == 'show':
             # Delegate to show subcommand
             from .show_impl import command as show_cmd
@@ -663,10 +663,10 @@ class CaseCommand(BaseCommand):
         console.print(table)
         console.print()
         console.print("[bold]EXAMPLES:[/bold]")
-        console.print("    case show CS4SG1U1")
+        console.print("    case show --case CS4SG1U1")
         console.print("    case create myCase --problem-name test")
-        console.print("    case run CS4SG1U1")
-        console.print("    case run CS4SG1U1 --no-monitor")
+        console.print("    case run --case CS4SG1U1")
+        console.print("    case run --case CS4SG1U1 --no-monitor")
         console.print("    case organise history update --case CS4SG1U1")
         console.print("    case organise history clean compile verify --case CS4SG1U1")
         console.print("    case organise out --case CS4SG1U1")
@@ -674,26 +674,26 @@ class CaseCommand(BaseCommand):
         console.print("    case organise plt ascii --case CS4SG1U1")
         console.print("    case organise plt binary --case CS4SG1U1 --t1 0 --t2 1000")
         console.print("    case organise vtu --case CS4SG1U1")
-        console.print("    case check run CS4SG1U1")
-        console.print("    case check plt CS4SG1U1 --t1 0 --t2 1000")
-        console.print("    case check out CS4SG1U1")
-        console.print("    case check all CS4SG1U1")
-        console.print("    case status CS4SG1U1")
-        console.print("    case status update CS4SG1U1 -m \"resubmitted with np 240\"")
-        console.print("    case check data CS4SG1U1")
-        console.print("    case domain CS4SG1U1 --init")
+        console.print("    case check run --case CS4SG1U1")
+        console.print("    case check plt --case CS4SG1U1 --t1 0 --t2 1000")
+        console.print("    case check out --case CS4SG1U1")
+        console.print("    case check all --case CS4SG1U1")
+        console.print("    case status --case CS4SG1U1")
+        console.print("    case status update --case CS4SG1U1 -m \"resubmitted with np 240\"")
+        console.print("    case check data --case CS4SG1U1")
+        console.print("    case domain --case CS4SG1U1 --init")
         console.print("    case domain body --list")
         console.print("    case domain body --add --name cyl --type beam")
         console.print("    case add --dir /scratch/me/project")
         console.print("    case report")
-        console.print("    case upload ./myCase --remote remote-server")
-        console.print("    case upload ./myCase --remote remote-server --dir othd_files,oisd_files")
-        console.print("    case upload ./myCase --remote remote-server --dir othd_files --force")
-        console.print("    case upload ./myCase --remote remote-server --resume")
-        console.print("    case download ./myCase --remote remote-server")
-        console.print("    case download ./myCase --remote remote-server --dir othd_files,oisd_files")
-        console.print("    case download ./myCase --remote remote-server --force")
-        console.print("    case download ./myCase --remote remote-server --resume")
+        console.print("    case upload --case ./myCase --remote remote-server")
+        console.print("    case upload --case ./myCase --remote remote-server --dir othd_files,oisd_files")
+        console.print("    case upload --case ./myCase --remote remote-server --dir othd_files --force")
+        console.print("    case upload --case ./myCase --remote remote-server --resume")
+        console.print("    case download --case ./myCase --remote remote-server")
+        console.print("    case download --case ./myCase --remote remote-server --dir othd_files,oisd_files")
+        console.print("    case download --case ./myCase --remote remote-server --force")
+        console.print("    case download --case ./myCase --remote remote-server --resume")
         console.print()
 
 

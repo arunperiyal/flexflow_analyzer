@@ -268,18 +268,18 @@ def _folder_rule(w):
         lacking = sorted({(ext, n) for ext, h in snap.history.items()
                           for n in set(h.cleaned) - set(h.archive)})
         if cloud is None:
-            how = (f"restore it with `case download history {name} --archive --remote {conf.remote}` "
+            how = (f"restore it with `case download history --case {name} --archive --remote {conf.remote}` "
                    f"if {conf.remote} has it (it could not be listed)")
         else:
             there = [(ext, n) for ext, n in lacking
                      if f"{ext}_files/archive/{p}{n}.{ext}" in cloud]
             if len(there) == len(lacking):
                 how = (f"{conf.remote} has it: restore with "
-                       f"`case download history {name} --archive --remote {conf.remote}`")
+                       f"`case download history --case {name} --archive --remote {conf.remote}`")
             elif there:
                 how = (f"{conf.remote} has only some of it ("
                        f"{', '.join(f'{e} run {n}' for e, n in there)}): restore those with "
-                       f"`case download history {name} --archive --remote {conf.remote}`")
+                       f"`case download history --case {name} --archive --remote {conf.remote}`")
             else:
                 how = (f"{conf.remote} has no archive/ copy either, so it cannot be restored "
                        f"from there")
@@ -312,7 +312,7 @@ def _folder_rule(w):
                          f"{'they exist' if len(gone_archive) > 1 else 'it exists'} only on "
                          f"{conf.remote}. Bring "
                          f"{'them' if len(gone_archive) > 1 else 'it'} back with "
-                         f"`case download history {name} --archive --remote {conf.remote}`.")
+                         f"`case download history --case {name} --archive --remote {conf.remote}`.")
 
     w.broken_rule = broken_rule
 
@@ -334,7 +334,7 @@ def _history(w):
                 if stale:
                     plan.uploads.update(stale)
                     plan.step('history', 'upload', 'live',
-                              f"case upload history {name} --live --remote {conf.remote}",
+                              f"case upload history --case {name} --live --remote {conf.remote}",
                               files=stale,
                               note=f"a copy of the live {p}.othd/.oisd "
                                    f"({_size_text(sum(stale.values()))}), refreshed each run")
@@ -385,7 +385,7 @@ def _history(w):
         if organising or hist:
             # once organised, the plan made again lists the files to send
             plan.step('history', 'upload', 'upload-history',
-                      f"case upload history {name} --remote {conf.remote}",
+                      f"case upload history --case {name} --remote {conf.remote}",
                       files={} if organising else hist,
                       note='once the history is organised' if organising else '')
         if organising:
@@ -647,7 +647,7 @@ def _plt_upload(w):
         # an earlier run's PLT in place after a restart
         flag = '' if set(up) & set(plan.ctx.get('stale_plt') or []) else ' --missing'
         plan.step('plt', 'upload', 'upload-plt',
-                  f"case upload plt {name} --t1 {up[0]} --t2 {up[-1]}{flag} "
+                  f"case upload plt --case {name} --t1 {up[0]} --t2 {up[-1]}{flag} "
                   f"--remote {conf.remote}", files=plts)
         plan.add('upload', f"Binary PLTs, {steps_phrase([int(k.split('.')[1]) for k in plts], f).lower()}: "
                            f"{_size_text(sum(plts.values()))}")
@@ -694,12 +694,12 @@ def _rst_upload(w):
         grid_due = [t for t in sorted(todo_rst) if t != final]
         if grid_due:
             plan.step('rst', 'upload', 'upload-rst',
-                      f"case upload rst {name} --t1 {grid_due[0]} --t2 {grid_due[-1]} "
+                      f"case upload rst --case {name} --t1 {grid_due[0]} --t2 {grid_due[-1]} "
                       f"--freq {conf.upload_rst} --missing --remote {conf.remote}",
                       files={k: v for t in grid_due for k, v in todo_rst[t].items()})
         if final in todo_rst:
             plan.step('rst', 'upload', 'upload-rst-final',
-                      f"case upload rst {name} --t1 {final} --t2 {final} --missing "
+                      f"case upload rst --case {name} --t1 {final} --t2 {final} --missing "
                       f"--remote {conf.remote}", files=dict(todo_rst[final]))
         note = f", {'including' if len(todo_rst) > 1 else 'the'} final set of the finished run" \
             if final in todo_rst else ''
@@ -735,7 +735,7 @@ def _input_upload(w):
     if inputs:
         plan.uploads.update(inputs)
         plan.step('input', 'upload', 'upload-inputs',
-                  f"case upload {name} --files '{','.join(sorted(inputs))}' "
+                  f"case upload --case {name} --files '{','.join(sorted(inputs))}' "
                   f"--remote {conf.remote}", files=inputs)
         plan.add('upload', f"Inputs and case files: {len(inputs)} files "
                            f"({', '.join(sorted(inputs)[:4])}{', ...' if len(inputs) > 4 else ''})")
@@ -861,7 +861,7 @@ def _deletions(w):
         # file that is not meant to go.
         name, remote = snap.name, conf.remote
         if binary or plan.steps_of('upload-plt'):
-            plan.step('plt', 'check', 'check-plt', f"case check plt {name} --remote {remote}",
+            plan.step('plt', 'check', 'check-plt', f"case check plt --case {name} --remote {remote}",
                       note="the binary PLTs here against their copies on the remote, by md5")
         for a, b in runs_apart(ascii, []):
             plan.step('plt', 'delete', 'delete-ascii',

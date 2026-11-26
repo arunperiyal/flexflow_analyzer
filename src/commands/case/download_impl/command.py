@@ -158,11 +158,11 @@ So do the restarts ({Colors.CYAN}.restarts{Colors.RESET}, `case organise history
 the remote gets the restarts it lacks.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    case upload [{Colors.YELLOW}case{Colors.RESET}] --remote {Colors.YELLOW}REMOTE{Colors.RESET} [options]
-    case upload plt [{Colors.YELLOW}case{Colors.RESET}] [--t1 STEP] [--t2 STEP] [options]
-    case upload rst [{Colors.YELLOW}case{Colors.RESET}] [--t1 STEP] [--t2 STEP] [options]
-    case upload input [{Colors.YELLOW}case{Colors.RESET}] [options]
-    case upload history [{Colors.YELLOW}case{Colors.RESET}] [--archive] [--cleaned] [--compiled] [options]
+    case upload [--case {Colors.YELLOW}NAME{Colors.RESET}] --remote {Colors.YELLOW}REMOTE{Colors.RESET} [options]
+    case upload plt [--case {Colors.YELLOW}NAME{Colors.RESET}] [--t1 STEP] [--t2 STEP] [options]
+    case upload rst [--case {Colors.YELLOW}NAME{Colors.RESET}] [--t1 STEP] [--t2 STEP] [options]
+    case upload input [--case {Colors.YELLOW}NAME{Colors.RESET}] [options]
+    case upload history [--case {Colors.YELLOW}NAME{Colors.RESET}] [--archive] [--cleaned] [--compiled] [options]
 
 {Colors.BOLD}ARGUMENTS:{Colors.RESET}
     {Colors.YELLOW}plt{Colors.RESET}                    The binary PLTs in binary/ only -- with --t1/--t2,
@@ -207,7 +207,7 @@ the remote gets the restarts it lacks.
     Use 'use remote:<name>' in the interactive shell to set a default remote
     so --remote can be omitted.
 
-    Wildcard mode ('case upload *') uploads all cases listed in the .cases.yml
+    Wildcard mode ('case upload --case *') uploads all cases listed in the .cases.yml
     file in the current directory.
 
 {Colors.BOLD}CHECKED COPIES:{Colors.RESET}
@@ -245,7 +245,7 @@ the remote gets the restarts it lacks.
     The two flags read as they do everywhere else in FlexFlow: both bounds make
     a range, one alone names that single step. They need {Colors.YELLOW}plt{Colors.RESET} or {Colors.YELLOW}rst{Colors.RESET},
     since nothing else in a case is written per step. The t1/t2 context
-    supplies them: {Colors.DIM}use t1:1000 t2:5000{Colors.RESET}, then {Colors.DIM}case upload plt CS4SG1U1{Colors.RESET}.
+    supplies them: {Colors.DIM}use t1:1000 t2:5000{Colors.RESET}, then {Colors.DIM}case upload plt --case CS4SG1U1{Colors.RESET}.
 
     {Colors.YELLOW}--missing{Colors.RESET} carries only the selected files the remote binary/ lacks,
     or holds at another size (a copy an interrupted transfer cut short), and
@@ -301,25 +301,25 @@ the remote gets the restarts it lacks.
     take the runs until the next `case organise history compile`.
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
-    case upload history CS4SG1U1 --remote server
-    case upload history CS4SG1U1 --remote server --cleaned --compiled
-    case upload history CS4SG1U1 --remote server --live          # a running job's history, as it is now
-    case upload plt CS4SG1U1 --remote server --t1 1000 --t2 5000
-    case upload plt CS4SG1U1 --remote server --t1 5000
-    case upload plt CS4SG1U1 --remote server --missing
-    case upload input CS4SG1U1 --remote server
-    case upload rst CS4SG1U1 --remote server --t1 4000
-    case upload rst CS4SG1U1 --remote server --freq 1000 --missing   # every 1000 steps, what is not there
-    case upload rst CS4SG1U1 --remote server --t1 3000 --t2 4000 --force
-    case upload rst CS4SG1U1 --remote server
-    case upload CS4SG1U1 --remote server --files
-    case upload CS4SG1U1 --remote server --files "*.map"
-    case upload * --remote server --files --force
-    case upload CS4SG1U1 --remote server --dir binary --files
+    case upload history --case CS4SG1U1 --remote server
+    case upload history --case CS4SG1U1 --remote server --cleaned --compiled
+    case upload history --case CS4SG1U1 --remote server --live          # a running job's history, as it is now
+    case upload plt --case CS4SG1U1 --remote server --t1 1000 --t2 5000
+    case upload plt --case CS4SG1U1 --remote server --t1 5000
+    case upload plt --case CS4SG1U1 --remote server --missing
+    case upload input --case CS4SG1U1 --remote server
+    case upload rst --case CS4SG1U1 --remote server --t1 4000
+    case upload rst --case CS4SG1U1 --remote server --freq 1000 --missing   # every 1000 steps, what is not there
+    case upload rst --case CS4SG1U1 --remote server --t1 3000 --t2 4000 --force
+    case upload rst --case CS4SG1U1 --remote server
+    case upload --case CS4SG1U1 --remote server --files
+    case upload --case CS4SG1U1 --remote server --files "*.map"
+    case upload --case * --remote server --files --force
+    case upload --case CS4SG1U1 --remote server --dir binary --files
 
 {Colors.BOLD}CONTEXT:{Colors.RESET}
     Set remote context:    use remote:myserver
-    Then run:              case upload CS4SG1U1
+    Then run:              case upload --case CS4SG1U1
 """)
 
 
@@ -338,11 +338,11 @@ So do the restarts ({Colors.CYAN}.restarts{Colors.RESET}, `case organise history
 the restarts found only on the remote are added here.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    case download [{Colors.YELLOW}case{Colors.RESET}] --remote {Colors.YELLOW}REMOTE{Colors.RESET} [options]
-    case download plt [{Colors.YELLOW}case{Colors.RESET}] [--t1 STEP] [--t2 STEP] [--freq N] [options]
-    case download rst [{Colors.YELLOW}case{Colors.RESET}] [--t1 STEP] [--t2 STEP] [options]
-    case download input [{Colors.YELLOW}case{Colors.RESET}] [options]
-    case download history [{Colors.YELLOW}case{Colors.RESET}] [--archive] [--cleaned] [--compiled] [options]
+    case download [--case {Colors.YELLOW}NAME{Colors.RESET}] --remote {Colors.YELLOW}REMOTE{Colors.RESET} [options]
+    case download plt [--case {Colors.YELLOW}NAME{Colors.RESET}] [--t1 STEP] [--t2 STEP] [--freq N] [options]
+    case download rst [--case {Colors.YELLOW}NAME{Colors.RESET}] [--t1 STEP] [--t2 STEP] [options]
+    case download input [--case {Colors.YELLOW}NAME{Colors.RESET}] [options]
+    case download history [--case {Colors.YELLOW}NAME{Colors.RESET}] [--archive] [--cleaned] [--compiled] [options]
 
 {Colors.BOLD}ARGUMENTS:{Colors.RESET}
     {Colors.YELLOW}plt{Colors.RESET}                    binary/ only -- with --t1/--t2, only the timesteps
@@ -386,7 +386,7 @@ the restarts found only on the remote are added here.
     Use 'use remote:<name>' in the interactive shell to set a default remote
     so --remote can be omitted.
 
-    Wildcard mode ('case download *') downloads all cases listed in the .cases.yml
+    Wildcard mode ('case download --case *') downloads all cases listed in the .cases.yml
     file in the current directory.
 
 {Colors.BOLD}FILES:{Colors.RESET}
@@ -408,7 +408,7 @@ the restarts found only on the remote are added here.
     The two flags read as they do everywhere else in FlexFlow: both bounds make
     a range, one alone names that single step. They need {Colors.YELLOW}plt{Colors.RESET} or {Colors.YELLOW}rst{Colors.RESET},
     since nothing else in a case is written per step. The t1/t2 context
-    supplies them: {Colors.DIM}use t1:1000 t2:5000{Colors.RESET}, then {Colors.DIM}case download plt CS4SG1U1{Colors.RESET}.
+    supplies them: {Colors.DIM}use t1:1000 t2:5000{Colors.RESET}, then {Colors.DIM}case download plt --case CS4SG1U1{Colors.RESET}.
 
     {Colors.YELLOW}--freq N{Colors.RESET} thins what is left to the steps that are multiples of N,
     as it does for `field` sweeps -- with or without a range. It also comes
@@ -467,25 +467,25 @@ the restarts found only on the remote are added here.
     take the runs until the next `case organise history compile`.
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
-    case download history CS4SG1U1 --remote server
-    case download history CS4SG1U1 --remote server --compiled
+    case download history --case CS4SG1U1 --remote server
+    case download history --case CS4SG1U1 --remote server --compiled
     case download history * --remote server --cleaned --compiled
-    case download plt CS4SG1U1 --remote server --t1 1000 --t2 5000
-    case download plt CS4SG1U1 --remote server --t1 1000 --t2 5000 --freq 500
-    case download plt CS4SG1U1 --remote server --freq 1000
-    case download plt CS4SG1U1 --remote server --t1 5000
-    case download plt CS4SG1U1 --remote server --missing
-    case download plt CS4SG1U1 --remote server --t1 3000 --t2 5000 --missing
-    case download input CS4SG1U1 --remote server
-    case download rst CS4SG1U1 --remote server --t1 4000
-    case download rst CS4SG1U1 --remote server
-    case download CS4SG1U1 --remote server --files
-    case download CS4SG1U1 --remote server --files "*.map"
-    case download * --remote server --files --force
+    case download plt --case CS4SG1U1 --remote server --t1 1000 --t2 5000
+    case download plt --case CS4SG1U1 --remote server --t1 1000 --t2 5000 --freq 500
+    case download plt --case CS4SG1U1 --remote server --freq 1000
+    case download plt --case CS4SG1U1 --remote server --t1 5000
+    case download plt --case CS4SG1U1 --remote server --missing
+    case download plt --case CS4SG1U1 --remote server --t1 3000 --t2 5000 --missing
+    case download input --case CS4SG1U1 --remote server
+    case download rst --case CS4SG1U1 --remote server --t1 4000
+    case download rst --case CS4SG1U1 --remote server
+    case download --case CS4SG1U1 --remote server --files
+    case download --case CS4SG1U1 --remote server --files "*.map"
+    case download --case * --remote server --files --force
 
 {Colors.BOLD}CONTEXT:{Colors.RESET}
     Set remote context:    use remote:myserver
-    Then run:              case download CS4SG1U1
+    Then run:              case download --case CS4SG1U1
 """)
 
 
@@ -691,8 +691,7 @@ class CaseUploadCommand(HistoryTransferMixin):
     def _transfer_mode(self, args, direction: str):
         """(mode, problem): binary/rst/input/history/None from the first word, or what is wrong.
 
-        `case upload CS4` puts the case in the first positional; it is moved to
-        `case` (the parser does not fill the case context in that situation).
+        The case is `--case NAME` (or `use case:`), never a word.
         """
         if self._get_arg(args, 'binary', False):
             return None, (f"--binary is now a word: `case {direction} plt` "
@@ -703,11 +702,8 @@ class CaseUploadCommand(HistoryTransferMixin):
         if what in ('binary', 'rst', 'input', 'history'):
             return what, None
         if what is not None:
-            case = self._get_arg(args, 'case')
-            if case is not None:
-                return None, (f"'{what}' is not binary, rst, input or history (did you mean "
-                              f"`case {direction} binary {case}`?)")
-            args.case = what
+            return None, (f"'{what}' is not plt, rst, input or history; the case is a flag "
+                          f"now: `case {direction} plt --case {what}`")
         return None, None
 
     def _execute_transfer(self, args, direction: str) -> int:

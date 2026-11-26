@@ -228,7 +228,7 @@ def test_report_sections_of_a_queued_case(dummy):
     assert plt['Skipped'] == '750: the queued job restarts from 700 and computes it again'
     assert sec['plt'].actions == ['run post full case3 --t1 550 --t2 700 --no-remote']
     # uploads first (the grid set 400), then the deletion that follows
-    assert sec['rst'].actions[0] == ('case upload rst case3 --t1 400 --t2 400 --freq 400 '
+    assert sec['rst'].actions[0] == ('case upload rst --case case3 --t1 400 --t2 400 --freq 400 '
                                      '--missing --remote local')
     assert sec['rst'].actions[1] == ('case organise rst --case case3 --keep-freq 200 '
                                      '--keep-newest 2 --t1 550 --t2 550')
@@ -242,8 +242,8 @@ def test_report_needs_and_flags_come_after_state(dummy):
     assert dict(sec['plt'].rows)['Binary'] == 'present 450, 500 · broken 550'
     # the check first, then the upload, then the delete that follows from it
     assert sec['plt'].actions == [
-        'case check plt case6 --remote local',
-        'case upload plt case6 --t1 450 --t2 500 --missing --remote local',
+        'case check plt --case case6 --remote local',
+        'case upload plt --case case6 --t1 450 --t2 500 --missing --remote local',
         'case organise plt binary --case case6 --t1 450 --t2 500 --remote local']
 
 
@@ -302,7 +302,7 @@ def test_every_action_is_a_command_and_the_rest_is_in_rows(dummy):
     assert plt['By hand'].startswith('auto apply does not delete unless asked')
     # the copy of a live history file is a command too
     hist = report_of(dummy, 'case2')['history']
-    assert 'case upload history case2 --live --remote local' in hist.actions
+    assert 'case upload history --case case2 --live --remote local' in hist.actions
     assert dict(hist.rows)['Live copy'].startswith('a copy of the live riser.othd/.oisd')
     # what a section waits for is a row, not an action
     waiting = dict(report_of(dummy, 'case4')['plt'].rows)['Waiting']
@@ -349,7 +349,7 @@ def test_the_rst_section_says_what_the_remote_holds_and_what_is_due(dummy):
     assert sec.subtitle == 'keep_rst 200 · keep_newest_rst 2 · upload_rst 400'
     assert dict(sec.rows)['Remote'] == 'none'
     assert dict(sec.rows)['Upload'] == 'every 400: due 400 (not there)'
-    assert sec.actions == ['case upload rst case12 --t1 400 --t2 400 --freq 400 --missing '
+    assert sec.actions == ['case upload rst --case case12 --t1 400 --t2 400 --freq 400 --missing '
                            '--remote local']
 
 
@@ -388,7 +388,7 @@ def test_a_restore_message_checks_whether_the_remote_has_the_archive(dummy):
         put_remote(dummy, 'case8', f'{ext}_files/archive/riser1.{ext}')
     plan, _ = plan_and_report(dummy, 'case8')
     need = [i.text for i in plan.items if i.kind == 'needs'][0]
-    assert 'local has it: restore with `case download history case8 --archive --remote local`' in need
+    assert 'local has it: restore with `case download history --case case8 --archive --remote local`' in need
 
 
 def test_history_parts_only_on_the_remote_are_flagged(dummy):
@@ -398,10 +398,10 @@ def test_history_parts_only_on_the_remote_are_flagged(dummy):
             put_remote(dummy, 'case8', f'{ext}_files/archive/riser{n}.{ext}')
     plan, sec = plan_and_report(dummy, 'case8')
     assert dict(sec['history'].rows)['Only there'] == 'archive runs 1–8 (on local, not here)'
-    assert sec['history'].actions == ['case download history case8 --archive --remote local']
+    assert sec['history'].actions == ['case download history --case case8 --archive --remote local']
     flags = [i.text for i in plan.items if i.kind == 'flag']
     assert ('local holds archive runs 1–8 that this case does not have (archive/ here: empty), so '
-            'they exist only on local. Bring them back with `case download history case8 '
+            'they exist only on local. Bring them back with `case download history --case case8 '
             '--archive --remote local`.') in flags
     assert plan.ctx['hist_only_remote'][('othd', 'archive')] == list(range(1, 9))
 

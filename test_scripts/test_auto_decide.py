@@ -594,7 +594,7 @@ def test_the_upload_command_drops_missing_when_an_old_plt_must_be_replaced():
                        binary_time={350: START + 900}, sent_at={})
     plan = decide(s, CONF, True, True)
     cmds = [c for c in commands(build(s, plan, CONF)) if c.startswith('case upload plt')]
-    assert cmds == ['case upload plt case --t1 350 --t2 350 --remote local']
+    assert cmds == ['case upload plt --case case --t1 350 --t2 350 --remote local']
 
 
 # --- more real cases ---------------------------------------------------------------------

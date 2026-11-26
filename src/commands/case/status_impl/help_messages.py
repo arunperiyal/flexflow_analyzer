@@ -16,9 +16,9 @@ the last PLT and the case's jobs in the queue (those are read each time, never
 saved, so they cannot go stale).
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    case status [{Colors.YELLOW}case{Colors.RESET}] [--no-create]
-    case status update [{Colors.YELLOW}case{Colors.RESET}] [-m {Colors.YELLOW}TEXT{Colors.RESET}] [--state {Colors.YELLOW}STATE{Colors.RESET}]
-    case status '*'
+    case status [--case {Colors.YELLOW}NAME{Colors.RESET}] [--no-create]
+    case status update [--case {Colors.YELLOW}NAME{Colors.RESET}] [-m {Colors.YELLOW}TEXT{Colors.RESET}] [--state {Colors.YELLOW}STATE{Colors.RESET}]
+    case status --case '*'
 
 {Colors.BOLD}SHOW:{Colors.RESET}
     The first time, it writes the file from a template (--no-create: don't).
@@ -49,11 +49,11 @@ saved, so they cannot go stale).
     One line per case in .cases.yml: its state and last log line.
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
-    case status CS4SG3U6P0
-    case status update CS4SG3U6P0
-    case status update CS4SG3U6P0 -m "lock-in from U=5.5; compare with U1"
-    case status update CS4SG3U6P0 --state done
-    case status '*'
+    case status --case CS4SG3U6P0
+    case status update --case CS4SG3U6P0
+    case status update --case CS4SG3U6P0 -m "lock-in from U=5.5; compare with U1"
+    case status update --case CS4SG3U6P0 --state done
+    case status --case '*'
 
     The old `case status` (data file completeness) is now `case check data`.
 """)

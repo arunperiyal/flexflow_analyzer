@@ -152,7 +152,7 @@ def _domain_for(case_dir, zone):
         raise ReferenceError(
             f"No {FILENAME} in {case_dir.name}, so there is no free stream, diameter, "
             f"length or axis to normalise by. Write one with "
-            f"`case domain {case_dir.name} --init`, then declare the two things the "
+            f"`case domain --init --case {case_dir.name}`, then declare the two things the "
             "case does not state: `case domain field --velocity X,Y,Z` and "
             f"`case domain body --name {zone} --radius R`.")
     body = domain.body(zone)
@@ -166,7 +166,7 @@ def _domain_for(case_dir, zone):
 
 def _free_stream(domain, case_dir):
     """The field's declared velocity, as three numbers, or why it cannot be used."""
-    how = f"Declare it with `case domain field {Path(case_dir).name} --velocity X,Y,Z`."
+    how = f"Declare it with `case domain field --case {Path(case_dir).name} --velocity X,Y,Z`."
     velocity = domain.velocity
     if velocity is None:
         raise ReferenceError(
@@ -192,7 +192,7 @@ def _required(body, key, case_dir, zone, how):
         raise ReferenceError(
             f"Body '{body.get('name')}' has no {key} in domain.yml, and a coefficient "
             f"cannot be normalised without it. Set it with "
-            f"`case domain body {Path(case_dir).name} --name {body.get('name')} {how}`.")
+            f"`case domain body --case {Path(case_dir).name} --name {body.get('name')} {how}`.")
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ReferenceError(f"Body '{body.get('name')}' has {key} = {value!r} in "
                              "domain.yml, which is not a number")
@@ -232,7 +232,7 @@ def resolve(case_dir, zone, args, logger):
             raise ReferenceError(
                 f"Body '{name}' has no axis in domain.yml and --direction was not "
                 "given, so there is no direction to cut sections along. Set it with "
-                f"`case domain body {case_dir.name} --name {name} --axis +x`, or pass "
+                f"`case domain body --case {case_dir.name} --name {name} --axis +x`, or pass "
                 "--direction.")
         span = axis_vector(declared, "domain.yml axis")
         sources['span axis'] = "domain.yml"

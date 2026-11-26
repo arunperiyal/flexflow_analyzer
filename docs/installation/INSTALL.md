@@ -278,7 +278,7 @@ ff --help
 ff --examples
 
 # Test case command (if you have cases)
-ff case show CS4SG1U1
+ff case show --case CS4SG1U1
 ```
 
 ### Configuration
@@ -500,7 +500,7 @@ For development work:
 vim src/cli/commands/case_cmd.py
 
 # Changes take effect immediately (no reinstall needed)
-ff case show CS4SG1U1
+ff case show --case CS4SG1U1
 ```
 
 ### Custom Wrapper Script

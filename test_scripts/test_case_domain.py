@@ -401,22 +401,21 @@ def test_check_flags_an_unknown_type(case):
 # The command
 # ---------------------------------------------------------------------------
 
-def test_target_and_case_share_two_slots():
-    """`domain body <case>` and `domain <case>` both have to parse."""
+def test_the_target_is_a_word_and_the_case_a_flag():
+    """`domain body --case C1`; a case is never the word."""
     assert resolve_target_and_case(_args(target="body", case="C1")) == ("body", "C1")
-    assert resolve_target_and_case(_args(target="field")) [0] == "field"
-    # A lone word that is not a target is the case.
-    assert resolve_target_and_case(_args(target="C1")) == (None, "C1")
+    assert resolve_target_and_case(_args(target="field"))[0] == "field"
+    assert resolve_target_and_case(_args(case="C1")) == (None, "C1")
 
 
-def test_a_case_named_before_a_target_is_an_error():
-    with pytest.raises(DomainCommandError):
-        resolve_target_and_case(_args(target="C1", case="body"))
+def test_a_case_typed_as_the_target_is_refused_and_says_what_to_type():
+    with pytest.raises(DomainCommandError, match="--case C1"):
+        resolve_target_and_case(_args(target="C1"))
 
 
 def test_resolve_falls_back_to_the_working_directory(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    assert resolve_target_and_case(_args())[1] == os.getcwd()
+    assert resolve_target_and_case(_args(case=None))[1] == os.getcwd()
 
 
 def test_init_then_edit_then_read_back(case, capsys):

@@ -15,8 +15,8 @@ What a case's domain is made of -- the fluid field and the bodies in it -- kept 
     case domain [CASE]                     {Colors.DIM}# summary of the domain{Colors.RESET}
     case domain [CASE] --init              {Colors.DIM}# derive it from the .def{Colors.RESET}
     case domain [CASE] --check             {Colors.DIM}# does the case still agree?{Colors.RESET}
-    case domain body [CASE] [options]
-    case domain field [CASE] [options]
+    case domain body [--case NAME] [options]
+    case domain field [--case NAME] [options]
 
     CASE may be left out: the interactive case context is used, or the current
     directory. {Colors.YELLOW}*{Colors.RESET} means every case in the .cases.yml registry, for reading
@@ -135,8 +135,8 @@ What a case's domain is made of -- the fluid field and the bodies in it -- kept 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
 
   {Colors.BOLD}Start from what the case already says:{Colors.RESET}
-    case domain BR0SG0U1P0 --init
-    case domain BR0SG0U1P0                {Colors.DIM}# read it back{Colors.RESET}
+    case domain --case BR0SG0U1P0 --init
+    case domain --case BR0SG0U1P0                {Colors.DIM}# read it back{Colors.RESET}
 
   {Colors.BOLD}Fill in what the .def could not say:{Colors.RESET}
     case domain body --name cyl --radius 0.5
@@ -155,7 +155,7 @@ What a case's domain is made of -- the fluid field and the bodies in it -- kept 
     case domain field --show
 
   {Colors.BOLD}Check it against the case:{Colors.RESET}
-    case domain BR0SG0U1P0 --check
+    case domain --case BR0SG0U1P0 --check
 
   {Colors.BOLD}Across every registered case:{Colors.RESET}
     case domain * --list

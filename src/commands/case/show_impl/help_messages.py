@@ -43,10 +43,10 @@ def print_info_examples():
 
 {Colors.BOLD}Basic Usage:{Colors.RESET}
     # Show case information
-    case show CS4SG1U1
+    case show --case CS4SG1U1
 
     # Show with verbose output
-    case show CS4SG1U1 --verbose
+    case show --case CS4SG1U1 --verbose
 
     # Show relative path case
     case show ./cases/CS4SG1U1

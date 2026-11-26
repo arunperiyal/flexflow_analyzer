@@ -99,7 +99,7 @@ def _get_case_name(args) -> Optional[str]:
         return current_case()
     else:
         print("Error: No case directory specified.")
-        print("Usage:  case check run <dir>")
+        print("Usage:  case check run [--case NAME]")
         print("   or:  use case <dir>  then  case check run")
         return None
 

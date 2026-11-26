@@ -11,7 +11,7 @@ def print_out_help():
 Build small derived files from a case's own inputs.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    case out <case_dir> --map [NAME]
+    case out [--case NAME] --map [NAME]
     case out * --map            {Colors.DIM}# every case in .cases.yml{Colors.RESET}
     case out * --list           {Colors.DIM}# survey them all in one table{Colors.RESET}
 
@@ -151,17 +151,17 @@ Build small derived files from a case's own inputs.
     It applies to whichever maps the run writes, so use {Colors.YELLOW}--map NAME{Colors.RESET} to
     give different sets different types:
 
-        case out BR0SG0U1P0 --map cyl_nodes --probe-type line
-        case out BR0SG0U1P0 --map probe_dat --probe-type point
+        case out --case BR0SG0U1P0 --map cyl_nodes --probe-type line
+        case out --case BR0SG0U1P0 --map probe_dat --probe-type point
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
 
   {Colors.BOLD}Every nodal block in the case:{Colors.RESET}
-    case out BR0SG0U1P0 --map
+    case out --case BR0SG0U1P0 --map
 
   {Colors.BOLD}Just one, by node-set or block name:{Colors.RESET}
-    case out BR0SG0U1P0 --map cyl_nodes
-    case out BR0SG0U1P0 --map riser_probe
+    case out --case BR0SG0U1P0 --map cyl_nodes
+    case out --case BR0SG0U1P0 --map riser_probe
 
   {Colors.BOLD}Every registered case at once:{Colors.RESET}
     case out * --map
