@@ -58,6 +58,7 @@
         </div>
       </div>
     </div>
+    <span id="busy" hidden title="The server is reading or writing">&#9696; working&hellip;</span>
     <span class="root-path">{{ root }}</span>
   </header>
 
@@ -89,6 +90,11 @@
     </aside>
   </div>
 
+  <section id="command-window" class="collapsed">
+    <div id="command-bar" title="What the server is doing (read only)">Log <span id="command-count"></span></div>
+    <pre id="command-lines"></pre>
+  </section>
+
   <div id="dialog-backdrop" hidden>
     <div id="dialog"></div>
   </div>
@@ -107,6 +113,7 @@
 <script src="{{ url_for('static', filename='js/data.js') }}"></script>
 <script src="{{ url_for('static', filename='js/field.js') }}"></script>
 <script src="{{ url_for('static', filename='js/flowchart.js') }}"></script>
+<script src="{{ url_for('static', filename='js/log.js') }}"></script>
 <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
 </html>

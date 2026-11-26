@@ -15,12 +15,15 @@ case is really *two* independent series, read and cached separately.
 """
 
 import threading
+import time
 from collections import OrderedDict
 from pathlib import Path
 from typing import Optional
 
 from src.core.readers import series
 from src.utils.file_utils import natural_sort_key
+
+from .logbuf import capture, log
 
 DEFAULT_MAX_CASES = 3
 
@@ -60,7 +63,11 @@ class Loader:
         if entry is None or entry.mtime != mtime:
             entry = _CacheEntry()
             entry.mtime = mtime
-            entry.meta = series.scan(paths)
+            began = time.time()
+            log.add(f"reading {Path(case_dir).name}: {len(paths)} .{kind} file(s)")
+            with capture():
+                entry.meta = series.scan(paths)
+            log.add(f"read {Path(case_dir).name} .{kind} in {time.time() - began:.1f} s")
             self._cache[key] = entry
         self._cache.move_to_end(key)
         while len(self._cache) > self._max_cases:
@@ -80,7 +87,11 @@ class Loader:
             cache_key = (group, tuple(sorted(names)))
             if cache_key not in entry.arrays:
                 paths = self._paths(case_dir, kind)
-                entry.arrays[cache_key] = series.load(paths, sorted(names), entry.meta, group)
+                began = time.time()
+                log.add(f"loading {', '.join(sorted(names))} of {case_dir.name} (group {group})")
+                with capture():
+                    entry.arrays[cache_key] = series.load(paths, sorted(names), entry.meta, group)
+                log.add(f"loaded in {time.time() - began:.1f} s")
             return entry.meta, entry.arrays[cache_key]
 
     def clear(self):

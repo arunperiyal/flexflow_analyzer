@@ -436,7 +436,7 @@ retired; the plan is `docs/development/PLAN.md`. What is built:
 | `src/web/` package, app factory, `python -m src.web`, loopback guard | `src/web/server.py`, `__main__.py` |
 | Three-pane layout | `templates/index.html`, `static/js/layout.js` |
 | `scan_for_cases()` / `write_cases_file()` split out of `case add` | `src/commands/case/add_impl/command.py` |
-| `services/registry.py` | built; `services/logbuf.py` was not (see below) |
+| `services/registry.py`, `services/logbuf.py` | `src/web/services/` (the log buffer, Phase 45) |
 | `/api/cases` (list, scan, browse, add, delete) | `api/cases.py` |
 | Menu bar, `Case → Add / Delete` | `static/js/menu.js` |
 | `mapfile.py`, `frame.py`, `project.py`, `loader.py` | `src/web/services/` |
@@ -457,9 +457,13 @@ Built beyond this list: field extract and render (`api/field.py`, `vtkjs`), FFT
 (`api/fft.py`), spatial plots (`api/spatial.py`), data statistics
 (`api/data.py`), settings (`api/settings.py`), the flowchart (`flowchart.js`).
 
-Not built, and now in the plan (Phase 45): `/api/log` with `services/logbuf.py`
-and the spinner with teed stdout during a first load, and a y-axis lock per
-panel. The open questions of section 13 stay open.
+Built in Phase 45: `/api/log` with `services/logbuf.py` (a ring buffer of 500
+lines; `capture()` tees what the reader and `write_case_maps()` print, the loader
+and background jobs add their own lines, and a failed request adds one), the
+read-only command window under the plot area (folded until clicked) and the
+"working" spinner that shows when a request takes more than 300 ms. The y-axis
+lock was already there: `setYLock` in `panels.js` and the `ylim` fields. The open
+questions of section 13 stay open.
 
 ---
 

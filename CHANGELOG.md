@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### 🖥️ Web UI: the command window
+
+- A read-only log under the plot area (click "Log" to open it) shows what the
+  server is doing: a case being read, maps being written, a request that
+  failed. A "working" spinner shows when a request takes more than 300 ms.
+  `GET /api/log?since=N` serves it; nothing can be sent in.
+
 ### 🔎 PLTs only on the remote, not recorded
 
 - `case organise out`, `plt` and `auto show` now say "on the remote, not
