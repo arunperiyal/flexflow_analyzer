@@ -304,11 +304,11 @@ flowchart TD
     </ul>
     <p class="note">The commands the charts belong to:</p>
 <pre class="cmds">auto init --remote NAME <span># that remote's folder and keep_rst, disk_alert in .cases.yml     (built)</span>
-auto show [case]        <span># labelled sections for a case; the table for case:* (--detail)  (built)</span>
-auto commands [case]    <span># just the commands to run, numbered, as plain text              (built)</span>
-auto status [case]      <span># one line per case: state, steps, jobs, what is next           (built)</span>
+auto show [--case NAME]        <span># labelled sections for a case; the table for case:* (--detail)  (built)</span>
+auto commands [--case NAME]    <span># just the commands to run, numbered, as plain text              (built)</span>
+auto status [--case NAME]      <span># one line per case: state, steps, jobs, what is next           (built)</span>
 auto apply TARGET [case] <span># history, checked uploads, post jobs; --delete: md5-checked deletes (built)</span>
-auto log [case]         <span># what earlier runs did                                          (planned)</span></pre>
+auto log [--case NAME]         <span># what earlier runs did                                          (planned)</span></pre>
   </section>
 </main>
 

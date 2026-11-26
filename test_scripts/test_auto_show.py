@@ -526,7 +526,7 @@ def test_status_piped_into_case_show_runs_once_per_picked_case(dummy, monkeypatc
     out = io.StringIO()
     rt = Runtime(create_app(), console=Console(file=out, width=200, color_system=None),
                  err_console=Console(file=out, width=200, color_system=None))
-    rt.execute_line('auto status * --remote local --only running | case show')
+    rt.execute_line('auto status --case * --remote local --only running | case show')
     text = out.getvalue()
     running = [n for n, p in plans(dummy)[0].items()
                if p.ctx.get('main_now') or p.ctx.get('post_now')]
@@ -546,7 +546,7 @@ def test_status_piped_into_apply_runs_apply_once_per_picked_case(dummy, monkeypa
     out = io.StringIO()
     rt = Runtime(create_app(), console=Console(file=out, width=200, color_system=None),
                  err_console=Console(file=out, width=200, color_system=None))
-    rt.execute_line('auto status * --remote local --only running | '
+    rt.execute_line('auto status --case * --remote local --only running | '
                     'auto apply plt --remote local --dry-run')
     text = out.getvalue() + capsys.readouterr().out
     heads = [l for l in text.splitlines() if l.startswith('── ')]

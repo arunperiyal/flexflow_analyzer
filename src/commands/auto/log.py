@@ -1,6 +1,6 @@
 """auto log: read back what earlier `auto apply` runs did.
 
-    auto log [case]            the newest run's log, one line per action
+    auto log [--case NAME]            the newest run's log, one line per action
                                (only that case's lines when a case is given)
     auto log --list            the runs, newest first, one line each
     auto log --log N           the Nth newest run (1 is the newest), with or

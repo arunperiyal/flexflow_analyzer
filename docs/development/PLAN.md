@@ -806,9 +806,16 @@ restart` carry `--case`.
 
 ### Phase 44: `auto` follows the rules (branch `auto-flag-case`)
 
-`auto show|commands|status|apply|log` take a case as the second word and `apply`
-a target as the first. The case becomes `--case NAME` (`*` for all), the target
-stays a word. Tasks when it is started.
+`auto show|commands|status|apply|log` take the case as `--case NAME` (`*` for all);
+`apply`'s target stays the one word after it. The old forms are refused and the
+message says `--case`.
+
+- [x] `--case` on `auto`, the target as a word only for `apply`, a case typed as
+      a word refused (`auto show C`, `auto apply C`, `auto apply plt C`)
+- [x] Tests: every old form refused, the flags parse, the words and `--case`
+      complete with and without a case in context
+- [x] Help, `docs/architecture/auto.md` 13.21, `CHANGELOG.md`
+
 
 ### Phase 42: one test walks every command (branch `walk-test`)
 

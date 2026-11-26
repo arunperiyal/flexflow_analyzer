@@ -1,9 +1,9 @@
 """auto show / commands / status: what auto would do for a case, or for every
 case with `use case:*`. Reads only.
 
-    auto show [case] [--detail] [--only SECTIONS]   labelled sections per case
-    auto commands [case]                             just the commands, numbered
-    auto status [case]                               one line per case
+    auto show [--case NAME] [--detail] [--only SECTIONS]   labelled sections per case
+    auto commands [--case NAME]                             just the commands, numbered
+    auto status [--case NAME]                               one line per case
 """
 
 import re
@@ -45,7 +45,7 @@ def resolve_cases(case, base_dir: Path):
     from src.core.auto.conf import AutoConfError
     from src.commands.case_iteration import is_wildcard_case
     if not case:
-        raise AutoConfError("no case given: auto show <case>, or `use case:<dir>` "
+        raise AutoConfError("no case given: auto show [--case NAME], or `use case:<dir>` "
                             f"(`use case:*` for every case in {cases_file.FILENAME})")
     if is_wildcard_case(case):
         try:
@@ -279,7 +279,7 @@ def execute_show(args) -> int:
         console.rule("[bold]summary[/bold]", style='cyan')
         _summary_table(console, results)
         if not detail:
-            console.print("[dim]Each case in full: auto show <case>, or --detail; "
+            console.print("[dim]Each case in full: auto show [--case NAME], or --detail; "
                           "the commands alone: auto commands.[/dim]")
 
     total = sum(sum(plan.uploads.values()) for _, plan in results)

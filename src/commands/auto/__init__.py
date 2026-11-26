@@ -3,24 +3,24 @@ auto - the per-case workflow for a folder of cases (docs/architecture/auto.md §
 
     auto init [--remote NAME] [--path DIR] [--keep-rst N] [--keep-newest-rst N] [--upload-rst N] [--disk-alert SIZE] [--vtu-cache keep|delete]
                          set a remote's folder and auto's settings in .cases.yml
-    auto show [case] [--remote NAME] [--detail] [--only SECTIONS]
+    auto show [--case NAME] [--remote NAME] [--detail] [--only SECTIONS]
                          what auto would do: labelled sections for a case; the summary
                          table for several (case:*), each in full with --detail
-    auto commands [case] just the commands to run, numbered, as plain text
-    auto status [case] [--only needs|todo|running|all]
+    auto commands [--case NAME] just the commands to run, numbered, as plain text
+    auto status [--case NAME] [--only needs|todo|running|all]
                          one line per case; the cases --only picks go to a command after a |
-    auto apply <target> [case] [--remote NAME] [--delete] [--dry-run] [--yes]
+    auto apply <target> [--case NAME] [--remote NAME] [--delete] [--dry-run] [--yes]
                          target: history, plt, output, input, rst, all
                          organise history, upload (checked), submit post jobs; --delete also
                          deletes what has an md5-checked copy on the remote
-    auto log [case] [--list] [--log N]
+    auto log [--case NAME] [--list] [--log N]
                          read back the logs of `auto apply` (newest; --list: all runs)
 """
 
 import argparse
 
 from ..base import BaseCommand
-from src.cli.context import case_arg, context_flag
+from src.cli.context import case_flag, context_flag, no_words
 
 SUBCOMMANDS = (('init', "Set a remote's folder and auto's settings in .cases.yml"),
                ('show', 'What auto would do for a case, or every case with case:* (changes nothing)'),
@@ -34,6 +34,11 @@ def _complete_sub(rt, prefix):
     return list(SUBCOMMANDS)
 
 
+def _complete_target(rt, prefix):
+    from .apply import TARGETS
+    return list(TARGETS)
+
+
 class AutoCommand(BaseCommand):
     """Check every case of a folder and do its next safe step"""
 
@@ -45,9 +50,12 @@ class AutoCommand(BaseCommand):
         parser = subparsers.add_parser(self.name, add_help=False, help=self.description)
         parser.add_argument('what', nargs='?', metavar='init|show|commands|status|apply|log',
                             help='; '.join(f"{n}: {h}" for n, h in SUBCOMMANDS)).completer = _complete_sub
-        case_arg(parser, help="show: the case folder (default: use case:); '*' for every case in .cases.yml; "
-                              "apply: a target (history, plt, output, input, rst, all) first")
-        parser.add_argument('extra', nargs='?', metavar='CASE', help=argparse.SUPPRESS)
+        parser.add_argument('target', nargs='?', metavar='TARGET',
+                            help='apply: history, plt, output, input, rst or all (omit it and '
+                                 'the targets are listed)').completer = _complete_target
+        case_flag(parser, help="The case folder (default: use case:); '*' for every case in "
+                               ".cases.yml")
+        no_words(parser)
         context_flag(parser, 'remote', '--remote', type=str, metavar='NAME',
                      help='the remote (or use remote:NAME); `local` for a folder')
         parser.add_argument('--path', metavar='DIR',
@@ -92,6 +100,11 @@ class AutoCommand(BaseCommand):
 
     def execute(self, args):
         what = getattr(args, 'what', None)
+        target = getattr(args, 'target', None)
+        if target is not None and what != 'apply':
+            print(f"Error: auto {what}: unexpected word '{target}'; the case is a flag now: "
+                  f"--case {target}")
+            return 2
         if getattr(args, 'help', False) or what is None:
             from .help_messages import print_auto_help
             print_auto_help()

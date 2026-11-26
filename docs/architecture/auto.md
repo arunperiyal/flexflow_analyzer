@@ -1089,3 +1089,19 @@ forms it was written with.
 
 `auto apply` reads the same steps, so its `history` line is `organise history update clean compile`.
 `case upload`, `case check` and `run post` keep the case as a word until Phase 38.
+
+### 13.21 The `auto` command lines after Phase 44 (2026-11-26)
+
+The case is `--case NAME` (`*` for every case in `.cases.yml`), never a word; `apply`'s target stays the
+one word after it (`.claude/rules/command-design.md`). 13.15 and 13.18 keep the forms they were written
+with.
+
+| Before | Now |
+|---|---|
+| `auto show C`, `auto commands C`, `auto status C`, `auto log C` | `auto show --case C` (also `commands`, `status`, `log`) |
+| `auto show '*'` | `auto show --case '*'` |
+| `auto apply plt C --remote R` | `auto apply plt --case C --remote R` |
+| `auto apply C` | refused: `'C' is not a target ...; the case is a flag now: --case C` |
+
+`auto status --case * --only needs | case show` (13.19) and `auto status ... | auto apply plt` pass a case
+to the next command as `{case}` in the row; the next command's own `--case`, if typed, wins.

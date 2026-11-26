@@ -138,7 +138,7 @@ def test_flags_parse():
                               '--disk-alert', '200G', '--path', '/x/bare'])
     assert (args.what, args.remote, args.keep_rst, args.disk_alert, args.path) == \
         ('init', 'cloud', 500, '200G', '/x/bare')
-    args = parser.parse_args(['auto', 'show', 'case2', '--remote', 'local'])
+    args = parser.parse_args(['auto', 'show', '--case', 'case2', '--remote', 'local'])
     assert (args.what, args.case, args.remote) == ('show', 'case2', 'local')
 
 

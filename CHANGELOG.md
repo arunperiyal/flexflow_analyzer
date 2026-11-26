@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### ⚠️ `auto`: the case is `--case NAME`, never a word
+
+Phase 44, the last command to follow the rule. Breaking, no aliases; the old
+form is refused and the message says `--case`:
+
+| Before | Now |
+|---|---|
+| `auto show C`, `auto commands C`, `auto status C`, `auto log C` | `auto show --case C` (also `commands`, `status`, `log`) |
+| `auto show '*'` | `auto show --case '*'` |
+| `auto apply plt C --remote R` | `auto apply plt --case C --remote R` |
+
+The target of `auto apply` stays a word. With the case from `use case:` nothing
+changes.
+
 ### ⚠️ `run`: the case, the job and the script are flags
 
 Phase 43. The modes stay words. Breaking, no aliases; the old form is refused

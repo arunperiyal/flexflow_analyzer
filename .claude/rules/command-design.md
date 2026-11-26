@@ -50,4 +50,4 @@ that does not yet is listed at the end and fixed by its own phase.
 
 ## Not yet following these
 
-`auto` (Phase 44); everything else follows them.
+None: every command follows them. `docs TOPIC` is a word (a choice, not a value).
