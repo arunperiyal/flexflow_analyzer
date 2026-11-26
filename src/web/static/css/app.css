@@ -725,3 +725,20 @@ body {
   font-size: 11px;
 }
 .flowchart-detail p { font-size: 13px; line-height: 1.5; color: #334155; margin: 0 0 8px; }
+
+/* Command window: what the server is doing, read only; folded until clicked */
+#command-window { flex: none; background: #0f172a; color: #cbd5e1; border-top: 1px solid #1e293b; }
+#command-bar {
+  padding: 3px 12px; font-size: 11px; font-weight: 700; letter-spacing: .05em;
+  text-transform: uppercase; color: #94a3b8; cursor: pointer; user-select: none;
+}
+#command-count { font-weight: 400; color: #64748b; margin-left: 6px; }
+#command-lines {
+  margin: 0; padding: 4px 12px; height: 140px; overflow: auto; font-size: 12px;
+  font-family: 'DejaVu Sans Mono', Menlo, Consolas, monospace; white-space: pre-wrap;
+}
+#command-window.collapsed #command-lines { display: none; }
+#command-lines .err { color: #fca5a5; }
+#command-lines .when { color: #64748b; margin-right: 8px; }
+#busy { font-size: 12px; color: #fbbf24; margin-left: auto; margin-right: 12px; }
+#busy[hidden] { display: none; }

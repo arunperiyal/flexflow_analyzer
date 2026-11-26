@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from flask import Flask, render_template
+from flask import Flask, render_template, request
 
 from .api.cases import bp as cases_bp
 from .api.data import bp as data_bp
@@ -18,9 +18,12 @@ from .api.fft import bp as fft_bp
 from .api.field import bp as field_bp
 from .api.history import bp as history_bp
 from .api.jobs import bp as jobs_bp
+from .api.log import bp as log_bp
 from .api.maps import bp as maps_bp
 from .api.settings import bp as settings_bp
 from .api.spatial import bp as spatial_bp
+
+from .services.logbuf import log
 
 _LOOPBACK_HOSTS = {'127.0.0.1', 'localhost', '::1'}
 
@@ -36,9 +39,19 @@ def create_app(root: Path) -> Flask:
     app.register_blueprint(fft_bp)
     app.register_blueprint(field_bp)
     app.register_blueprint(jobs_bp)
+    app.register_blueprint(log_bp)
     app.register_blueprint(export_bp)
     app.register_blueprint(spatial_bp)
     app.register_blueprint(settings_bp)
+
+    @app.after_request
+    def say_failures(response):
+        # a failed request shows in the command window, as webapp.md §8 says
+        if response.status_code >= 400 and response.is_json and not request.path.startswith('/api/log'):
+            body = response.get_json(silent=True) or {}
+            log.add(f"{request.method} {request.path}: {body.get('error', response.status)}",
+                    'error')
+        return response
 
     @app.get('/')
     def index():

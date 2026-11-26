@@ -11,6 +11,8 @@ import threading
 import uuid
 from typing import Callable, Optional
 
+from .logbuf import log
+
 
 class Job:
     def __init__(self, job_id: str):
@@ -37,6 +39,7 @@ class JobRegistry:
             except Exception as exc:
                 job.error = str(exc)
                 job.status = 'error'
+                log.add(f"background job failed: {exc}", 'error')
 
         threading.Thread(target=run, daemon=True).start()
         return job.id
