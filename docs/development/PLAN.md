@@ -69,18 +69,6 @@ main jobs.
 - [ ] Dummy cases (steady, not steady) and tests
 - [ ] Help text and `CHANGELOG.md`
 
-### Phase 8: `auto log` and `auto status` polish (branch `auto-log`)
-
-- [x] `auto log [case] [--list] [--log N]`: read back the run logs in
-      `<folder>/auto_logs/` (newest by default, one case's lines, `--list` for
-      every run, `--log N` for the Nth newest)
-- [x] `auto status`: polish the layout (the job column names the job id; a footer
-      counts the cases, those with something to do and those that need you, as
-      `auto show` does)
-- [x] With a queued restart, `Complete` / `Also kept` should not count the
-      earlier run's newer restart set
-- [x] Tests, help text, completion, `CHANGELOG.md`
-
 ### Phase 9: files for FlowReel (branch `flowreel-export`)
 
 Design: `docs/architecture/flowreel.md`. Check the key names against FlowReel's
@@ -119,237 +107,6 @@ spatial plots).
       pointer here
 - [ ] Rewrite §12 "Out of scope" to match what the web UI now does
 
-### Phases 12 to 17: `auto` as a sequence of visible commands
-
-Asked for on 2026-11-13. The aim: the user can read in `auto show` the exact
-commands `auto apply` will run, in order, and run any of them by hand.
-
-For the PLT section, the Action list becomes commands only, for example:
-
-```
-1: case check plt <case> --verify
-2: case upload plt <case> --t1 8950 --t2 9900 --freq 50 --remote cloud
-3: case organise plt <case> --delete-ascii --t1 8950 --t2 9900 --freq 50
-4: case organise plt <case> --delete-binary --t1 8950 --t2 9900 --freq 50
-```
-
-- `case check plt --verify` does not exist yet. It verifies every PLT in
-  `binary/` against the remote directory.
-- When the binary PLTs are not made yet, the second command is
-  `run post convert` (or `run post full`).
-- `case upload binary` is renamed `case upload plt`, to be specific.
-- `--missing` is added only when the remote lacks some of the PLTs.
-- The same change for History, OUT files, RST files, and Inputs and case
-  files.
-
-Settled with the user on 2026-11-13:
-
-- **The deletion chain.** A `.out` may be deleted when the ASCII PLT of its
-  step is verified. An ASCII PLT may be deleted when the binary PLT of its
-  step is verified. A binary PLT may be deleted when the remote directory
-  holds its copy.
-- An ASCII PLT is verified by its size and by the node and element counts in
-  its header.
-- A later link stands in for a missing one: with no ASCII PLT, the `.out`
-  goes on the verified binary PLT; with no binary PLT, on the remote copy.
-- Every step that has `.out` files gets its PLT made and uploaded; nothing
-  is thinned out. `--freq` is the spacing of the series. Before deleting,
-  the command confirms that the series from `--t1` to `--t2` has its next
-  file in the chain, in the local or the remote directory.
-- `case upload --to` and `case download --from` are renamed `--remote`.
-- **Repair goes back along the chain** (2026-11-13). A broken binary PLT
-  means a broken remote copy too: it is made again from the ASCII PLT (`run
-  post convert`); if the ASCII PLT is broken as well, from the `.out` files
-  (`run post full`). `auto show` prints that command.
-- An ASCII PLT can only be checked by its size and header; a binary PLT is
-  always checked by md5, read back from the remote when it has no `md5sum`.
-  Time is not the concern; a safe copy on the remote is.
-- An empty local `binary/` with the PLTs on the remote is a normal state:
-  the local files were deleted to save space (and the ASCII PLTs and `.out`
-  may be gone too, or not).
-- A folder whose `.cases.yml` has no block for the remote says so: the
-  remote is not set and its path is not set.
-- `auto apply` has the targets `history`, `plt`, `output`, `input`, `rst`
-  and `all`.
-- `auto apply` is not only for deleting: it organises, uploads and deletes
-  in a conditional sequence. `--dry-run` uploads and deletes nothing and
-  prints the sequence in full. `auto show` stays as it is: state,
-  observation and action.
-- `case organise plt` always verifies. There is no `--unverified` flag.
-
-Order of work: 12, 13, 18, 14, 19, 15 and 16 (done), 17, 20, then Phase 6. Phases 12 to 14 change
-hand commands and are useful on their own; 15 is a refactor with no change in
-behaviour; 16 and 17 are what the user sees.
-
-What the code check found (why 12, 14 and 15 are needed):
-
-- **Two upload paths.** `case upload` (`case/download_impl/command.py`, 2660
-  lines) sends without an md5 check, a temporary name or the ledger. `auto
-  apply` does not call it: it has its own path (`core/auto/cloud.py` `put`,
-  `executor.do_upload`) with all three. So the `case upload ...` line that
-  `auto show` prints is not what `auto apply` runs, and running it by hand is
-  weaker.
-- **Hand deletions are not guarded.** `case organise plt --delete-binary` is
-  unconditional, and `--delete-ascii` only asks for a newer file in
-  `binary/`. Neither knows about the remote copy.
-- **Show and apply describe the work separately.** `report.build()` writes
-  the Action lines as text (some are commands, some start with
-  `auto apply: ` or `wait:`, and `commands()` filters by that prefix);
-  `apply._intended()` writes its own list. Nothing makes the two agree.
-- **`decide()` was one function of about 530 lines** and `report.build()` one
-  of about 310, each covering history, PLT, `.out`, `.rst` and inputs in a
-  row. `auto apply plt` needs the PLT part on its own. (Split in Phase 15.)
-- **Parsing.** `auto` takes `what` and `[case]` as positionals. A target word
-  after `apply` (`history`, `plt`, `output`, `all`) has to be told apart from
-  a case name.
-
-### Phase 17: `auto apply <target>` (branch `auto-apply-targets`)
-
-- [x] `auto apply history [case]`, `plt`, `output`, `input`, `rst` and
-      `all`: each runs the steps of its target (organise, upload, delete),
-      in the order `auto show` lists them, each step only if the one before
-      it succeeded
-- [x] `auto apply` with no target does nothing and lists the targets
-- [x] `--dry-run` (as in `auto apply all --dry-run`): uploads and deletes
-      nothing, and prints every step with what it would send or delete
-- [x] `--only` for `apply` goes (or stays as an alias for one release)
-- [x] Parsing: a target word against a case of the same name (shell completion of the targets not done)
-- [x] Tests, help text, `docs/architecture/auto.md` (a new section at the
-      end), `CHANGELOG.md`
-
-### Phase 20: `case organise out` and `case organise rst` (branch `organise-out-rst`)
-
-Asked for on 2026-11-14, after reading an `auto show` whose `.out` and `.rst`
-actions were both `case organise output ...` with opposite flags (`--all-out`
-for the `.out` files, `--keep-out` for the `.rst`). Two words say what each
-command touches. To be built after Phase 17, before Phase 6, so that Phase 6
-deletes with the final command names.
-
-- [x] `case organise out`: what `case organise output` does to the `.out`
-      files (the `--all-out` path, the chain rules of Phase 14, `--t1` / `--t2`, `--remote`; no `--keep-freq`)
-- [x] `case organise rst`: what it does to the `.rst` files (the `--keep-out`
-      path: `--keep-freq`, `--keep-newest`, `--t1` / `--t2`); no `--keep-out`
-      flag is left
-- [x] The `output` subcommand is removed, with its flags `--all-out` and
-      `--keep-out`; the old word gives a one-line error that names the new
-      ones
-- [x] `auto show`, `auto commands` and `auto apply` print and run the new
-      commands (`decide.py` steps `delete-out` and `thin-rst`; the `apply`
-      targets `output` and `rst` stay as they are); the dummy cases, tests,
-      completion, help text, `docs/usage/`, `docs/architecture/auto_flow.html`,
-      the web flowchart and `CHANGELOG.md` follow
-
-### Phase 21: `plot --archive N` (branch `plot-archive`)
-
-Asked for on 2026-11-17, after a `plot --gnu` of `fixed/bare` showed one
-spike near step 2750, where `riser5` and `riser6` both restart inside
-`riser3`. To see whether the spike is in the solver's files or made by the
-compile, `plot` must be able to read single archived runs. `plot` with no
-flag keeps reading the whole history (compiled file while fresh, else the
-runs; `core/history.read_files`).
-
-- [x] `core/history.parse_runs()`: `1,3` / `2-4` / `1,3-5` to a list of run
-      numbers; ascending only, else an error that says so (Phase 22 uses it
-      too); `pick_archived()` takes the files
-- [x] `plot --archive LIST`: read `othd_files/archive/` and
-      `oisd_files/archive/` runs of those numbers, in order, instead of the
-      whole history; a bare `--archive` is every archived run; a number not
-      in `archive/` is an error that lists the ones there. The file
-      choice goes through `shared.find_files` / `scan_kinds` / `select`
-- [x] The title and the `reading` line say which archive runs were read
-- [x] Dummy case with overlapping runs, tests, help text, completion,
-      `CHANGELOG.md`
-
-### Phase 22: `case organise history --clean 1,2,3` (branch `organise-clean-select`)
-
-Asked for on 2026-11-17. `--clean` decides itself which runs make the
-history; with abandoned branches (`riser4`, `riser5` of `fixed/bare`) the user
-must choose. `archive/` is the store and is never changed by `--clean`;
-`cleaned/` is derived and temporary, so `--clean LIST` replaces it: files not
-in the new set are removed, the named runs are written renamed `1..N` in the
-order given. Design agreed on 2026-11-17 (user's words: "clean is a temporary
-directory between archive and the compiled file").
-
-- [x] `core/history`: `cleaned/.runs.json` (`{"cleaned": {N: archive M},
-      "skipped": [...]}`: read, write, remove); `runs()` / `read_files()` read
-      through it: a cleaned file counts as its source run, the skipped runs
-      are ignored, an archive run that came after is a new run
-- [x] `--clean LIST` (syntax of Phase 21, ascending only): the plan reads only
-      those runs; `cleaned/` is made to hold exactly `1..N`; the record is
-      written; mapping, overlaps and gaps are printed; the question lists the
-      files removed and written (`--no-confirm`, `--dry-run` as today)
-- [x] `--compile`, `--verify` and the "up to date" check judge `cleaned/`
-      against the selection in the record
-- [x] `--prune` refuses while a record is present and says why; a plain
-      `--clean` (all runs) asks, clears the record and cleans everything
-- [x] Tests (selection, rename order, removal of the old files, readers,
-      compile, verify, prune refusal, plain `--clean` after a selection),
-      help text, completion, `docs/usage/case-organise.md`, `CHANGELOG.md`
-
-### Phase 23: `plot --run` (branch `plot-run`)
-
-Comment 6 of `version comment` (2026-11-11) and asked again on 2026-11-17:
-`plot` reads only the history (`othd_files/`, `oisd_files/`); it cannot show
-what a job is writing now, before `case organise history --update` moves it
-into `archive/`. `plot` with no flag keeps reading the whole history.
-
-- [x] `plot --run`: read the `.othd` / `.oisd` of the case's run directory
-      (`dir:` of `simflow.config`, e.g. `RUN_1`) instead of the history; a
-      cut-off last step (a job still writing) is left out, as `--clean` does;
-      an empty run directory is an error that says so
-- [x] `--run` and `--archive` exclude each other, with an error that says so;
-      the title and the `reading` line name the run directory
-- [x] Tests (a dummy run directory, a half-written last step, both flags),
-      help text, completion, `CHANGELOG.md`
-
-### Phase 24: help examples and the carried `.casestatus.md` (branch `help-and-carry`)
-
-From `version comment` 1 (2026-11-01) and 2 (2026-11-10).
-
-- [x] Examples in the `help_messages.py` files and `docs/usage/` start with
-      the command, not `flexflow ` (about 220 lines); one pass, then a test
-      that no help text has the prefix
-- [x] `case download` / `case upload` of a case whose folder is missing on
-      the remote: `.casestatus.md` and `.restarts` are skipped with one line
-      that says why (upload the case first), instead of `[Errno 2] No such
-      file` twice; the run still ends `Incomplete: n/m` only for what really
-      failed. Decided: no empty case folder is made on the remote for the
-      notes alone
-- [x] Tests, `CHANGELOG.md`
-
-### Phase 25: shellkit, `version comment clear` and `\` continuation
-
-From `version comment` 5 (2026-11-10) and the request of 2026-11-17. The
-`version` builtin and the shell are in shellkit (a separate repository,
-pinned in `requirements.txt` (v0.1.6 had `version comment --remove N` and no
-clear-all), so the work was there and FlexFlow only moved the pin, to v0.1.7.
-Shellkit has no changelog file; its changes are in `DESIGN.md` there.
-
-- [x] shellkit: `version comment clear` clears every comment (asks first
-      unless `--yes`); `version comment clear 2` / `clear 2 4` clears those
-      numbers and says so for a number that is not there; `--remove` stays;
-      tests, help text, its changelog
-- [x] shellkit: a line ending in `\` continues on the next line (prompt shows
-      a continuation mark), in the interactive shell; tests
-- [x] shellkit tagged (v0.1.7), the pin in `requirements.txt` here raised,
-      the suite run against it
-
----
-
-### Phase 26: `auto show` posts steps a finished post job was never given (branch `auto-post-window`)
-
-From the user's `auto show` of CS4SG3U1P0 (2026-11-18): a post job that ended
-COMPLETED while the main job was still writing `.out` made `auto` say "ended
-COMPLETED after the .out of steps ... were written, yet they have no whole
-PLT" and suggest no `run post`, for steps written while that job ran. With no
-`post job N started: steps a..b` line, the window of the job came only from
-the local `binary/` PLTs, which are empty once uploaded.
-
-- [x] The window of a post job with no log line also comes from the PLTs on
-      the remote written while it ran (`snap.cloud_mtime`), not only from
-      `binary/`; test with an emptied `binary/`
-- [x] Tests, `CHANGELOG.md`
-
 ### Phase 27: `run sq` is easier to use (branch `run-sq-usage`)
 
 From the user (2026-11-18): `run sq` is a little confusing to use. One command
@@ -370,104 +127,6 @@ loop (`run sq watch [N]`), a search (`run sq find KEY`) and one job
 - [ ] Mistyped input is explained: `run sq watch abc`, `run sq find` with no
       key, a job id that is not in the queue
 - [ ] Tests, help text, completion, `CHANGELOG.md`
-
-### Phase 28: `--no-verify`, delete without asking the remote (branch `no-verify`)
-
-From the user (2026-11-18): on the personal machine `case organise plt
---delete-binary` cannot run, because the deletion chain (`core/chain.py`)
-needs the remote copy of each binary PLT (same size and md5) and stops with
-"The remote could not be asked, so nothing in binary/ is deleted: which
-remote?". That is right on the server, where a PLT with no good copy must
-stay, but on the personal machine the user knows the files are not wanted.
-
-Suggested shape: `--no-verify` is an explicit, per-command waiver of the
-remote link only. It never changes what `auto` does.
-
-- The remote check is skipped, so a binary PLT with no remote copy may go.
-  The local checks stay (a PLT that is cut short or not whole is still said).
-- It is printed, not silent: a line "remote copy not checked (--no-verify)"
-  in the step and in the summary, so a deleted file is known to have had no
-  proof.
-- It uses the confirmation `case organise` already asks ("Delete N files?",
-  skipped by `--no-confirm`), since a deletion cannot be undone.
-- It is not read from `.cases.yml` or `auto`: `auto` never passes it, so the
-  server's rule is unchanged.
-- Only `case organise plt --delete-binary` takes it: there the remote copy is
-  the only thing that stands in for the file. For `--delete-ascii`, `out` and
-  `rst` the local binary PLT is what stands in, so waiving the remote would
-  change nothing; and `case check plt --verify` is the check itself.
-
-- [x] Confirm with the user: the name (`--no-verify`), the confirmation, and
-      which commands take it
-- [x] `RemoteCopies` can be told not to ask (`core/chain.py`): a link that is
-      waived stands in as `by='waived'`, never as `remote`
-- [x] `case organise plt --delete-binary --no-verify`, with the notice and
-      the existing confirmation
-- [x] Not on `--delete-ascii`, `organise out` and `organise rst` (see above)
-- [x] `auto` is untouched: a test that no `auto` step carries the flag
-- [x] Tests, help text, completion, `CHANGELOG.md`
-
-### Phase 29: `auto` cleans up the `.vtu` caches (branch `auto-vtu`)
-
-From the user (2026-11-18). Today only `case organise vtu [--clean]` handles
-the `.vtu` files `field render` and `field convert` leave in `binary/`
-(`{problem}.{step}.vtu`, `.z{N}.vtu`, and the `.partial`/`.deriving`
-leftovers of a killed run). `auto` never looks at them, so they pile up
-unseen and a killed render leaves half-written files.
-
-Suggested shape, for the user to confirm:
-
-- `.partial` and `.deriving` files are always junk: `auto` deletes them (older
-  than a day, so a render still running is left alone).
-- A cache whose PLT is still here is rebuilt by the next render, so it may go,
-  but only when the config says so (`vtu_cache: delete`, off by default): it
-  costs conversion time, and a `field compute` may have written values into it.
-- A `.vtu` whose PLT is gone cannot be rebuilt: `auto show` reports it, and
-  `auto` never deletes it.
-- `auto show` says how many caches there are and how much space they take.
-- It runs where `.vtu` files are made (the personal machine), not on the
-  server; `auto` never uploads them.
-
-- [ ] Confirm with the user: which of the above, and the config word
-- [ ] Observe: the snapshot lists the `.vtu` files of `binary/` (kind, step,
-      size, age, whether the PLT is there)
-- [ ] Decide: the leftovers go; the caches go when configured; the orphans are
-      reported and kept; a step the plan still needs is not touched
-- [ ] `auto show` and `auto status` report them; the executor deletes through
-      the same path as `case organise vtu --clean`
-- [ ] Tests (a dummy case with each kind), help text, `docs/architecture/auto.md`
-      (new section at the end), `CHANGELOG.md`
-
-### Phase 29: `auto` cleans up the `.vtu` caches (branch `auto-vtu`)
-
-From the user (2026-11-18). Today only `case organise vtu [--clean]` handles
-the `.vtu` files `field render` and `field convert` leave in `binary/`
-(`{problem}.{step}.vtu`, `.z{N}.vtu`, and the `.partial`/`.deriving`
-leftovers of a killed run). `auto` never looks at them, so they pile up
-unseen and a killed render leaves half-written files.
-
-Suggested shape, for the user to confirm:
-
-- `.partial` and `.deriving` files are always junk: `auto` deletes them (older
-  than a day, so a render still running is left alone).
-- A cache whose PLT is still here is rebuilt by the next render, so it may go,
-  but only when the config says so (`vtu_cache: delete`, off by default): it
-  costs conversion time, and a `field compute` may have written values into it.
-- A `.vtu` whose PLT is gone cannot be rebuilt: `auto show` reports it, and
-  `auto` never deletes it.
-- `auto show` says how many caches there are and how much space they take.
-- It needs no remote check and `auto` never uploads them; they exist only
-  where a render ran. The delete stage still opens the remote first.
-
-- [x] Confirm with the user: which of the above, and the config word
-- [x] Observe: the snapshot lists the `.vtu` files of `binary/` (kind, step,
-      size, age, whether the PLT is there)
-- [x] Decide: the leftovers go; the caches go when configured; the orphans are
-      reported and kept; a step the plan still needs is not touched
-- [x] `auto show` and `auto status` report them; the executor deletes through
-      the same path as `case organise vtu --clean`
-- [x] Tests (a dummy case with each kind), help text, `docs/architecture/auto.md`
-      (new section at the end), `CHANGELOG.md`
 
 ### Phase 30: `case organise out` with PLTs only on the remote, unrecorded (branch `unrecorded-remote-plt`)
 
@@ -515,117 +174,6 @@ unrecorded, and the right words.
       command)
 - [ ] Tests (a dummy case with unrecorded, recorded and older-than-`.out`
       copies on the folder remote), help text, `CHANGELOG.md`
-
-### Phase 31: one flag vocabulary for `case`, `run` and `auto` (branch `flag-vocabulary`)
-
-From the user (2026-11-18): the commands have too many flags and they are not
-alike (survey of `case organise` and `case check`). The old flags and words are
-**removed, not kept as aliases**: a command given one says what to type now.
-
-What is inconsistent today:
-- Six flags repeat on every `organise` subcommand (`--log`, `--no-confirm`,
-  `--dry-run`, `-v`, `-h`, `--examples`); with `--t1/--t2`, `plt` takes about
-  16, `history` 15, `vtu` 13.
-- Three rules for when something is deleted: `out`/`rst` after a question,
-  `plt` only with `--delete-ascii`/`--delete-binary`, `vtu` only listed until
-  `--clean`, `history` only with one of five verb flags.
-- Verbs written as flags: `history --update/--clean/--compile/--verify/--prune`,
-  `plt --delete-ascii/--delete-binary`, `check plt --verify`.
-- "Don't ask" is `--no-confirm` in `case`, `--yes` in `run` and `auto`.
-- Flags that need another flag: `--keep-freq`, `--leftovers`, `--keep-orphans`,
-  `--no-verify`.
-- `--remote` is asked for even when `.cases.yml` lists only one remote.
-- `-v` and `--dry-run` exist on some commands and not others.
-
-The rules the commands will follow:
-- `case check X` reads and never changes a file; `case organise X` changes
-  files and always lists what it will do and asks first. `--dry-run` stops
-  after the list; `--yes` skips the question (everywhere, replacing
-  `--no-confirm`).
-- An action is a word, not a flag: `case organise plt ascii|binary`,
-  `case organise history update|clean|compile|verify|prune`,
-  `case organise vtu [leftovers]`. What stays a flag is an option:
-  `--t1/--t2`, `--freq`, `--keep-freq`, `--remote`.
-- `case organise vtu` removes leftovers and caches that have a PLT, never
-  those with none; `--orphans` is the one deliberate override. This replaces
-  `--leftovers` and `--keep-orphans`.
-- The common flags (`--t1/--t2`, `--dry-run`, `--yes`, `--log`, `-v`) are added
-  by one helper; `--examples` is gone, help always ends with the examples.
-- With exactly one remote in `.cases.yml` it is used and said ("Using remote:
-  cloud"); `--remote` is for choosing between several.
-- `case check plt --remote` replaces `--verify` (with Phase 12).
-
-- [x] The single remote is the default (`core/cases_file.py`, `cloud.py`,
-      `conf.py`: the error says "which remote?" only when there are several
-      or none)
-- [x] `case organise out/rst/plt/vtu/history`: list, ask, do; `--dry-run`,
-      `--yes`; `--no-confirm` removed (`organizer.py`, `history.py`)
-- [x] The common flags from one helper (`src/commands/case/__init__.py`);
-      `--examples` removed and every help ends with its examples
-- [x] `case organise vtu`: leftovers and caches with a PLT, `--orphans`;
-      `--clean` and `--keep-orphans` removed (`--leftovers` stays: it picks
-      what `auto` deletes); `auto`'s command updated
-- [x] `case check plt --remote` instead of `--verify`; `check` takes
-      `-v` and the same `--t1/--t2/--freq` words where they apply
-- [x] Actions as words: `organise plt ascii|binary`, `organise history
-      update|clean|compile|verify|prune` (the flags removed; `auto`'s
-      commands in `decide.py`, the help, completion, the web UI's calls)
-- [x] A test that audits the parsers: every command that deletes takes
-      `--dry-run` and `--yes`; no option is spelled two ways
-- [x] Docs (`docs/usage/`, `docs/architecture/auto.md` at the end),
-      `CHANGELOG.md` (breaking: list each old form and its new one)
-
-### Phase 32: pipe rows between commands (shellkit 0.1.8; branch `pipe-rows`)
-
-From the user (2026-11-19). To render a case at its largest displacement:
-
-    use case:BR0SG0U1P0 last:1000 node:25 var:dy; data stats --func maxloc
-    use time:5400; case download plt
-
-and the same again for every case. Asked: a `--maxloc` flag on `case download
-plt`, or a pipe, `data stats --func maxloc | case download plt`.
-
-Decision: the pipe, and not the flag. A `--maxloc` flag on `download` would need
-the variable, node, window and function too (five flags for one command, the
-opposite of Phase 31), and would have to be repeated on `field render`, `plot`
-and every other command that wants "the step where". The pipe does it once.
-
-Today a pipe cannot do it: in shellkit only the first segment of `a | b` can be
-a command; every later one runs in the OS shell on the text of the first. So:
-
-- A command may **emit rows**: a list of `{context key: value}`, one per case
-  (here `{case: ..., time: 5400}`).
-- In `a | b`, when `a` emitted rows and `b` is a shell command, `b` runs once
-  per row with that row's keys set as context for that run (as `use` would),
-  then the context is put back. `a`'s own output is still shown. `a` emitting
-  no rows, or `b` not being a shell command, keeps today's text pipe, so
-  `data stats | grep` is unchanged.
-- It helps every command that takes the context (`case download plt`,
-  `field render`, `plot`, `data table`, `case show`...), not only this one.
-
-Then `use case:* last:1000 node:25 var:dy; data stats --func maxloc | case
-download plt` does every case: `data stats` already takes `case:*`, and now
-emits one row per case with the PLT it chose (the first of its ranked
-files, so a file that exists, as `maxloc` already picks).
-
-shellkit (its own branch `row-pipes`, tag v0.1.8, then the pin here):
-- [x] `Runtime.emit(rows)` for a command, and `execute_pipe` runs a shell
-      command segment once per row with the row's keys as context
-- [x] The failure of one row is reported and the rest still run; the status
-      is the worst one; no rows says "nothing to pass on"
-- [x] Tests, `help` text for `|` ("rows"), `DESIGN.md`, version 0.1.8 (shellkit
-      branch `row-pipes`, commits `e5dc4ba`, `b386d50`; waiting for the user to
-      merge and tag v0.1.8)
-
-flexflow_manager:
-- [x] Pin shellkit 0.1.8
-- [x] `data stats` emits rows (it already took `case:*`, one section per case) for `maxloc`, `minloc` and `zeroloc` (`case` and
-      `time` of the PLT chosen; for `zeroloc` the descending crossing first)
-- [x] `case download plt` (and `field render`, `plot`) take that `time` from
-      the context as they already do; a test with two registry cases through the
-      pipe (`case show` as the second command)
-- [x] Help for `data stats` (the pipe, with the example above), `docs/usage/`,
-      `CHANGELOG.md`
 
 ### Phase 12: `case check --remote`, verify against the remote (branch `check-remote`)
 
@@ -679,12 +227,12 @@ Not split into tasks yet. Each needs a decision before it becomes a phase.
 
 ## Open branches
 
-As of 2026-11-17, after Phases 21 to 24 were merged. To work on later.
+As of 2026-11-26, after Phase 44. To work on later.
 
 | Branch | Phase | State |
 |---|---|---|
-| `docs-install` | 10 | 4 commits not in `main` (installed documentation, development testing tools, next-session notes); 37 commits behind `main`, so merge or rebase `main` first. On `origin` |
-| `flowreel-export` | 9 | 1 commit not in `main` (`Add FlowReel body export`); 37 commits behind `main`, same. On `origin` |
+| `docs-install` | 10 | 4 commits not in `main` (installed documentation, development testing tools, next-session notes); 112 commits behind `main`, so merge or rebase `main` first. On `origin` |
+| `flowreel-export` | 9 | 1 commit not in `main` (`Add FlowReel body export`); 112 commits behind `main`, same. On `origin` |
 | `auto-post-window` | 26 | Merged into `main` (`ff0dd3d`) and kept on `origin` on purpose, as the reference if this bug returns: `auto show` suggests no `run post` and prints `Post job N ended COMPLETED after the .out of steps ... were written, yet they have no whole PLT`, for `.out` the post job was never given (it ended while the main job still wrote them). Cause: with no `post job N started: steps a..b` log line, the job's window was read only from `binary/`, empty once uploaded; the fix (`f169a78`, `_post` in `src/core/auto/decide.py`) also reads the remote PLTs' write times. Still unfixed: a remote that got its PLTs from a later upload, not from the post job, has mtimes outside the window and gives the old alarm |
 
 - The user merges both open branches; Claude resolves conflicts when asked.
@@ -693,13 +241,16 @@ As of 2026-11-17, after Phases 21 to 24 were merged. To work on later.
 
 ## Waiting on the user
 
-As noted on 2026-11-11; may be out of date.
+As noted on 2026-11-26.
 
 - First real run of the additive steps on the cluster:
-  `auto apply BR0SG0U1P0 --remote cloud --only upload --dry-run`, then without
+  `auto apply all --case BR0SG0U1P0 --remote cloud --only upload --dry-run`, then without
   `--dry-run`; bring back `auto_logs/auto_<time>.log` and `auto show`.
 - `BR0SG0U6P0`: `archive/` is empty locally; restore with
-  `case download history BR0SG0U6P0 --archive --from cloud`.
+  `case download history --case BR0SG0U6P0 --archive --remote cloud`.
+- The new command forms (Phases 33 to 44) on real data: `case organise out --no-verify --t1 N`,
+  `data check steady --case * --var dy | data stats --func rms`,
+  `auto status --case * --only needs | case show`, and Tab after `history`, `auto apply`, `run post`.
 
 ---
 
@@ -731,6 +282,20 @@ As noted on 2026-11-11; may be out of date.
 | 42 | `walk-test` | `test_scripts/test_command_rules.py` walks the whole parser tree and checks the command rules; `docs TOPIC` completes its topics |
 | 43 | `run-flag-case` | `run`: `--case`, `--job`, `--script`, `--interval`, `--key`, `--name`, `--sbatch-args`; the modes stay words |
 | 44 | `auto-flag-case` | `auto`: `--case NAME`, the target of `apply` stays a word (§13.21) |
+| 8 | `auto-log` | `auto log` reads back the logs of `auto apply`; `auto status` is one line per case |
+| 12 to 17 | | `auto` as a sequence of visible commands: `auto show` lists the exact commands `auto apply` runs, in order (Phases 13 to 16, 18, 19 and 17 in this table; Phase 12 is still open) |
+| 17 | `auto-apply-targets` | `auto apply <target>`: history, plt, output, input, rst or all (§13.15) |
+| 20 | `organise-out-rst` | `case organise out` and `rst` as subcommands of their own (§13.16) |
+| 21 | `plot-archive` | `plot --archive N` |
+| 22 | `organise-clean-select` | `case organise history clean 1,2,3`: clean a selection of archive runs |
+| 23 | `plot-run` | `plot --run` |
+| 24 | `help-and-carry` | Help examples; the carried `.casestatus.md` |
+| 25 | | shellkit port: `version comment clear`, `\` continuation |
+| 26 | `auto-post-window` | `auto show` no longer posts steps a finished post job was never given |
+| 28 | `no-verify` | `case organise plt binary --no-verify`: delete whole binary PLTs without asking the remote |
+| 29 | `auto-vtu` | `auto` cleans up the `.vtu` caches (§13.17) |
+| 31 | `flag-vocabulary` | One flag vocabulary for `case`, `run` and `auto`: actions are words, `--yes`, one remote is the default (§13.18) |
+| 32 | `pipe-rows` | Pipe rows between commands (shellkit 0.1.8): `data stats --func maxloc \| case download plt` |
 
 ---
 
