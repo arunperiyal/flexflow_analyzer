@@ -604,3 +604,15 @@ def test_run_words_complete_and_the_case_is_a_flag(rt):
     check()
     use(rt, 'case:CaseA')
     check()
+
+
+def test_auto_words_complete_and_the_case_is_a_flag(rt):
+    def check():
+        assert texts(rt, 'auto ') == ['init', 'show', 'commands', 'status', 'apply', 'log']
+        assert set(texts(rt, 'auto apply ')) >= {'history', 'plt', 'output', 'input', 'rst', 'all'}
+        for line in ('auto show', 'auto commands', 'auto status', 'auto log', 'auto apply plt'):
+            assert '--case' in texts(rt, line + ' --'), line
+            assert texts(rt, f'{line} --case Case') == ['CaseA/', 'CaseB/'], line
+    check()
+    use(rt, 'case:CaseA')
+    check()

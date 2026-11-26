@@ -22,7 +22,8 @@ class BaseCommand(_ShellkitCommand):
         stray = list(getattr(args, 'words', None) or [])
         if stray:
             path = ' '.join(str(v) for k, v in vars(args).items()
-                            if (k == 'command' or k.endswith('_subcommand') or k == 'template_domain') and v)
+                            if (k == 'command' or k.endswith('_subcommand') or k == 'template_domain'
+                                or (k == 'what' and getattr(args, 'command', '') == 'auto')) and v)
             flag = getattr(args, 'word_flag', '--case')
             what = 'the case' if flag == '--case' else 'that value'
             print(f"Error: {path}: unexpected word '{stray[0]}'; {what} is a flag "

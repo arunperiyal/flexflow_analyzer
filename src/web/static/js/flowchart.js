@@ -326,7 +326,7 @@ const FlowChart = (() => {
     {
       id: 'autoShow', kind: 'step', col: 3, row: 12, label: ['See the plan'],
       title: 'See the plan (auto)',
-      command: 'auto show <case>\nuse case:*\nauto status\nauto commands',
+      command: 'auto show [--case NAME]\nuse case:*\nauto status\nauto commands',
       detail: `For the case (the argument or "use case:"), or every case in
         .cases with "use case:*", like case check: its state, then what "auto
         apply" would do and why: organise the history, a post job and its

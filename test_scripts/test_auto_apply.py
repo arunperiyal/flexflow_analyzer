@@ -371,14 +371,14 @@ def test_no_target_does_nothing_and_lists_the_targets(dummy, capsys):
     assert not any(j['name'] == 'postcase5' for j in submitted(dummy))
 
 
-def test_the_target_word_is_told_from_the_case(dummy):
+def test_the_target_is_a_word_and_the_case_a_flag(dummy):
     from src.commands.auto.apply import split_target
-    ns = lambda **kw: SimpleNamespace(**{'case': None, 'extra': None, 'only': None, **kw})
-    assert split_target(ns(case='plt', extra='case5')) == ('plt', 'case5')
+    ns = lambda **kw: SimpleNamespace(**{'case': None, 'target': None, 'only': None, **kw})
+    assert split_target(ns(target='plt', case='case5')) == ('plt', 'case5')
     assert split_target(ns(case='case5')) == (None, 'case5')
     assert split_target(ns(case='case5', only='upload')) == ('all', 'case5')
-    with pytest.raises(ValueError):
-        split_target(ns(case='case5', extra='plt'))
+    with pytest.raises(ValueError, match='--case case5'):         # the old form: the case first
+        split_target(ns(target='case5'))
 
 
 def test_a_target_runs_only_its_own_steps(dummy):

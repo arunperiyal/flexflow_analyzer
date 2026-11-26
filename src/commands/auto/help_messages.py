@@ -11,7 +11,7 @@ def print_auto_help():
     auto init [--remote NAME] [--path DIR] [--keep-rst N] [--keep-newest-rst N] [--upload-rst N] [--disk-alert SIZE] [--vtu-cache keep|delete] [--force]
         set, in this folder's .cases.yml, the remote's folder for these cases
         (default: the remote's `remote set-path`) and auto's settings
-    auto show [case] [--remote NAME] [--detail] [--only SECTIONS]
+    auto show [--case NAME] [--remote NAME] [--detail] [--only SECTIONS]
         what auto would do; changes nothing. case: a folder, or `use case:`;
         `use case:*` (or '*') for every case in .cases.yml. One case: labelled
         sections (State, History, PLT files, OUT files, RST files, Inputs and
@@ -25,19 +25,19 @@ def print_auto_help():
         cases: the summary table; each in full with --detail. --only plt,rst
         shows just those sections (state, needs, flags, history, plt, out, rst,
         inputs).
-    auto commands [case]   just the Action commands, numbered, as plain text
-                           (`auto commands '*' > todo.sh` to read before running)
-    auto status [case] [--only needs|todo|running|all]
+    auto commands [--case NAME]   just the Action commands, numbered, as plain text
+                           (`auto commands --case '*' > todo.sh` to read before running)
+    auto status [--case NAME] [--only needs|todo|running|all]
                            one line per case: state, steps, jobs (with ids), what is next;
                            a footer counts the cases and those that need you. The cases
                            picked by --only (default all: needs = need you, todo = have
                            something to do, running = have a job in the queue) go to a
                            command after a `|`, which runs once for each:
-                               auto status * --only needs | case show
-                               auto status * --only todo | auto apply plt
+                               auto status --case * --only needs | case show
+                               auto status --case * --only todo | auto apply plt
                            the second command still asks its own questions (auto apply
                            asks per case unless --yes). Needs shellkit 0.1.8
-    auto apply <target> [case] [--remote NAME] [--delete] [--dry-run] [--yes]
+    auto apply <target> [--case NAME] [--remote NAME] [--delete] [--dry-run] [--yes]
         target: history, plt, output, input, rst or all. With no target nothing
         is done and the targets are listed. A target word is always a target
         (a case of that name: ./plt). --only history,upload,post still works
@@ -67,7 +67,7 @@ def print_auto_help():
         needed; the question gives their number and size). Nothing is deleted
         for a case that needs you, has a post job in the queue, or whose queue
         or remote could not be read.
-    auto log [case] [--list] [--log N]
+    auto log [--case NAME] [--list] [--log N]
                            read back the logs of `auto apply` (auto_logs/auto_<time>.log):
                            the newest run, one line per action, failures in red; with a
                            case only its lines. --list shows every run, one line each;

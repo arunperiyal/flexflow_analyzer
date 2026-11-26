@@ -1,7 +1,7 @@
 """auto apply: carry out what `auto show` lists -- organise the history, upload
 (checked), delete what has a checked copy (only when asked), submit a post job.
 
-    auto apply <target> [case] --remote NAME [--delete] [--dry-run] [--yes]
+    auto apply <target> [--case NAME] --remote NAME [--delete] [--dry-run] [--yes]
 
     target: history | plt | output | input | rst | all. Each runs the steps
     `auto show` lists for that part of the case (plan.steps, filtered by
@@ -46,23 +46,18 @@ DELETE_OF = {'plt': ('ascii', 'binary', 'vtu'), 'output': ('out',), 'rst': ('rst
 
 
 def split_target(args):
-    """(target, case) from the positionals: `apply plt CASE`, `apply plt`
-    (the case from `use case:`) or `apply CASE` (no target). A target word is
-    always a target; name a case of that name as `./plt`. A --only with no
-    target is the old way to say `all`."""
-    from src.cli.context import current_case
+    """(target, case): `auto apply plt [--case NAME]`. The target is the one word;
+    the case is `--case NAME`, else the `use case:` one. A word that is not a target is
+    refused (the old form took the case there). A --only with no target is the old way
+    to say `all`."""
     names = [t for t, _ in TARGETS]
-    first, second = getattr(args, 'case', None), getattr(args, 'extra', None)
-    target = getattr(args, 'target', None)
-    if target is None and first in names:
-        target, first, second = first, second, None
-        first = first or current_case()
-    elif second is not None:
-        raise ValueError(f"`auto apply {first} {second}`: the first word is not a target "
-                         f"({', '.join(names)})")
+    target, case = getattr(args, 'target', None), getattr(args, 'case', None)
+    if target is not None and target not in names:
+        raise ValueError(f"'{target}' is not a target ({', '.join(names)}); the case is a "
+                         f"flag now: --case {target}")
     if target is None and getattr(args, 'only', None):
         target = 'all'
-    return target, first
+    return target, case
 
 
 def for_target(plan, target):
@@ -298,7 +293,7 @@ def execute_apply(args) -> int:
         console.print("[bold]auto apply[/bold] needs a target; nothing was done.")
         for name, what in TARGETS:
             console.print(f"  [cyan]{name:<8}[/cyan] {what}")
-        console.print("[dim]e.g. `auto apply plt BR0SG0U1P0 --dry-run`; `auto show` lists the steps.[/dim]")
+        console.print("[dim]e.g. `auto apply plt --case BR0SG0U1P0 --dry-run`; `auto show` lists the steps.[/dim]")
         return 0
     args.case = case
     got = _collect(args)

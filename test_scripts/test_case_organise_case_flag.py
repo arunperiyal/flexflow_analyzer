@@ -201,3 +201,27 @@ def test_run_takes_its_flags():
     assert parser.parse_args('run sc --name postCS1'.split()).name == 'postCS1'
     got = parser.parse_args(['run', 'sb', '--script', 'post.sh', '--sbatch-args=--dependency=afterok:1'])
     assert (got.script, got.sbatch_args) == ('post.sh', '--dependency=afterok:1')
+
+
+# --- auto (Phase 44) ----------------------------------------------------------------------
+
+AUTO_OLD_FORMS = ('auto show CS1', 'auto commands CS1', 'auto status CS1', 'auto log CS1',
+                  'auto apply CS1', 'auto apply plt CS1', 'auto apply plt * --dry-run')
+
+
+@pytest.mark.parametrize('line', AUTO_OLD_FORMS)
+def test_auto_refuses_the_case_as_a_word(shell, capsys, line):
+    status, text = shell(line)
+    seen = capsys.readouterr()
+    out = text + seen.out + seen.err
+    assert status != 0 and '--case' in out and 'flag now' in out, line
+
+
+def test_auto_takes_the_case_flag_and_the_target_word():
+    from src.cli.app import create_app
+    parser = create_app().build_parser()
+    for what in ('show', 'commands', 'status', 'log'):
+        assert parser.parse_args(['auto', what, '--case', 'CS1']).case == 'CS1', what
+    got = parser.parse_args('auto apply plt --case CS1 --dry-run'.split())
+    assert (got.what, got.target, got.case) == ('apply', 'plt', 'CS1')
+    assert parser.parse_args('auto apply all --case *'.split()).case == '*'
