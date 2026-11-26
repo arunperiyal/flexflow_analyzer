@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### ⚠️ `run`: the case, the job and the script are flags
+
+Phase 43. The modes stay words. Breaking, no aliases; the old form is refused
+and the message names the flag:
+
+| Before | Now |
+|---|---|
+| `run check mesh CS1`, `run pre CS1`, `run main CS1` | `run check mesh --case CS1`, `run pre --case CS1`, `run main --case CS1` |
+| `run main restart CS1 --time 5000` | `run main restart --case CS1 --time 5000` |
+| `run post full CS1 --t1 0` | `run post full --case CS1 --t1 0` |
+| `run list log CS1` | `run list log --case CS1` |
+| `run sq 1258586`, `run sq watch 5`, `run sq find KEY` | `run sq --job 1258586`, `run sq watch --interval 5`, `run sq find --key KEY` |
+| `run sc 1258586`, `run sc postCS1` | `run sc --job 1258586`, `run sc --name postCS1` |
+| `run sb post.sh --dependency=afterok:1` | `run sb --script post.sh --sbatch-args='--dependency=afterok:1'` |
+
+`auto show` and `auto commands` write `run post MODE --case C ...` and
+`run main restart --case C --time T`.
+
 ### ⚠️ Names, values and files are flags
 
 Phase 41. Breaking, no aliases; a value typed as a word is refused and the

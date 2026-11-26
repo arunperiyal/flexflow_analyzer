@@ -108,7 +108,7 @@ def _state(v):
             if conf.disk_alert and snap.run_size > conf.disk_alert else '')
     s.row('Run dir', f"{snap.run_rel}/ {_size_text(snap.run_size)}{over}")
     if c.get('restart_from') is not None:
-        s.actions.append(f"run main restart {name} --time {c['restart_from']}")
+        s.actions.append(f"run main restart --case {name} --time {c['restart_from']}")
     return [s]
 
 

@@ -19,10 +19,10 @@ def execute_sc(args):
         print("Make sure you're on an HPC cluster with SLURM installed")
         return
 
-    target = getattr(args, 'target', None)
+    target = getattr(args, 'job', None) or getattr(args, 'name', None)
     if not target:
         print("Error: No job ID or name specified")
-        print("Usage: run sc <job_id|job_name>")
+        print("Usage: run sc --job ID | --name NAME")
         return
 
     cancel_job(target)
@@ -181,7 +181,7 @@ def show_sc_help():
 {Colors.BOLD}{Colors.CYAN}run sc — Cancel SLURM Jobs{Colors.RESET}
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    run sc <job_id|job_name>
+    run sc --job <id> | --name <name>
 
 {Colors.BOLD}ARGUMENTS:{Colors.RESET}
     {Colors.YELLOW}<job_id>{Colors.RESET}     Numeric SLURM job ID — cancelled immediately

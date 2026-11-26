@@ -787,6 +787,29 @@ old forms are refused and the message names the flag. `docs TOPIC` stays a word
 - [x] Tests: every old form refused with its flag, the flags take the values
 - [x] Help, `docs/usage/`, `README.md`, `CHANGELOG.md`
 
+### Phase 43: `run` follows the rules (branch `run-flag-case`)
+
+The modes stay words (`run check headers|mesh`, `run main restart|reset`, `run post
+full|convert`, `run list log`, `run sq watch|find`); the case, the step, the job and
+the script become flags: `--case NAME`, `run main restart --time TSID` (the step was
+already a flag), `run sq --job ID | watch --interval S | find --key K`, `run sc --job
+ID | --name N`, `run sb --script F [--sbatch-args '...']`. The old forms are refused
+and the message names the flag; the lines `auto` writes for `run post` and `run main
+restart` carry `--case`.
+
+- [x] `--case` and the mode as the only word on `check`, `pre`, `main`, `post`,
+      `list`; `sq`, `sb` and `sc` take their job, script and values as flags
+- [x] `auto` writes `run post MODE --case C ...` and `run main restart --case C ...`
+- [x] Tests: every old form refused with its flag, the flags parse, the words
+      complete with and without a case in context
+- [x] Help, `docs/usage/`, `CHANGELOG.md`
+
+### Phase 44: `auto` follows the rules (branch `auto-flag-case`)
+
+`auto show|commands|status|apply|log` take a case as the second word and `apply`
+a target as the first. The case becomes `--case NAME` (`*` for all), the target
+stays a word. Tasks when it is started.
+
 ### Phase 42: one test walks every command (branch `walk-test`)
 
 Asks the completer at every position of every command and checks the rules:

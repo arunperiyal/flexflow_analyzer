@@ -72,7 +72,7 @@ def parse():
 
 
 def test_parse(parse):
-    args = parse('log', 'CaseX', '--sort', 'type', '-r', '--type', 'post', '--type', 'main')
+    args = parse('log', '--case', 'CaseX', '--sort', 'type', '-r', '--type', 'post', '--type', 'main')
     assert (args.what, args.case, args.sort, args.reverse, args.type) == \
         ('log', 'CaseX', 'type', True, ['post', 'main'])
     assert parse('log').sort == 'time'

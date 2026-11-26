@@ -349,7 +349,7 @@ def do_post(snap, plan, conf) -> Step:
     from src.commands.run.post_impl.command import (find_postprocessing_script,
                                                     submit_postprocessing_job)
     t1, t2, freq, mode = plan.post_jobs[0]
-    command = f"run post {mode} {snap.name} --t1 {t1} --t2 {t2} --freq {freq} --no-remote"
+    command = f"run post {mode} --case {snap.name} --t1 {t1} --t2 {t2} --freq {freq} --no-remote"
     script = find_postprocessing_script(snap.dir)
     if script is None:
         return Step('post', False, "no postFlex.sh in the case", command)
@@ -362,7 +362,7 @@ def do_post(snap, plan, conf) -> Step:
     if got != expected:
         return Step('post', False,
                     f"{script.name} names its job {got or '(no name)'}, it should be {expected}; "
-                    f"fix it with `run post full {snap.name}` (it offers to set the name)",
+                    f"fix it with `run post full --case {snap.name}` (it offers to set the name)",
                     command)
     args = SimpleNamespace(
         case=str(snap.dir), words=[], post_mode=mode, convert=(mode == 'convert'),

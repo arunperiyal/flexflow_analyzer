@@ -50,4 +50,4 @@ that does not yet is listed at the end and fixed by its own phase.
 
 ## Not yet following these
 
-`run` (Phase 43) and `auto` (Phase 44); everything else follows them.
+`auto` (Phase 44); everything else follows them.

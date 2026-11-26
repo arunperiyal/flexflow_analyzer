@@ -169,3 +169,35 @@ def test_the_flags_take_the_values(shell):
     assert (got.kind, got.value) == ('maxTime', '5000')
     assert parser.parse_args('def freq out --value 50 --case CS1'.split()).case == 'CS1'
     assert parser.parse_args('template script main --case CS1'.split()).case_dir == 'CS1'
+
+
+# --- run (Phase 43) -----------------------------------------------------------------------
+
+RUN_OLD_FORMS = (('run check CS1', '--case CS1'), ('run check mesh CS1', '--case CS1'),
+                 ('run pre CS1', '--case CS1'), ('run main CS1', '--case CS1'),
+                 ('run main restart CS1', '--case CS1'), ('run main restart 5000', '--case 5000'),
+                 ('run post full CS1', '--case CS1'), ('run list log CS1', '--case CS1'),
+                 ('run sq 1258586', '--job 1258586'), ('run sc 1258586', '--job 1258586'),
+                 ('run sb post.sh', '--script post.sh'))
+
+
+@pytest.mark.parametrize('line, flag', RUN_OLD_FORMS)
+def test_run_refuses_a_case_job_or_script_typed_as_a_word(shell, capsys, line, flag):
+    status, text = shell(line)
+    seen = capsys.readouterr()
+    assert flag in text + seen.out + seen.err, line
+
+
+def test_run_takes_its_flags():
+    from src.cli.app import create_app
+    parser = create_app().build_parser()
+    for line in ('check', 'check mesh', 'pre', 'main', 'main restart', 'main reset', 'post full',
+                 'post convert', 'list log'):
+        assert parser.parse_args(['run', *line.split(), '--case', 'CS1']).case == 'CS1', line
+    got = parser.parse_args('run sq watch --interval 5'.split())
+    assert (got.target, got.interval) == ('watch', 5.0)
+    assert parser.parse_args('run sq find --key CS4'.split()).key == 'CS4'
+    assert parser.parse_args('run sq --job 123 --out'.split()).job == '123'
+    assert parser.parse_args('run sc --name postCS1'.split()).name == 'postCS1'
+    got = parser.parse_args(['run', 'sb', '--script', 'post.sh', '--sbatch-args=--dependency=afterok:1'])
+    assert (got.script, got.sbatch_args) == ('post.sh', '--dependency=afterok:1')

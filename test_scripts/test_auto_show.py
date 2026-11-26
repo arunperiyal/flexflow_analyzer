@@ -191,7 +191,7 @@ def test_the_case_context(dummy, monkeypatch, capsys):
                     'Inputs and case files', 'Steps:', 'Remote:', 'Action:'):
         assert heading in out
     assert 'main 1300105 PENDING, restarts from 700' in out
-    assert '1: run post full case3 --t1 550 --t2 700 --no-remote' in out
+    assert '1: run post full --case case3 --t1 550 --t2 700 --no-remote' in out
     assert rt.execute_line('use case:*') == 0
     assert rt.execute_line('auto show --remote local') == 1      # some cases need you
     out = capsys.readouterr().out
@@ -226,7 +226,7 @@ def test_report_sections_of_a_queued_case(dummy):
                              '(4 steps)')
     assert plt['Binary'] == 'present 750 · broken none'
     assert plt['Skipped'] == '750: the queued job restarts from 700 and computes it again'
-    assert sec['plt'].actions == ['run post full case3 --t1 550 --t2 700 --no-remote']
+    assert sec['plt'].actions == ['run post full --case case3 --t1 550 --t2 700 --no-remote']
     # uploads first (the grid set 400), then the deletion that follows
     assert sec['rst'].actions[0] == ('case upload rst --case case3 --t1 400 --t2 400 --freq 400 '
                                      '--missing --remote local')
@@ -254,7 +254,7 @@ def test_auto_commands_is_plain_text_to_read_or_save(dummy, monkeypatch, capsys)
     assert execute_commands(SimpleNamespace(case='*', remote='local')) == 0
     out = capsys.readouterr().out
     assert '\x1b[' not in out                                     # no colour codes
-    assert 'run post full case2 --t1 450 --t2 600 --no-remote    # 2, PLT files' in out
+    assert 'run post full --case case2 --t1 450 --t2 600 --no-remote    # 2, PLT files' in out
     assert '#   waiting: post job' in out                         # case4
     assert '#   needs you: Main job' in out                       # case7
     assert 'auto apply:' not in out and 'not built yet' not in out
@@ -283,7 +283,7 @@ def test_a_change_of_output_frequency_is_not_a_hole(dummy):
     assert plt['Remote'] == ('present 50–500 every 50 (10 steps), 505–560 every 5 (12 steps) · '
                              'missing 565–600 every 5 (8 steps)')
     assert 'Lost' not in plt
-    assert sec['plt'].actions == ['run post full case12 --t1 565 --t2 600 --no-remote']
+    assert sec['plt'].actions == ['run post full --case case12 --t1 565 --t2 600 --no-remote']
 
 
 def test_every_action_is_a_command_and_the_rest_is_in_rows(dummy):
