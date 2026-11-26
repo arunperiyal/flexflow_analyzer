@@ -34,8 +34,10 @@ steady oscillation, or a steady value -- and from which tsId it has.
                            each component is judged on its own
     {Colors.YELLOW}--t1 TSID{Colors.RESET}              First tsId (alone: from there to the end)
     {Colors.YELLOW}--t2 TSID{Colors.RESET}              Last tsId
-    {Colors.YELLOW}--last N{Colors.RESET}               Only the last N steps (of the --t1/--t2 window).
-                           From context: use last:N
+    {Colors.YELLOW}--last N{Colors.RESET}               Only the last N steps (of the `use t1:`/`t2:` window).
+                           From context: use last:N. Not with a typed --t1/--t2:
+                           typing both is refused, and a typed --t1/--t2 makes a
+                           `use last:` ignored (it says so)
     {Colors.YELLOW}--node N{Colors.RESET}               Node to read       (default: 0)
     {Colors.YELLOW}--othid ID{Colors.RESET} / {Colors.YELLOW}--osgid ID{Colors.RESET}  Probe set / surface group, as for `data table`
     {Colors.YELLOW}--blocks K{Colors.RESET}             Blocks of whole cycles compared   (default: 4)

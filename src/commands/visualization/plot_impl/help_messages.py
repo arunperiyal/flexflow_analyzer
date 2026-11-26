@@ -42,7 +42,7 @@ same --var, node and window.
                             (--var d, or --var dx,dy)
     {Colors.YELLOW}--t1{Colors.RESET} TSID            First tsId (use t1:)
     {Colors.YELLOW}--t2{Colors.RESET} TSID            Last tsId (use t2:)
-    {Colors.YELLOW}--last{Colors.RESET} N             Only the last N steps of that window (use last:N)
+    {Colors.YELLOW}--last{Colors.RESET} N             Only the last N steps of that window (use last:N). Not with a typed --t1/--t2
     {Colors.YELLOW}--restart{Colors.RESET}             Mark each restart recorded in .restarts (by case
                             organise history) with a grey dashed line (time plots)
 

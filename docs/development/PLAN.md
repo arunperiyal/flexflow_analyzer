@@ -733,12 +733,12 @@ Breaks no command line except a shortened flag.
   fails.
 
 - [x] Write the plan: Phases 38 to 42
-- [ ] The displacement declaration in `src/cli/context.py`, read by `last_arg`,
+- [x] The displacement declaration in `src/cli/context.py`, read by `last_arg`,
       `time_window` and the other context flags; the "ignored" line
-- [ ] Refuse two typed flags that displace each other (`--t1` with `--last`),
+- [x] Refuse two typed flags that displace each other (`--t1` with `--last`),
       in every command that has them (`data`, `plot`, `case upload/download`)
-- [ ] `allow_abbrev=False` on every parser; a test over the whole tree
-- [ ] Help text, `docs/usage/`, `CHANGELOG.md`
+- [x] `allow_abbrev=False` on every parser; a test over the whole tree
+- [x] Help text, `docs/usage/`, `CHANGELOG.md`
 
 ### Phase 39: `--case` for the `case` commands (branch `case-flag-case`)
 

@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### 🛡️ Flags are typed in full, and a typed flag displaces `use` values
+
+Rules 4 and 6 of `.claude/rules/command-design.md`, for every command (Phase 38).
+
+- **No abbreviations, anywhere.** `--no-ver` for `--no-verify`, `--dry` for
+  `--dry-run` and the like are refused (`unrecognized arguments`). Tab fills in
+  the full flag.
+- **A typed `--t1` or `--t2` makes a `use last:N` ignored**, and a typed `--t1`
+  or `--t2` makes a `use time:S` fill neither end; each says so
+  (`last: 1000 (use) ignored: --t1 typed`).
+- **Breaking:** typing `--last` together with `--t1` or `--t2` is refused
+  (`data table|stats|check steady`, `plot`). One of them can still come from
+  `use`: `use t1:5000` and a typed `--last 1000` cuts that window.
+
 ### ⚠️ `case organise`: the case is `--case NAME`, never a word
 
 The rules for every command are in `.claude/rules/command-design.md`;
