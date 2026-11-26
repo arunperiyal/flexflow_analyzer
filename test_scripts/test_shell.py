@@ -353,25 +353,30 @@ def test_case_positional_completes_directories(rt):
     assert texts(rt, 'case show Ca') == ['CaseA/', 'CaseB/']
 
 
-def test_organise_action_words_complete_in_every_position(rt):
-    # after the case word
-    assert texts(rt, 'case organise plt CaseA ') == ['ascii', 'binary']
-    assert texts(rt, 'case organise plt CaseA a') == ['ascii']
-    assert texts(rt, 'case organise history CaseA c') == ['clean', 'compile']
-    # no case set: the first word is a case, so only cases are offered
-    assert texts(rt, 'case organise plt ') == ['CaseA/', 'CaseB/']
-    assert texts(rt, 'case organise plt a') == []
-    # with `use case:` that first word is an action (the command reads it so), and
-    # the case directories are still offered beside the words
+def test_organise_words_complete_in_every_position(rt):
+    """The case is a flag (`--case` or `use case:`), so the first word after
+    `history` / `plt` is an action, with or without a case in context."""
+    def check():
+        assert texts(rt, 'case organise ') == ['history', 'out', 'rst', 'plt', 'vtu']
+        assert texts(rt, 'case organise history ') == ['update', 'clean', 'compile', 'verify',
+                                                       'prune']
+        assert texts(rt, 'case organise history up') == ['update']
+        assert texts(rt, 'case organise history update c') == ['clean', 'compile']
+        assert texts(rt, 'case organise history update clean 1-3 ') == [
+            'update', 'clean', 'compile', 'verify', 'prune']
+        assert texts(rt, 'case organise plt ') == ['ascii', 'binary']
+        assert texts(rt, 'case organise plt a') == ['ascii']
+        assert texts(rt, 'case organise plt ascii b') == ['binary']
+        assert {'--case', '--t1', '--freq', '--no-verify'} <= set(texts(rt, 'case organise plt --'))
+        assert {'--case', '--t1', '--no-verify'} <= set(texts(rt, 'case organise out --'))
+        assert '--no-verify' not in texts(rt, 'case organise rst --')
+        for sub in ('out', 'rst', 'vtu'):               # no words: flags straight away
+            assert {'--case', '--t1', '--dry-run'} <= set(texts(rt, f'case organise {sub} '))
+        assert texts(rt, 'case organise history --case ') == ['CaseA/', 'CaseB/']
+        assert texts(rt, 'case organise plt binary --case Case') == ['CaseA/', 'CaseB/']
+    check()
     use(rt, 'case:CaseA')
-    assert texts(rt, 'case organise plt ') == ['ascii', 'binary', 'CaseA/', 'CaseB/']
-    assert texts(rt, 'case organise plt a') == ['ascii']
-    assert texts(rt, 'case organise plt b') == ['binary']
-    assert texts(rt, 'case organise history ')[:5] == ['update', 'clean', 'compile',
-                                                       'verify', 'prune']
-    assert texts(rt, 'case organise history CaseA ')[:2] == ['update', 'clean']
-    assert 'ascii' not in texts(rt, 'case organise out ')       # only plt and history take words
-    assert {'--t1', '--freq'} <= set(texts(rt, 'case organise plt --'))
+    check()
 
 
 def test_remote_completion(rt, monkeypatch):

@@ -212,7 +212,7 @@ def test_compile_refuses_a_cleaned_out_of_date(tmp_path):
     archive(tmp_path, {'riser3.othd': othd([11], value=3.0)})
     _, out = run(tmp_path, compile=True)
     assert not (tmp_path / 'othd_files' / 'riser.othd').exists()
-    assert 'run --clean first' in out
+    assert 'run `clean` first' in out
 
 
 # --- --verify ----------------------------------------------------------------------
@@ -236,13 +236,13 @@ def test_verify_fails_cleaned_and_compiled_out_of_date(tmp_path):
     archive(tmp_path, {'riser3.othd': othd([9, 10, 11], value=3.0)})
     organizer, out = run(tmp_path, verify=True)
     assert organizer.stats['verify_ok'] is False
-    assert 'cleaned/riser2.othd' in out and 'out of date with archive/ — run --clean' in out
-    assert 'cleaned/riser3.othd │ — │ — │ missing — run --clean' in out
+    assert 'cleaned/riser2.othd' in out and 'out of date with archive/ — run `clean`' in out
+    assert 'cleaned/riser3.othd │ — │ — │ missing — run `clean`' in out
 
     run(tmp_path, clean=True)
     organizer, out = run(tmp_path, verify=True)
     assert organizer.stats['verify_ok'] is False
-    assert 'not cleaned/ joined — run --compile' in out
+    assert 'not cleaned/ joined — run `compile`' in out
 
 
 def test_verify_reports_tsids_in_no_run_without_failing(tmp_path):

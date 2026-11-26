@@ -6,8 +6,8 @@ Subcommands: show, create, run, domain, ...
 import argparse
 import sys
 from ..base import BaseCommand
-from src.cli.completers import described, file_flags, words_in_case_slot
-from src.cli.context import case_arg, context_flag, freq_arg, time_window
+from src.cli.completers import described, file_flags
+from src.cli.context import case_arg, case_flag, context_flag, freq_arg, time_window
 from .common_flags import organise_flags
 
 
@@ -93,6 +93,12 @@ def _status_case(store, ns):
     return store.get('case') if store.is_set('case') else None
 
 
+def _no_words(parser):
+    """A subcommand with no action words: a word typed there (often the old
+    positional case) is read by the command and refused with what to type."""
+    parser.add_argument('words', nargs='*', help=argparse.SUPPRESS)
+
+
 class CaseCommand(BaseCommand):
     """Case operations (show, create, run)"""
 
@@ -164,7 +170,7 @@ class CaseCommand(BaseCommand):
                                help='Show help for run command')
 
         # case organise
-        organise_parser = case_subparsers.add_parser('organise', add_help=False,
+        organise_parser = case_subparsers.add_parser('organise', add_help=False, allow_abbrev=False,
                                                      help='Organize and clean up case directory')
         organise_parser.add_argument('-h', '--help', action='store_true',
                                     help='Show help for organise command')
@@ -172,9 +178,9 @@ class CaseCommand(BaseCommand):
                                                              help='Organise subcommands')
 
         # case organise history
-        history_parser = organise_subparsers.add_parser('history', add_help=False,
+        history_parser = organise_subparsers.add_parser('history', add_help=False, allow_abbrev=False,
                                     help='OTHD/OISD history: archive/ → cleaned/ → compiled file')
-        history_case = case_arg(history_parser, help='Case directory path')
+        case_flag(history_parser)
         history_actions = history_parser.add_argument(
             'actions', nargs='*', metavar='ACTION',
             help='What to do, in this order: update (move .othd/.oisd from the run dir into '
@@ -189,7 +195,6 @@ class CaseCommand(BaseCommand):
             ('compile', 'Join cleaned/ into one file'),
             ('verify', 'Check archive/, cleaned/, the compiled file'),
             ('prune', 'Delete archive/ once cleaned/ checks out'))
-        words_in_case_slot(history_case, history_actions.completer)
         time_window(history_parser,
                     t1_kwargs=dict(metavar='STEP', help='update: only files reaching timesteps >= STEP'),
                     t2_kwargs=dict(metavar='STEP', help='update: only files reaching timesteps <= STEP'))
@@ -198,9 +203,10 @@ class CaseCommand(BaseCommand):
         # case organise out / case organise rst
         for word, what in (('out', '.out files (kept until a PLT stands in for them)'),
                            ('rst', '.rst restart sets (thinned to --keep-freq, the newest kept)')):
-            sub = organise_subparsers.add_parser(word, add_help=False,
+            sub = organise_subparsers.add_parser(word, add_help=False, allow_abbrev=False,
                                                  help=f'Delete {what} from the run dir')
-            case_arg(sub, help='Case directory path')
+            case_flag(sub)
+            _no_words(sub)
             if word == 'rst':
                 sub.add_argument('--keep-freq', type=int, metavar='N',
                                  help='Keep the .rst of steps divisible by N (default: 10 * freq)')
@@ -221,9 +227,9 @@ class CaseCommand(BaseCommand):
             organise_flags(sub, 'out/rst')
 
         # case organise plt
-        plt_parser = organise_subparsers.add_parser('plt', add_help=False,
+        plt_parser = organise_subparsers.add_parser('plt', add_help=False, allow_abbrev=False,
                                     help='Delete PLT files in the run dir and/or binary/')
-        plt_case = case_arg(plt_parser, help='Case directory path')
+        case_flag(plt_parser)
         plt_actions = plt_parser.add_argument(
             'actions', nargs='*', metavar='ACTION',
             help='ascii: delete the ASCII PLT files of the run dir whose binary PLT is whole and '
@@ -232,7 +238,6 @@ class CaseCommand(BaseCommand):
         plt_actions.completer = described(
             ('ascii', 'Delete the run dir ASCII PLTs a whole binary PLT stands in for'),
             ('binary', 'Delete the binary/ PLTs that have a verified copy on the remote'))
-        words_in_case_slot(plt_case, plt_actions.completer)
         context_flag(plt_parser, 'remote', '--remote', type=str, metavar='REMOTE',
                      help='The remote holding the copies (default: the only one in '
                           '.cases.yml; or use context with "use remote:name")')
@@ -250,9 +255,10 @@ class CaseCommand(BaseCommand):
         organise_flags(plt_parser, 'plt')
 
         # case organise vtu
-        vtu_parser = organise_subparsers.add_parser('vtu', add_help=False,
+        vtu_parser = organise_subparsers.add_parser('vtu', add_help=False, allow_abbrev=False,
                                     help='Delete the .vtu caches field render keeps in binary/')
-        case_arg(vtu_parser, help='Case directory path')
+        case_flag(vtu_parser)
+        _no_words(vtu_parser)
         vtu_parser.add_argument('--leftovers', action='store_true',
                                     help='Only the .partial/.deriving files a killed render left')
         vtu_parser.add_argument('--orphans', action='store_true',

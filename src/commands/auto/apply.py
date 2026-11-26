@@ -202,8 +202,9 @@ def _intended(plan, only):
     out = []
     if 'history' in only:
         for step in plan.due('history'):
-            out.append(('history', step.command.replace(f"case organise history {plan.name} ",
-                                                        "organise history ", 1)))
+            out.append(('history', step.command.replace(" --case " + plan.name, "", 1)
+                                                .replace("case organise history ",
+                                                         "organise history ", 1)))
     sending = plan.to_send()
     if 'upload' in only and sending:
         out.append(('upload', f"{len(sending)} files, {_size_text_of(sending)}"))

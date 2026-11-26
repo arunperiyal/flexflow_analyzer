@@ -178,8 +178,8 @@ class HistoryMixin:
         steps = [step for step in STEPS if getattr(self.args, step, False)]
         if not steps:
             self.console.print(
-                "[yellow]Nothing to do — pass --update, --clean, --compile, "
-                "--verify and/or --prune[/yellow]"
+                "[yellow]Nothing to do — name an action: update, clean, compile, "
+                "verify and/or prune[/yellow]"
             )
             return
         if not self.case.problem_name:
@@ -193,7 +193,7 @@ class HistoryMixin:
             try:
                 self._clean_runs = history.parse_runs(raw)
             except ValueError as e:
-                self.console.print(f"[red]--clean {raw}: {e}[/red]")
+                self.console.print(f"[red]clean {raw}: {e}[/red]")
                 return
 
         self._migrate_flat()
@@ -502,7 +502,7 @@ class HistoryMixin:
         had = [label for ext, label in self._types() if history.selection(self.case_dir, ext)]
         if explicit is None and had and not dry_run:
             self.console.print(f"  [yellow]⚠[/yellow]  cleaned/ was made from a selection of runs "
-                               f"(.runs.json): a plain --clean cleans every run of archive/ instead")
+                               f"(.runs.json): a plain `clean` cleans every run of archive/ instead")
             if not self.args.yes:
                 self.console.print("[bold yellow]Clean every run and drop the selection?[/bold yellow] "
                                    "\\[y/N]: ", end="")
@@ -670,11 +670,11 @@ class HistoryMixin:
             plan = self._plan(ext, label, quiet=True)
             if plan is None or self._stale_cleaned(ext, plan):
                 self.console.print(f"  [yellow]⚠[/yellow]  {label}: cleaned/ is out of date with "
-                                   f"archive/ — run --clean first; not compiled")
+                                   f"archive/ — run `clean` first; not compiled")
                 continue
             header, blocks, problems = self._compiled_plan(ext)
             if problems:
-                self.console.print(f"  [red]✗[/red]  {label}: {'; '.join(problems)} — run --clean")
+                self.console.print(f"  [red]✗[/red]  {label}: {'; '.join(problems)} — run `clean`")
                 continue
             if not blocks:
                 self.console.print(f"  [dim]{label}: nothing in cleaned/ — skipped[/dim]")
@@ -755,7 +755,7 @@ class HistoryMixin:
                 problems = check['problems'] + check['cut']
                 problems += [p for p in joined if p.startswith(path.name)]
                 if n in stale:
-                    problems.append("out of date with archive/ — run --clean")
+                    problems.append("out of date with archive/ — run `clean`")
                 row(path, check, problems)
             if plan is not None:
                 missing = [n for n in stale if n not in history.cleaned(self.case_dir, ext, problem)]
@@ -763,7 +763,7 @@ class HistoryMixin:
                     any_file = True
                     all_ok = False
                     table.add_row(f"{ext}_files/cleaned/{problem}{n}.{ext}", "—", "—",
-                                  "[red]missing — run --clean[/red]")
+                                  "[red]missing — run `clean`[/red]")
                 ts = [m[0] for m in plan['merged']]
                 interval = _interval(ts)
                 gaps = [(a + interval, b - interval) for a, b in zip(ts, ts[1:]) if b - a > interval]
@@ -776,7 +776,7 @@ class HistoryMixin:
                 problems = check['problems'] + check['cut']
                 header, blocks, joined = self._compiled_plan(ext)
                 if not joined and not self._same(out, self._chunks(header or b'', blocks)):
-                    problems.append("not cleaned/ joined — run --compile")
+                    problems.append("not cleaned/ joined — run `compile`")
                 row(out, check, problems)
 
         if not any_file:
@@ -819,7 +819,7 @@ class HistoryMixin:
             plan = self._plan(ext, label, quiet=True)
             if plan is None or self._stale_cleaned(ext, plan):
                 self.console.print(f"  [yellow]⚠[/yellow]  {label}: cleaned/ is out of date with "
-                                   f"archive/ — run --clean first; nothing pruned")
+                                   f"archive/ — run `clean` first; nothing pruned")
                 continue
             bad = [p.name for p in history.cleaned(self.case_dir, ext, problem).values()
                    if check_file(p)['problems'] or check_file(p)['cut']]

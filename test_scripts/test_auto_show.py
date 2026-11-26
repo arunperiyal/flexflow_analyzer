@@ -230,7 +230,7 @@ def test_report_sections_of_a_queued_case(dummy):
     # uploads first (the grid set 400), then the deletion that follows
     assert sec['rst'].actions[0] == ('case upload rst case3 --t1 400 --t2 400 --freq 400 '
                                      '--missing --remote local')
-    assert sec['rst'].actions[1] == ('case organise rst case3 --keep-freq 200 '
+    assert sec['rst'].actions[1] == ('case organise rst --case case3 --keep-freq 200 '
                                      '--keep-newest 2 --t1 550 --t2 550')
     assert dict(sec['rst'].rows)['Thin'] == 'step 550: not multiples of 200'
     assert dict(sec['history'].rows)['Run dir'].startswith('riser.othd steps 501–760')
@@ -244,7 +244,7 @@ def test_report_needs_and_flags_come_after_state(dummy):
     assert sec['plt'].actions == [
         'case check plt case6 --remote local',
         'case upload plt case6 --t1 450 --t2 500 --missing --remote local',
-        'case organise plt case6 binary --t1 450 --t2 500 --remote local']
+        'case organise plt binary --case case6 --t1 450 --t2 500 --remote local']
 
 
 def test_auto_commands_is_plain_text_to_read_or_save(dummy, monkeypatch, capsys):
@@ -258,7 +258,7 @@ def test_auto_commands_is_plain_text_to_read_or_save(dummy, monkeypatch, capsys)
     assert '#   waiting: post job' in out                         # case4
     assert '#   needs you: Main job' in out                       # case7
     assert 'auto apply:' not in out and 'not built yet' not in out
-    assert 'binary --t1 450 --t2 500 --remote local    #' in out     # a command now
+    assert 'binary --case case6 --t1 450 --t2 500 --remote local    #' in out     # a command now
     assert '#   by hand: auto apply does not delete unless asked' in out
 
 

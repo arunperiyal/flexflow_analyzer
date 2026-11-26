@@ -77,5 +77,5 @@ def test_parser():
     import argparse
     parser = argparse.ArgumentParser()
     CaseCommand().setup_parser(parser.add_subparsers(dest='command'))
-    a = parser.parse_args(['case', 'organise', 'vtu', 'C1', '--orphans', '--yes', '--t2', '300'])
+    a = parser.parse_args(['case', 'organise', 'vtu', '--case', 'C1', '--orphans', '--yes', '--t2', '300'])
     assert (a.organise_subcommand, a.case, a.orphans, a.yes, a.t2) == ('vtu', 'C1', True, True, 300.0)

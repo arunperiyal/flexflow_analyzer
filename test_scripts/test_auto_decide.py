@@ -655,7 +655,7 @@ def test_thinning_is_done_by_auto_apply_delete_and_says_it_has_no_copy():
     s.rst_files = {t: {f"RUN_1/riser.{t}_{k}.rst": 100 for k in range(4)} for t in s.rst}
     plan = decide(s, CONF, True, True)
     acts = [a for sec in build(s, plan, CONF) for a in sec.actions if a.startswith('case organise rst')]
-    assert acts and acts[0].startswith('case organise rst case --keep-freq 200 '
+    assert acts and acts[0].startswith('case organise rst --case case --keep-freq 200 '
                                        '--keep-newest 2 --t1 100 --t2')
 
 

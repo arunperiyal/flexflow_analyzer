@@ -703,13 +703,16 @@ After this phase:
     case organise out|rst|vtu [--case NAME]
 
 - [x] The rules in `.claude/rules/command-design.md`, listed in `CLAUDE.md`
-- [ ] A `--case` flag helper in `src/cli/context.py` (context fallback, `*`);
+- [x] A `--case` flag helper in `src/cli/context.py` (context fallback, `*`);
       `allow_abbrev=False` on the organise parsers
-- [ ] `case organise history|plt|out|rst|vtu`: no positional case; the words
-      first; a case typed as a word is refused with "use --case NAME"
-- [ ] The values used are printed, each tagged typed or from `use`, before the
+- [x] `case organise history|plt|out|rst|vtu`: no positional case; the words
+      first; a case typed as a word is refused with "use --case NAME". `auto`
+      writes the new form in its command lines; the leftover `--update` /
+      `--clean` / `--compile` in the history messages now read `update` /
+      `clean` / `compile`
+- [x] The values used are printed, each tagged typed or from `use`, before the
       question; over `*` it asks once per case
-- [ ] Remove `words_in_case_slot` (Phase 36's workaround); a completion test for
+- [x] Remove `words_in_case_slot` (Phase 36's workaround); a completion test for
       every position of every organise command
 - [ ] Help, `docs/usage/`, the other help texts that show the old form,
       `CHANGELOG.md`
