@@ -627,211 +627,6 @@ flexflow_manager:
 - [x] Help for `data stats` (the pipe, with the example above), `docs/usage/`,
       `CHANGELOG.md`
 
-### Phase 33: `data check steady` offers rows (branch `steady-rows`)
-
-From the user (2026-11-19), after Phase 32 (rows between commands). `data check
-steady` already says from which tsId the rest of a window is steady ("the --t1
-to use"). Offering that as a row lets the next command work on the settled part
-of every case:
-
-    use case:* node:25 var:dy; data check steady | data stats --func rms,std
-
-- [x] `data check steady` offers `{case, t1: the steady tsId}` per case and
-      variable where it found one (none for "-", which is said, not skipped
-      silently); it needs no new flag
-- [x] The row's `t1` is honoured when `last` is also set in the context: check
-      what `data stats` and `data table` do with `t1` and `last` together
-      (`last_arg` ignores a context `last` only when `t1`/`t2` were typed) and
-      make the row win, with a test. Found: no code needed, the check and the
-      next command read the same `last`, so the steady step lies inside its
-      window and `last` cuts nothing; the test pins it
-- [x] A test through the pipe on two registry cases, `data check steady |
-      data stats --func rms` (each case's stats start at its own steady step)
-- [x] Help for `data check steady` (the pipe, with the example), `docs/usage/`,
-      `CHANGELOG.md`
-
-### Phase 34: `auto status` offers rows (branch `status-rows`)
-
-From the user (2026-11-19). `auto status` lists every case with what is next;
-offering the cases that need something lets the next command act on only those:
-
-    auto status --only needs | case show
-    auto status --only todo | auto apply plt
-
-- [x] `auto status` offers `{case}` per case, picked by `--only
-      needs|todo|running|all` (default `all`): `needs` is the cases that need
-      you, `todo` those with something to do, `running` those with a job in the
-      queue. The one flag chooses which cases; nothing else is added
-- [x] The table is still printed first and the exit code is unchanged
-- [x] `auto apply` and `case show` as the second command: a test through the
-      pipe on the dummy cases (`needs` gives the dummy cases that need you)
-- [x] The second command's own questions are not skipped: `auto apply` asks per
-      case unless `--yes` (said in the help)
-- [x] Help for `auto status`, `docs/architecture/auto.md` (new section at the
-      end), `CHANGELOG.md`
-
-### Phase 36: tab completion of `case organise plt` (branch `plt-completion`)
-
-Bug from the user (2026-11-25): auto-completion on `case organise plt` does not
-work. The `ascii` / `binary` words have a completer (`plt_actions.completer`
-in `src/commands/case/__init__.py`), so find out what fails: the words, the
-flags after them, or the case argument. Note: the subcommand is spelled
-`organise`; `organize` is not a registered name, which may be part of it.
-
-- [x] Reproduce in the shell (`case organise plt <Tab>`, after a case, after a
-      word, after `--`) and write down which of the three fails. Found: the words
-      and flags after a case were fine; the first word is read as an action when
-      the case comes from `use case:`, and there Tab offered only directories, and
-      `plt a<Tab>` nothing (same for `history`)
-- [x] Fix it, with a test that asks the completer for each position
-- [x] `CHANGELOG.md`
-
-### Phase 37: `case organise` follows the command rules (branch `command-levels`)
-
-From the user (2026-11-26): after `case organise history` the shell expected a
-case directory, so `update` did not complete. The rules decided with the user
-are in `.claude/rules/command-design.md`: at most 3 levels of words; every value
-is a flag (`--case NAME`, `*` for all, or `use case:`); `use` fills what is left
-out and a typed flag wins; flags typed in full; deleting commands print their
-values (typed or from `use`) and ask per case. The old forms are removed, not
-kept as aliases; a command given one says what to type now.
-
-After this phase:
-
-    case organise history update clean compile verify prune [--case NAME]
-    case organise plt ascii binary [--case NAME]
-    case organise out|rst|vtu [--case NAME]
-
-- [x] The rules in `.claude/rules/command-design.md`, listed in `CLAUDE.md`
-- [x] A `--case` flag helper in `src/cli/context.py` (context fallback, `*`);
-      `allow_abbrev=False` on the organise parsers
-- [x] `case organise history|plt|out|rst|vtu`: no positional case; the words
-      first; a case typed as a word is refused with "use --case NAME". `auto`
-      writes the new form in its command lines; the leftover `--update` /
-      `--clean` / `--compile` in the history messages now read `update` /
-      `clean` / `compile`
-- [x] The values used are printed, each tagged typed or from `use`, before the
-      question; over `*` it asks once per case
-- [x] Remove `words_in_case_slot` (Phase 36's workaround); a completion test for
-      every position of every organise command
-- [x] Help, `docs/usage/`, the other help texts that show the old form,
-      `CHANGELOG.md`
-
-### Phase 38: flags displace flags, and are typed in full (branch `flag-rules`)
-
-Rules 4 and 6 of `.claude/rules/command-design.md`, for the whole program.
-Breaks no command line except a shortened flag.
-
-- Displacement: a flag declares which context keys a typed value displaces
-  (`--t1`/`--t2` displace `last` and `time`; `--time` displaces `t1`/`t2`; `--last`
-  displaces nothing), once, in `src/cli/context.py`; the line says what was
-  ignored (`last: 1000 (use) ignored: --t1 typed`). Two typed flags that
-  displace each other are refused, naming both. Today `last_arg` and
-  `time_window` each carry their own rule; they become one.
-- `allow_abbrev=False` on every parser of every command (a shortened flag is
-  refused), with a test that walks the parser tree so a new parser without it
-  fails.
-
-- [x] Write the plan: Phases 38 to 42
-- [x] The displacement declaration in `src/cli/context.py`, read by `last_arg`,
-      `time_window` and the other context flags; the "ignored" line
-- [x] Refuse two typed flags that displace each other (`--t1` with `--last`),
-      in every command that has them (`data`, `plot`, `case upload/download`)
-- [x] `allow_abbrev=False` on every parser; a test over the whole tree
-- [x] Help text, `docs/usage/`, `CHANGELOG.md`
-
-### Phase 39: `--case` for the `case` commands (branch `case-flag-case`)
-
-The case is `--case NAME` and never a word for `case show`, `run`, `check`
-(run, history, config, plt, def, out, data, all), `status`, `upload`,
-`download`, `domain`, `out`. The old forms are refused with the new one. The
-lines `auto show` writes for `case upload`, `case download` and `case check`
-change with it; `run post` waits for Phase 40, `case create` for Phase 41.
-
-- [x] `--case` and a refused stray word on `show`, `run`, `out` and every
-      `check` subcommand
-- [x] `status` (`update` is the word), `upload` / `download` (`plt|rst|input|
-      history` is the word) and `domain` (`body|field` is the word): `--case`,
-      and a case typed as a word is refused with "use --case NAME"
-- [x] `auto` writes the new lines (`case upload plt --case C ...`, `case check
-      plt --case C ...`) and the hints `field compute` prints
-- [x] Tests: every old form refused, `--case` taken by every command, the words
-      complete with or without a case in context
-- [x] Help, `docs/usage/`, `README.md`, `CHANGELOG.md`
-
-### Phase 40: `--case` for `data`, `plot` and `field` (branch `other-flag-case`)
-
-The case is `--case NAME` for `data show|table|stats|check steady`, `plot` and
-`field info|extract|compute|convert|render`; a case typed as a word is refused
-with "use --case NAME". The refusal of a stray word is now in `BaseCommand.run`
-for every command (parsers add a hidden `words` catch-all with `no_words`).
-
-- [x] `BaseCommand.run` refuses a stray word and says `--case WORD`; `no_words`
-      in `src/cli/context.py`
-- [x] `--case` on `data`, `plot` and `field` (the words `quantity` and `mode`
-      stay words)
-- [x] Tests: every old form refused, `--case` taken, the words and `--case`
-      complete with and without a case in context
-- [x] Help, `docs/usage/`, `README.md`, `CHANGELOG.md`
-
-### Phase 41: names, values and files as flags (branch `names-as-flags`)
-
-Rule 2: a value is a flag, a word is a choice. `case create --name`, `remote
-add|modify|delete|set-path --name`, `template plot|case ... --output`, `template
-script --case`, `def var --name N --value V`, `def time|freq KIND --value V`
-(`-c/--case` fills from `use case:`), `check --file`, `field check --file`. The
-old forms are refused and the message names the flag. `docs TOPIC` stays a word
-(a choice, not a value); `run sq|sb|sc` go with Phase 43.
-
-- [x] The flags, and `no_words(parser, flag)` so a refusal names the right flag
-- [x] Tests: every old form refused with its flag, the flags take the values
-- [x] Help, `docs/usage/`, `README.md`, `CHANGELOG.md`
-
-### Phase 43: `run` follows the rules (branch `run-flag-case`)
-
-The modes stay words (`run check headers|mesh`, `run main restart|reset`, `run post
-full|convert`, `run list log`, `run sq watch|find`); the case, the step, the job and
-the script become flags: `--case NAME`, `run main restart --time TSID` (the step was
-already a flag), `run sq --job ID | watch --interval S | find --key K`, `run sc --job
-ID | --name N`, `run sb --script F [--sbatch-args '...']`. The old forms are refused
-and the message names the flag; the lines `auto` writes for `run post` and `run main
-restart` carry `--case`.
-
-- [x] `--case` and the mode as the only word on `check`, `pre`, `main`, `post`,
-      `list`; `sq`, `sb` and `sc` take their job, script and values as flags
-- [x] `auto` writes `run post MODE --case C ...` and `run main restart --case C ...`
-- [x] Tests: every old form refused with its flag, the flags parse, the words
-      complete with and without a case in context
-- [x] Help, `docs/usage/`, `CHANGELOG.md`
-
-### Phase 44: `auto` follows the rules (branch `auto-flag-case`)
-
-`auto show|commands|status|apply|log` take the case as `--case NAME` (`*` for all);
-`apply`'s target stays the one word after it. The old forms are refused and the
-message says `--case`.
-
-- [x] `--case` on `auto`, the target as a word only for `apply`, a case typed as
-      a word refused (`auto show C`, `auto apply C`, `auto apply plt C`)
-- [x] Tests: every old form refused, the flags parse, the words and `--case`
-      complete with and without a case in context
-- [x] Help, `docs/architecture/auto.md` 13.21, `CHANGELOG.md`
-
-
-### Phase 42: one test walks every command (branch `walk-test`)
-
-`test_scripts/test_command_rules.py` walks the whole parser tree and checks the
-rules, so a command added later that breaks one fails: at most 3 levels, every
-positional is a word (choices or a completer, never a value name), a command that
-works on a case takes `--case` (not a positional), a parser with a value flag
-catches a stray word, and the completer answers at every position and offers the
-first word of each command.
-
-- [x] The test, shown to fail on a scratch command with a positional case, a
-      positional with no choices and a fourth level
-- [x] `docs TOPIC` gets its words (a completer); the last positional without one
-- [x] `CHANGELOG.md`
-
-
 ### Phase 12: `case check --remote`, verify against the remote (branch `check-remote`)
 
 Found on a real case (`BR0SG0U1P0`, PLTs moved to the remote by hand; none
@@ -925,6 +720,17 @@ As noted on 2026-11-11; may be out of date.
 | 15 | `auto-steps` | Refactor, no change in what `auto` prints or does: the plan carries `plan.steps` (`PlanStep`: target, kind, key, command, files); `decide()` and `report.build()` are split into one function per part; the report's command lines and `auto apply` both read the steps; `test_auto_steps.py` holds them together on every dummy case. `apply` still runs history, upload, post in that order with the uploads as one transfer; per-target order is Phase 17 |
 | 16 | `auto-show-commands` | Every Action of `auto show` is a command, in the order `apply` takes them (`auto.md` §13.14): check, post, upload, deletes for PLT; the same for History, OUT, RST and Inputs. Waits and reasons are rows (`Waiting`, `Why`, `Delete`, `Thin`, `By hand`). New: `case upload history --live`. The check and delete steps are in `plan.steps` (kinds `check`, `delete`) but `apply` does not run them yet. Not done: `auto_flow.html` was left as it is (it draws the decisions, not the Action lines) |
 | 35 | `out-no-verify` | `case organise out --no-verify`: deletes every `.out` in `--t1`/`--t2` without a PLT standing in; needs a range, lists the steps with no PLT (their field data is lost), asks first (`--yes`, `--dry-run`); `rst` refuses it and `auto` never passes it |
+| 33 | `steady-rows` | `data check steady` offers `{case, t1}` (and `var` when several are checked) to the command after a `\|`: `data check steady \| data stats --func rms`; a variable with no steady start offers nothing and says so |
+| 34 | `status-rows` | `auto status --only needs\|todo\|running\|all` offers `{case}` per case to the command after a `\|` (`auto.md` §13.19) |
+| 36 | `plt-completion` | `case organise plt\|history` Tab offered only directories with the case from `use case:`; superseded by Phase 37 (the case is a flag, the first word is an action) |
+| 37 | `command-levels` | `.claude/rules/command-design.md`; `case organise` takes `--case NAME`, never a word; flags typed in full; the values used are printed, typed or `use`; `auto` writes the new lines (§13.20) |
+| 38 | `flag-rules` | Every parser `allow_abbrev=False`; a typed `--t1`/`--t2` displaces `use last:`/`time:` and says so; `--last` typed with `--t1`/`--t2` is refused |
+| 39 | `case-flag-case` | `--case` for `case show`, `run`, `out`, `check *`, `status`, `upload`, `download`, `domain` |
+| 40 | `other-flag-case` | `--case` for `data`, `plot`, `field`; `BaseCommand.run` refuses a stray word and names the flag |
+| 41 | `names-as-flags` | `case create --name`, `remote ... --name`, `check`/`field check --file`, `template --output`, `def var --name --value`, `def time\|freq KIND --value` |
+| 42 | `walk-test` | `test_scripts/test_command_rules.py` walks the whole parser tree and checks the command rules; `docs TOPIC` completes its topics |
+| 43 | `run-flag-case` | `run`: `--case`, `--job`, `--script`, `--interval`, `--key`, `--name`, `--sbatch-args`; the modes stay words |
+| 44 | `auto-flag-case` | `auto`: `--case NAME`, the target of `apply` stays a word (§13.21) |
 
 ---
 
