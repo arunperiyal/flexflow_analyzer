@@ -658,16 +658,16 @@ offering the cases that need something lets the next command act on only those:
     auto status --only needs | case show
     auto status --only todo | auto apply plt
 
-- [ ] `auto status` offers `{case}` per case, picked by `--only
+- [x] `auto status` offers `{case}` per case, picked by `--only
       needs|todo|running|all` (default `all`): `needs` is the cases that need
       you, `todo` those with something to do, `running` those with a job in the
       queue. The one flag chooses which cases; nothing else is added
-- [ ] The table is still printed first and the exit code is unchanged
-- [ ] `auto apply` and `case show` as the second command: a test through the
+- [x] The table is still printed first and the exit code is unchanged
+- [x] `auto apply` and `case show` as the second command: a test through the
       pipe on the dummy cases (`needs` gives the dummy cases that need you)
-- [ ] The second command's own questions are not skipped: `auto apply` asks per
+- [x] The second command's own questions are not skipped: `auto apply` asks per
       case unless `--yes` (said in the help)
-- [ ] Help for `auto status`, `docs/architecture/auto.md` (new section at the
+- [x] Help for `auto status`, `docs/architecture/auto.md` (new section at the
       end), `CHANGELOG.md`
 
 ### Phase 36: tab completion of `case organise plt` (branch `plt-completion`)

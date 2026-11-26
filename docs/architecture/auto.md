@@ -1051,3 +1051,25 @@ keep the old forms in the text they were written with:
 | `case organise vtu C --clean --leftovers` | `case organise vtu C --leftovers` (13.17) |
 
 With one remote in `.cases.yml`, `--remote R` may be left out of all of these.
+
+### 13.19 `auto status` offers rows (2026-11-25)
+
+`auto status` prints its table and exit code as before, and also offers the cases picked by
+`--only` to the command after a `|` (shellkit 0.1.8 rows: one run of that command per case,
+the row's keys set as context for it). One row per case, one key: `{case}` (its directory).
+
+| `--only` | The cases |
+|---|---|
+| `all` (default) | every case listed |
+| `needs` | those that need you (`plan.needs_you`) |
+| `todo` | those with something to do besides needing you or waiting (the "with something to do" of the footer) |
+| `running` | those with a main or post job in the queue (`ctx['main_now']`, `ctx['post_now']`) |
+
+A bad value is refused (exit 2) before anything is printed or offered. Nothing is offered outside
+the shell, or by a shellkit without rows; the table still prints. The second command asks its own
+questions: `auto apply` asks per case unless `--yes` (or `--dry-run`).
+
+```
+auto status * --only needs   | case show
+auto status * --only todo    | auto apply plt
+```

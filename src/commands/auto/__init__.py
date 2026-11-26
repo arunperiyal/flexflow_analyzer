@@ -7,7 +7,8 @@ auto - the per-case workflow for a folder of cases (docs/architecture/auto.md §
                          what auto would do: labelled sections for a case; the summary
                          table for several (case:*), each in full with --detail
     auto commands [case] just the commands to run, numbered, as plain text
-    auto status [case]   one line per case
+    auto status [case] [--only needs|todo|running|all]
+                         one line per case; the cases --only picks go to a command after a |
     auto apply <target> [case] [--remote NAME] [--delete] [--dry-run] [--yes]
                          target: history, plt, output, input, rst, all
                          organise history, upload (checked), submit post jobs; --delete also
@@ -70,7 +71,9 @@ class AutoCommand(BaseCommand):
         parser.add_argument('--only', metavar='SECTIONS',
                             help='show: only these sections (state, needs, flags, history, '
                                  'plt, out, rst, inputs); apply: only these steps '
-                                 '(history, upload, delete, post); comma-separated (apply: deprecated, use a target)')
+                                 '(history, upload, delete, post); comma-separated (apply: deprecated, use a target); '
+                                 'status: which cases go to a command after a |: '
+                                 'needs, todo, running or all (default)')
         parser.add_argument('--delete', action='store_true',
                             help='apply: also delete what has an md5-checked copy on the remote '
                                  '(or use --only delete)')

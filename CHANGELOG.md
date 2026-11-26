@@ -29,6 +29,11 @@
   the next command works on the settled part:
   `use case:* node:25 var:dy; data check steady | data stats --func rms,std`.
   A variable with no steady start offers nothing, and it is said.
+- `auto status --only needs|todo|running|all` (default `all`) offers the cases
+  it picks to the command after a `|`, which runs once per case:
+  `auto status * --only needs | case show`,
+  `auto status * --only todo | auto apply plt`. The table and the exit code are
+  as before; `auto apply` still asks per case unless `--yes`.
 
 ### ⚠️ `case organise`: `--yes`, and `vtu` asks and deletes
 

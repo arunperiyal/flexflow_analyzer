@@ -451,3 +451,106 @@ def test_no_report_line_says_deleting_is_not_built(dummy):
     thin = [a for a in report_of(dummy, 'case5')['rst'].actions if a.startswith('case organise rst')]
     assert thin
     assert 'auto apply --delete' in dict(report_of(dummy, 'case5')['rst'].rows)['By hand']
+
+
+# --- `auto status` offers rows (shellkit 0.1.8) -------------------------------------------
+
+@pytest.fixture
+def offered(monkeypatch):
+    from types import SimpleNamespace
+    rows = []
+    monkeypatch.setattr('shellkit.current_runtime',
+                        lambda: SimpleNamespace(emit=lambda r: rows.extend(r)))
+    return rows
+
+
+def _offered_cases(dummy, monkeypatch, offered, only=None):
+    from types import SimpleNamespace
+    from src.commands.auto.show import execute_status
+    monkeypatch.chdir(dummy / 'bare')
+    offered.clear()
+    execute_status(SimpleNamespace(case='*', remote='local', only=only))
+    assert all(set(r) == {'case'} for r in offered)         # one key: which case
+    return sorted(Path(r['case']).name for r in offered)
+
+
+def test_status_offers_every_case_by_default(dummy, monkeypatch, offered):
+    assert len(_offered_cases(dummy, monkeypatch, offered)) == 15
+    assert _offered_cases(dummy, monkeypatch, offered, 'all') == \
+        _offered_cases(dummy, monkeypatch, offered)
+
+
+def test_status_only_needs_gives_the_cases_that_need_you(dummy, monkeypatch, offered):
+    assert _offered_cases(dummy, monkeypatch, offered, 'needs') == sorted(
+        ['case5', 'case6', 'case7', 'case8', 'case9', 'case11', 'case12'] +
+        [n for n, p in plans(dummy)[0].items() if p.needs_you and n not in
+         ('case5', 'case6', 'case7', 'case8', 'case9', 'case11', 'case12')])
+
+
+def test_status_only_running_and_todo(dummy, monkeypatch, offered):
+    running = _offered_cases(dummy, monkeypatch, offered, 'running')
+    got, _ = plans(dummy)
+    assert running == sorted(n for n, p in got.items()
+                             if p.ctx.get('main_now') or p.ctx.get('post_now'))
+    assert 'case4' in running and 'case1' not in running      # case4: a post job runs
+    todo = _offered_cases(dummy, monkeypatch, offered, 'todo')
+    assert 'case1' not in todo and 0 < len(todo) <= 12        # "12 with something to do"
+
+
+def test_status_with_a_bad_only_says_so_and_offers_nothing(dummy, monkeypatch, offered, capsys):
+    from types import SimpleNamespace
+    from src.commands.auto.show import execute_status
+    monkeypatch.chdir(dummy / 'bare')
+    assert execute_status(SimpleNamespace(case='*', remote='local', only='bogus')) == 2
+    assert 'one of all, needs, todo, running' in capsys.readouterr().out and offered == []
+
+
+def test_status_without_a_shell_or_an_older_one_still_prints_the_table(dummy, monkeypatch, capsys):
+    from types import SimpleNamespace
+    from src.commands.auto.show import execute_status
+    monkeypatch.chdir(dummy / 'bare')
+    monkeypatch.setattr('shellkit.current_runtime', lambda: None)
+    execute_status(SimpleNamespace(case='*', remote='local'))
+    monkeypatch.setattr('shellkit.current_runtime', lambda: SimpleNamespace())    # no emit
+    execute_status(SimpleNamespace(case='*', remote='local'))
+    assert capsys.readouterr().out.count('15 case(s)') == 2
+
+
+def test_status_piped_into_case_show_runs_once_per_picked_case(dummy, monkeypatch, tmp_path, capsys):
+    import io
+    from rich.console import Console
+    from shellkit import Runtime
+    from src.cli.app import create_app
+    monkeypatch.chdir(dummy / 'bare')
+    monkeypatch.setenv('HOME', str(tmp_path / 'home'))
+    out = io.StringIO()
+    rt = Runtime(create_app(), console=Console(file=out, width=200, color_system=None),
+                 err_console=Console(file=out, width=200, color_system=None))
+    rt.execute_line('auto status * --remote local --only running | case show')
+    text = out.getvalue()
+    running = [n for n, p in plans(dummy)[0].items()
+               if p.ctx.get('main_now') or p.ctx.get('post_now')]
+    heads = [l for l in text.splitlines() if l.startswith('── ')]
+    assert len(heads) == len(running) >= 2
+    assert all('case:' in h for h in heads) and any('case4' in h for h in heads)
+
+
+def test_status_piped_into_apply_runs_apply_once_per_picked_case(dummy, monkeypatch, tmp_path,
+                                                                 capsys):
+    import io
+    from rich.console import Console
+    from shellkit import Runtime
+    from src.cli.app import create_app
+    monkeypatch.chdir(dummy / 'bare')
+    monkeypatch.setenv('HOME', str(tmp_path / 'home'))
+    out = io.StringIO()
+    rt = Runtime(create_app(), console=Console(file=out, width=200, color_system=None),
+                 err_console=Console(file=out, width=200, color_system=None))
+    rt.execute_line('auto status * --remote local --only running | '
+                    'auto apply plt --remote local --dry-run')
+    text = out.getvalue() + capsys.readouterr().out
+    heads = [l for l in text.splitlines() if l.startswith('── ')]
+    assert [h.split('case:')[1] for h in heads][:1] == ['case2'] and len(heads) >= 2
+    # apply's own dry run for the cases that have something for plt (case4 only waits)
+    assert text.count('--dry-run: nothing was done.') >= 2
+    assert 'run post full --t1 5 --t2 115 --freq 5' in text.split('── 4/4  case:case10')[1]
