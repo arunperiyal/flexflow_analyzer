@@ -13,7 +13,7 @@ ff
 
 # Example commands
 flexflow → case show --case CS4SG1U1
-flexflow → check riser.othd
+flexflow → check --file riser.othd
 flexflow → plot --case CS4SG1U1 --node 10
 ```
 
@@ -53,7 +53,7 @@ flexflow → plot --case CS4SG1U1 --node 10
 ```bash
 # Case operations
 case show --case <case>           # Show case info
-case create <name>         # Create new case
+case create --name <name>         # Create new case
 case run --case <case>            # Submit jobs
 case organise <case>       # Clean up case files
 case out --case <case> --map      # Write othd maps (row → node/point coordinates)
@@ -64,7 +64,7 @@ case upload --case <case> --remote R  # Send case data/files to a remote
 case download --case <case> --remote R
 
 # Data inspection
-check <file>               # Inspect OTHD/OISD files
+check --file <file>               # Inspect OTHD/OISD files
 data show [--case NAME]           # Preview data
 field info [--case NAME]          # Show PLT info (zones, variables, mesh audit)
 
@@ -74,12 +74,12 @@ field extract [--case NAME] --probe 1,2,3    # Sample a point over time
 field compute force [--case NAME] --zone cyl # Per-element force -> <case>/cyl.forces/
 field compute force_coeff [--case NAME] --zone cyl --sectional 48   # Cd/Cl, per section
 field convert [--case NAME] --output mesh.vtu
-field check <file>         # Validate a produced .vtu/.pvd
+field check --file <file>         # Validate a produced .vtu/.pvd
 field render iso [--case NAME]    # Isosurface PNGs
 field render slice [--case NAME] --normal z   # Cut-plane PNGs (or .vtp/.csv)
 
 # Remotes
-remote add <name> --user U --ip IP --password P --path /base
+remote add --name <name> --user U --ip IP --password P --path /base
 remote list
 
 # Visualization

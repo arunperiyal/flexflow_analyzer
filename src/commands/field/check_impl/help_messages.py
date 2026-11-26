@@ -3,7 +3,7 @@
 
 def print_check_help():
     print("""
-field check <file.vtu|.vtk|.vtp|.pvd>
+field check --file <file.vtu|.vtk|.vtp|.pvd>
 
 Validate a file produced by `field convert` / `field extract`: confirm it reads
 back, and report points, cells (by type), bounds, and each point-data array's
@@ -20,7 +20,7 @@ Options:
   -h, --help
 
 Examples:
-  field check results.vtk
-  field check snap.vtu
-  field check wake.pvd
+  field check --file results.vtk
+  field check --file snap.vtu
+  field check --file wake.pvd
 """)

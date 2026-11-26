@@ -776,23 +776,16 @@ for every command (parsers add a hidden `words` catch-all with `no_words`).
 
 ### Phase 41: names, values and files as flags (branch `names-as-flags`)
 
-Rule 2: a value is a flag. `case create --name NAME`, `remote add|modify|delete|
-set-path --name NAME`, `template ... --output FILE`, `def var --name N --value V`
-(and `def time|freq`), `check --file F`, `field check --file F`, `docs --topic T`.
-Tasks when it is started.
+Rule 2: a value is a flag, a word is a choice. `case create --name`, `remote
+add|modify|delete|set-path --name`, `template plot|case ... --output`, `template
+script --case`, `def var --name N --value V`, `def time|freq KIND --value V`
+(`-c/--case` fills from `use case:`), `check --file`, `field check --file`. The
+old forms are refused and the message names the flag. `docs TOPIC` stays a word
+(a choice, not a value); `run sq|sb|sc` go with Phase 43.
 
-### Phase 43: `run` follows the rules (branch `run-flag-case`)
-
-`run check|pre|main|post|list` put a mode word in the case slot (`run post full
-CASE`, `run main restart TSID CASE`). The case becomes `--case NAME`, the mode
-stays a word, and the step of `run main restart` is `--time TSID`. The lines
-`auto show` writes for `run post` change with it. Tasks when it is started.
-
-### Phase 44: `auto` follows the rules (branch `auto-flag-case`)
-
-`auto show|commands|status|apply|log` take a case as the second word and
-`apply` a target as the first. The case becomes `--case NAME` (`*` for all), the
-target stays a word. Tasks when it is started.
+- [x] The flags, and `no_words(parser, flag)` so a refusal names the right flag
+- [x] Tests: every old form refused with its flag, the flags take the values
+- [x] Help, `docs/usage/`, `README.md`, `CHANGELOG.md`
 
 ### Phase 42: one test walks every command (branch `walk-test`)
 

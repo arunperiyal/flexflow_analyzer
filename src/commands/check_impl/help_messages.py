@@ -19,8 +19,8 @@ def print_check_help():
     Automatically detects file type by extension and shows relevant metadata.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    check <file>
-    ff check <file>
+    check --file <file>
+    ff check --file <file>
 
 {Colors.BOLD}SUPPORTED FILE TYPES:{Colors.RESET}
     {Colors.GREEN}• .othd{Colors.RESET}  - Output Time History Data (node displacements)
@@ -50,13 +50,13 @@ def print_check_help():
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
     {Colors.GREEN}# Check OTHD file{Colors.RESET}
-    ff check riser.othd
+    ff check --file riser.othd
     
     {Colors.GREEN}# Check OISD file{Colors.RESET}
-    ff check riser.oisd
+    ff check --file riser.oisd
     
     {Colors.GREEN}# Check file with full path{Colors.RESET}
-    ff check /path/to/case/riser.othd
+    ff check --file /path/to/case/riser.othd
 
 {Colors.BOLD}SEE ALSO:{Colors.RESET}
     ff data show      - Preview time-series data in table format
@@ -78,7 +78,7 @@ def print_check_examples():
 {Colors.BOLD}BASIC USAGE:{Colors.RESET}
 
   {Colors.GREEN}1. Check OTHD file (displacement data):{Colors.RESET}
-     $ ff check riser.othd
+     $ ff check --file riser.othd
      
      Output shows:
      - Number of nodes
@@ -87,7 +87,7 @@ def print_check_examples():
      - Available displacement components
 
   {Colors.GREEN}2. Check OISD file (surface data):{Colors.RESET}
-     $ ff check riser.oisd
+     $ ff check --file riser.oisd
      
      Output shows:
      - Number of surfaces

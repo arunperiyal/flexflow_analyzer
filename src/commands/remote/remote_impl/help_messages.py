@@ -27,11 +27,11 @@ Record the machines a case can be sent to or fetched from, so
     {Colors.YELLOW}-h, --help{Colors.RESET}         Show this help message
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
-    remote add hpc1 --user john --ip 192.168.1.100 --password secret --path /home/john/cases
+    remote add --name hpc1 --user john --ip 192.168.1.100 --password secret --path /home/john/cases
     remote list
-    remote modify hpc1 --port 2222
-    remote set-path hpc1 --path /scratch/john/new_location
-    remote delete hpc1
+    remote modify --name hpc1 --port 2222
+    remote set-path --name hpc1 --path /scratch/john/new_location
+    remote delete --name hpc1
 
 {Colors.BOLD}NOTES:{Colors.RESET}
 
@@ -48,7 +48,7 @@ def print_add_help():
 {Colors.BOLD}{Colors.CYAN}remote add — Add a remote machine{Colors.RESET}
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    remote add <name> --user <user> --ip <ip> --password <pass> [--port <port>] [--path <path>]
+    remote add --name <name> --user <user> --ip <ip> --password <pass> [--port <port>] [--path <path>]
 
 {Colors.BOLD}ARGUMENTS:{Colors.RESET}
     {Colors.YELLOW}<name>{Colors.RESET}             What to call this machine here. It is the name given
@@ -68,8 +68,8 @@ def print_add_help():
     {Colors.YELLOW}-h, --help{Colors.RESET}         Show this help message
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
-    remote add hpc1 --user john --ip 192.168.1.100 --password secret --path /home/john/cases
-    remote add hpc2 --user john --ip 10.0.0.7 --password secret --port 2222
+    remote add --name hpc1 --user john --ip 192.168.1.100 --password secret --path /home/john/cases
+    remote add --name hpc2 --user john --ip 10.0.0.7 --password secret --port 2222
 
 {Colors.BOLD}NOTES:{Colors.RESET}
 
@@ -87,7 +87,7 @@ def print_modify_help():
 {Colors.BOLD}{Colors.CYAN}remote modify — Update a remote's connection details{Colors.RESET}
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    remote modify <name> [--user <user>] [--ip <ip>] [--password <pass>] [--port <port>]
+    remote modify --name <name> [--user <user>] [--ip <ip>] [--password <pass>] [--port <port>]
 
 {Colors.BOLD}ARGUMENTS:{Colors.RESET}
     {Colors.YELLOW}<name>{Colors.RESET}             The remote to update, as shown by {Colors.YELLOW}remote list{Colors.RESET}
@@ -102,8 +102,8 @@ def print_modify_help():
     {Colors.DIM}Give at least one. Only the fields named are changed; the rest are kept.{Colors.RESET}
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
-    remote modify hpc1 --port 2222
-    remote modify hpc1 --user jane --password newsecret
+    remote modify --name hpc1 --port 2222
+    remote modify --name hpc1 --user jane --password newsecret
 
 {Colors.BOLD}NOTES:{Colors.RESET}
 
@@ -119,7 +119,7 @@ def print_delete_help():
 {Colors.BOLD}{Colors.CYAN}remote delete — Delete a remote machine{Colors.RESET}
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    remote delete <name>
+    remote delete --name <name>
 
 {Colors.BOLD}ARGUMENTS:{Colors.RESET}
     {Colors.YELLOW}<name>{Colors.RESET}             The remote to delete, as shown by {Colors.YELLOW}remote list{Colors.RESET}
@@ -128,7 +128,7 @@ def print_delete_help():
     {Colors.YELLOW}-h, --help{Colors.RESET}         Show this help message
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
-    remote delete hpc1
+    remote delete --name hpc1
 
 {Colors.BOLD}NOTES:{Colors.RESET}
 
@@ -166,7 +166,7 @@ def print_set_path_help():
 {Colors.BOLD}{Colors.CYAN}remote set-path — Set a remote's base path{Colors.RESET}
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    remote set-path <name> --path <path>
+    remote set-path --name <name> --path <path>
 
 {Colors.BOLD}ARGUMENTS:{Colors.RESET}
     {Colors.YELLOW}<name>{Colors.RESET}             The remote to update, as shown by {Colors.YELLOW}remote list{Colors.RESET}
@@ -177,7 +177,7 @@ def print_set_path_help():
     {Colors.YELLOW}-h, --help{Colors.RESET}         Show this help message
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
-    remote set-path hpc1 --path /scratch/john/cases
+    remote set-path --name hpc1 --path /scratch/john/cases
 
 {Colors.BOLD}NOTES:{Colors.RESET}
 

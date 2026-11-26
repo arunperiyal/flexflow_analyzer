@@ -262,7 +262,8 @@ class FieldCommand(BaseCommand):
         # field check (validate a produced VTK file)
         check_parser = field_subparsers.add_parser('check', add_help=False,
                                                    help='Validate a VTK (.vtu/.vtk/.vtp) file')
-        check_parser.add_argument('file', nargs='?', help='VTK file to validate')
+        check_parser.add_argument('--file', type=str, metavar='FILE', help='VTK file to validate')
+        no_words(check_parser, '--file')
         check_parser.add_argument('-v', '--verbose', action='store_true',
                                   help='Enable verbose output')
         check_parser.add_argument('-h', '--help', action='store_true',
@@ -362,7 +363,7 @@ class FieldCommand(BaseCommand):
         console.print("    field convert myCase --timestep 100")
         console.print("    field render iso myCase --timestep 100 --values 20 --color W")
         console.print("    field render slice myCase --normal z --color Pressure")
-        console.print("    field check results.vtk")
+        console.print("    field check --file results.vtk")
         console.print()
 
 

@@ -4,6 +4,7 @@ Supports: .othd, .oisd files
 """
 
 from .base import BaseCommand
+from src.cli.context import no_words
 
 
 class CheckCommand(BaseCommand):
@@ -21,8 +22,9 @@ class CheckCommand(BaseCommand):
             help=self.description
         )
         
-        parser.add_argument('file', nargs='?', 
+        parser.add_argument('--file', type=str, metavar='FILE',
                           help='Path to data file (.othd, .oisd)')
+        no_words(parser, '--file')
         parser.add_argument('-h', '--help', action='store_true',
                           help='Show help for check command')
         parser.add_argument('--examples', action='store_true',
