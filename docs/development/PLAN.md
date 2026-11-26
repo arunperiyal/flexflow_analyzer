@@ -732,7 +732,7 @@ Breaks no command line except a shortened flag.
   refused), with a test that walks the parser tree so a new parser without it
   fails.
 
-- [ ] Write the plan: Phases 38 to 42
+- [x] Write the plan: Phases 38 to 42
 - [ ] The displacement declaration in `src/cli/context.py`, read by `last_arg`,
       `time_window` and the other context flags; the "ignored" line
 - [ ] Refuse two typed flags that displace each other (`--t1` with `--last`),
