@@ -6,6 +6,7 @@ Handles .def operations: var, time, freq.
 
 from .base import BaseCommand
 from src.cli.completers import described
+from src.cli.context import case_flag, no_words
 
 
 class DefCommand(BaseCommand):
@@ -29,12 +30,12 @@ class DefCommand(BaseCommand):
         # def var [name] [value]
         var_parser = def_subparsers.add_parser('var', add_help=False,
                                                help='Show or edit define{} variables')
-        var_parser.add_argument('name', nargs='?',
+        var_parser.add_argument('--name', type=str, metavar='NAME',
                                 help='Variable name (omit to list all variables)')
-        var_parser.add_argument('value', nargs='?',
+        var_parser.add_argument('--value', type=str, metavar='VALUE',
                                 help='New value (provide to edit the variable)')
-        var_parser.add_argument('-c', '--case', type=str,
-                                help='Case directory path (default: current directory)')
+        case_flag(var_parser, '-c', '--case')
+        no_words(var_parser, '--name')
         var_parser.add_argument('-h', '--help', action='store_true',
                                 help='Show help for var command')
 
@@ -49,10 +50,10 @@ class DefCommand(BaseCommand):
                                       "omit to show all timeSteppingControl values"
                                  ).completer = described(('maxTime', 'maxTimeSteps'),
                                                          ('inc', 'initialTimeIncrement'))
-        time_parser.add_argument('value', nargs='?',
+        time_parser.add_argument('--value', type=str, metavar='VALUE',
                                  help='New value (provide to edit the field)')
-        time_parser.add_argument('-c', '--case', type=str,
-                                 help='Case directory path (default: current directory)')
+        case_flag(time_parser, '-c', '--case')
+        no_words(time_parser, '--value')
         time_parser.add_argument('-h', '--help', action='store_true',
                                  help='Show help for time command')
 
@@ -65,10 +66,10 @@ class DefCommand(BaseCommand):
                                       "omit to show both"
                                  ).completer = described(('out', 'outputSimulation outFreq'),
                                                          ('rst', 'outputRestart outFreq'))
-        freq_parser.add_argument('value', nargs='?',
+        freq_parser.add_argument('--value', type=str, metavar='N',
                                  help='New frequency in steps (provide to edit it)')
-        freq_parser.add_argument('-c', '--case', type=str,
-                                 help='Case directory path (default: current directory)')
+        case_flag(freq_parser, '-c', '--case')
+        no_words(freq_parser, '--value')
         freq_parser.add_argument('-h', '--help', action='store_true',
                                  help='Show help for freq command')
 

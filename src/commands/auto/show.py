@@ -1,9 +1,9 @@
 """auto show / commands / status: what auto would do for a case, or for every
 case with `use case:*`. Reads only.
 
-    auto show [case] [--detail] [--only SECTIONS]   labelled sections per case
-    auto commands [case]                             just the commands, numbered
-    auto status [case]                               one line per case
+    auto show [--case NAME] [--detail] [--only SECTIONS]   labelled sections per case
+    auto commands [--case NAME]                             just the commands, numbered
+    auto status [--case NAME]                               one line per case
 """
 
 import re
@@ -45,7 +45,7 @@ def resolve_cases(case, base_dir: Path):
     from src.core.auto.conf import AutoConfError
     from src.commands.case_iteration import is_wildcard_case
     if not case:
-        raise AutoConfError("no case given: auto show <case>, or `use case:<dir>` "
+        raise AutoConfError("no case given: auto show [--case NAME], or `use case:<dir>` "
                             f"(`use case:*` for every case in {cases_file.FILENAME})")
     if is_wildcard_case(case):
         try:
@@ -119,10 +119,10 @@ def gather(case_dirs, remote, clouds=None):
                 except CloudError as e:
                     problems.append(f"{Path(case_dir).name}: {e}")
             from src.core.transfer.ledger import Ledger
-            sent = {rel: e.get('when') for rel, e in
-                    Ledger(Path(case_dir).parent).data.get(conf.remote, {})
-                    .get(Path(case_dir).name, {}).items()}
-            snap = observe_case(case_dir, queue, ended, listing, sent)
+            entries = (Ledger(Path(case_dir).parent).data.get(conf.remote, {})
+                       .get(Path(case_dir).name, {}))
+            sent = {rel: e.get('when') for rel, e in entries.items()}
+            snap = observe_case(case_dir, queue, ended, listing, sent, entries)
             results.append((snap, decide(snap, conf, cloud_ok=listing is not None,
                                          sacct_ok=sacct_ok)))
     finally:
@@ -155,7 +155,6 @@ def _only(args):
 
 def _print_sections(console, sections, only=None):
     from rich.table import Table
-    from src.core.auto.report import AUTO_ONLY
     for sec in sections:
         if only is not None and sec.key not in only:
             continue
@@ -174,12 +173,7 @@ def _print_sections(console, sections, only=None):
                 grid.add_row('', 'Action:', '[dim]none[/dim]')
             for n, action in enumerate(sec.actions, 1):
                 label = 'Action:' if n == 1 else ''
-                if action.startswith(AUTO_ONLY):
-                    text = f"[magenta]{n}: {escape(action)}[/magenta]"
-                elif action.startswith('wait:'):
-                    text = f"[yellow]{n}: {escape(action)}[/yellow]"
-                else:
-                    text = f"{n}: [green]{escape(action)}[/green]"
+                text = f"{n}: [green]{escape(action)}[/green]"      # every action is a command
                 grid.add_row('', label, text)
         console.print(grid)
 
@@ -285,7 +279,7 @@ def execute_show(args) -> int:
         console.rule("[bold]summary[/bold]", style='cyan')
         _summary_table(console, results)
         if not detail:
-            console.print("[dim]Each case in full: auto show <case>, or --detail; "
+            console.print("[dim]Each case in full: auto show [--case NAME], or --detail; "
                           "the commands alone: auto commands.[/dim]")
 
     total = sum(sum(plan.uploads.values()) for _, plan in results)
@@ -300,7 +294,7 @@ def execute_show(args) -> int:
                      else "[green]none needs you[/green]"))
     console.print(upload)
     console.print("[dim]Nothing was changed. `auto apply --dry-run` lists what it would do: "
-                  "history, uploads, post jobs. Deleting is not built yet.[/dim]")
+                  "history, uploads, post jobs; `--delete` adds the deletions.[/dim]")
     console.rule(style='cyan')
     console.print()
     return 1 if needs or problems else 0
@@ -310,7 +304,7 @@ def execute_commands(args) -> int:
     """The commands of every case, plain text (no colour), numbered per case,
     so the output can be saved as a script and read before running it."""
     import sys
-    from src.core.auto.report import AUTO_ONLY, build
+    from src.core.auto.report import build
     got = _collect(args)
     if isinstance(got, int):
         return got
@@ -329,22 +323,44 @@ def execute_commands(args) -> int:
         for need in (i.text for i in plan.items if i.kind == 'needs'):
             out.write(f"#   needs you: {need}\n")
         for sec in sections:
+            for label, value in sec.rows:
+                if label in ('Waiting', 'Why', 'By hand'):
+                    out.write(f"#   {label.lower()}: {value}\n")
             for action in sec.actions:
-                if action.startswith(AUTO_ONLY) or action.startswith('wait:'):
-                    out.write(f"#   {action}\n")
-                else:
-                    n += 1
-                    out.write(f"{action}    # {n}, {sec.title}\n")
+                n += 1
+                out.write(f"{action}    # {n}, {sec.title}\n")
         if n == 0:
             out.write("#   no commands\n")
     return 1 if problems else 0
 
 
+STATUS_ONLY = ('all', 'needs', 'todo', 'running')
+
+
+def _status_offer(results, only):
+    """Offer the cases picked by --only to the command after a `|`
+    (`auto status --only needs | case show`), one row {case} each. Nothing is
+    offered outside the shell, or by a shellkit without rows (0.1.8)."""
+    from shellkit import current_runtime
+    rt = current_runtime()
+    if rt is None or not hasattr(rt, 'emit'):
+        return
+    picked = [snap.dir for snap, plan, flags in results if only == 'all' or flags[only]]
+    if picked:
+        rt.emit([{'case': str(d)} for d in picked])
+
+
 def execute_status(args) -> int:
-    """One line per case: state, steps, jobs, what is next."""
+    """One line per case: state, steps, jobs, what is next. The cases picked by
+    --only needs|todo|running|all (default all) are offered to a command after `|`."""
     from rich.table import Table
     from rich import box
     from src.core.auto.decide import _size_text
+    only = getattr(args, 'only', None) or 'all'
+    if only not in STATUS_ONLY:
+        Console().print(f"[red]Error:[/red] auto status --only is one of "
+                        f"{', '.join(STATUS_ONLY)}, not '{escape(only)}'")
+        return 2
     got = _collect(args)
     if isinstance(got, int):
         return got
@@ -355,11 +371,13 @@ def execute_status(args) -> int:
     table = Table(box=box.SIMPLE, header_style='bold', pad_edge=False)
     for col in ('case', 'state', 'steps', 'job', 'next'):
         table.add_column(col, no_wrap=col != 'next', overflow='fold')
+    doing = 0
+    flagged = []                    # (snap, plan, {needs, todo, running})
     for snap, plan in results:
         c = plan.ctx
         reached = c.get('reached')
         steps = (f"{reached}/{snap.max_steps}" if reached and snap.max_steps else str(reached or '-'))
-        jobs = ' '.join(f"{j.kind} {j.state.lower()}" for j in
+        jobs = ' '.join(f"{j.kind} {j.jobid} {j.state.lower()}" for j in
                         list(c.get('main_now', [])) + list(c.get('post_now', []))) or '-'
         nxt = []
         if plan.needs_you:
@@ -374,7 +392,16 @@ def execute_status(args) -> int:
             nxt.append(f"upload {_size_text(sum(plan.uploads.values()))}")
         if c.get('del_out') or c.get('del_binary') or c.get('thin'):
             nxt.append('clean up')
+        todo = any('needs you' not in item and 'waits' not in item for item in nxt)
+        doing += todo
+        flagged.append((snap, plan, {'needs': bool(plan.needs_you), 'todo': todo,
+                                     'running': bool(c.get('main_now') or c.get('post_now'))}))
         table.add_row(escape(plan.name), f"[{STATE_STYLE.get(plan.state, 'white')}]{plan.state}[/]",
                       steps, jobs, ', '.join(nxt) or '[green]nothing[/green]')
     console.print(table)
-    return 1 if problems or any(plan.needs_you for _, plan in results) else 0
+    needs = sum(plan.needs_you for _, plan in results)
+    console.print(f"[bold]{len(results)} case(s)[/bold] · {doing} with something to do · "
+                  + (f"[bold red]{needs} need(s) you[/bold red] (`auto show` says why)" if needs
+                     else "[green]none needs you[/green]"))
+    _status_offer(flagged, only)
+    return 1 if problems or needs else 0

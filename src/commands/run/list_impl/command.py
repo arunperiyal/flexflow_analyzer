@@ -165,7 +165,7 @@ def show_list_help():
 {Colors.BOLD}{Colors.CYAN}run list{Colors.RESET} - List a case's job files
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    run list log [case_directory] [--sort time|type|jobid] [-r] [--type pre|main|post|other]
+    run list log [--case NAME] [--sort time|type|jobid] [-r] [--type pre|main|post|other]
 
 {Colors.BOLD}DESCRIPTION:{Colors.RESET}
     Lists the slurm-* output files in the case directory (or the current
@@ -181,7 +181,7 @@ def show_list_help():
     {Colors.YELLOW}-h, --help{Colors.RESET}     Show this help
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
-    run list log Case001
+    run list log --case Case001
     run list log --sort type
     run list log --type main -r
     run list log | grep post

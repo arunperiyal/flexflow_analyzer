@@ -7,7 +7,7 @@ def show_docs_help():
     """Display help for docs command."""
     print(f"""
 {Colors.BOLD}USAGE{Colors.RESET}
-    flexflow docs [TOPIC]
+    docs [TOPIC]
 
 {Colors.BOLD}DESCRIPTION{Colors.RESET}
     View FlexFlow documentation.
@@ -33,16 +33,16 @@ def show_docs_help():
 
 {Colors.BOLD}EXAMPLES{Colors.RESET}
     # List all available documentation
-    flexflow docs
+    docs
     
     # View main usage guide
-    flexflow docs main
+    docs main
     
     # View the run commands
-    flexflow docs run
+    docs run
     
     # View the design of the auto command
-    flexflow docs auto
+    docs auto
 
 {Colors.BOLD}NOTES{Colors.RESET}
     • Documentation is included when installing with --install flag

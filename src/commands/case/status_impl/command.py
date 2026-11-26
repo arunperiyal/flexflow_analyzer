@@ -2,10 +2,10 @@
 case status: the case's notes (.casestatus.md) with what its files say now.
 
     case status [case]                    show it (writes the file the first time)
-    case status update [case]             edit it in $EDITOR
-    case status update [case] -m TEXT     add a line to its log
-    case status update [case] --state S   set the state (logged too)
-    case status '*'                       one line per registered case
+    case status update [--case NAME]             edit it in $EDITOR
+    case status update [--case NAME] -m TEXT     add a line to its log
+    case status update [--case NAME] --state S   set the state (logged too)
+    case status --case '*'                       one line per registered case
 
 The file holds only what a person knows; the step the run reached, the last
 PLT and the job in the queue are read from the case each time, so they are
@@ -39,8 +39,13 @@ def execute_status(args):
         print_status_help()
         return 0
 
-    update = getattr(args, 'what', None) == 'update'
-    name = args.case if update else (getattr(args, 'what', None) or args.case)
+    what = getattr(args, 'what', None)
+    if what not in (None, 'update'):
+        console.print(f"[red]Error:[/red] case status: '{escape(what)}' is not an action "
+                      f"(update); the case is a flag now: --case {escape(what)}")
+        return 2
+    update = what == 'update'
+    name = args.case
     if name is None:
         from src.cli.context import current_case
         name = current_case() or '.'

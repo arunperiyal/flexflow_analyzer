@@ -12,11 +12,11 @@ What a case's domain is made of -- the fluid field and the bodies in it -- kept 
 {Colors.YELLOW}domain.yml{Colors.RESET} beside the .def.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    flexflow case domain [CASE]                     {Colors.DIM}# summary of the domain{Colors.RESET}
-    flexflow case domain [CASE] --init              {Colors.DIM}# derive it from the .def{Colors.RESET}
-    flexflow case domain [CASE] --check             {Colors.DIM}# does the case still agree?{Colors.RESET}
-    flexflow case domain body [CASE] [options]
-    flexflow case domain field [CASE] [options]
+    case domain [CASE]                     {Colors.DIM}# summary of the domain{Colors.RESET}
+    case domain [CASE] --init              {Colors.DIM}# derive it from the .def{Colors.RESET}
+    case domain [CASE] --check             {Colors.DIM}# does the case still agree?{Colors.RESET}
+    case domain body [--case NAME] [options]
+    case domain field [--case NAME] [options]
 
     CASE may be left out: the interactive case context is used, or the current
     directory. {Colors.YELLOW}*{Colors.RESET} means every case in the .cases.yml registry, for reading
@@ -135,31 +135,31 @@ What a case's domain is made of -- the fluid field and the bodies in it -- kept 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
 
   {Colors.BOLD}Start from what the case already says:{Colors.RESET}
-    flexflow case domain BR0SG0U1P0 --init
-    flexflow case domain BR0SG0U1P0                {Colors.DIM}# read it back{Colors.RESET}
+    case domain --case BR0SG0U1P0 --init
+    case domain --case BR0SG0U1P0                {Colors.DIM}# read it back{Colors.RESET}
 
   {Colors.BOLD}Fill in what the .def could not say:{Colors.RESET}
-    flexflow case domain body --name cyl --radius 0.5
-    flexflow case domain field --velocity 0,0,1
-    flexflow case domain field --set name=water
+    case domain body --name cyl --radius 0.5
+    case domain field --velocity 0,0,1
+    case domain field --set name=water
     {Colors.DIM}(--init names the field after its elementGroup, e.g. 'interior'){Colors.RESET}
 
   {Colors.BOLD}Declare a body by hand:{Colors.RESET}
-    flexflow case domain body --add --name cyl --type beam
-    flexflow case domain body --add --name strake --type rigid --geotag stk \\
+    case domain body --add --name cyl --type beam
+    case domain body --add --name strake --type rigid --geotag stk \\
         --radius 0.6 --length 12 --origin 0,0,0 --axis +x
 
   {Colors.BOLD}Look at one thing:{Colors.RESET}
-    flexflow case domain body --list
-    flexflow case domain body --show cyl
-    flexflow case domain field --show
+    case domain body --list
+    case domain body --show cyl
+    case domain field --show
 
   {Colors.BOLD}Check it against the case:{Colors.RESET}
-    flexflow case domain BR0SG0U1P0 --check
+    case domain --case BR0SG0U1P0 --check
 
   {Colors.BOLD}Across every registered case:{Colors.RESET}
-    flexflow case domain * --list
-    flexflow case domain * --init
+    case domain * --list
+    case domain * --init
     {Colors.DIM}(or set the context once: use case:*){Colors.RESET}
 
 {Colors.BOLD}NOTES:{Colors.RESET}

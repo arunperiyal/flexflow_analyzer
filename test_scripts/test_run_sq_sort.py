@@ -156,7 +156,7 @@ def test_filter_jobs_falls_back_to_workdir(monkeypatch):
 
 def _sq_args(**kw):
     from types import SimpleNamespace
-    base = dict(help=False, target=None, value=None, all=False, by_dir=False,
+    base = dict(help=False, target=None, job=None, interval=None, key=None, all=False, by_dir=False,
                 sort=None, out=False, n=20)
     base.update(kw)
     return SimpleNamespace(**base)
@@ -170,9 +170,9 @@ def test_execute_sq_routes_watch_and_find(monkeypatch):
     monkeypatch.setattr(sq_cmd, "show_job_detail", lambda job_id, **kw: calls.append(("detail", job_id)))
 
     sq_cmd.execute_sq(_sq_args(target="watch"))
-    sq_cmd.execute_sq(_sq_args(target="watch", value="2.5"))
-    sq_cmd.execute_sq(_sq_args(target="find", value="CS4SG3U3P0"))
-    sq_cmd.execute_sq(_sq_args(target="1258586"))
+    sq_cmd.execute_sq(_sq_args(target="watch", interval=2.5))
+    sq_cmd.execute_sq(_sq_args(target="find", key="CS4SG3U3P0"))
+    sq_cmd.execute_sq(_sq_args(job="1258586"))
     assert calls == [("watch", 10.0), ("watch", 2.5), ("find", "CS4SG3U3P0"), ("detail", "1258586")]
 
 
@@ -181,13 +181,13 @@ def test_execute_sq_rejects_bad_watch_and_missing_find_key(monkeypatch, capsys):
     monkeypatch.setattr(sq_cmd, "watch_queue", lambda *a: (_ for _ in ()).throw(AssertionError))
     monkeypatch.setattr(sq_cmd, "find_jobs", lambda *a: (_ for _ in ()).throw(AssertionError))
 
-    sq_cmd.execute_sq(_sq_args(target="watch", value="soon"))
-    sq_cmd.execute_sq(_sq_args(target="watch", value="0"))
+    sq_cmd.execute_sq(_sq_args(target="watch", interval=0))
     sq_cmd.execute_sq(_sq_args(target="find"))
+    sq_cmd.execute_sq(_sq_args(target="1258586"))
     out = capsys.readouterr().out
-    assert "must be a number" in out
     assert "positive" in out
     assert "requires a search key" in out
+    assert "the job is a flag now: --job 1258586" in out
 
 
 def test_find_jobs_groups_by_submit_directory(monkeypatch):

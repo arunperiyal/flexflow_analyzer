@@ -4,7 +4,7 @@ Commands: plot, compare
 """
 
 from ..base import BaseCommand
-from src.cli.context import (case_arg, context_flag, last_arg, node_arg, osgid_arg,
+from src.cli.context import (case_flag, no_words, context_flag, last_arg, node_arg, osgid_arg,
                               othid_arg, time_window)
 
 
@@ -31,7 +31,8 @@ class PlotCommand(BaseCommand):
             help=self.description
         )
         # Required arguments
-        case_arg(parser, help='Case directory path')
+        case_flag(parser)
+        no_words(parser)
         parser.add_argument('--input-file', type=str, help='YAML input file')
         context_flag(parser, 'var', '--var', '--variable', dest='var', type=str,
                      action='append', metavar='NAME',
@@ -42,6 +43,11 @@ class PlotCommand(BaseCommand):
         osgid_arg(parser, help='osgId (surface group) in the oisd files (default: the first)')
         parser.add_argument('--group', type=int, metavar='ID',
                             help='The group id, whichever kind the variables are in')
+        parser.add_argument('--archive', nargs='?', const='all', metavar='RUNS',
+                            help='Read these runs of archive/ (1, 1,3 or 2-4) instead of the whole history')
+        parser.add_argument('--run', action='store_true',
+                            help="Read the run directory's .othd/.oisd (what a job is writing now) "
+                                 "instead of the history")
         parser.add_argument('--othd', action='store_true', help='Look only in the othd files')
         parser.add_argument('--oisd', action='store_true', help='Look only in the oisd files')
 
@@ -53,7 +59,7 @@ class PlotCommand(BaseCommand):
         time_window(parser,
                     t1_kwargs=dict(type=_step, metavar='TSID', help='First tsId'),
                     t2_kwargs=dict(type=_step, metavar='TSID', help='Last tsId'))
-        last_arg(parser, help='Only the last N steps (of the --t1/--t2 window)')
+        last_arg(parser, help='Only the last N steps (of the `use t1:`/`t2:` window); not with a typed --t1/--t2')
 
         # Styling options
         parser.add_argument('--plot-style', type=str, help='Plot style string')

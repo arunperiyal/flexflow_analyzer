@@ -133,7 +133,7 @@ def test_remote_must_be_configured(rt):
 
 @pytest.mark.parametrize('line', [
     'case show', 'case run', 'case status', 'case out', 'case upload', 'case download',
-    'case organise history', 'case organise output', 'case organise plt',
+    'case organise history', 'case organise out', 'case organise rst', 'case organise plt',
     'case check run', 'case check history', 'case check config', 'case check plt',
     'case check def', 'case check out', 'case check all', 'case check data',
     'case status update',
@@ -154,19 +154,17 @@ def test_template_script_case_dir(rt, work):
 
 def test_typed_case_wins(rt):
     use(rt, 'case:CaseA')
-    assert parsed(rt, 'case show CaseB').case == 'CaseB'
+    assert parsed(rt, 'case show --case CaseB').case == 'CaseB'
 
 
 def test_no_context_leaves_case_none(rt):
     assert parsed(rt, 'case show').case is None
 
 
-@pytest.mark.parametrize('line', ['case domain', 'field convert'])
-def test_case_not_filled_where_the_command_resolves_it(rt, line):
-    # case domain shares the slot with body/field and reads the context itself;
-    # field convert never took the case from the context
+def test_case_not_filled_where_the_command_resolves_it(rt):
     use(rt, 'case:CaseA')
-    assert parsed(rt, line).case is None
+    for line in ('field convert', 'case domain', 'data stats', 'plot', 'field info'):
+        assert parsed(rt, line).case.endswith('CaseA'), line       # a flag, filled like the rest
 
 
 def test_wildcard_case_is_passed_through(rt):
@@ -322,7 +320,7 @@ def texts(rt, line):
 def test_completion_of_commands_and_subcommands(rt):
     assert 'case' in texts(rt, 'ca')
     assert {'show', 'create', 'organise', 'check', 'upload'} <= set(texts(rt, 'case '))
-    assert texts(rt, 'case organise ') == ['history', 'output', 'plt', 'vtu']
+    assert texts(rt, 'case organise ') == ['history', 'out', 'rst', 'plt', 'vtu']
 
 
 def test_completion_of_flags(rt):
@@ -349,8 +347,53 @@ def test_file_flags_filter_extensions(rt, work):
     assert texts(rt, 'field render iso --config ') == ['CaseA/', 'CaseB/', 'view.yml']
 
 
-def test_case_positional_completes_directories(rt):
-    assert texts(rt, 'case show Ca') == ['CaseA/', 'CaseB/']
+def test_the_case_flag_completes_directories(rt):
+    assert texts(rt, 'case show --case Ca') == ['CaseA/', 'CaseB/']
+    assert texts(rt, 'case show ') != ['CaseA/', 'CaseB/']          # a case is not a word
+
+
+def test_organise_words_complete_in_every_position(rt):
+    """The case is a flag (`--case` or `use case:`), so the first word after
+    `history` / `plt` is an action, with or without a case in context."""
+    def check():
+        assert texts(rt, 'case organise ') == ['history', 'out', 'rst', 'plt', 'vtu']
+        assert texts(rt, 'case organise history ') == ['update', 'clean', 'compile', 'verify',
+                                                       'prune']
+        assert texts(rt, 'case organise history up') == ['update']
+        assert texts(rt, 'case organise history update c') == ['clean', 'compile']
+        assert texts(rt, 'case organise history update clean 1-3 ') == [
+            'update', 'clean', 'compile', 'verify', 'prune']
+        assert texts(rt, 'case organise plt ') == ['ascii', 'binary']
+        assert texts(rt, 'case organise plt a') == ['ascii']
+        assert texts(rt, 'case organise plt ascii b') == ['binary']
+        assert {'--case', '--t1', '--freq', '--no-verify'} <= set(texts(rt, 'case organise plt --'))
+        assert {'--case', '--t1', '--no-verify'} <= set(texts(rt, 'case organise out --'))
+        assert '--no-verify' not in texts(rt, 'case organise rst --')
+        for sub in ('out', 'rst', 'vtu'):               # no words: flags straight away
+            assert {'--case', '--t1', '--dry-run'} <= set(texts(rt, f'case organise {sub} '))
+        assert texts(rt, 'case organise history --case ') == ['CaseA/', 'CaseB/']
+        assert texts(rt, 'case organise plt binary --case Case') == ['CaseA/', 'CaseB/']
+    check()
+    use(rt, 'case:CaseA')
+    check()
+
+
+def test_the_words_of_the_case_commands_complete_and_the_case_is_a_flag(rt):
+    def check():
+        assert texts(rt, 'case upload ') == ['plt', 'rst', 'input', 'history']
+        assert texts(rt, 'case download h') == ['history']
+        assert texts(rt, 'case status ') == ['update']
+        assert texts(rt, 'case domain ') == ['body', 'field']
+        assert texts(rt, 'case check ') == ['run', 'history', 'config', 'plt', 'def', 'out',
+                                            'data', 'all']
+        for line in ('case show', 'case run', 'case out', 'case check plt', 'case upload plt',
+                     'case download rst', 'case status', 'case domain body',
+                     'case organise out'):
+            assert '--case' in texts(rt, line + ' --'), line
+            assert texts(rt, f'{line} --case Case') == ['CaseA/', 'CaseB/'], line
+    check()
+    use(rt, 'case:CaseA')
+    check()
 
 
 def test_remote_completion(rt, monkeypatch):
@@ -417,7 +460,7 @@ def test_case_check_out_greps_by_tsid(rt, work):
     (work / 'CaseA' / 'simflow.config').write_text('problem = riser\ndir = ./RUN_1\n')
     for step in (2000, 4000, 14000):
         (work / 'CaseA' / 'RUN_1' / f'riser.{step}_0.out').write_text('')
-    assert rt.execute_line('case check out CaseA | grep 4000') == 0, err(rt)
+    assert rt.execute_line('case check out --case CaseA | grep 4000') == 0, err(rt)
     lines = rt.console.file.getvalue().splitlines()
     assert [line.split()[0] for line in lines if '✓' in line] == ['4000', '14000']
 
@@ -431,7 +474,7 @@ def _out_case(work, steps):
 
 def test_case_check_out_freq_lists_missing_steps(rt, work):
     _out_case(work, (1000, 2000, 4000, 5000))
-    assert rt.execute_line('case check out CaseA --freq 1000 | grep missing') == 0, err(rt)
+    assert rt.execute_line('case check out --case CaseA --freq 1000 | grep missing') == 0, err(rt)
     lines = rt.console.file.getvalue().splitlines()
     assert [line.split()[0] for line in lines if line.split()[-1] == 'missing'] == ['3000']
     assert any('1 step(s) missing at --freq 1000' in line for line in lines)
@@ -440,16 +483,16 @@ def test_case_check_out_freq_lists_missing_steps(rt, work):
 def test_case_check_out_freq_window_and_none_missing(rt, work):
     _out_case(work, (1000, 2000, 3000))
     # 3500 rounds up to 4000; up to t2 = 5000, with no files there: both missing
-    out = rt.run_captured('case check out CaseA --freq 1000 --t1 3500 --t2 5000')
+    out = rt.run_captured('case check out --case CaseA --freq 1000 --t1 3500 --t2 5000')
     rows = [line.split()[0] for line in out.splitlines() if line.strip().endswith('missing')]
     assert rows == ['4000', '5000'] and '2 step(s) missing at --freq 1000' in out
-    out = rt.run_captured('case check out CaseA --freq 1000')
+    out = rt.run_captured('case check out --case CaseA --freq 1000')
     assert 'no step missing at --freq 1000' in out
 
 
 def test_case_check_all_freq_is_not_the_out_frequency(rt, work):
     _out_case(work, (1000, 3000))
-    out = rt.run_captured('case check all CaseA --freq 1000')
+    out = rt.run_captured('case check all --case CaseA --freq 1000')
     assert 'Out/Rst file check' in out and 'missing at --freq' not in out
 
 
@@ -496,8 +539,8 @@ def test_a_typed_window_beats_the_last_context(rt):
         a = parsed(rt, f'{line} --t1 2000')
         assert (a.t1, a.last) == (2000, None), line
         assert parsed(rt, f'{line} --t2 3000').last is None, line
-        a = parsed(rt, f'{line} --t1 2000 --last 50')       # a typed --last still cuts
-        assert (a.t1, a.last) == (2000, 50), line
+        with pytest.raises(Exception, match='cannot both be typed'):   # two typed flags that
+            parsed(rt, f'{line} --t1 2000 --last 50')                  # contradict: refused
 
 
 def test_the_t1_context_keeps_the_last_context(rt):
@@ -530,3 +573,46 @@ def test_login_cpu_limit_setting(rt):
     assert rt.execute_line('set login_cpu_limit 0') == 0
     assert rt.execute_line('set login_cpu_limit 120') != 0
     assert rt.settings.get('login_cpu_limit') == 0
+
+
+def test_data_plot_field_words_and_the_case_flag_complete(rt):
+    def check():
+        assert texts(rt, 'field render ') == ['iso', 'slice', 'colorbar']
+        assert texts(rt, 'field compute f') == ['force', 'force_coeff']
+        assert texts(rt, 'data check ') == ['steady']
+        for line in ('data show', 'data table', 'data stats', 'data check steady', 'plot',
+                     'field info', 'field extract', 'field convert', 'field compute force',
+                     'field render iso'):
+            assert '--case' in texts(rt, line + ' --'), line
+            assert texts(rt, f'{line} --case Case') == ['CaseA/', 'CaseB/'], line
+    check()
+    use(rt, 'case:CaseA')
+    check()
+
+
+def test_run_words_complete_and_the_case_is_a_flag(rt):
+    def check():
+        assert texts(rt, 'run check ') == ['headers', 'mesh']
+        assert texts(rt, 'run main ') == ['restart', 'reset']
+        assert texts(rt, 'run post ') == ['full', 'convert']
+        assert texts(rt, 'run list ') == ['log']
+        assert texts(rt, 'run sq ') == ['watch', 'find'] or set(['watch', 'find']) <= set(texts(rt, 'run sq '))
+        for line in ('run check', 'run pre', 'run main', 'run main restart', 'run post full',
+                     'run list log'):
+            assert '--case' in texts(rt, line + ' --'), line
+            assert texts(rt, f'{line} --case Case') == ['CaseA/', 'CaseB/'], line
+    check()
+    use(rt, 'case:CaseA')
+    check()
+
+
+def test_auto_words_complete_and_the_case_is_a_flag(rt):
+    def check():
+        assert texts(rt, 'auto ') == ['init', 'show', 'commands', 'status', 'apply', 'log']
+        assert set(texts(rt, 'auto apply ')) >= {'history', 'plt', 'output', 'input', 'rst', 'all'}
+        for line in ('auto show', 'auto commands', 'auto status', 'auto log', 'auto apply plt'):
+            assert '--case' in texts(rt, line + ' --'), line
+            assert texts(rt, f'{line} --case Case') == ['CaseA/', 'CaseB/'], line
+    check()
+    use(rt, 'case:CaseA')
+    check()

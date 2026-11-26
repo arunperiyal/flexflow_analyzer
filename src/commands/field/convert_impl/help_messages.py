@@ -3,7 +3,7 @@
 
 def print_convert_help():
     print("""
-flexflow field convert <case> [options]
+field convert [--case NAME] [options]
 
 Convert a binary PLT volume zone to a VTK .vtu (for ParaView / pyvista).
 Tecplot-free: parses the PLT directly with numpy and writes with meshio.
@@ -22,8 +22,8 @@ Options:
   -h, --help         this help
 
 Examples:
-  flexflow field convert myCase
-  flexflow field convert myCase --timestep 100 --output field.vtu
-  flexflow field convert myCase --audit-only
-  flexflow field convert myCase --xmin -1 --xmax 5 --ymin -2 --ymax 2   # near-wake mesh
+  field convert myCase
+  field convert myCase --timestep 100 --output field.vtu
+  field convert myCase --audit-only
+  field convert myCase --xmin -1 --xmax 5 --ymin -2 --ymax 2   # near-wake mesh
 """)

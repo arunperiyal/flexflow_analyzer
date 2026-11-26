@@ -206,7 +206,7 @@ def execute_list(args):
     if not remotes:
         console.print()
         console.print("[dim]No remotes configured[/dim]")
-        console.print("[dim]Use: ff remote add <name> --user <user> --ip <ip> --password <pass> --path <path>[/dim]")
+        console.print("[dim]Use: ff remote add --name <name> --user <user> --ip <ip> --password <pass> --path <path>[/dim]")
         console.print()
         return
 

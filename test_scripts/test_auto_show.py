@@ -59,7 +59,7 @@ def test_every_case_gets_what_the_readme_says(dummy):
     assert got['case9'].state == 'skipped'
     assert [i.text for i in got['case5'].items if i.kind == 'history'] == [
         'Move RUN_1/riser.othd and .oisd into archive/ as run 2, then clean and compile '
-        '(organise history --update --clean --compile)']
+        '(organise history update clean compile)']
 
 
 def test_a_job_named_for_case1_does_not_make_case1_busy(dummy):
@@ -141,12 +141,23 @@ def test_a_folder_without_auto_conf_is_an_error(dummy, tmp_path):
         gather(resolve_cases(str(lone / 'case2'), tmp_path), 'local')
 
 
-def test_the_remote_must_be_named_and_listed(dummy):
+def test_the_only_listed_remote_is_used_when_none_is_named(dummy):
     case = resolve_cases('case2', dummy / 'bare')
-    with pytest.raises(AutoConfError, match='which remote'):
+    results, confs, _ = gather(case, None)             # the dummy lists one: local
+    assert [c.remote for c in confs.values()] == ['local'] and results
+
+
+def test_with_several_remotes_one_must_be_named_and_listed(dummy):
+    from src.core import cases_file
+    folder = dummy / 'bare'
+    cf = cases_file.read(folder)
+    cf.remotes['cloud2'] = '/elsewhere'
+    cases_file.write(cf)
+    case = resolve_cases('case2', folder)
+    with pytest.raises(AutoConfError, match='more than one'):
         gather(case, None)
-    with pytest.raises(AutoConfError, match="no folder for remote 'cloud'"):
-        gather(case, 'cloud')
+    with pytest.raises(AutoConfError, match="no folder for remote 'nowhere'"):
+        gather(case, 'nowhere')
 
 
 def test_the_case_context(dummy, monkeypatch, capsys):
@@ -165,7 +176,12 @@ def test_the_case_context(dummy, monkeypatch, capsys):
     assert rt.execute_line('auto show --remote local') == 2      # no case set
     assert 'no case given' in capsys.readouterr().out
     assert rt.execute_line('use case:case3') == 0
-    assert rt.execute_line('auto show') == 2                     # no remote set
+    assert rt.execute_line('auto show') == 0                     # the one remote listed
+    from src.core import cases_file
+    cf = cases_file.read(dummy / 'bare')
+    cf.remotes['cloud2'] = '/elsewhere'
+    cases_file.write(cf)
+    assert rt.execute_line('auto show') == 2                     # two: none is chosen
     assert 'which remote' in capsys.readouterr().out
     assert rt.execute_line('auto show --remote local') == 0
     out = capsys.readouterr().out
@@ -175,15 +191,15 @@ def test_the_case_context(dummy, monkeypatch, capsys):
                     'Inputs and case files', 'Steps:', 'Remote:', 'Action:'):
         assert heading in out
     assert 'main 1300105 PENDING, restarts from 700' in out
-    assert '1: run post full case3 --t1 550 --t2 700 --no-remote' in out
+    assert '1: run post full --case case3 --t1 550 --t2 700 --no-remote' in out
     assert rt.execute_line('use case:*') == 0
     assert rt.execute_line('auto show --remote local') == 1      # some cases need you
     out = capsys.readouterr().out
-    assert '12 cases' in out and 'summary' in out
+    assert '15 cases' in out and 'summary' in out
     assert 'PLT files' not in out                                # table only for several
     assert rt.execute_line('auto show --remote local --detail --only plt') == 1
     out = capsys.readouterr().out
-    assert out.count('PLT files') == 11 and 'RST files' not in out   # case9 has none
+    assert out.count('PLT files') == 14 and 'RST files' not in out   # case9 has none
     assert rt.execute_line('auto show --remote local --only nonsense') == 2
 
 
@@ -210,11 +226,13 @@ def test_report_sections_of_a_queued_case(dummy):
                              '(4 steps)')
     assert plt['Binary'] == 'present 750 · broken none'
     assert plt['Skipped'] == '750: the queued job restarts from 700 and computes it again'
-    assert sec['plt'].actions == ['run post full case3 --t1 550 --t2 700 --no-remote']
+    assert sec['plt'].actions == ['run post full --case case3 --t1 550 --t2 700 --no-remote']
     # uploads first (the grid set 400), then the deletion that follows
-    assert sec['rst'].actions[0] == ('case upload rst case3 --t1 400 --t2 400 --freq 400 '
+    assert sec['rst'].actions[0] == ('case upload rst --case case3 --t1 400 --t2 400 --freq 400 '
                                      '--missing --remote local')
-    assert sec['rst'].actions[1].startswith('auto apply: delete .rst of steps 550, 650')
+    assert sec['rst'].actions[1] == ('case organise rst --case case3 --keep-freq 200 '
+                                     '--keep-newest 2 --t1 550 --t2 550')
+    assert dict(sec['rst'].rows)['Thin'] == 'step 550: not multiples of 200'
     assert dict(sec['history'].rows)['Run dir'].startswith('riser.othd steps 501–760')
 
 
@@ -222,7 +240,11 @@ def test_report_needs_and_flags_come_after_state(dummy):
     sec = report_of(dummy, 'case6')
     assert list(sec)[:3] == ['state', 'needs', 'flags']
     assert dict(sec['plt'].rows)['Binary'] == 'present 450, 500 · broken 550'
-    assert sec['plt'].actions[0] == 'case upload plt case6 --t1 450 --t2 500 --missing --remote local'
+    # the check first, then the upload, then the delete that follows from it
+    assert sec['plt'].actions == [
+        'case check plt --case case6 --remote local',
+        'case upload plt --case case6 --t1 450 --t2 500 --missing --remote local',
+        'case organise plt binary --case case6 --t1 450 --t2 500 --remote local']
 
 
 def test_auto_commands_is_plain_text_to_read_or_save(dummy, monkeypatch, capsys):
@@ -232,10 +254,12 @@ def test_auto_commands_is_plain_text_to_read_or_save(dummy, monkeypatch, capsys)
     assert execute_commands(SimpleNamespace(case='*', remote='local')) == 0
     out = capsys.readouterr().out
     assert '\x1b[' not in out                                     # no colour codes
-    assert 'run post full case2 --t1 450 --t2 600 --no-remote    # 1, PLT files' in out
-    assert '#   wait: post job' in out                            # case4
+    assert 'run post full --case case2 --t1 450 --t2 600 --no-remote    # 2, PLT files' in out
+    assert '#   waiting: post job' in out                         # case4
     assert '#   needs you: Main job' in out                       # case7
-    assert '#   auto apply: delete' in out
+    assert 'auto apply:' not in out and 'not built yet' not in out
+    assert 'binary --case case6 --t1 450 --t2 500 --remote local    #' in out     # a command now
+    assert '#   by hand: auto apply does not delete unless asked' in out
 
 
 def test_auto_status_one_line_per_case(dummy, monkeypatch, capsys):
@@ -244,8 +268,10 @@ def test_auto_status_one_line_per_case(dummy, monkeypatch, capsys):
     monkeypatch.chdir(dummy / 'bare')
     assert execute_status(SimpleNamespace(case='*', remote='local')) == 1   # some need you
     out = ' '.join(capsys.readouterr().out.split())
-    assert 'case4 post running 800/1000 post running waits for post job' in out
+    assert 'case4 post running 800/1000 post 1300107 running waits for post job 1300107' in out
+    assert 'case3 queued 760/1000 main 1300105 pending' in out         # the job's id is there
     assert 'case1 done 1000/1000 - nothing' in out
+    assert '15 case(s) · 12 with something to do · 7 need(s) you' in out   # the footer, as in auto show
 
 
 def test_a_change_of_output_frequency_is_not_a_hole(dummy):
@@ -257,32 +283,50 @@ def test_a_change_of_output_frequency_is_not_a_hole(dummy):
     assert plt['Remote'] == ('present 50–500 every 50 (10 steps), 505–560 every 5 (12 steps) · '
                              'missing 565–600 every 5 (8 steps)')
     assert 'Lost' not in plt
-    assert sec['plt'].actions == ['run post full case12 --t1 565 --t2 600 --no-remote']
+    assert sec['plt'].actions == ['run post full --case case12 --t1 565 --t2 600 --no-remote']
 
 
-def test_deletions_say_they_are_not_built_and_agree_with_the_count(dummy):
+def test_every_action_is_a_command_and_the_rest_is_in_rows(dummy):
+    from src.commands.auto.show import resolve_cases as _all
+    from src.core.auto.report import build
+    results, confs, _ = gather(_all('*', dummy / 'bare'), 'local')
+    starts = ('case ', 'run ')
+    for snap, plan in results:
+        for sec in build(snap, plan, confs[snap.dir.parent]):
+            for action in sec.actions:
+                assert action.startswith(starts), (snap.name, action)
+                assert 'not built' not in action and 'auto apply' not in action
     sec = report_of(dummy, 'case6')
-    deletes = [a for s in sec.values() for a in s.actions if 'delete' in a]
-    assert deletes and all('[not built yet' in a for a in deletes)
-    one = [a for a in deletes if 'delete binary PLTs' in a]
-    assert one == ['auto apply: delete binary PLTs, steps 450, 500, once their copy on local is '
-                   'md5-checked [not built yet; by hand: case organise plt case6 '
-                   '--delete-binary --t1 450 --t2 500 --remote local]']
-    # the live-snapshot copy IS done by apply, so it carries no such label
-    live = [a for a in report_of(dummy, 'case2')['history'].actions if a.startswith('auto apply: copy')]
-    assert live and 'not built yet' not in live[0]
+    plt = dict(sec['plt'].rows)
+    assert plt['Delete'].startswith('binary 450, 500: each only once the next file stands in')
+    assert plt['By hand'].startswith('auto apply does not delete unless asked')
+    # the copy of a live history file is a command too
+    hist = report_of(dummy, 'case2')['history']
+    assert 'case upload history --case case2 --live --remote local' in hist.actions
+    assert dict(hist.rows)['Live copy'].startswith('a copy of the live riser.othd/.oisd')
+    # what a section waits for is a row, not an action
+    waiting = dict(report_of(dummy, 'case4')['plt'].rows)['Waiting']
+    assert waiting.startswith('post job') and 'until it ends' in waiting
+def test_a_case_that_needs_you_has_no_deletion_candidates(dummy):
+    sec = report_of(dummy, 'case6')                  # a cut-short binary PLT and a bad post job
+    assert 'auto apply --delete deletes nothing' in dict(sec['plt'].rows)['Deleting']
+    results, _, _ = gather(resolve_cases('case6', dummy / 'bare'), 'local')
+    ctx = results[0][1].ctx
+    assert ctx['delete_hold'] and not any(ctx['delete'].values())
 
 
 def test_a_single_step_reads_as_a_step(dummy):
     from src.core.auto.decide import steps_phrase
     assert steps_phrase([5740]) == 'Step 5740'
     sec = report_of(dummy, 'case3')
-    assert 'delete .rst of steps 550, 650' in sec['rst'].actions[1]
+    # 650 is one of the two newest sets of the run (700 is the restart point); 750 is the earlier run's
+    assert dict(sec['rst'].rows)['Thin'].startswith('step 550')
 
 
-def test_the_newest_set_a_queued_restart_will_recompute_is_said_so(dummy):
+def test_the_sets_a_queued_restart_will_recompute_are_not_the_newest(dummy):
     rows = dict(report_of(dummy, 'case3')['rst'].rows)
-    assert rows['Complete'] == 'newest 750 (the queued job restarts from 700 and computes it again)'
+    assert rows['Complete'].startswith('newest ') and int(rows['Complete'].split()[1]) <= 700
+    assert rows['Old run'].startswith('750: above the queued restart point 700')
     assert dict(report_of(dummy, 'case5')['rst'].rows)['Complete'] == 'newest 500'
 
 
@@ -293,7 +337,7 @@ def test_the_footer_does_not_claim_apply_is_missing(dummy, monkeypatch, capsys):
     execute_show(SimpleNamespace(case='case3', remote='local', detail=False, only=None))
     out = ' '.join(capsys.readouterr().out.split())
     assert 'not built yet).' not in out
-    assert '`auto apply --dry-run` lists what it would do: history, uploads, post jobs. Deleting is not built yet.' in out
+    assert '`auto apply --dry-run` lists what it would do: history, uploads, post jobs; `--delete` adds the deletions.' in out
 
 
 def test_the_rst_section_says_what_the_remote_holds_and_what_is_due(dummy):
@@ -305,7 +349,7 @@ def test_the_rst_section_says_what_the_remote_holds_and_what_is_due(dummy):
     assert sec.subtitle == 'keep_rst 200 · keep_newest_rst 2 · upload_rst 400'
     assert dict(sec.rows)['Remote'] == 'none'
     assert dict(sec.rows)['Upload'] == 'every 400: due 400 (not there)'
-    assert sec.actions == ['case upload rst case12 --t1 400 --t2 400 --freq 400 --missing '
+    assert sec.actions == ['case upload rst --case case12 --t1 400 --t2 400 --freq 400 --missing '
                            '--remote local']
 
 
@@ -344,7 +388,7 @@ def test_a_restore_message_checks_whether_the_remote_has_the_archive(dummy):
         put_remote(dummy, 'case8', f'{ext}_files/archive/riser1.{ext}')
     plan, _ = plan_and_report(dummy, 'case8')
     need = [i.text for i in plan.items if i.kind == 'needs'][0]
-    assert 'local has it: restore with `case download history case8 --archive --remote local`' in need
+    assert 'local has it: restore with `case download history --case case8 --archive --remote local`' in need
 
 
 def test_history_parts_only_on_the_remote_are_flagged(dummy):
@@ -354,10 +398,10 @@ def test_history_parts_only_on_the_remote_are_flagged(dummy):
             put_remote(dummy, 'case8', f'{ext}_files/archive/riser{n}.{ext}')
     plan, sec = plan_and_report(dummy, 'case8')
     assert dict(sec['history'].rows)['Only there'] == 'archive runs 1–8 (on local, not here)'
-    assert sec['history'].actions == ['case download history case8 --archive --remote local']
+    assert sec['history'].actions == ['case download history --case case8 --archive --remote local']
     flags = [i.text for i in plan.items if i.kind == 'flag']
     assert ('local holds archive runs 1–8 that this case does not have (archive/ here: empty), so '
-            'they exist only on local. Bring them back with `case download history case8 '
+            'they exist only on local. Bring them back with `case download history --case case8 '
             '--archive --remote local`.') in flags
     assert plan.ctx['hist_only_remote'][('othd', 'archive')] == list(range(1, 9))
 
@@ -398,3 +442,115 @@ def test_the_dry_run_says_what_the_files_are(dummy):
 def test_the_rst_section_says_which_sets_are_always_kept(dummy):
     rows = dict(report_of(dummy, 'case12')['rst'].rows)
     assert rows['Also kept'] == '600, 400 (the newest 2, whatever the grid)'
+
+
+def test_no_report_line_says_deleting_is_not_built(dummy):
+    for case in ('case3', 'case5', 'case10'):
+        for sec in report_of(dummy, case).values():
+            assert not any('not built' in a for a in sec.actions)
+    thin = [a for a in report_of(dummy, 'case5')['rst'].actions if a.startswith('case organise rst')]
+    assert thin
+    assert 'auto apply --delete' in dict(report_of(dummy, 'case5')['rst'].rows)['By hand']
+
+
+# --- `auto status` offers rows (shellkit 0.1.8) -------------------------------------------
+
+@pytest.fixture
+def offered(monkeypatch):
+    from types import SimpleNamespace
+    rows = []
+    monkeypatch.setattr('shellkit.current_runtime',
+                        lambda: SimpleNamespace(emit=lambda r: rows.extend(r)))
+    return rows
+
+
+def _offered_cases(dummy, monkeypatch, offered, only=None):
+    from types import SimpleNamespace
+    from src.commands.auto.show import execute_status
+    monkeypatch.chdir(dummy / 'bare')
+    offered.clear()
+    execute_status(SimpleNamespace(case='*', remote='local', only=only))
+    assert all(set(r) == {'case'} for r in offered)         # one key: which case
+    return sorted(Path(r['case']).name for r in offered)
+
+
+def test_status_offers_every_case_by_default(dummy, monkeypatch, offered):
+    assert len(_offered_cases(dummy, monkeypatch, offered)) == 15
+    assert _offered_cases(dummy, monkeypatch, offered, 'all') == \
+        _offered_cases(dummy, monkeypatch, offered)
+
+
+def test_status_only_needs_gives_the_cases_that_need_you(dummy, monkeypatch, offered):
+    assert _offered_cases(dummy, monkeypatch, offered, 'needs') == sorted(
+        ['case5', 'case6', 'case7', 'case8', 'case9', 'case11', 'case12'] +
+        [n for n, p in plans(dummy)[0].items() if p.needs_you and n not in
+         ('case5', 'case6', 'case7', 'case8', 'case9', 'case11', 'case12')])
+
+
+def test_status_only_running_and_todo(dummy, monkeypatch, offered):
+    running = _offered_cases(dummy, monkeypatch, offered, 'running')
+    got, _ = plans(dummy)
+    assert running == sorted(n for n, p in got.items()
+                             if p.ctx.get('main_now') or p.ctx.get('post_now'))
+    assert 'case4' in running and 'case1' not in running      # case4: a post job runs
+    todo = _offered_cases(dummy, monkeypatch, offered, 'todo')
+    assert 'case1' not in todo and 0 < len(todo) <= 12        # "12 with something to do"
+
+
+def test_status_with_a_bad_only_says_so_and_offers_nothing(dummy, monkeypatch, offered, capsys):
+    from types import SimpleNamespace
+    from src.commands.auto.show import execute_status
+    monkeypatch.chdir(dummy / 'bare')
+    assert execute_status(SimpleNamespace(case='*', remote='local', only='bogus')) == 2
+    assert 'one of all, needs, todo, running' in capsys.readouterr().out and offered == []
+
+
+def test_status_without_a_shell_or_an_older_one_still_prints_the_table(dummy, monkeypatch, capsys):
+    from types import SimpleNamespace
+    from src.commands.auto.show import execute_status
+    monkeypatch.chdir(dummy / 'bare')
+    monkeypatch.setattr('shellkit.current_runtime', lambda: None)
+    execute_status(SimpleNamespace(case='*', remote='local'))
+    monkeypatch.setattr('shellkit.current_runtime', lambda: SimpleNamespace())    # no emit
+    execute_status(SimpleNamespace(case='*', remote='local'))
+    assert capsys.readouterr().out.count('15 case(s)') == 2
+
+
+def test_status_piped_into_case_show_runs_once_per_picked_case(dummy, monkeypatch, tmp_path, capsys):
+    import io
+    from rich.console import Console
+    from shellkit import Runtime
+    from src.cli.app import create_app
+    monkeypatch.chdir(dummy / 'bare')
+    monkeypatch.setenv('HOME', str(tmp_path / 'home'))
+    out = io.StringIO()
+    rt = Runtime(create_app(), console=Console(file=out, width=200, color_system=None),
+                 err_console=Console(file=out, width=200, color_system=None))
+    rt.execute_line('auto status --case * --remote local --only running | case show')
+    text = out.getvalue()
+    running = [n for n, p in plans(dummy)[0].items()
+               if p.ctx.get('main_now') or p.ctx.get('post_now')]
+    heads = [l for l in text.splitlines() if l.startswith('── ')]
+    assert len(heads) == len(running) >= 2
+    assert all('case:' in h for h in heads) and any('case4' in h for h in heads)
+
+
+def test_status_piped_into_apply_runs_apply_once_per_picked_case(dummy, monkeypatch, tmp_path,
+                                                                 capsys):
+    import io
+    from rich.console import Console
+    from shellkit import Runtime
+    from src.cli.app import create_app
+    monkeypatch.chdir(dummy / 'bare')
+    monkeypatch.setenv('HOME', str(tmp_path / 'home'))
+    out = io.StringIO()
+    rt = Runtime(create_app(), console=Console(file=out, width=200, color_system=None),
+                 err_console=Console(file=out, width=200, color_system=None))
+    rt.execute_line('auto status --case * --remote local --only running | '
+                    'auto apply plt --remote local --dry-run')
+    text = out.getvalue() + capsys.readouterr().out
+    heads = [l for l in text.splitlines() if l.startswith('── ')]
+    assert [h.split('case:')[1] for h in heads][:1] == ['case2'] and len(heads) >= 2
+    # apply's own dry run for the cases that have something for plt (case4 only waits)
+    assert text.count('--dry-run: nothing was done.') >= 2
+    assert 'run post full --t1 5 --t2 115 --freq 5' in text.split('── 4/4  case:case10')[1]

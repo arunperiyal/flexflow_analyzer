@@ -15,7 +15,7 @@ hundreds of MB of data.
 
 This says nothing about whether the PLT is the *right* one (made from the
 current .out, after a restart). That needs the files it came from; see
-plt_covers() for the rule `case organise output` uses.
+plt_covers() for the rule `case organise out` uses.
 """
 
 import os
@@ -49,7 +49,7 @@ class CutShort(Exception):
         self.zone = zone
 
 
-def expected_size(path) -> int:
+def expected_size(path, size: Optional[int] = None, opener=None) -> int:
     """Bytes a complete file with this header has.
 
     Raises CutShort when the file ends before a zone's preamble (so the full
@@ -58,8 +58,9 @@ def expected_size(path) -> int:
     that is cut short or malformed.
     """
     from src.plt.fxplt import PltFile, NPE, FMT_SIZE
-    size = os.path.getsize(path)
-    plt = PltFile(path)
+    if size is None:
+        size = os.path.getsize(path)
+    plt = PltFile(path, opener=opener)
     try:
         f = plt._f
         f.seek(plt._data_start)
@@ -101,17 +102,28 @@ def check_plt(path) -> PltCheck:
         size = path.stat().st_size
     except OSError as e:
         return PltCheck(path, False, f"cannot read: {e.strerror or e}", 0)
+    return _judge(path, size, open)
+
+
+def check_plt_open(name: str, size: int, opener) -> PltCheck:
+    """check_plt for a file that is not here: `opener(name, 'rb')` gives a
+    seekable file (an SFTP file on a remote), `size` is what the remote lists.
+    Only the header and the zone preambles are read, never the data."""
+    return _judge(Path(name), size, opener)
+
+
+def _judge(path: Path, size: int, opener) -> PltCheck:
     if size == 0:
         return PltCheck(path, False, "empty", 0)
     try:
-        with open(path, 'rb') as f:
+        with opener(path, 'rb') as f:
             magic = f.read(len(MAGIC))
     except OSError as e:
         return PltCheck(path, False, f"cannot read: {e.strerror or e}", size)
     if magic != MAGIC:
         return PltCheck(path, False, "not a binary PLT (no #!TDV112 header)", size)
     try:
-        expected = expected_size(path)
+        expected = expected_size(path, size=size, opener=opener)
     except CutShort as e:
         return PltCheck(path, False, f"cut short: {size:,} bytes, {e}", size)
     except Exception:

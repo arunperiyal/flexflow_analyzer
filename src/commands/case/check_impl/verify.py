@@ -1,4 +1,4 @@
-"""`case check plt <case> --verify`: the binary PLTs in binary/ against their
+"""`case check plt --case <case> --remote [NAME]`: the binary PLTs in binary/ against their
 copies on the remote, by size and md5 read now on both sides
 (src/core/transfer/verify.py). Exit code 0 only when every one is verified."""
 
@@ -24,10 +24,18 @@ def _steps(names) -> str:
     return f"{', '.join(steps[:3])} ... {steps[-1]} ({len(steps)})"
 
 
+def _context_remote():
+    """`--remote` with no name: the `use remote:` context, else None (the only remote)."""
+    from shellkit import current_runtime
+    rt = current_runtime()
+    return rt.get('remote') if rt else None
+
+
 def execute_verify(args) -> int:
     from src.cli.context import current_case, current_dir
     from src.core.simflow_config import SimflowConfig
-    from src.core.transfer.cloud import CloudError, open_for_folder
+    from src.core import cases_file
+    from src.core.transfer.cloud import CloudError, open_for_folder, remote_name_for
     from src.core.transfer.ledger import Ledger
     from src.core.transfer.verify import verify_plts
 
@@ -35,7 +43,7 @@ def execute_verify(args) -> int:
     name = getattr(args, 'case', None) or current_case()
     if not name:
         console.print("[red]Error:[/red] No case directory specified.")
-        console.print("Usage:  case check plt <dir> --verify --remote NAME")
+        console.print("Usage:  case check plt [--case NAME] --remote [NAME]")
         return 1
     if is_wildcard_case(name):
         cases = [Path(c['path']) for c in load_cases_from_directory(current_dir())]
@@ -44,10 +52,11 @@ def execute_verify(args) -> int:
             return 1
     else:
         cases = [Path(name)]
-    remote = getattr(args, 'remote', None)
+    remote = getattr(args, 'remote', None) or _context_remote()
     window = _window(getattr(args, 't1', None), getattr(args, 't2', None))
     freq = getattr(args, 'freq', None)
     verbose = bool(getattr(args, 'verbose', False))
+    adopt = bool(getattr(args, 'adopt', False))
 
     clouds, ledgers, code = {}, {}, 0
     try:
@@ -65,15 +74,25 @@ def execute_verify(args) -> int:
                               f"simflow.config, so the PLT names are not known")
                 code = 1
                 continue
+            used = remote_name_for(folder, remote)
             try:
                 if folder not in clouds:
                     clouds[folder] = open_for_folder(folder, remote)
                     ledgers[folder] = Ledger(folder)
+                    if not remote and used:
+                        console.print(f"Using remote: {escape(used)} [dim](the only one in "
+                                      f"{cases_file.FILENAME})[/dim]")
                 cloud = clouds[folder]
                 console.print(f"[bold]PLT verify[/bold]  [dim]{escape(case_dir.name)}: binary/"
                               f"{escape(problem)}.<step>.plt against {escape(cloud.where)}[/dim]")
                 say = (lambda line: console.print(f"  [dim]{escape(line)}[/dim]")) if verbose else None
-                result = verify_plts(case_dir, problem, cloud, remote, ledgers[folder],
+                if adopt:
+                    from src.core.transfer.adopt import adopt_plts
+                    adoption = adopt_plts(case_dir, problem, cloud, used, ledgers[folder],
+                                          window=window, freq=freq, say=say,
+                                          run_dir=cfg.run_dir(case_dir))
+                    _print_adoption(console, adoption)
+                result = verify_plts(case_dir, problem, cloud, used, ledgers[folder],
                                      window=window, freq=freq, say=say,
                                      run_dir=cfg.run_dir(case_dir))
             except CloudError as e:
@@ -86,6 +105,24 @@ def execute_verify(args) -> int:
         for cloud in clouds.values():
             cloud.close()
     return code
+
+
+def _print_adoption(console, adoption) -> None:
+    rows = Table.grid(padding=(0, 2))
+    rows.add_column(no_wrap=True)
+    rows.add_column()
+    if adoption.adopted:
+        rows.add_row("[green]adopted[/green]", _steps(adoption.adopted))
+    for name, why in adoption.refused.items():
+        rows.add_row("[red]not adopted[/red]", f"{escape(name)}: {escape(why)}")
+    if adoption.recorded:
+        rows.add_row("[dim]already recorded[/dim]", _steps(adoption.recorded))
+    console.print(rows)
+    if adoption.adopted:
+        console.print("  [dim]Adopted means: whole (header read on the remote, no download), "
+                      "written after its .out here, md5 taken on the remote. It does not "
+                      "prove the data equals the file it was made from: there is none here "
+                      "to compare with.[/dim]")
 
 
 def _print(console, result) -> None:

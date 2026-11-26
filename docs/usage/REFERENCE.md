@@ -60,38 +60,38 @@ ff                    # Start interactive shell
 ### Case Management
 ```bash
 case show              # Show case info (uses current case)
-case show <case>       # Show specific case info
-case create <name>     # Create new case
-case run <case>        # Submit SLURM jobs
+case show --case <case>       # Show specific case info
+case create --name <name>     # Create new case
+case run --case <case>        # Submit SLURM jobs
 case status [case]     # The case's notes (.casestatus.md) and where it is
-case status update [case] [-m TEXT] [--state STATE]   # edit ($EDITOR), log a line, set the state
+case status update [--case NAME] [-m TEXT] [--state STATE]   # edit ($EDITOR), log a line, set the state
 case status '*'        # State and last log line of every registered case
-case check data <case> # Data file completeness (was: case status)
+case check data --case <case> # Data file completeness (was: case status)
 ```
 
 ### Data Operations
 ```bash
 data show              # Show data (uses current case)
-data show <case>       # Show specific case data
-data stats <case>      # Calculate statistics
+data show [--case NAME]       # Show specific case data
+data stats [--case NAME]      # Calculate statistics
 ```
 
 ### Field Operations
 ```bash
 field info             # Show PLT info (uses current case)
-field info <case>      # Show specific case PLT info
-field extract <case>   # Extract field data
+field info [--case NAME]      # Show specific case PLT info
+field extract [--case NAME]   # Extract field data
 ```
 
 ### File Inspection
 ```bash
-check <file>           # Inspect OTHD/OISD file
+check --file <file>           # Inspect OTHD/OISD file
 ```
 
 ### Visualization
 ```bash
 plot --node 10         # Plot (uses current case)
-plot <case> --node 10  # Plot specific case
+plot [--case NAME] --node 10  # Plot specific case
 compare <case1> <case2> # Compare cases
 ```
 
@@ -145,9 +145,9 @@ data show --node 24
 ### Cross-Project
 ```bash
 cd /project1
-case show CS4SG1U1
+case show --case CS4SG1U1
 cd /project2
-case show CS4SG2U1
+case show --case CS4SG2U1
 ```
 
 ### Explore New Directory

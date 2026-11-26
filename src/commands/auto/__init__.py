@@ -1,31 +1,42 @@
 """
 auto - the per-case workflow for a folder of cases (docs/architecture/auto.md §13)
 
-    auto init [--remote NAME] [--path DIR] [--keep-rst N] [--keep-newest-rst N] [--upload-rst N] [--disk-alert SIZE]
+    auto init [--remote NAME] [--path DIR] [--keep-rst N] [--keep-newest-rst N] [--upload-rst N] [--disk-alert SIZE] [--vtu-cache keep|delete]
                          set a remote's folder and auto's settings in .cases.yml
-    auto show [case] [--remote NAME] [--detail] [--only SECTIONS]
+    auto show [--case NAME] [--remote NAME] [--detail] [--only SECTIONS]
                          what auto would do: labelled sections for a case; the summary
                          table for several (case:*), each in full with --detail
-    auto commands [case] just the commands to run, numbered, as plain text
-    auto status [case]   one line per case
-    auto apply [case] [--remote NAME] [--only history,upload,post] [--dry-run] [--yes]
-                         organise history, upload (checked, never deleting), submit post jobs
-    auto log [case]      (not built yet)
+    auto commands [--case NAME] just the commands to run, numbered, as plain text
+    auto status [--case NAME] [--only needs|todo|running|all]
+                         one line per case; the cases --only picks go to a command after a |
+    auto apply <target> [--case NAME] [--remote NAME] [--delete] [--dry-run] [--yes]
+                         target: history, plt, output, input, rst, all
+                         organise history, upload (checked), submit post jobs; --delete also
+                         deletes what has an md5-checked copy on the remote
+    auto log [--case NAME] [--list] [--log N]
+                         read back the logs of `auto apply` (newest; --list: all runs)
 """
 
+import argparse
+
 from ..base import BaseCommand
-from src.cli.context import case_arg, context_flag
+from src.cli.context import case_flag, context_flag, no_words
 
 SUBCOMMANDS = (('init', "Set a remote's folder and auto's settings in .cases.yml"),
                ('show', 'What auto would do for a case, or every case with case:* (changes nothing)'),
                ('commands', 'Just the commands to run, numbered, as plain text'),
                ('status', 'One line per case: state, steps, jobs, what is next'),
-               ('apply', 'Organise history, upload (checked), submit post jobs; deletes nothing'),
-               ('log', 'What earlier runs did (not built yet)'))
+               ('apply', 'Organise history, upload (checked), submit post jobs; --delete removes checked copies'),
+               ('log', 'What earlier auto apply runs did, from auto_logs/ (--list: every run)'))
 
 
 def _complete_sub(rt, prefix):
     return list(SUBCOMMANDS)
+
+
+def _complete_target(rt, prefix):
+    from .apply import TARGETS
+    return list(TARGETS)
 
 
 class AutoCommand(BaseCommand):
@@ -39,7 +50,12 @@ class AutoCommand(BaseCommand):
         parser = subparsers.add_parser(self.name, add_help=False, help=self.description)
         parser.add_argument('what', nargs='?', metavar='init|show|commands|status|apply|log',
                             help='; '.join(f"{n}: {h}" for n, h in SUBCOMMANDS)).completer = _complete_sub
-        case_arg(parser, help="show: the case folder (default: use case:); '*' for every case in .cases.yml")
+        parser.add_argument('target', nargs='?', metavar='TARGET',
+                            help='apply: history, plt, output, input, rst or all (omit it and '
+                                 'the targets are listed)').completer = _complete_target
+        case_flag(parser, help="The case folder (default: use case:); '*' for every case in "
+                               ".cases.yml")
+        no_words(parser)
         context_flag(parser, 'remote', '--remote', type=str, metavar='NAME',
                      help='the remote (or use remote:NAME); `local` for a folder')
         parser.add_argument('--path', metavar='DIR',
@@ -55,14 +71,26 @@ class AutoCommand(BaseCommand):
                                  'of --keep-rst)')
         parser.add_argument('--disk-alert', metavar='SIZE',
                             help='init: flag running cases whose run directory is bigger (e.g. 200G)')
+        parser.add_argument('--vtu-cache', choices=('keep', 'delete'), metavar='keep|delete',
+                            help='init: delete: the .vtu caches of binary/ may go too (keep, the '
+                                 'default: only a killed render\'s leftovers go)')
         parser.add_argument('--detail', action='store_true',
                             help='show: every case in full, not only the summary table')
         parser.add_argument('--only', metavar='SECTIONS',
                             help='show: only these sections (state, needs, flags, history, '
                                  'plt, out, rst, inputs); apply: only these steps '
-                                 '(history, upload, post); comma-separated')
+                                 '(history, upload, delete, post); comma-separated (apply: deprecated, use a target); '
+                                 'status: which cases go to a command after a |: '
+                                 'needs, todo, running or all (default)')
+        parser.add_argument('--delete', action='store_true',
+                            help='apply: also delete what has an md5-checked copy on the remote '
+                                 '(or use --only delete)')
         parser.add_argument('--dry-run', action='store_true',
                             help='apply: list what would be done, do nothing')
+        parser.add_argument('--list', action='store_true',
+                            help='log: one line per run, newest first')
+        parser.add_argument('--log', type=int, metavar='N',
+                            help='log: the Nth newest run (1 is the newest)')
         parser.add_argument('--yes', action='store_true',
                             help='apply: do not ask before starting')
         parser.add_argument('--force', action='store_true',
@@ -72,6 +100,11 @@ class AutoCommand(BaseCommand):
 
     def execute(self, args):
         what = getattr(args, 'what', None)
+        target = getattr(args, 'target', None)
+        if target is not None and what != 'apply':
+            print(f"Error: auto {what}: unexpected word '{target}'; the case is a flag now: "
+                  f"--case {target}")
+            return 2
         if getattr(args, 'help', False) or what is None:
             from .help_messages import print_auto_help
             print_auto_help()
@@ -92,7 +125,7 @@ class AutoCommand(BaseCommand):
             from .apply import execute_apply
             return execute_apply(args)
         if what == 'log':
-            print("auto log is not built yet; the log of each apply run is in auto_logs/.")
-            return 2
+            from .log import execute_log
+            return execute_log(args)
         print(f"Unknown subcommand: {what} (init, show, commands, status, apply, log)")
         return 2

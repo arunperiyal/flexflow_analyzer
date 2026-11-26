@@ -35,6 +35,7 @@ def execute_init(args) -> int:
                                    upload_rst=getattr(args, 'upload_rst', None),
                                    keep_newest_rst=getattr(args, 'keep_newest_rst', None),
                                    disk_alert=getattr(args, 'disk_alert', None),
+                                   vtu_cache=getattr(args, 'vtu_cache', None),
                                    replace=getattr(args, 'force', False))
     except AutoConfError as e:
         console.print(f"[red]Error:[/red] {escape(str(e))}")
@@ -48,7 +49,7 @@ def execute_init(args) -> int:
     if not changed and not kept:
         console.print("  nothing to change")
     if remote and path_from and any(c.startswith(f"remotes.{remote}:") for c in changed):
-        console.print(f"  [dim]the folder is `remote set-path {escape(path_from)}`[/dim]")
+        console.print(f"  [dim]the folder is `remote set-path --name {escape(path_from)}`[/dim]")
     new_path = cf.remotes.get(remote) if remote else None
     if new_path and new_path != PLACEHOLDER:
         # case X goes to <path>/X: a folder named after another one is likely wrong

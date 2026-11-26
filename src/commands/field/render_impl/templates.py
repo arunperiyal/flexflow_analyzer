@@ -221,7 +221,7 @@ annotations:
 """
 
 ISO_TEMPLATE = """\
-# flexflow field render iso -- configuration
+# field render iso -- configuration
 #
 # An isosurface of a scalar -- Q-criterion or lambda2 for vortex tubes --
 # coloured by another variable, with the body drawn alongside for context.
@@ -247,7 +247,7 @@ views:
 """
 
 SLICE_TEMPLATE = """\
-# flexflow field render slice -- configuration
+# field render slice -- configuration
 #
 # A cut plane through the volume, coloured by a scalar, with the body drawn
 # beside it for context.
@@ -301,7 +301,7 @@ views:
 """
 
 COLORBAR_TEMPLATE = """\
-# flexflow field render colorbar -- configuration
+# field render colorbar -- configuration
 #
 # A standalone legend, matching a slice/iso figure whose own scalar bar was
 # turned off (color.show_scalar_bar: false there). Written as vector PDF or

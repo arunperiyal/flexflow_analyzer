@@ -11,7 +11,7 @@ def print_extract_help():
 Extract nodal data from binary PLT files to CSV (Tecplot-free; pure numpy).
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    flexflow field extract <case_dir> [options]
+    field extract [--case NAME] [options]
 
 {Colors.BOLD}ARGUMENTS:{Colors.RESET}
     {Colors.YELLOW}case_dir{Colors.RESET}              Path to case directory containing binary/ folder
@@ -121,45 +121,45 @@ Extract nodal data from binary PLT files to CSV (Tecplot-free; pure numpy).
 {Colors.BOLD}EXAMPLES:{Colors.RESET}  ({Colors.DIM}--output is required{Colors.RESET})
 
   {Colors.BOLD}Single variable to CSV:{Colors.RESET}
-    flexflow field extract CS4SG1U1 --timestep 1000 --variables Y --zone FIELD --output y.csv
+    field extract --case CS4SG1U1 --timestep 1000 --variables Y --zone FIELD --output y.csv
 
   {Colors.BOLD}Single timestep to a contourable mesh (.vtu):{Colors.RESET}
-    flexflow field extract CS4SG1U1 --timestep 1000 --variables U,QCriterion --zone FIELD --output snap.vtu
+    field extract --case CS4SG1U1 --timestep 1000 --variables U,QCriterion --zone FIELD --output snap.vtu
 
   {Colors.BOLD}Range to a CSV table (one file, 'timestep' column):{Colors.RESET}
-    flexflow field extract CS4SG1U1 --t1 1000 --t2 5000 --variables U,V --zone FIELD --output range.csv
+    field extract --case CS4SG1U1 --t1 1000 --t2 5000 --variables U,V --zone FIELD --output range.csv
 
   {Colors.BOLD}Range to a ParaView time series of meshes (.pvd):{Colors.RESET}
-    flexflow field extract CS4SG1U1 --t1 1000 --t2 5000 --freq 1000 --variables U,QCriterion \\
+    field extract --case CS4SG1U1 --t1 1000 --t2 5000 --freq 1000 --variables U,QCriterion \\
       --zone FIELD --output wake.pvd     # -> wake_1000.vtu, wake_2000.vtu, ... + wake.pvd
 
   {Colors.BOLD}3D subdomain box:{Colors.RESET}
-    flexflow field extract CS4SG1U1 --timestep 1000 --variables U,V --zone FIELD --output box.csv \\
+    field extract --case CS4SG1U1 --timestep 1000 --variables U,V --zone FIELD --output box.csv \\
       --xmin -1.0 --xmax 1.0 --ymin -2.0 --ymax 2.0 --zmin -3.0 --zmax 3.0
 
   {Colors.BOLD}Probe one point, printed on screen:{Colors.RESET}
-    flexflow field extract CS4SG1U1 --timestep 1000 --variables U,V --zone FIELD --probe 2.5,0,0
+    field extract --case CS4SG1U1 --timestep 1000 --variables U,V --zone FIELD --probe 2.5,0,0
 
   {Colors.BOLD}Time signal at three probes -> CSV:{Colors.RESET}
-    flexflow field extract CS4SG1U1 --t1 1000 --t2 5000 --variables U,V,Pressure --zone FIELD \\
+    field extract --case CS4SG1U1 --t1 1000 --t2 5000 --variables U,V,Pressure --zone FIELD \\
       --probe 2.5,0,0 --probe 5,0,0 --probe 10,0,0 --output wake_probes.csv
 
   {Colors.BOLD}Surface pressure from a shared (surface) zone:{Colors.RESET}
-    flexflow field extract BR0SG0U1P0 --t1 50 --t2 5000 --variables X,Y,Z,Pressure \\
+    field extract --case BR0SG0U1P0 --t1 50 --t2 5000 --variables X,Y,Z,Pressure \\
       --zone cyl --output cyl_pressure.csv    # one row per surface node per step
 
   {Colors.BOLD}Interpolated at the exact point rather than the nearest node:{Colors.RESET}
-    flexflow field extract CS4SG1U1 --t1 1000 --t2 5000 --variables Pressure --zone FIELD \\
+    field extract --case CS4SG1U1 --t1 1000 --t2 5000 --variables Pressure --zone FIELD \\
       --probe 0,0,3 --interpolate --output wake_pressure.csv
 
 {Colors.BOLD}WORKFLOW:{Colors.RESET}
 
   1. Discover variables and zones:
-     {Colors.YELLOW}flexflow field info CS4SG1U1 --variables --zones{Colors.RESET}
+     {Colors.YELLOW}field info --case CS4SG1U1 --variables --zones{Colors.RESET}
 
   2. Optionally set context once, then extract without repeating flags:
      {Colors.YELLOW}use zone:FIELD var:U,V t1:1000 t2:5000{Colors.RESET}
-     {Colors.YELLOW}flexflow field extract CS4SG1U1 --output range.csv{Colors.RESET}
+     {Colors.YELLOW}field extract --case CS4SG1U1 --output range.csv{Colors.RESET}
 
 {Colors.BOLD}NOTES:{Colors.RESET}
 

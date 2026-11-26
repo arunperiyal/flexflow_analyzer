@@ -4,7 +4,7 @@ Subcommands: show, table, stats, check
 """
 
 from ..base import BaseCommand
-from src.cli.context import (case_arg, context_flag, freq_arg, last_arg, node_arg, osgid_arg,
+from src.cli.context import (case_flag, no_words, context_flag, freq_arg, last_arg, node_arg, osgid_arg,
                              othid_arg, time_window)
 
 
@@ -30,7 +30,8 @@ class DataCommand(BaseCommand):
         # data show -- what the data holds, not the data itself
         show_parser = data_subparsers.add_parser('show', add_help=False,
                                                 help='What the time-history data holds')
-        case_arg(show_parser, help='Case directory path')
+        case_flag(show_parser)
+        no_words(show_parser)
         show_parser.add_argument('--othd', action='store_true',
                                 help='Report on the othd files only')
         show_parser.add_argument('--oisd', action='store_true',
@@ -45,7 +46,8 @@ class DataCommand(BaseCommand):
         # data table -- the numbers, time down the rows
         table_parser = data_subparsers.add_parser('table', add_help=False,
                                                  help='Tabulate variables over time')
-        case_arg(table_parser, help='Case directory path')
+        case_flag(table_parser)
+        no_words(table_parser)
         context_flag(table_parser, 'var', '--var', '--variable', dest='var', type=str,
                      action='append', metavar='NAME',
                      help='Variable or component to tabulate '
@@ -53,7 +55,7 @@ class DataCommand(BaseCommand):
         time_window(table_parser, 
                     t1_kwargs=dict(metavar='TSID', help='First tsId (alone: from there to the end)'),
                     t2_kwargs=dict(metavar='TSID', help='Last tsId'))
-        last_arg(table_parser, help='Only the last N steps (of the --t1/--t2 window)')
+        last_arg(table_parser, help='Only the last N steps (of the `use t1:`/`t2:` window); not with a typed --t1/--t2')
         node_arg(table_parser, help='Node to read (default: 0)')
         table_parser.add_argument('--output', nargs='?', const=True, type=str, metavar='FILE',
                                  help='Write every row to a .csv instead of printing '
@@ -83,7 +85,8 @@ class DataCommand(BaseCommand):
         # data stats -- one row per variable
         stats_parser = data_subparsers.add_parser('stats', add_help=False,
                                                  help='Summarise variables over a window')
-        case_arg(stats_parser, help='Case directory path')
+        case_flag(stats_parser)
+        no_words(stats_parser)
         context_flag(stats_parser, 'var', '--var', '--variable', dest='var', type=str,
                      action='append', metavar='NAME',
                      help='Variable or component to summarise '
@@ -94,7 +97,7 @@ class DataCommand(BaseCommand):
         time_window(stats_parser, 
                     t1_kwargs=dict(metavar='TSID', help='First tsId (alone: from there to the end)'),
                     t2_kwargs=dict(metavar='TSID', help='Last tsId'))
-        last_arg(stats_parser, help='Only the last N steps (of the --t1/--t2 window)')
+        last_arg(stats_parser, help='Only the last N steps (of the `use t1:`/`t2:` window); not with a typed --t1/--t2')
         node_arg(stats_parser, help='Node to read (default: 0)')
         stats_parser.add_argument('--output', type=str, metavar='FILE',
                                  help='Also write the summary to a .csv')
@@ -126,14 +129,15 @@ class DataCommand(BaseCommand):
                                                        help='Data check subcommands')
         steady_parser = check_subparsers.add_parser('steady', add_help=False,
                                                     help='Whether a variable has settled, and from which tsId')
-        case_arg(steady_parser, help='Case directory path')
+        case_flag(steady_parser)
+        no_words(steady_parser)
         context_flag(steady_parser, 'var', '--var', '--variable', dest='var', type=str,
                      action='append', metavar='NAME',
                      help='Variable or component to check (repeat, or comma-separate)')
         time_window(steady_parser,
                     t1_kwargs=dict(metavar='TSID', help='First tsId (alone: from there to the end)'),
                     t2_kwargs=dict(metavar='TSID', help='Last tsId'))
-        last_arg(steady_parser, help='Only the last N steps (of the --t1/--t2 window)')
+        last_arg(steady_parser, help='Only the last N steps (of the `use t1:`/`t2:` window); not with a typed --t1/--t2')
         node_arg(steady_parser, help='Node to read (default: 0)')
         othid_arg(steady_parser,
                   help='othId (probe set) to read from the othd files (default: the first)')
@@ -199,7 +203,7 @@ class DataCommand(BaseCommand):
         console.print("Work with time-series data from OTHD/OISD files.")
         console.print()
         console.print("[bold]USAGE:[/bold]")
-        console.print("    flexflow data <subcommand> [options]")
+        console.print("    data <subcommand> [options]")
         console.print()
 
         # Create subcommands table
@@ -216,11 +220,11 @@ class DataCommand(BaseCommand):
         console.print(table)
         console.print()
         console.print("[bold]EXAMPLES:[/bold]")
-        console.print("    flexflow data show CS4SG1U1")
-        console.print("    flexflow data show CS4SG1U1 --oisd")
-        console.print("    flexflow data table CS4SG1U1 --var aleDisp_y --node 24 --tail 20")
-        console.print("    flexflow data stats CS4SG1U1 --var aleDisp_y --func max,rms")
-        console.print("    flexflow data stats CS4SG1U1 --var totTrac_y --func maxloc")
+        console.print("    data show --case CS4SG1U1")
+        console.print("    data show --case CS4SG1U1 --oisd")
+        console.print("    data table --case CS4SG1U1 --var aleDisp_y --node 24 --tail 20")
+        console.print("    data stats --case CS4SG1U1 --var aleDisp_y --func max,rms")
+        console.print("    data stats --case CS4SG1U1 --var totTrac_y --func maxloc")
         console.print()
 
 

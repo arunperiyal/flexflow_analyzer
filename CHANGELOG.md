@@ -14,6 +14,407 @@
 - Updated the next-session notes to reference the current architecture
   documentation paths.
 
+### 🖥️ Web UI: the command window
+
+- A read-only log under the plot area (click "Log" to open it) shows what the
+  server is doing: a case being read, maps being written, a request that
+  failed. A "working" spinner shows when a request takes more than 300 ms.
+  `GET /api/log?since=N` serves it; nothing can be sent in.
+
+### 🔎 PLTs only on the remote, not recorded
+
+- `case organise out`, `plt` and `auto show` now say "on the remote, not
+  recorded" for a step whose PLT is on the remote with no ledger record,
+  instead of "no PLT yet", and tell how to make it count: bring it back with
+  `case download plt`, then `case check plt --remote` records what it verifies.
+- `case check plt --remote --adopt [--t1 A --t2 B]` records the PLTs that are
+  only on the remote with no record, without downloading them: the header is
+  read over SFTP (whole), the remote write time must be after the newest
+  `.out` of that step here, the md5 is taken on the remote. Adopted copies
+  then stand in for their `.out` in `case organise out`. It does not prove the
+  data equals the file it was made from. `auto` never adopts.
+- The "not newer than its .out" message gives both times and the likely cause
+  (a restart wrote the `.out` again).
+
+### 🔎 `case check history|out --remote`
+
+- `case check history --remote [NAME]` compares each history file with its copy
+  on the remote, by size and md5 read now: identical, differs, not on the remote,
+  or only on the remote (`archive/` pruned here?). `--archive`, `--cleaned` and
+  `--compiled` pick the groups as before. Read-only.
+- `case check out --remote [NAME]` adds a PLT column: what stands in for each
+  `.out` (its ASCII PLT here, its binary PLT here, or its verified copy on the
+  remote), as `case organise out` judges it. The steps with none are listed as
+  "convert first" with the `run post full` that makes them; the remote is asked
+  only for a step with no good PLT here. Without `--remote` nothing changes.
+
+### 🧪 One test walks every command
+
+`test_scripts/test_command_rules.py` checks `.claude/rules/command-design.md` over
+the whole parser tree (levels, words and values, `--case`, stray words, completion at
+every position), so a command added later that breaks a rule fails. `docs TOPIC` now
+completes its topics.
+
+### ⚠️ `auto`: the case is `--case NAME`, never a word
+
+Phase 44, the last command to follow the rule. Breaking, no aliases; the old
+form is refused and the message says `--case`:
+
+| Before | Now |
+|---|---|
+| `auto show C`, `auto commands C`, `auto status C`, `auto log C` | `auto show --case C` (also `commands`, `status`, `log`) |
+| `auto show '*'` | `auto show --case '*'` |
+| `auto apply plt C --remote R` | `auto apply plt --case C --remote R` |
+
+The target of `auto apply` stays a word. With the case from `use case:` nothing
+changes.
+
+### ⚠️ `run`: the case, the job and the script are flags
+
+Phase 43. The modes stay words. Breaking, no aliases; the old form is refused
+and the message names the flag:
+
+| Before | Now |
+|---|---|
+| `run check mesh CS1`, `run pre CS1`, `run main CS1` | `run check mesh --case CS1`, `run pre --case CS1`, `run main --case CS1` |
+| `run main restart CS1 --time 5000` | `run main restart --case CS1 --time 5000` |
+| `run post full CS1 --t1 0` | `run post full --case CS1 --t1 0` |
+| `run list log CS1` | `run list log --case CS1` |
+| `run sq 1258586`, `run sq watch 5`, `run sq find KEY` | `run sq --job 1258586`, `run sq watch --interval 5`, `run sq find --key KEY` |
+| `run sc 1258586`, `run sc postCS1` | `run sc --job 1258586`, `run sc --name postCS1` |
+| `run sb post.sh --dependency=afterok:1` | `run sb --script post.sh --sbatch-args='--dependency=afterok:1'` |
+
+`auto show` and `auto commands` write `run post MODE --case C ...` and
+`run main restart --case C --time T`.
+
+### ⚠️ Names, values and files are flags
+
+Phase 41. Breaking, no aliases; a value typed as a word is refused and the
+message names the flag:
+
+| Before | Now |
+|---|---|
+| `case create CS9 --ref-case R` | `case create --name CS9 --ref-case R` |
+| `remote add hpc1 --user U` (also `modify`, `delete`, `set-path`) | `remote add --name hpc1 --user U` |
+| `check riser.othd` | `check --file riser.othd` |
+| `field check snap.vtu` | `field check --file snap.vtu` |
+| `template plot single my.yaml` (also `case`) | `template plot single --output my.yaml` |
+| `template script main CASE` | `template script main --case CASE` |
+| `def var DIA 2.0` | `def var --name DIA --value 2.0` |
+| `def time maxTime 7000`, `def freq out 50` | `def time maxTime --value 7000`, `def freq out --value 50` |
+
+`def var|time|freq` take `--case` (also `-c`) from `use case:` like the other
+commands. `docs TOPIC` and the type words (`single`, `main`, `maxTime`, `out`)
+stay words.
+
+### ⚠️ `data`, `plot` and `field`: the case is `--case NAME`, never a word
+
+Phase 40, the same rule as `case`. Breaking, no aliases; a case typed as a word
+is refused and the message says `--case NAME`:
+
+| Before | Now |
+|---|---|
+| `data stats CS1 --var dy`, `data show/table/check steady` | `data stats --case CS1 --var dy` |
+| `plot CS1 --var dy` | `plot --case CS1 --var dy` |
+| `field render iso CS1`, `compute force CS1`, `info`, `extract`, `convert` | `field render iso --case CS1` |
+| `data stats * --func maxloc \| case download plt` | `data stats --case * --func maxloc \| case download plt` |
+
+With the case from `use case:` nothing changes. `field convert` now takes the
+`use case:` case like the others.
+
+### ⚠️ The other `case` commands: the case is `--case NAME`, never a word
+
+Phase 39, the same rule as `case organise`. Breaking, no aliases; the old form
+is refused and the message says what to type:
+
+| Before | Now |
+|---|---|
+| `case show CS1`, `run`, `out` | `case show --case CS1` (also `run`, `out`) |
+| `case check plt CS1 --remote R` | `case check plt --case CS1 --remote R` (also `run`, `history`, `config`, `def`, `out`, `data`, `all`) |
+| `case upload plt CS1 --t1 5`, `download rst CS1` | `case upload plt --case CS1 --t1 5` |
+| `case upload CS1 --files ...` | `case upload --case CS1 --files ...` |
+| `case status CS1`, `case status update CS1` | `case status --case CS1`, `case status update --case CS1` |
+| `case domain body CS1 --init` | `case domain body --init --case CS1` |
+
+With the case from `use case:` nothing changes. `auto show`, `auto commands`
+and the hints `field compute` prints write the new form. Completion: the words
+(`plt`, `rst`, `update`, `body`, ...) now complete straight after the command.
+
+### 🛡️ Flags are typed in full, and a typed flag displaces `use` values
+
+Rules 4 and 6 of `.claude/rules/command-design.md`, for every command (Phase 38).
+
+- **No abbreviations, anywhere.** `--no-ver` for `--no-verify`, `--dry` for
+  `--dry-run` and the like are refused (`unrecognized arguments`). Tab fills in
+  the full flag.
+- **A typed `--t1` or `--t2` makes a `use last:N` ignored**, and a typed `--t1`
+  or `--t2` makes a `use time:S` fill neither end; each says so
+  (`last: 1000 (use) ignored: --t1 typed`).
+- **Breaking:** typing `--last` together with `--t1` or `--t2` is refused
+  (`data table|stats|check steady`, `plot`). One of them can still come from
+  `use`: `use t1:5000` and a typed `--last 1000` cuts that window.
+
+### ⚠️ `case organise`: the case is `--case NAME`, never a word
+
+The rules for every command are in `.claude/rules/command-design.md`;
+`case organise` is the first to follow them (Phase 37). Breaking, no aliases:
+
+| Before | Now |
+|---|---|
+| `case organise history CS1 update clean` | `case organise history update clean --case CS1` |
+| `case organise plt CS1 binary --t1 0` | `case organise plt binary --case CS1 --t1 0` |
+| `case organise out CS1`, `rst`, `vtu` | `case organise out --case CS1` (also `rst`, `vtu`) |
+| a shortened flag (`--no-ver`) | refused: flags are typed in full |
+
+- With the case from `use case:` nothing changes except that `update` and
+  `ascii` now complete straight after `history` and `plt`.
+- Before it asks, each run prints the values it uses, each tagged `(typed)` or
+  `(use)`: `Values used: case CS1 (use) · t1 9850 (typed)`. Over `--case *`
+  each case has its own line and its own question.
+- No case given says what to type, instead of showing the help.
+- `auto show` and `auto commands` write the new form.
+- The messages of `history verify` say `run clean` / `run compile`, not the old
+  flags.
+
+### 🐛 Tab completion of `case organise plt` and `history`
+
+- With the case set by `use case:`, `case organise plt <Tab>` offered only
+  directories and `plt a<Tab>` nothing, because the first word is read as an
+  action. It now offers `ascii` / `binary` (and `update`, `clean`, ... for
+  `history`) beside the case directories. After a typed case it worked already.
+
+### 🗑️ `case organise out --no-verify`
+
+- Deletes every `.out` in `--t1`/`--t2` without a PLT standing in for it, for
+  steps you do not want to convert. It needs a range, lists the steps that
+  have no PLT (their field data is lost), asks for confirmation (`--yes`
+  skips it, `--dry-run` lists) and is never passed by `auto`.
+
+### 🔗 Pipe rows between commands
+
+- `data stats --func maxloc` (also `minloc`, `zeroloc`) now offers the PLT it
+  chose, per case, to the command after a `|`, which runs once per case with
+  `case` and `time` set from it:
+  `use case:* last:1000 node:25 var:dy; data stats --func maxloc | case
+  download plt`. Needs shellkit 0.1.8; a `|` into `grep` and the like is
+  unchanged.
+- `data check steady` offers the tsId from which the rest of the window is
+  steady, per case, as `t1` (with `var` when several variables are checked), so
+  the next command works on the settled part:
+  `use case:* node:25 var:dy; data check steady | data stats --func rms,std`.
+  A variable with no steady start offers nothing, and it is said.
+- `auto status --only needs|todo|running|all` (default `all`) offers the cases
+  it picks to the command after a `|`, which runs once per case:
+  `auto status * --only needs | case show`,
+  `auto status * --only todo | auto apply plt`. The table and the exit code are
+  as before; `auto apply` still asks per case unless `--yes`.
+
+### ⚠️ `case organise`: `--yes`, and `vtu` asks and deletes
+
+Breaking (the old forms are gone, no aliases):
+
+| Before | Now |
+|---|---|
+| `--no-confirm` (organise) | `--yes` (also `-y`) |
+| `case organise vtu` (listed only) and `vtu --clean` (deleted) | `case organise vtu` lists, asks and deletes; `--dry-run` only lists |
+| `vtu --keep-orphans` | the default: a `.vtu` with no `.plt` is kept; `--orphans` deletes it too |
+| `organise plt CASE --delete-ascii --delete-binary` | `organise plt CASE ascii binary` |
+| `organise history CASE --update --clean 1,3 --compile --verify --prune` | `organise history CASE update clean 1,3 compile verify prune` |
+| `case check plt CASE --verify --remote NAME` | `case check plt CASE --remote [NAME]` |
+
+`--examples` is gone from every `case` command (show, create, run, organise and
+its subcommands, upload, download): `-h` prints the help and then its examples.
+The `organise` subcommands share one definition of `--log`, `-y/--yes`,
+`--dry-run`, `-v` and `-h`.
+
+Giving `case check plt --remote` is what asks for the comparison with the remote (a leftover
+`use remote:` does not turn it on); with no NAME it is the `use remote:`
+context, else the only remote `.cases.yml` lists.
+
+The actions run in the order the command has always run them (`update`,
+`clean`, `compile`, `verify`, `prune`), whatever order they are typed in. With
+`use case:` set, the case may be left out (`organise plt binary`). The old
+flags are refused.
+
+`vtu --leftovers` stays. `auto`'s commands follow (`case organise vtu CASE
+--leftovers`).
+
+### 🌐 The only remote is the default
+
+- When a folder's `.cases.yml` lists exactly one remote, `case check plt`,
+  `case organise out/plt` and `auto` use it without `--remote` or `use
+  remote:`; `case check plt --remote` says "Using remote: NAME (the only one in
+  .cases.yml)". With two or more, none is chosen for you (the error says so).
+- Fixed: `auto init --vtu-cache delete` wrote an `auto:` key `.cases.yml`
+  refused to read back.
+
+### 🗑️ `case organise plt binary --no-verify`
+
+- `--no-verify` does not ask the remote: the binary PLT files that are whole
+  here are deleted whether or not a copy is there. For a machine that is not
+  the server. It says so, a file cut short is still kept, and the usual
+  confirmation is asked (`--yes` skips it). Without it nothing changes:
+  no remote, nothing deleted; the error now names the flag. `auto` never
+  passes it, and `--delete-ascii` and `out` do not take it (nothing else would
+  stand in for what they delete).
+
+
+### 🧹 `auto` and the `.vtu` caches
+
+- `auto show` counts the `.vtu` files `field render` leaves in `binary/` (the
+  PLT section's `VTU` row), and `auto apply --delete` clears a killed render's
+  leftovers (`.partial`, `.deriving`) once a day old. The caches whose PLT is
+  here go too with `auto.vtu_cache: delete` (`auto init --vtu-cache delete`;
+  the default is `keep`); a cache whose PLT is gone is never deleted.
+- `case organise vtu --clean` takes `--leftovers` (only the killed render's
+  files) and `--keep-orphans` (leave the ones with no PLT).
+
+### 📋 `auto status`
+
+- The `job` column names the job (`main 1234695 pending`, not `main pending`),
+  and a footer counts the cases, those with something to do and those that
+  need you, as `auto show` does.
+
+### 🐛 `auto show`: a queued restart and the restart sets above it
+
+- With a restart queued from step T, the sets above T belong to the earlier run
+  (the queued job computes those steps again). `Complete` no longer names one of
+  them as the newest, they are listed on an `Old run` row, and `keep_newest_rst`
+  no longer counts them: the newest sets kept are the newest at or below T. So
+  one more set at or below T stays, where an earlier run's set used to take its
+  place; nothing is deleted that was not before.
+
+### 📜 `auto log`
+
+- `auto log` reads back what `auto apply` did: the newest run's log in
+  `auto_logs/`, one line per action, failures in red, exit status 1 when a step
+  failed. `auto log C1` keeps one case's lines (and the run's own start and
+  end); `auto log --list` shows every run on one line (when, cases, steps,
+  failed, the command, and a note when a run has no end line); `auto log --log
+  2` reads the second newest. From inside a case it reads the folder above.
+
+### 🐚 Shell: `version comment clear` and `\` continuation (shellkit v0.1.7)
+
+- `version comment clear` clears every comment, after asking (`--yes` does
+  not ask); `version comment clear 2 4` clears those numbers and says so for a
+  number that is not there. `version comment --remove N` is as before. The
+  comment text `clear` alone can no longer be saved.
+- In the shell, a line ending in `\` goes on at the next line (a `…` marks it),
+  as in bash: the lines join into one command, which is one history entry.
+  Two backslashes at the end are an escaped backslash and run as usual.
+- `requirements.txt` pins shellkit v0.1.7.
+
+### 🐛 `auto show` and a post job that ended while the run went on
+
+- When a post job ended COMPLETED while the main job was still writing `.out`,
+  and its log has no `started: steps a..b` line, `auto` read what the job was
+  given only from `binary/`, which is empty once the PLTs are uploaded. It then
+  said the `.out` written meanwhile should have been converted and suggested no
+  `run post`. It now also counts the PLTs on the remote written while the job
+  ran, so those steps get their `run post` command.
+
+### 🐛 Upload to a case the remote does not have
+
+- `case upload` of a case whose folder is not on the remote (its own upload
+  failed, or carried nothing) no longer prints `.casestatus.md not carried: …
+  [Errno 2] No such file`. One line says the case is not on the remote yet and
+  that the notes and `.restarts` were left; upload the case first.
+
+### 📖 Help examples start with the command
+
+- The usage lines and examples in every `--help` / `--examples` text, and in
+  `docs/`, no longer start with `flexflow `: in the shell you type `case show
+  C1`, not `flexflow case show C1`. The old `flexflow new ...` examples of
+  `case create` now read `case create ...`. `flexflow --completion` and
+  `flexflow --help`, run from bash, keep the name.
+
+### 📈 `plot --run`
+
+- `plot --var dy --run` reads the `.othd` / `.oisd` in the case's run directory
+  (`dir:` of `simflow.config`) instead of the history: what a job is writing
+  now, before `case organise history --update` archives it. A last step that is
+  still being written is left out with a warning; the job's file is not
+  touched. `--run` and `--archive` cannot be given together.
+
+### 🧹 `case organise history --clean RUNS`
+
+- `--clean 1,2,6` (also `1-3`, `1,3-5`; ascending only) cleans only those runs
+  of `archive/` and makes `cleaned/` hold exactly them, renamed `riser1..N` in
+  the order given (`cleaned/riser3` is made from `archive/riser6`). Files
+  `cleaned/` held before are removed after a question that lists them;
+  `archive/` is never changed. For abandoned runs that must not count.
+- `cleaned/.runs.json` records which archive run each cleaned file came from
+  and which runs were left out. `--compile`, `--verify` and the readers
+  (`plot`, `data`, `case check`) follow it; a job archived afterwards is read
+  as a new run.
+- `--prune` refuses while that record stands. A plain `--clean` asks, cleans
+  every run and removes the record.
+
+### 📈 `plot --archive`
+
+- `plot --var tty --archive 6` reads only `archive/riser6` of the othd and
+  oisd files; `--archive 1,3` or `--archive 2-4` joins those runs in order
+  (ascending only; the later run wins a step both wrote); a bare `--archive`
+  is every archived run. Without it `plot` reads the whole history as before.
+  To tell a spike in the solver's files from one made by the compile.
+
+### 🗑 `auto apply --delete`: the delete stage
+
+- `auto apply --delete` (or `--only delete`) deletes local files whose copy on
+  the remote passes an md5 check made at that moment: the ASCII PLT, the binary
+  PLT and the `.out` of a step, in the order `history → upload → delete → post`.
+  A plain `auto apply` still deletes nothing.
+- Restart sets off the `auto.keep_rst` grid are deleted without a copy; the
+  question says so, with the number of sets and their size.
+- Each file is checked again right before it goes; one that fails is left and
+  reported. A case that needs you, has a post job in the queue, or whose queue
+  or remote could not be read gets no deletion. A copy whose md5 differs puts
+  the case under *needs you*. Every file is a line in the run log, and the case
+  gets one line in `.casestatus.md`.
+- `auto show` and `auto commands` still list the delete commands for you to
+  run by hand; the `By hand` row now says `auto apply --delete` does it with
+  the md5 check made right before each file goes. A case that needs you shows
+  "Deleting: none".
+- With a target (`auto apply plt --delete`) only that target's files go: `plt`
+  the ASCII and binary PLTs, `output` the `.out`, `rst` the restart sets.
+
+### 🧹 `case organise out` and `case organise rst`
+
+- `case organise output` is split in two: `out` deletes the `.out` files a
+  whole, newer PLT stands in for; `rst` thins the `.rst` (`--keep-freq`,
+  `--keep-newest`). The `output` word and its `--all-out` / `--keep-out`
+  flags are gone.
+- `auto show`, `auto commands` and the web flowchart print the new commands.
+  The `.out` delete command no longer depends on `auto.keep_rst`.
+
+### ▶ `auto apply <target>`
+
+- `auto apply` now takes a target: `history`, `plt`, `output`, `input`, `rst`
+  or `all` (`auto apply plt BR0SG0U1P0 --remote cloud --dry-run`). Each runs
+  only the steps `auto show` lists for that part of the case. With no target
+  it does nothing and lists the targets.
+- `--only` still works and means `all` limited to those steps; it is
+  deprecated.
+- `--dry-run` also lists the check and delete commands as `not run by apply`
+  (the delete ones run with `--delete`, see below).
+
+### 📋 `auto show`: every Action is a command
+
+- The Action list of each section is now only commands, in the order `auto
+  apply` takes them, so you can read what it will do and run any of them
+  yourself. For PLT files: `case check plt --verify`, `run post`, `case
+  upload plt`, `case organise plt --delete-ascii`, `case organise plt
+  --delete-binary`. The same for History, OUT files, RST files and Inputs.
+- The sentences are gone from Action (`auto apply: delete ... [not built
+  yet; by hand: ...]`, `wait: ...`). What is not a command is a row:
+  `Waiting`, `Why`, `Delete`, `Thin`, `Live copy`, `By hand`.
+- `auto commands` prints the same list; the waits and notes are comments.
+- **`case upload history --live`** sends the run directory's `.othd`/`.oisd`
+  while a job is still writing them, as a snapshot. It is the command behind
+  the "copy of the live history" that `auto apply` already made.
+- `auto apply` runs no delete command unless `--delete` is given; the `By
+  hand` row says so.
+
 ### 🔗 `case organise plt` and `output`: deleting along the chain
 
 A file is now deleted only when the next form of the same data stands in for

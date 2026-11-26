@@ -54,7 +54,7 @@ class Item:
     topic: str = 'other'        # the heading it is shown under: TOPIC_OF[kind] unless given
 
 
-AUTO_ONLY = 'auto apply: '      # an action only `auto apply` carries out, not a command to type
+AUTO_ONLY = 'auto apply: '      # no action starts with this any more (every one is a command)
 
 TARGETS = ('history', 'plt', 'output', 'rst', 'input')
 
@@ -64,9 +64,11 @@ class PlanStep:
     """One thing the plan has done for a case, as `auto show` lists it and
     `auto apply` runs it: show and apply both read plan.steps."""
     target: str                 # history | plt | output | rst | input
-    kind: str                   # what carries it out: history | upload | post
+    kind: str                   # what carries it out: history | upload | post | check | delete
     key: str                    # which step of its target: organise, upload-history, live,
-    #                             post, upload-plt, upload-rst, upload-rst-final, upload-inputs
+    #                             check-plt, post, upload-plt, delete-ascii, delete-binary,
+    #                             delete-out, upload-rst, upload-rst-final, thin-rst,
+    #                             upload-inputs
     command: str                # the command, as the user would type it
     files: Dict[str, int] = field(default_factory=dict)     # upload: relative path -> bytes
     note: str = ''              # why, or what it waits for
@@ -145,6 +147,23 @@ def _ended_at(job) -> Optional[float]:
         return datetime.strptime(job.end[:19], '%Y-%m-%dT%H:%M:%S').timestamp()
     except (ValueError, TypeError, AttributeError):
         return None
+
+
+def runs_apart(steps, others):
+    """`steps` split into runs (first, last) so that no step of `others` lies inside a run:
+    a range command cannot touch a file that is not in the list."""
+    steps, others = sorted(set(steps)), sorted(set(others) - set(steps))
+    runs, start, prev = [], None, None
+    for t in steps:
+        if start is not None and any(prev < o < t for o in others):
+            runs.append((start, prev))
+            start = None
+        if start is None:
+            start = t
+        prev = t
+    if start is not None:
+        runs.append((start, prev))
+    return runs
 
 
 def _post_jobs(todo: List[int], freq: int, ascii_steps) -> Tuple[List[Tuple[int, int, int, str]], List[int]]:
@@ -231,7 +250,7 @@ def _folder_rule(w):
                              f"{r['first']}, {r.get('part', '?')}) but no history part starts "
                              f"there (they start at {', '.join(map(str, snap.run_starts))}). "
                              f"Check with `case check history`; .restarts is only rewritten by "
-                             f"`case organise history --clean`.")
+                             f"`case organise history clean`.")
     # run numbers that skip: history of a run that is in neither archive/ nor cleaned/
     for ext, h in snap.history.items():
         have_runs = set(h.archive) | set(h.cleaned)
@@ -249,18 +268,18 @@ def _folder_rule(w):
         lacking = sorted({(ext, n) for ext, h in snap.history.items()
                           for n in set(h.cleaned) - set(h.archive)})
         if cloud is None:
-            how = (f"restore it with `case download history {name} --archive --remote {conf.remote}` "
+            how = (f"restore it with `case download history --case {name} --archive --remote {conf.remote}` "
                    f"if {conf.remote} has it (it could not be listed)")
         else:
             there = [(ext, n) for ext, n in lacking
                      if f"{ext}_files/archive/{p}{n}.{ext}" in cloud]
             if len(there) == len(lacking):
                 how = (f"{conf.remote} has it: restore with "
-                       f"`case download history {name} --archive --remote {conf.remote}`")
+                       f"`case download history --case {name} --archive --remote {conf.remote}`")
             elif there:
                 how = (f"{conf.remote} has only some of it ("
                        f"{', '.join(f'{e} run {n}' for e, n in there)}): restore those with "
-                       f"`case download history {name} --archive --remote {conf.remote}`")
+                       f"`case download history --case {name} --archive --remote {conf.remote}`")
             else:
                 how = (f"{conf.remote} has no archive/ copy either, so it cannot be restored "
                        f"from there")
@@ -293,7 +312,7 @@ def _folder_rule(w):
                          f"{'they exist' if len(gone_archive) > 1 else 'it exists'} only on "
                          f"{conf.remote}. Bring "
                          f"{'them' if len(gone_archive) > 1 else 'it'} back with "
-                         f"`case download history {name} --archive --remote {conf.remote}`.")
+                         f"`case download history --case {name} --archive --remote {conf.remote}`.")
 
     w.broken_rule = broken_rule
 
@@ -315,8 +334,10 @@ def _history(w):
                 if stale:
                     plan.uploads.update(stale)
                     plan.step('history', 'upload', 'live',
-                              AUTO_ONLY + f"copy the live {p}.othd/.oisd to {conf.remote} "
-                                          f"({_size_text(sum(stale.values()))})", files=stale)
+                              f"case upload history --case {name} --live --remote {conf.remote}",
+                              files=stale,
+                              note=f"a copy of the live {p}.othd/.oisd "
+                                   f"({_size_text(sum(stale.values()))}), refreshed each run")
                     plan.add('upload', f"A copy of the live {p}.othd and {p}.oisd "
                                        f"({_size_text(sum(stale.values()))}), refreshed each run")
         elif not broken_rule:
@@ -324,10 +345,10 @@ def _history(w):
             n = max(numbers, default=0) + 1
             plan.ctx['organise'] = ('update', n)
             plan.step('history', 'history', 'organise',
-                      f"case organise history {name} --update --clean --compile")
+                      f"case organise history update clean compile --case {name}")
             plan.add('history', f"Move {snap.run_rel}/{p}.othd and .oisd into archive/ as run "
                                 f"{n}, then clean and compile "
-                                f"(organise history --update --clean --compile)")
+                                f"(organise history update clean compile)")
             organising = True
     if not organising and not broken_rule:
         # a run that a later run rewrites from its first step on has nothing left to clean
@@ -341,10 +362,10 @@ def _history(w):
         if uncleaned:
             plan.ctx['organise'] = ('clean', uncleaned)
             plan.step('history', 'history', 'organise',
-                      f"case organise history {name} --clean --compile")
+                      f"case organise history clean compile --case {name}")
             plan.add('history', f"Clean and compile archive run(s) "
                                 f"{', '.join(map(str, uncleaned))}, not yet in cleaned/ "
-                                f"(organise history --clean --compile)")
+                                f"(organise history clean compile)")
             organising = True
     if cloud is not None:
         hist = {k: v for k, v in snap.files.items() if k.startswith(('othd_files/', 'oisd_files/'))
@@ -364,7 +385,7 @@ def _history(w):
         if organising or hist:
             # once organised, the plan made again lists the files to send
             plan.step('history', 'upload', 'upload-history',
-                      f"case upload history {name} --remote {conf.remote}",
+                      f"case upload history --case {name} --remote {conf.remote}",
                       files={} if organising else hist,
                       note='once the history is organised' if organising else '')
         if organising:
@@ -515,10 +536,16 @@ def _post(w):
         ended_at = _ended_at(last_post) if last_post else None
         given = snap.post_windows.get(last_post.jobid) if last_post else None
         if given is None and last_post and ended_at:
-            # no "post job N started: steps a..b" line: the steps it made are the binary
-            # PLTs written while it ran, so a later step was not given to it
+            # no "post job N started: steps a..b" line: the steps it made are the PLTs
+            # written while it ran, here in binary/ or (once binary/ is emptied after the
+            # upload) on the remote, so a later step was not given to it
             began = _parse_time(last_post.start)
-            made = [t for t, when in snap.binary_time.items()
+            times = dict(snap.binary_time)
+            for key, when in snap.cloud_mtime.items():
+                m = re.match(rf'binary/{re.escape(p)}\.(\d+)\.plt$', key)
+                if m:
+                    times.setdefault(int(m.group(1)), when)
+            made = [t for t, when in times.items()
                     if began is not None and began - 60 <= when <= ended_at + 120]
             if made:
                 given = (min(made), max(made))
@@ -577,7 +604,7 @@ def _post(w):
                     for n, (a, b, d, mode) in enumerate(jobs):
                         freq_part = f" --freq {d}" if (len(jobs) > 1 or d != f) else ''
                         plan.step('plt', 'post', 'post',
-                                  f"run post {mode} {name} --t1 {a} --t2 {b}{freq_part} "
+                                  f"run post {mode} --case {name} --t1 {a} --t2 {b}{freq_part} "
                                   f"--no-remote", now=(n == 0),
                                   note='' if n == 0 else 'after the post job before it has ended')
                         count = len(range(a, b + 1, d))
@@ -620,7 +647,7 @@ def _plt_upload(w):
         # an earlier run's PLT in place after a restart
         flag = '' if set(up) & set(plan.ctx.get('stale_plt') or []) else ' --missing'
         plan.step('plt', 'upload', 'upload-plt',
-                  f"case upload plt {name} --t1 {up[0]} --t2 {up[-1]}{flag} "
+                  f"case upload plt --case {name} --t1 {up[0]} --t2 {up[-1]}{flag} "
                   f"--remote {conf.remote}", files=plts)
         plan.add('upload', f"Binary PLTs, {steps_phrase([int(k.split('.')[1]) for k in plts], f).lower()}: "
                            f"{_size_text(sum(plts.values()))}")
@@ -667,12 +694,12 @@ def _rst_upload(w):
         grid_due = [t for t in sorted(todo_rst) if t != final]
         if grid_due:
             plan.step('rst', 'upload', 'upload-rst',
-                      f"case upload rst {name} --t1 {grid_due[0]} --t2 {grid_due[-1]} "
+                      f"case upload rst --case {name} --t1 {grid_due[0]} --t2 {grid_due[-1]} "
                       f"--freq {conf.upload_rst} --missing --remote {conf.remote}",
                       files={k: v for t in grid_due for k, v in todo_rst[t].items()})
         if final in todo_rst:
             plan.step('rst', 'upload', 'upload-rst-final',
-                      f"case upload rst {name} --t1 {final} --t2 {final} --missing "
+                      f"case upload rst --case {name} --t1 {final} --t2 {final} --missing "
                       f"--remote {conf.remote}", files=dict(todo_rst[final]))
         note = f", {'including' if len(todo_rst) > 1 else 'the'} final set of the finished run" \
             if final in todo_rst else ''
@@ -708,7 +735,7 @@ def _input_upload(w):
     if inputs:
         plan.uploads.update(inputs)
         plan.step('input', 'upload', 'upload-inputs',
-                  f"case upload {name} --files '{','.join(sorted(inputs))}' "
+                  f"case upload --case {name} --files '{','.join(sorted(inputs))}' "
                   f"--remote {conf.remote}", files=inputs)
         plan.add('upload', f"Inputs and case files: {len(inputs)} files "
                            f"({', '.join(sorted(inputs)[:4])}{', ...' if len(inputs) > 4 else ''})")
@@ -726,13 +753,78 @@ def _broken_plts(w):
 def _deletions(w):
     """What may go once its copy on the cloud is checked (not carried out yet)."""
     snap, conf, plan = w.snap, w.conf, w.plan
-    f, cloud, post_now, running, covered, provisional, local_ok, stale_rst = \
-        w.f, w.cloud, w.post_now, w.running, w.covered, w.provisional, w.local_ok, w.stale_rst
+    p, f, cloud, post_now, running, covered, provisional, local_ok, stale_rst, stale_plt, sacct_ok = \
+        w.p, w.f, w.cloud, w.post_now, w.running, w.covered, w.provisional, w.local_ok, \
+        w.stale_rst, w.stale_plt, w.sacct_ok
+    state, reached = w.state, w.reached
+    for rel, e in sorted(snap.ledger.items()):
+        if e.get('mismatch'):
+            plan.add('needs', f"{rel}: the copy on {conf.remote} had another md5 than this file "
+                              f"when a deletion was tried ({e['mismatch']}). Find out which is "
+                              f"right, then send it again.")
+
+    # -- deletions, once the copies on the cloud are checked ----------------------
+    # Two lists. The commands and rows `auto show` prints (ascii, binary, outs, thin) are for
+    # the hand commands, which check every file along the chain when they run. The candidates
+    # of `auto apply --delete` (cand_*, plan.ctx['delete']) are explicit files, held back as
+    # a whole while the case needs you (auto.md 13.13); the executor checks each again.
     if cloud is not None and not post_now:
         gone = [t for t in covered if not provisional(t)]
         outs = [t for t in gone if t in snap.out and (not running or t in snap.settled)]
         ascii = [t for t in gone if t in snap.ascii]
         binary = [t for t in gone if local_ok(t)]
+        cand_binary, cand_ascii, cand_outs, no_mtime = [], [], [], []
+        hold = [i.text for i in plan.items if i.kind == 'needs'
+                and not i.text.startswith('Main job')]
+        hold += [f"binary/{p}.{t}.plt is broken: {c.reason}" for t, c in sorted(snap.binary.items())
+                 if not c.ok]
+        plan.ctx['delete_hold'] = hold
+        if sacct_ok:
+            def plt_rel(t):
+                return f"binary/{p}.{t}.plt"
+
+            def entry(t):
+                e = snap.ledger.get(plt_rel(t))
+                return e if e and e.get('verified') == 'md5' and e.get('md5') else None
+
+            def written(t):
+                """When the binary PLT of step t was written: its mtime here, or the one the
+                ledger kept when it was sent (None: unknown)."""
+                if t in snap.binary:
+                    return snap.binary_time.get(t)
+                e = entry(t)
+                return e.get('mtime') if e else None
+
+            def has_copy(t):
+                """The remote holds a file of that name and size (md5 is the executor's)."""
+                there = cloud.get(plt_rel(t), 0)
+                if t in snap.binary:
+                    return snap.binary[t].ok and there == snap.binary[t].size and there > 0
+                e = entry(t)
+                return bool(e and there and there == e.get('size')
+                            and not stale_plt(t))
+
+            steps = sorted(t for t in set(snap.binary) | set(snap.out) | snap.ascii
+                           | {int(m.group(1)) for k in cloud
+                              for m in [re.match(rf'binary/{re.escape(p)}\.(\d+)\.plt$', k)] if m}
+                           if not provisional(t))
+            if not hold:
+                for t in steps:
+                    if not has_copy(t):
+                        continue
+                    if t in snap.binary:
+                        cand_binary.append(t)
+                    wr = written(t)
+                    if t in snap.ascii or t in snap.out:
+                        if wr is None:
+                            no_mtime.append(t)
+                            continue
+                        if t in snap.ascii and wr > snap.ascii_time.get(t, 0):
+                            cand_ascii.append(t)
+                        if (t in snap.out and t in snap.settled
+                                and wr > snap.out_time.get(t, 0)):
+                            cand_outs.append(t)
+            plan.ctx['delete_no_mtime'] = no_mtime
         parts = []
         if ascii:
             parts.append(f"ASCII PLTs, {steps_phrase(ascii, f).lower()}")
@@ -745,24 +837,111 @@ def _deletions(w):
             keep = set()
             if snap.restart_tsid is not None:
                 keep.add(snap.restart_tsid)
+            # sets above a queued restart point are the earlier run's, which the queued job
+            # computes again: they are not among the newest, and not what is kept as newest
             complete = sorted(t for t, n in snap.rst.items() if snap.nsg and n == snap.nsg
-                              and not stale_rst(t))
+                              and not stale_rst(t) and not provisional(t))
             newest_sets = complete[-conf.keep_newest_rst:]
             keep.update(newest_sets)
             plan.ctx['rst_newest_kept'] = newest_sets
-            keep.add(max(snap.rst))
+            current = [t for t in snap.rst if not provisional(t)]
+            if current:
+                keep.add(max(current))
+            if state == 'stopped' and reached:       # the set a restart would start from
+                back = [t for t in complete if t <= reached]
+                if back:
+                    keep.add(back[-1])
             thin = [t for t in snap.rst if t % conf.keep_rst and t not in keep
                     and not provisional(t) and not stale_rst(t) and not (running and snap.live and t >= snap.live[1])]
-        plan.ctx.update(del_ascii=ascii, del_binary=binary, del_out=outs, thin=thin)
-        if parts:
-            for part in parts:
-                plan.add('delete', part)
+        plan.ctx.update(del_ascii=ascii, del_binary=binary, del_out=outs, thin=thin,
+                        cand_ascii=cand_ascii, cand_binary=cand_binary, cand_out=cand_outs,
+                        cand_thin=[] if hold or not sacct_ok else thin)
+        # The commands that delete, each along the chain (core/chain.py): it checks again
+        # when it runs and keeps what has nothing to stand in for it. A range never spans a
+        # file that is not meant to go.
+        name, remote = snap.name, conf.remote
+        if binary or plan.steps_of('upload-plt'):
+            plan.step('plt', 'check', 'check-plt', f"case check plt --case {name} --remote {remote}",
+                      note="the binary PLTs here against their copies on the remote, by md5")
+        for a, b in runs_apart(ascii, []):
+            plan.step('plt', 'delete', 'delete-ascii',
+                      f"case organise plt ascii --case {name} --t1 {a} --t2 {b} --remote {remote}")
+        for a, b in runs_apart(binary, set(snap.binary) - set(binary)):
+            plan.step('plt', 'delete', 'delete-binary',
+                      f"case organise plt binary --case {name} --t1 {a} --t2 {b} --remote {remote}")
+        for a, b in runs_apart(outs, set(snap.out) - set(outs)):
+            plan.step('output', 'delete', 'delete-out',
+                      f"case organise out --case {name} --t1 {a} --t2 {b} --remote {remote}")
+        if conf.keep_rst and snap.rst and thin:
+            plan.step('rst', 'delete', 'thin-rst',
+                      f"case organise rst --case {name} --keep-freq {conf.keep_rst} "
+                      f"--keep-newest {conf.keep_newest_rst} --t1 {min(thin)} --t2 {max(thin)}")
+        if sacct_ok:                     # with no queue or remote read, nothing is a candidate
+            plan.ctx['delete'] = {
+                'ascii': {f"{snap.run_rel}/{p}.{t}.plt": snap.ascii_size.get(t, 0)
+                          for t in cand_ascii},
+                'binary': {f"binary/{p}.{t}.plt": snap.binary[t].size for t in cand_binary},
+                'out': {x.relative_to(snap.dir).as_posix(): x.stat().st_size
+                        for t in cand_outs for x in snap.out[t] if x.exists()},
+                'rst': {k: v for t in plan.ctx['cand_thin'] for k, v in snap.rst_files.get(t, {}).items()},
+            }
+        if no_mtime:
+            plan.add('note', f"{steps_phrase(no_mtime, f)}: the ASCII PLT and .out stay; the ledger "
+                             f"has no time for the binary PLT that is gone here (sent before the "
+                             f"delete stage existed).", 'delete')
+        for part in parts:
+            plan.add('delete', part)
         if conf.keep_rst and snap.rst and thin:
             plan.add('delete', f"{steps_phrase(thin, f)}: not a multiple of {conf.keep_rst}. "
                                f"The restart point and the newest set stay.", 'thin')
         if snap.rst and not conf.keep_rst:
             plan.add('note', "Not thinned: auto.keep_rst is not set (auto init --keep-rst N).",
                      'thin')
+
+
+LEFTOVER_AGE = 24 * 3600        # a .partial/.deriving younger than this may be being written
+
+
+def _vtu(w):
+    """The .vtu files `field render` leaves in binary/ (docs/architecture/auto.md, 13.17).
+    Leftovers of a killed render (.partial, .deriving) go once a day old; a cache whose
+    PLT is here is rebuilt by the next render, so it goes only with auto.vtu_cache:
+    delete; one whose PLT is gone cannot be rebuilt and is only reported."""
+    snap, conf, plan = w.snap, w.conf, w.plan
+    if not snap.vtu:
+        return
+    leftovers = [v for v in snap.vtu if v.leftover and v.age >= LEFTOVER_AGE]
+    fresh = [v for v in snap.vtu if v.leftover and v.age < LEFTOVER_AGE]
+    caches = [v for v in snap.vtu if not v.leftover and v.plt]
+    orphans = [v for v in snap.vtu if not v.leftover and not v.plt]
+    go = leftovers + (caches if conf.vtu_cache == 'delete' else [])
+    size = lambda vs: _size_text(sum(v.size for v in vs))
+    plan.ctx['vtu'] = dict(leftovers=leftovers, fresh=fresh, caches=caches, orphans=orphans)
+    if go:
+        plan.ctx.setdefault('delete', {})['vtu'] = {v.rel: v.size for v in go}
+        what = []
+        if leftovers:
+            what.append(f"{len(leftovers)} leftover{'s' if len(leftovers) != 1 else ''} of a "
+                        f"killed render ({size(leftovers)})")
+        if conf.vtu_cache == 'delete' and caches:
+            what.append(f"{len(caches)} cache{'s' if len(caches) != 1 else ''} ({size(caches)})")
+        plan.add('delete', f".vtu: {' and '.join(what)}; the next render converts the PLT "
+                           f"again.", 'delete')
+        flags = '' if conf.vtu_cache == 'delete' else ' --leftovers'
+        plan.step('plt', 'delete', 'delete-vtu', f"case organise vtu --case {snap.name}{flags}",
+                  note="leftovers a day old" + (", caches with a PLT here"
+                                                if conf.vtu_cache == 'delete' else ''))
+    if caches and conf.vtu_cache != 'delete':
+        plan.add('note', f".vtu: {len(caches)} cache{'s' if len(caches) != 1 else ''} "
+                         f"({size(caches)}) kept. Set auto.vtu_cache: delete "
+                         f"(auto init --vtu-cache delete) to clear them; a render rebuilds them.",
+                 'delete')
+    if orphans:
+        plan.add('note', f".vtu: {len(orphans)} with no PLT in binary/ ({size(orphans)}); "
+                         f"they cannot be rebuilt, so they are kept.", 'delete')
+    if fresh:
+        plan.add('note', f".vtu: {len(fresh)} leftover{'s' if len(fresh) != 1 else ''} "
+                         f"younger than a day are left: a render may be writing them.", 'delete')
 
 
 def _stopped_short(w):
@@ -776,14 +955,42 @@ def _stopped_short(w):
         plan.ctx['restart_from'] = sets[-1] if sets else None
         if not last_main and not sets:
             return                      # nothing known: no job history, no set to name
-        ask = (f"run main restart {snap.name} --time {sets[-1]}" if sets
-               else f"run main restart {snap.name} --time <tsId>")
+        ask = (f"run main restart --case {snap.name} --time {sets[-1]}" if sets
+               else f"run main restart --case {snap.name} --time <tsId>")
         why = (f" (the newest complete restart set; a set cut short by the stop is not used)"
                if sets else " (no complete restart set found)")
         how = (f"main job {last_main.jobid} ended {last_main.state}" if last_main
                else "no main job in the job history")
         plan.add('needs', f"Stopped at step {reached} of {snap.max_steps} with nothing queued "
                           f"({how}). Queue a restart with `{ask}`?{why}")
+
+
+def _steady(w):
+    """A case that reached maxTimeSteps and has nothing queued: has it settled?
+    (auto.md 13.24). Only when auto.steady_var is set. Never queues anything."""
+    snap, conf, plan = w.snap, w.conf, w.plan
+    if not conf.steady_var or w.state != 'done':
+        return
+    from .steady import judge
+    got = judge(snap.dir, conf.steady_var, conf.steady_last, tol=conf.steady_tol,
+                mean_tol=conf.steady_mean_tol, min_cycles=conf.steady_min_cycles, blocks=4)
+    var, span = conf.steady_var, f"the last {conf.steady_last} steps"
+    if got.verdict == 'steady':
+        plan.add('note', f"{var} is steady over {span} (steps {got.first} to {got.last_step}, "
+                         f"{got.cycles} cycles).", 'steady')
+        return
+    if not got.verdict:
+        plan.add('needs', f"The steady check of {var} could not be made: "
+                          f"{'; '.join(got.reasons)}.", 'steady')
+        return
+    sets = sorted(t for t, n in snap.rst.items() if snap.nsg and n == snap.nsg
+                  and t <= (w.reached or 0) and not w.stale_rst(t))
+    more = (snap.max_steps or 0) + conf.steady_last
+    restart = f"run main restart --case {snap.name} --time {sets[-1] if sets else '<tsId>'}"
+    why = '; '.join(got.reasons) or got.verdict
+    plan.add('needs', f"{var} is {got.verdict} over {span} ({why}). To run longer: "
+                      f"`def time maxTime --case {snap.name} --value {more}`, then `{restart}`.",
+             'steady')
 
 
 def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan:
@@ -835,7 +1042,7 @@ def decide(snap: CaseSnapshot, conf, cloud_ok: bool, sacct_ok: bool) -> CasePlan
     w.last_main, w.last_post, w.has_history = last_main, last_post, has_history
     w.cloud, w.rst_remote = cloud, rst_remote
     for part in (_flags, _folder_rule, _history, _restart_view, _post, _plt_upload,
-                 _rst_upload, _input_upload, _broken_plts, _deletions, _stopped_short):
+                 _rst_upload, _input_upload, _broken_plts, _deletions, _vtu, _stopped_short, _steady):
         part(w)
     return plan
 

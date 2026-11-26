@@ -137,9 +137,11 @@ def test_missing_case_and_wildcard_update(case, monkeypatch, tmp_path):
     assert run(case, monkeypatch, what='update', case='*')[0] == 2
 
 
-def test_the_first_word_is_the_case_unless_it_is_update(case, monkeypatch):
-    code, text = run(case, monkeypatch, what=str(case), case=None)
+def test_the_case_is_a_flag_and_a_word_that_is_not_update_is_refused(case, monkeypatch, capsys):
+    code, text = run(case, monkeypatch, what=None, case=str(case))
     assert code == 0 and 'step 500' in text
+    code, text = run(case, monkeypatch, what=str(case), case=None)
+    assert code == 2 and '--case' in text and 'not an action' in text
 
 
 def test_report_state_column(case):

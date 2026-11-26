@@ -471,7 +471,8 @@ def select_pendulum(case_dir, args, logger, requested):
     import numpy as np
     from ...data import shared
     from ....core.readers.othd_reader import OTHDReader
-    files = shared.find_files(case_dir, 'othd')
+    files = shared.find_files(case_dir, 'othd', getattr(args, 'archive', None),
+                              bool(getattr(args, 'run', False)), logger)
     if not files:
         raise ValueError(f"No othd files under {case_dir}")
     reader = OTHDReader(files, group=getattr(args, 'othid', None))
@@ -495,9 +496,13 @@ def select_pendulum(case_dir, args, logger, requested):
                             list(values), times[mask], tsids[mask], values)
 
 
-def describe(case_dir, sel, requested):
+def describe(case_dir, sel, requested, archive=None, run=False):
     """The default title: case, variables, and where they came from."""
     where = [sel.kind]
+    if run:
+        where.append('run directory')
+    if archive is not None:
+        where.append('archive' if str(archive).lower() == 'all' else f'archive {archive}')
     if sel.meta is not None:
         where.append(f"{sel.meta.group_label} {sel.group}")
         if sel.meta.nodes_of(sel.group) > 1:
@@ -564,6 +569,10 @@ def execute_plot(args):
             execute_plot_from_yaml(config, args)
             return
 
+        if getattr(args, 'run', False) and getattr(args, 'archive', None) is not None:
+            raise ValueError("--run (the run directory) and --archive (archived runs) "
+                             "are two places to read from: give one")
+
         requested = requested_vars(args)
         if not requested:
             print(f"{Colors.red('Error:')} --var says what to plot (or `use var:dy`); "
@@ -596,7 +605,8 @@ def execute_plot(args):
         plot_style = parse_plot_style(args.plot_style)
         legend_style = parse_legend_style(args.legend_style) if getattr(args, 'legend_style', None) else {}
         plot_type = args.plot_type or 'time'
-        title = None if args.title else describe(case_dir, sel, requested)
+        title = None if args.title else describe(case_dir, sel, requested, getattr(args, 'archive', None),
+                                            bool(getattr(args, 'run', False)))
         fig, axes = build_figure(plot_type, sel, plot_style, legend_style, title, logger)
 
         apply_plot_properties(fig, axes, args)

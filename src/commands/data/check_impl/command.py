@@ -113,6 +113,7 @@ def _run_steady(case_dir, args, logger, requested, limits):
     table.add_column("from", justify="right", no_wrap=True)
 
     details = []
+    starts = []                           # (label, tsId) where a steady start was found
     for label, series_values in values.items():
         x = series_values[order]
         verdict = steady.analyse(times, x, **limits)
@@ -120,7 +121,10 @@ def _run_steady(case_dir, args, logger, requested, limits):
         table.add_row(label, *_cells(verdict, limits),
                       "-" if start is None else str(tsids[start]))
         details.append((label, verdict))
+        if start is not None:
+            starts.append((label, int(tsids[start])))
     console.print(table)
+    _offer(case_dir, starts, many=len(values) > 1, console=console)
     for label, verdict in details:
         if verdict.failures and not verdict.steady:
             console.print(f"  [cyan]{label}[/cyan]: {', '.join(verdict.failures)}")
@@ -133,6 +137,25 @@ def _run_steady(case_dir, args, logger, requested, limits):
         for label, verdict in details:
             _print_blocks(console, label, verdict, tsids)
     console.print()
+
+
+def _offer(case_dir, starts, many, console):
+    """Offer the next command after a `|` one run per variable with a steady
+    start: `data check steady | data stats --func rms` (shellkit rows). A row is
+    {case, t1} (with `var` when several variables were checked, so each row says
+    whose start it is). A variable with no steady start gets no row, and it is
+    said. Nothing is offered outside the shell."""
+    from shellkit import current_runtime
+    rt = current_runtime()
+    # shellkit older than 0.1.8 has no rows: the table is still shown, only the pipe is lost
+    if rt is None or not hasattr(rt, 'emit'):
+        return
+    rows = [dict(case=str(case_dir), t1=tsid, **({'var': label} if many else {}))
+            for label, tsid in starts]
+    if rows:
+        rt.emit(rows)
+    else:
+        console.print("[dim]no steady start found: nothing offered to the next command[/dim]")
 
 
 def _fmt(value, limit, text):

@@ -21,19 +21,31 @@ def execute_sq(args):
         show_sq_help()
         return
 
+    target = getattr(args, 'target', None)
+    value = None
+    if target in (None, 'watch', 'find'):
+        job = getattr(args, 'job', None)
+        if target == 'watch' and getattr(args, 'interval', None) is not None:
+            value = args.interval
+        elif target == 'find':
+            value = getattr(args, 'key', None)
+        elif target is None and job:
+            target = job
+    elif target is not None:
+        print(f"Error: run sq: '{target}' is not a mode (watch, find); "
+              f"the job is a flag now: --job {target}")
+        return
+
     if not check_slurm_available():
         print("Error: SLURM commands not available")
         print("Make sure you're on an HPC cluster with SLURM installed")
         return
 
-    target = getattr(args, 'target', None)
-    value = getattr(args, 'value', None)
-
     if getattr(args, 'out', False) and target in (None, 'watch', 'find'):
-        print("Error: --out requires <job_id> (usage: run sq <job_id> --out)")
+        print("Error: --out requires <job_id> (usage: run sq --job <job_id> --out)")
         return
 
-    # Watch mode: run sq watch [<seconds>]
+    # Watch mode: run sq watch [--interval <seconds>]
     if target == 'watch':
         try:
             interval = float(value) if value is not None else 10.0
@@ -46,10 +58,10 @@ def execute_sq(args):
         watch_queue(args, interval)
         return
 
-    # Search mode: run sq find <key>
+    # Search mode: run sq find --key <key>
     if target == 'find':
         if not value:
-            print("Error: find requires a search key (usage: run sq find <key>)")
+            print("Error: find requires a search key (usage: run sq find --key <key>)")
             return
         find_jobs(args, value)
         return
@@ -59,7 +71,7 @@ def execute_sq(args):
         print("Usage: run sq [<job_id> | watch [<seconds>] | find <key>]")
         return
 
-    # Job detail mode: run sq <job_id>
+    # Job detail mode: run sq --job <job_id>
     if target:
         out_lines = getattr(args, 'n', 20)
         if out_lines <= 0:
@@ -585,7 +597,7 @@ def watch_queue(args, interval: float = 10.0):
 
 
 # ---------------------------------------------------------------------------
-# Job detail view  (run sq <job_id>)
+# Job detail view  (run sq --job <job_id>)
 # ---------------------------------------------------------------------------
 
 def show_job_detail(job_id: str, show_out: bool = False, out_lines: int = 20):
@@ -748,9 +760,9 @@ def show_sq_help():
 
 {Colors.BOLD}USAGE:{Colors.RESET}
     run sq [--all] [--by-dir] [--sort <column>]
-    run sq watch [<seconds>] [--all] [--by-dir] [--sort <column>]
-    run sq find <key> [--all] [--sort <column>]
-    run sq <job_id> [--out] [-n <lines>]
+    run sq watch [--interval <seconds>] [--all] [--by-dir] [--sort <column>]
+    run sq find --key <key> [--all] [--sort <column>]
+    run sq --job <job_id> [--out] [-n <lines>]
 
 {Colors.BOLD}SUBCOMMANDS:{Colors.RESET}
     {Colors.YELLOW}watch{Colors.RESET} [<seconds>]  Refresh every <seconds> (default: 10; Ctrl+C to stop)
@@ -781,9 +793,9 @@ def show_sq_help():
     run sq --by-dir         # Group your jobs by work directory
     run sq --sort submit    # Sort by submit timestamp
     run sq watch            # Auto-refresh every 10s
-    run sq watch 30         # Auto-refresh every 30s
-    run sq find CS4SG3U3P0  # Jobs for one case
-    run sq 1258586          # Detail for job 1258586
-    run sq 1258586 --out    # Show last 20 StdOut lines
-    run sq 1258586 --out -n 50
+    run sq watch --interval 30         # Auto-refresh every 30s
+    run sq find --key CS4SG3U3P0  # Jobs for one case
+    run sq --job 1258586          # Detail for job 1258586
+    run sq --job 1258586 --out    # Show last 20 StdOut lines
+    run sq --job 1258586 --out -n 50
 """)

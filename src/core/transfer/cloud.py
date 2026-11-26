@@ -176,6 +176,25 @@ class LocalCloud:
         except OSError:
             return None
 
+    def remote_size(self, case_name: str, rel: str) -> Optional[int]:
+        """Size of <root>/<case>/<rel> now; None when it is not there."""
+        try:
+            return (self.root / case_name / rel).stat().st_size
+        except OSError:
+            return None
+
+    def remote_md5(self, case_name: str, rel: str) -> Optional[str]:
+        """md5 of <root>/<case>/<rel>, computed now; None when the file is not there."""
+        try:
+            return file_md5(self.root / case_name / rel)
+        except OSError:
+            return None
+
+    def opener(self, case_name: str, rel: str):
+        """open(name, mode) for <root>/<case>/<rel>: a seekable file, read only."""
+        target = self.root / case_name / rel
+        return lambda _name, mode='rb': open(target, mode)
+
     def put(self, local, case_name: str, rel: str, snapshot: bool = False) -> PutResult:
         """Copy `local` to <root>/<case>/<rel>: to a temporary name first, checked
         (md5 of both), then renamed, so the real name never holds a half file."""
@@ -259,6 +278,25 @@ class SftpCloud:
         cannot be read."""
         return remote_md5(self.ssh, posixpath.join(self.root, case_name, rel), read_back=True)
 
+    def remote_size(self, case_name: str, rel: str) -> Optional[int]:
+        """Size of <root>/<case>/<rel> now; None when it is not there."""
+        try:
+            got = self.ssh.remote_stat(posixpath.join(self.root, case_name, rel))
+        except Exception:
+            return None
+        return got[0] if got else None
+
+    def remote_md5(self, case_name: str, rel: str) -> Optional[str]:
+        """md5 of <root>/<case>/<rel>, computed on the remote now; None when the file is not
+        there or the remote has no md5sum (a deletion is then never cleared)."""
+        return remote_md5(self.ssh, posixpath.join(self.root, case_name, rel))
+
+    def opener(self, case_name: str, rel: str):
+        """open(name, mode) for <root>/<case>/<rel>: a seekable SFTP file, read only,
+        so a header can be read without the data crossing the wire."""
+        target = posixpath.join(self.root, case_name, rel)
+        return lambda _name, mode='rb': self.ssh.sftp_client.open(target, 'rb')
+
     def put(self, local, case_name: str, rel: str, snapshot: bool = False) -> PutResult:
         """Send `local` to <root>/<case>/<rel>, checked (send_checked)."""
         return send_checked(self.ssh, local, posixpath.join(self.root, case_name, rel),
@@ -271,15 +309,29 @@ class SftpCloud:
             pass
 
 
+def remote_name_for(folder, remote: Optional[str]) -> Optional[str]:
+    """The remote a command uses for this folder: the one named, else the only one its
+    .cases.yml lists, else None (open_for_folder says which remote is needed)."""
+    from src.core import cases_file
+    if remote:
+        return remote
+    try:
+        return cases_file.remote_of(cases_file.read(folder), None)[0]
+    except cases_file.CasesFileError:
+        return None
+
+
 def open_for_folder(folder, remote: Optional[str]):
-    """The remote named `remote` as the folder of cases `folder` uses it (the
-    folder in its .cases.yml `remotes:`); CloudError when it cannot be used."""
+    """The remote named `remote` (else the only one listed) as the folder of cases
+    `folder` uses it (the folder in its .cases.yml `remotes:`); CloudError when it
+    cannot be used."""
     from types import SimpleNamespace
     from src.core import cases_file
     try:
         cf = cases_file.read(folder)
     except cases_file.CasesFileError as e:
         raise CloudError(str(e))
+    remote, _ = cases_file.remote_of(cf, remote)
     listed = ', '.join(cf.remotes)
     if not remote and not cf.remotes:
         raise CloudError(f"no remote is set for this folder, and so no path on one: "
@@ -287,7 +339,8 @@ def open_for_folder(folder, remote: Optional[str]):
                          f"Set both with `auto init --remote NAME --path DIR`")
     if not remote:
         raise CloudError(f"which remote? --remote NAME or `use remote:NAME` "
-                         f"({cases_file.FILENAME} lists: {listed})")
+                         f"({cases_file.FILENAME} lists: {listed}); it lists more than one, "
+                         f"so none is chosen for you")
     path = cf.remotes.get(remote)
     if not path:
         others = f" (it lists: {listed})" if listed else " (it lists none)"

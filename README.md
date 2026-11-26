@@ -12,9 +12,9 @@ Fast command-line tool for analyzing offshore riser simulation data.
 ff
 
 # Example commands
-flexflow → case show CS4SG1U1
-flexflow → check riser.othd
-flexflow → plot CS4SG1U1 --node 10
+flexflow → case show --case CS4SG1U1
+flexflow → check --file riser.othd
+flexflow → plot --case CS4SG1U1 --node 10
 ```
 
 ## Features
@@ -52,38 +52,38 @@ flexflow → plot CS4SG1U1 --node 10
 
 ```bash
 # Case operations
-case show <case>           # Show case info
-case create <name>         # Create new case
-case run <case>            # Submit jobs
+case show --case <case>           # Show case info
+case create --name <name>         # Create new case
+case run --case <case>            # Submit jobs
 case organise <case>       # Clean up case files
-case out <case> --map      # Write othd maps (row → node/point coordinates)
-case out <case> --list     # Table of the case's outputTimeHistory blocks
-case domain <case> --init  # Declare the field and bodies, in domain.yml
+case out --case <case> --map      # Write othd maps (row → node/point coordinates)
+case out --case <case> --list     # Table of the case's outputTimeHistory blocks
+case domain --case <case> --init  # Declare the field and bodies, in domain.yml
 case domain body --list    # What the domain is made of
-case upload <case> --remote R  # Send case data/files to a remote
-case download <case> --remote R
+case upload --case <case> --remote R  # Send case data/files to a remote
+case download --case <case> --remote R
 
 # Data inspection
-check <file>               # Inspect OTHD/OISD files
-data show <case>           # Preview data
-field info <case>          # Show PLT info (zones, variables, mesh audit)
+check --file <file>               # Inspect OTHD/OISD files
+data show [--case NAME]           # Preview data
+field info [--case NAME]          # Show PLT info (zones, variables, mesh audit)
 
 # Field data (PLT)
-field extract <case> --variables U,V,W --zone FIELD --output out.csv
-field extract <case> --probe 1,2,3    # Sample a point over time
-field compute force <case> --zone cyl # Per-element force -> <case>/cyl.forces/
-field compute force_coeff <case> --zone cyl --sectional 48   # Cd/Cl, per section
-field convert <case> --output mesh.vtu
-field check <file>         # Validate a produced .vtu/.pvd
-field render iso <case>    # Isosurface PNGs
-field render slice <case> --normal z   # Cut-plane PNGs (or .vtp/.csv)
+field extract [--case NAME] --variables U,V,W --zone FIELD --output out.csv
+field extract [--case NAME] --probe 1,2,3    # Sample a point over time
+field compute force [--case NAME] --zone cyl # Per-element force -> <case>/cyl.forces/
+field compute force_coeff [--case NAME] --zone cyl --sectional 48   # Cd/Cl, per section
+field convert [--case NAME] --output mesh.vtu
+field check --file <file>         # Validate a produced .vtu/.pvd
+field render iso [--case NAME]    # Isosurface PNGs
+field render slice [--case NAME] --normal z   # Cut-plane PNGs (or .vtp/.csv)
 
 # Remotes
-remote add <name> --user U --ip IP --password P --path /base
+remote add --name <name> --user U --ip IP --password P --path /base
 remote list
 
 # Visualization
-plot <case> [options]      # Create plots
+plot [--case NAME] [options]      # Create plots
 compare <case1> <case2>    # Compare cases
 ```
 

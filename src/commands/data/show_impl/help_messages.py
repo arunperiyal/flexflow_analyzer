@@ -11,7 +11,7 @@ What a case's time-history data holds -- {Colors.BOLD}not{Colors.RESET} the numb
 Run it before `data table` or `data stats` to learn what can be named to --var.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    flexflow data show [{Colors.YELLOW}case{Colors.RESET}] [options]
+    data show [--case {Colors.YELLOW}NAME{Colors.RESET}] [options]
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
     {Colors.YELLOW}--othd{Colors.RESET}                 The othd files alone
@@ -39,13 +39,13 @@ Run it before `data table` or `data stats` to learn what can be named to --var.
     whatever a run was asked to write is what shows up here.
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
-    flexflow data show CS4SG1U1
-    flexflow data show CS4SG1U1 --othd
-    flexflow data show CS4SG1U1 --oisd
+    data show --case CS4SG1U1
+    data show --case CS4SG1U1 --othd
+    data show --case CS4SG1U1 --oisd
 
 {Colors.BOLD}THEN:{Colors.RESET}
-    {Colors.DIM}data table CS4SG1U1 --var aleDisp_y --node 24
-    data stats CS4SG1U1 --var aleDisp_y --func max,rms{Colors.RESET}
+    {Colors.DIM}data table --case CS4SG1U1 --var aleDisp_y --node 24
+    data stats --case CS4SG1U1 --var aleDisp_y --func max,rms{Colors.RESET}
 """)
 
 
@@ -54,11 +54,11 @@ def print_preview_examples():
 {Colors.BOLD}{Colors.CYAN}Data Show Examples{Colors.RESET}
 
   {Colors.BOLD}Everything the case has:{Colors.RESET}
-    flexflow data show CS4SG1U1
+    data show --case CS4SG1U1
 
   {Colors.BOLD}Just the surface output:{Colors.RESET}
-    flexflow data show CS4SG1U1 --oisd
+    data show --case CS4SG1U1 --oisd
 
   {Colors.BOLD}Just the nodal history:{Colors.RESET}
-    flexflow data show CS4SG1U1 --othd
+    data show --case CS4SG1U1 --othd
 """)

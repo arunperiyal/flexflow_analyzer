@@ -179,6 +179,19 @@ def _zeroloc(values, tsids, times, freq, direction, runners=3):
     return found
 
 
+def _offer(case_dir, plt_tsid):
+    """Offer the next command after a `|` one run on this case at this PLT's step:
+    `data stats ... --func maxloc | case download plt` (shellkit rows). Nothing is
+    offered when no PLT was found, or outside the shell."""
+    if plt_tsid is None:
+        return
+    from shellkit import current_runtime
+    rt = current_runtime()
+    # shellkit older than 0.1.8 has no rows: the table is still shown, only the pipe is lost
+    if rt is not None and hasattr(rt, 'emit'):
+        rt.emit([{'case': str(case_dir), 'time': plt_tsid}])
+
+
 def _runners_up(found):
     """The PLT steps behind the best one, with what each would show."""
     rest = found["plt_ranked"][1:]
@@ -305,6 +318,7 @@ def _run_statistics(case_dir, args, logger, funcs, requested):
         loc.add_column("runners-up", style="dim")
         for label, series_values in values.items():
             found = _locate(series_values, tsids, times, freq, direction)
+            _offer(case_dir, found["plt_tsId"])
             loc.add_row(label, f"{found['value']:.6e}", str(found["tsId"]),
                         f"{found['time']:.6g}",
                         str(found["plt_tsId"]) if found["plt_tsId"] else "-",
@@ -338,6 +352,7 @@ def _run_statistics(case_dir, args, logger, funcs, requested):
                         f"{found['plt_value']:.3g}, {100 * found['plt_offset']:.0f}% "
                         f"of the swing from zero -- no file lands near a crossing "
                         f"at this frequency")
+                _offer(case_dir, found["plt_tsId"])
                 zl.add_row(
                     label, direction, str(found["tsId"]),
                     f"{found['time']:.6g}", f"{found['value']:.6e}",

@@ -56,7 +56,7 @@ def world(tmp_path):
 
 def organise(world, subcommand, **flags):
     args = Namespace(delete_ascii=False, delete_binary=False, freq=None, keep_freq=None,
-                     all_out=False, keep_out=False, dry_run=False, no_confirm=True, log=False,
+                     all_out=False, keep_out=False, dry_run=False, yes=True, log=False,
                      verbose=False, t1=None, t2=None, remote='local')
     for key, value in flags.items():
         setattr(args, key, value)
@@ -85,7 +85,20 @@ def test_delete_binary_takes_only_what_the_remote_holds_with_the_same_md5(world)
     assert Ledger(world.folder).get('local', 'CS1', 'binary/riser.100.plt')['verified'] == 'md5'
 
 
+def two_remotes(world):
+    """With one remote listed it is used; with two, none is chosen for you."""
+    cf = yaml.safe_load((world.folder / '.cases.yml').read_text())
+    cf['remotes']['other'] = str(world.folder / 'o')
+    (world.folder / '.cases.yml').write_text(yaml.safe_dump(cf))
+
+
+def test_delete_binary_with_one_remote_listed_uses_it(world):
+    out = organise(world, 'plt', delete_binary=True, remote=None)
+    assert left(world.binary, '.plt') == []
+
+
 def test_delete_binary_without_a_remote_deletes_nothing(world):
+    two_remotes(world)
     out = organise(world, 'plt', delete_binary=True, remote=None)
     assert left(world.binary, '.plt') == list(STEPS)
     assert 'The remote could not be asked, so nothing in binary/ is deleted' in out
@@ -123,6 +136,7 @@ def test_delete_ascii_stands_on_the_remote_when_binary_is_gone_here(world):
     out = organise(world, 'plt', delete_ascii=True)
     assert left(world.run, '.plt') == [400]                     # its copy is not as recorded
     # and with no remote to ask, none of them goes
+    two_remotes(world)
     out = organise(world, 'plt', delete_ascii=True, remote=None)
     assert left(world.run, '.plt') == [400] and 'the remote was not asked' in out
 
@@ -145,7 +159,7 @@ def test_out_goes_on_a_whole_newer_ascii_plt_alone(world):
     p = world.run / 'riser.300.plt'
     p.write_text(p.read_text()[:-30])                           # cut short
     at(p, 10)
-    out = organise(world, 'output', keep_freq=1000, keep_out=False, remote=None)
+    out = organise(world, 'out', keep_freq=1000, keep_out=False, remote=None)
     assert left(world.run, '.out') == [300]
     assert 'Keeping .out of 1 step(s) whose PLT cannot stand in for them' in out
     assert '300: the ASCII riser.300.plt is cut short' in out
@@ -154,7 +168,7 @@ def test_out_goes_on_a_whole_newer_ascii_plt_alone(world):
 def test_out_written_again_by_a_restart_stays(world):
     for k in range(2):
         at(world.run / f'riser.400_{k}.out', 50)                # after both PLTs
-    organise(world, 'output', keep_freq=1000)
+    organise(world, 'out', keep_freq=1000)
     assert left(world.run, '.out') == [400]
 
 
@@ -163,7 +177,7 @@ def test_out_falls_through_to_the_binary_and_then_the_remote(world):
         (world.run / f'riser.{step}.plt').unlink()              # no ASCII PLT at all
     organise(world, 'plt', delete_binary=True, t1=300)          # 300, 400: only on the remote
     (world.there / 'riser.400.plt').unlink()                    # ... and 400 lost there
-    out = organise(world, 'output', keep_freq=1000)
+    out = organise(world, 'out', keep_freq=1000)
     assert left(world.run, '.out') == [400]
     assert 'Keeping .out of 1 step(s) with no riser.<step>.plt yet: 400' in out
 
@@ -172,14 +186,65 @@ def test_out_with_no_plt_and_no_remote_says_the_remote_was_not_asked(world):
     for step in STEPS:
         (world.run / f'riser.{step}.plt').unlink()
     shutil.rmtree(world.binary)
-    out = organise(world, 'output', keep_freq=1000, remote=None)
+    two_remotes(world)
+    out = organise(world, 'out', keep_freq=1000, remote=None)
     assert left(world.run, '.out') == list(STEPS)
     assert 'The remote was not asked' in out
 
 
 def test_the_whole_chain_in_order_leaves_only_the_remote_copies(world):
-    organise(world, 'output', keep_freq=1000)
+    organise(world, 'out', keep_freq=1000)
     organise(world, 'plt', delete_ascii=True)
     organise(world, 'plt', delete_binary=True)
     assert left(world.run, '.out') == [] and left(world.run, '.plt') == []
     assert left(world.binary, '.plt') == [] and left(world.there, '.plt') == list(STEPS)
+
+
+# --- out --no-verify ------------------------------------------------------------------
+
+def test_out_no_verify_deletes_every_out_in_range_with_or_without_a_plt(world):
+    (world.run / 'riser.200.plt').unlink()                      # no ASCII PLT ...
+    (world.binary / 'riser.200.plt').unlink()                   # ... and no binary one
+    cut = world.run / 'riser.300.plt'
+    cut.write_bytes(cut.read_bytes()[:40])                      # ASCII PLT cut short
+    shutil.rmtree(world.there)
+    kept_before = left(world.run, '.out')
+    assert kept_before == list(STEPS)
+    out = organise(world, 'out', no_verify=True, t1=200)
+    assert left(world.run, '.out') == [100]                     # outside the range: untouched
+    assert 'PLT not asked' not in out and '--no-verify' in out
+    assert '1 step(s) have no PLT here, so their field data is lost: 200' in out
+
+
+def test_out_without_no_verify_still_keeps_a_step_with_no_plt(world):
+    (world.run / 'riser.200.plt').unlink()
+    (world.binary / 'riser.200.plt').unlink()
+    shutil.rmtree(world.there)
+    organise(world, 'out')
+    assert left(world.run, '.out') == [200]
+
+
+def test_out_no_verify_dry_run_deletes_nothing(world):
+    organise(world, 'out', no_verify=True, t1=100, dry_run=True)
+    assert left(world.run, '.out') == list(STEPS)
+
+
+def test_no_verify_on_out_needs_a_range_and_rst_refuses_the_flag():
+    import argparse
+    from src.commands.case import CaseCommand
+    from src.commands.case.organise_impl.command import _check_keep_flags
+    parser = argparse.ArgumentParser()
+    CaseCommand().setup_parser(parser.add_subparsers(dest='command'))
+
+    def parse(*words):
+        args = parser.parse_args(['case', 'organise', *words])
+        for name in ('t1', 't2'):                       # context resolves these when run
+            if not isinstance(getattr(args, name), (int, float)):
+                setattr(args, name, None)
+        return args
+    assert 'needs a range' in _check_keep_flags(parse('out', 'C1', '--no-verify'), 'out')
+    assert _check_keep_flags(parse('out', 'C1', '--no-verify', '--t1', '9850'), 'out') is None
+    assert _check_keep_flags(parse('out', 'C1', '--no-verify', '--t2', '500'), 'out') is None
+    assert _check_keep_flags(parse('out', 'C1'), 'out') is None
+    with pytest.raises(SystemExit):
+        parse('rst', 'C1', '--no-verify', '--t1', '1')

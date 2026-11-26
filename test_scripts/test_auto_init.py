@@ -83,7 +83,7 @@ def test_path_comes_from_remote_set_path(tmp_path, monkeypatch, capsys):
     assert cf.remotes == {'cloud': '/shares/x/bare'} and cf.cases == []
     assert cf.auto == {'keep_rst': 500, 'disk_alert': '200G'}
     out = ' '.join(capsys.readouterr().out.split())
-    assert 'the folder is `remote set-path cloud`' in out and 'Check the path' not in out
+    assert 'the folder is `remote set-path --name cloud`' in out and 'Check the path' not in out
     assert 'No cases listed yet' in out
 
 
@@ -138,7 +138,7 @@ def test_flags_parse():
                               '--disk-alert', '200G', '--path', '/x/bare'])
     assert (args.what, args.remote, args.keep_rst, args.disk_alert, args.path) == \
         ('init', 'cloud', 500, '200G', '/x/bare')
-    args = parser.parse_args(['auto', 'show', 'case2', '--remote', 'local'])
+    args = parser.parse_args(['auto', 'show', '--case', 'case2', '--remote', 'local'])
     assert (args.what, args.case, args.remote) == ('show', 'case2', 'local')
 
 

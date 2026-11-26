@@ -38,7 +38,7 @@ def plans(tmp_path_factory):
 def test_the_dummy_cases_have_steps_of_every_kind(plans):
     kinds = {s.kind for _, plan, _ in plans for s in plan.steps}
     keys = {s.key for _, plan, _ in plans for s in plan.steps}
-    assert kinds == set(KINDS)
+    assert kinds == set(KINDS) | {'check', 'delete'}       # apply carries out KINDS only, so far
     assert {'organise', 'upload-history', 'post', 'upload-plt', 'upload-inputs'} <= keys
     assert all(s.target in TARGETS for _, plan, _ in plans for s in plan.steps)
 
@@ -79,15 +79,14 @@ def test_what_apply_says_it_will_do_is_what_the_steps_say(plans):
         assert ('upload' in said) == bool(plan.to_send()), snap.name
         assert ('post' in said) == bool(plan.due('post')), snap.name
         if 'history' in said:
-            assert plan.due('history')[0].command == f"case {said['history']}".replace(
-                'organise history', f'organise history {snap.name}', 1)
+            assert plan.due('history')[0].command == f"case {said['history']} --case {snap.name}"
         if 'upload' in said:
             assert said['upload'].startswith(f"{len(plan.to_send())} files")
         if 'post' in said:
             # the first post step, with the same mode and window
             first = plan.due('post')[0].command
             mode, t1, t2 = said['post'].split()[2], said['post'].split()[4], said['post'].split()[6]
-            assert first.startswith(f"run post {mode} {snap.name} --t1 {t1} --t2 {t2}")
+            assert first.startswith(f"run post {mode} --case {snap.name} --t1 {t1} --t2 {t2}")
         # --only narrows it to the kinds named
         assert [k for k, _ in _intended(plan, {'post'}) if k != 'detail'] == \
             (['post'] if plan.due('post') else [])

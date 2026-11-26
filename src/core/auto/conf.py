@@ -36,6 +36,12 @@ class AutoConf:
     qos: Optional[str] = None
     account: Optional[str] = None
     partition: Optional[str] = None
+    vtu_cache: str = 'keep'             # 'delete': the .vtu caches of binary/ may go
+    steady_var: Optional[str] = None    # the variable a finished case is judged on; None: off
+    steady_last: int = 2000             # steps from the end judged
+    steady_tol: float = 0.05
+    steady_mean_tol: float = 0.1
+    steady_min_cycles: int = 10
 
     @property
     def is_local(self) -> bool:
@@ -57,6 +63,38 @@ def check_keep_rst(value, key: str = 'keep_rst') -> Optional[int]:
     return int(value)
 
 
+def check_vtu_cache(value) -> str:
+    """auto.vtu_cache: `keep` (the default: only the leftovers of a killed render
+    go) or `delete` (the caches whose PLT is here may go too)."""
+    if value is None or value == '':
+        return 'keep'
+    if str(value).lower() not in ('keep', 'delete'):
+        raise AutoConfError(f"auto.vtu_cache must be keep or delete, got {value!r}")
+    return str(value).lower()
+
+
+def check_steady(a: dict) -> dict:
+    """The steady_* settings of auto: -> AutoConf fields (13.24)."""
+    out = {}
+    var = a.get('steady_var')
+    if var is not None and not str(var).strip():
+        raise AutoConfError("auto.steady_var is empty: name a variable (e.g. dy) or remove it")
+    out['steady_var'] = str(var).strip() if var else None
+    for key, kind in (('steady_last', int), ('steady_min_cycles', int),
+                      ('steady_tol', float), ('steady_mean_tol', float)):
+        if a.get(key) is None:
+            continue
+        try:
+            value = kind(a[key])
+        except (TypeError, ValueError):
+            raise AutoConfError(f"auto.{key} must be a number, got {a[key]!r}")
+        if value <= 0 or (kind is int and value < 2):
+            raise AutoConfError(f"auto.{key} must be {'2 or more' if kind is int else 'above 0'}, "
+                                f"got {a[key]!r}")
+        out[key] = value
+    return out
+
+
 def check_rst_grids(keep, upload):
     """upload_rst must be a multiple of keep_rst: thinning deletes the .rst that are
     not multiples of keep_rst, so a set due for upload that is not one would be
@@ -74,9 +112,12 @@ def read(folder, remote: Optional[str]) -> AutoConf:
     except cases_file.CasesFileError as e:
         raise AutoConfError(str(e))
     listed = ', '.join(cf.remotes) or 'none yet'
+    remote, _ = cases_file.remote_of(cf, remote)
     if not remote:
         raise AutoConfError(f"which remote? --remote NAME or `use remote:NAME` "
-                            f"({cases_file.FILENAME} lists: {listed})")
+                            f"({cases_file.FILENAME} lists: {listed})"
+                            + ("; it lists more than one, so none is chosen for you"
+                               if len(cf.remotes) > 1 else ""))
     path = cf.remotes.get(remote)
     if not path:
         raise AutoConfError(f"{cf.path} has no folder for remote '{remote}' (lists: {listed}); "
@@ -88,16 +129,18 @@ def read(folder, remote: Optional[str]) -> AutoConf:
     keep, upload = check_keep_rst(a.get('keep_rst')), check_keep_rst(a.get('upload_rst'), 'upload_rst')
     check_rst_grids(keep, upload)
     newest = check_keep_rst(a.get('keep_newest_rst'), 'keep_newest_rst') or 2
+    vtu_cache = check_vtu_cache(a.get('vtu_cache'))
     return AutoConf(source=cf.path, remote=remote, path=path,
                     keep_rst=keep, upload_rst=upload, keep_newest_rst=newest,
                     disk_alert=parse_size(a['disk_alert']) if a.get('disk_alert') else None,
                     qos=a.get('qos') or None, account=a.get('account') or None,
-                    partition=a.get('partition') or None)
+                    partition=a.get('partition') or None, vtu_cache=vtu_cache,
+                    **check_steady(a))
 
 
 def set_up(folder, remote: Optional[str] = None, path: Optional[str] = None,
            keep_rst=None, disk_alert=None, replace: bool = False, upload_rst=None,
-           keep_newest_rst=None):
+           keep_newest_rst=None, vtu_cache=None):
     """Add or change auto's entries in the folder's .cases.yml (made, with no
     cases yet, when missing): the remote's folder and the given settings.
     An existing remote folder is changed only with replace. Returns
@@ -105,6 +148,8 @@ def set_up(folder, remote: Optional[str] = None, path: Optional[str] = None,
     check_keep_rst(keep_rst)
     check_keep_rst(upload_rst, 'upload_rst')
     check_keep_rst(keep_newest_rst, 'keep_newest_rst')
+    if vtu_cache is not None:
+        vtu_cache = check_vtu_cache(vtu_cache)
     if disk_alert is not None:
         parse_size(disk_alert)
     try:
@@ -125,7 +170,8 @@ def set_up(folder, remote: Optional[str] = None, path: Optional[str] = None,
             cf.remotes[remote] = new
             changed.append(f"remotes.{remote}: {new}")
     for key, value in (('keep_rst', keep_rst), ('keep_newest_rst', keep_newest_rst),
-                       ('upload_rst', upload_rst), ('disk_alert', disk_alert)):
+                       ('upload_rst', upload_rst), ('disk_alert', disk_alert),
+                       ('vtu_cache', vtu_cache)):
         if value is not None and cf.auto.get(key) != value:
             cf.auto[key] = value
             changed.append(f"auto.{key}: {value}")

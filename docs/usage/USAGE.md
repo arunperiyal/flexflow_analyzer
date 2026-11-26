@@ -71,14 +71,44 @@ plot --title "Analysis; Results"; data stats
 - Errors don't stop subsequent commands
 - Empty commands (;;) are skipped automatically
 
+### Piping Rows Between Commands
+
+A command that finds *where* something happens can hand that to the next one with
+`|`. `data stats --func maxloc` (also `minloc`, `zeroloc`) offers, for each case, the
+PLT step it chose; the command after the `|` then runs once per case, at that step, as
+if you had typed `use case:... time:...` for it:
+
+```bash
+# the PLT at the largest dy displacement, for every case in the registry, downloaded
+use case:* last:1000 node:25 var:dy; data stats --func maxloc | case download plt
+
+# render each one
+use case:* last:1000 node:25 var:dy; data stats --func maxloc | field render iso
+```
+
+`data check steady` offers, for each case, the tsId from which the rest of the window is
+steady, as `t1`; the next command then works on the settled part of every case:
+
+```bash
+use case:* node:25 var:dy; data check steady | data stats --func rms,std
+```
+
+With several variables checked each one gets its own run (`var` is set too); a variable with
+no steady start offers nothing, and the check says so.
+
+Each run is headed by a line (`── 2/5  case:BR1SG0U1P0 time:5400`); the context you had
+before is put back afterwards. One run failing is said and the rest still go; with no
+PLT found nothing runs ("nothing to pass on"). A command that is not a FlexFlow command
+after the `|` (`grep`, `sort`) still reads the text, as always.
+
 ### Def File Parameters
 
 ```bash
-def var                  # define{} variables;  def var Ur 2.0 sets one
-def time                 # timeSteppingControl{};  def time maxTime 7000
+def var                  # define{} variables;  def var --name Ur --value 2.0 sets one
+def time                 # timeSteppingControl{};  def time maxTime --value 7000
 def freq                 # outFreq of outputSimulation{} (out) and outputRestart{} (rst)
-def freq out 50          # write output every 50 steps
-def freq rst 500         # write a restart every 500 steps
+def freq out --value 50          # write output every 50 steps
+def freq rst --value 500         # write a restart every 500 steps
 ```
 
 ### Version and Comments
@@ -131,7 +161,7 @@ ff <command> <subcommand> [options] [arguments]
 Display comprehensive information about a simulation case:
 
 ```bash
-ff case show CS4SG1U1
+ff case show --case CS4SG1U1
 ```
 
 **Output includes:**
@@ -142,8 +172,8 @@ ff case show CS4SG1U1
 
 **Options:**
 ```bash
-ff case show CS4SG1U1 --verbose    # Detailed output
-ff case show CS4SG1U1 --json       # JSON format
+ff case show --case CS4SG1U1 --verbose    # Detailed output
+ff case show --case CS4SG1U1 --json       # JSON format
 ```
 
 ### Create New Case
@@ -151,7 +181,7 @@ ff case show CS4SG1U1 --json       # JSON format
 Create a new case directory from a template:
 
 ```bash
-ff case create MY_NEW_CASE
+ff case create --name MY_NEW_CASE
 ```
 
 **Interactive prompts:**
@@ -161,8 +191,8 @@ ff case create MY_NEW_CASE
 
 **Options:**
 ```bash
-ff case create MY_CASE --template standard    # Use specific template
-ff case create MY_CASE --no-interactive       # Use defaults
+ff case create --name MY_CASE --template standard    # Use specific template
+ff case create --name MY_CASE --no-interactive       # Use defaults
 ```
 
 **What gets created:**
@@ -180,7 +210,7 @@ MY_NEW_CASE/
 Submit and monitor SLURM simulation jobs:
 
 ```bash
-ff case run CS4SG1U1
+ff case run --case CS4SG1U1
 ```
 
 **First run:**
@@ -192,22 +222,22 @@ ff case run CS4SG1U1
 
 ```bash
 # Monitor automatically (default)
-ff case run CS4SG1U1
+ff case run --case CS4SG1U1
 
 # Submit without monitoring
-ff case run CS4SG1U1 --no-monitor
+ff case run --case CS4SG1U1 --no-monitor
 
 # Clean start (removes existing OTHD files)
-ff case run CS4SG1U1 --clean
+ff case run --case CS4SG1U1 --clean
 
 # Restart from specific timestep
-ff case run CS4SG1U1 --from-step 5000
+ff case run --case CS4SG1U1 --from-step 5000
 
 # Dry run (preview without submitting)
-ff case run CS4SG1U1 --dry-run
+ff case run --case CS4SG1U1 --dry-run
 
 # Custom job parameters
-ff case run CS4SG1U1 --nodes 4 --ntasks 128
+ff case run --case CS4SG1U1 --nodes 4 --ntasks 128
 ```
 
 **Monitoring:**
@@ -226,8 +256,8 @@ ff run sq --by-dir         # Group jobs by parent directory (case name level)
 ff run sq --sort submitted # Sort jobs by submit time
 ff run sq watch            # Auto-refresh every 10 seconds (run sq watch 30 for 30s)
 ff run sq find CS4SG3U3P0  # Jobs whose name or work directory contains the key, grouped by directory
-ff run sq <job_id>         # Show detailed info for a job
-ff run sq <job_id> --out -n 50  # Show last 50 lines from job StdOut
+ff run sq --job <job_id>         # Show detailed info for a job
+ff run sq --job <job_id> --out -n 50  # Show last 50 lines from job StdOut
 ```
 
 The `--by-dir` flag is useful when running multiple simulations:
@@ -238,7 +268,7 @@ The `--by-dir` flag is useful when running multiple simulations:
 **Example workflow:**
 ```bash
 # Create case
-ff case create MY_SIMULATION
+ff case create --name MY_SIMULATION
 
 # Review and edit configuration
 cd MY_SIMULATION
@@ -258,13 +288,13 @@ Manage remote machines for file transfer operations:
 
 ```bash
 # Add a new remote machine
-ff remote add myserver --user john --ip 192.168.1.100 --password secret123
+ff remote add --name myserver --user john --ip 192.168.1.100 --password secret123
 
 # List all configured remotes
 ff remote list
 
 # Update remote settings
-ff remote modify myserver --port 2222 --password newpass
+ff remote modify --name myserver --port 2222 --password newpass
 
 # Set base path for case uploads
 ff remote set-path myserver /home/john/simulations
@@ -332,8 +362,8 @@ login nodes are named otherwise.
 **Checking the binary PLTs against the remote:**
 
 ```bash
-ff case check plt mycase --verify --remote myserver
-ff case check plt mycase --verify --remote myserver --t1 8950 --t2 9900 --freq 50
+ff case check plt mycase --remote myserver
+ff case check plt mycase --remote myserver --t1 8950 --t2 9900 --freq 50
 ```
 
 Each PLT in `binary/` is compared with its copy on the remote by size and
@@ -407,7 +437,7 @@ ff case upload ../mySimulation --remote hpc-cluster --remote-path /alternate/pat
 Quickly inspect OTHD or OISD files:
 
 ```bash
-ff check riser.othd
+ff check --file riser.othd
 ff check CS4SG1U1/output/riser.othd
 ```
 
@@ -419,8 +449,8 @@ ff check CS4SG1U1/output/riser.othd
 
 **Options:**
 ```bash
-ff check riser.othd --time-steps 0 5000    # Specific time range
-ff check riser.othd --nodes 1 10 20        # Specific nodes
+ff check --file riser.othd --time-steps 0 5000    # Specific time range
+ff check --file riser.othd --nodes 1 10 20        # Specific nodes
 ```
 
 ### Show Data
@@ -428,14 +458,14 @@ ff check riser.othd --nodes 1 10 20        # Specific nodes
 Preview time-series data in table format:
 
 ```bash
-ff data show CS4SG1U1
+ff data show --case CS4SG1U1
 ```
 
 **Options:**
 ```bash
-ff data show CS4SG1U1 --node 24            # Specific node
-ff data show CS4SG1U1 --limit 100          # First 100 rows
-ff data show CS4SG1U1 --format csv         # CSV output
+ff data show --case CS4SG1U1 --node 24            # Specific node
+ff data show --case CS4SG1U1 --limit 100          # First 100 rows
+ff data show --case CS4SG1U1 --format csv         # CSV output
 ```
 
 **Example output:**
@@ -451,13 +481,15 @@ Time      Node  Displacement_X  Displacement_Y  Displacement_Z
 Calculate statistics for time-series data:
 
 ```bash
-ff data stats CS4SG1U1
+ff data stats --case CS4SG1U1
 ```
 
 **Output includes:**
 - Min, max, mean, std dev
 - Per node and component
 - Time-averaged values
+- `--func maxloc|minloc|zeroloc`: where it happens and which PLT shows it; pipe it into
+  a command (see Piping Rows Between Commands)
 
 ## Field Operations
 
@@ -468,7 +500,7 @@ Work with Tecplot PLT files using PyTecplot integration.
 Show information about PLT files:
 
 ```bash
-ff field info CS4SG1U1
+ff field info --case CS4SG1U1
 ```
 
 **Output includes:**
@@ -479,8 +511,8 @@ ff field info CS4SG1U1
 
 **Options:**
 ```bash
-ff field info CS4SG1U1 --file riser.1000.plt    # Specific file
-ff field info CS4SG1U1 --verbose                # Detailed output
+ff field info --case CS4SG1U1 --file riser.1000.plt    # Specific file
+ff field info --case CS4SG1U1 --verbose                # Detailed output
 ```
 
 ### Extract Field Data
@@ -488,12 +520,12 @@ ff field info CS4SG1U1 --verbose                # Detailed output
 Extract specific field data to CSV:
 
 ```bash
-ff field extract CS4SG1U1 --field displacement --node 10
+ff field extract --case CS4SG1U1 --field displacement --node 10
 ```
 
 **Options:**
 ```bash
-ff field extract CS4SG1U1 \
+ff field extract --case CS4SG1U1 \
   --field velocity \
   --node 10 \
   --output velocity_node10.csv
@@ -507,35 +539,35 @@ ff field extract CS4SG1U1 \
 window. The variable comes from `--var` or the `var` context:
 
 ```bash
-ff plot CS4SG1U1 --var dy --node 10
+ff plot --case CS4SG1U1 --var dy --node 10
 use case:CS4SG1U1 node:10 var:dy; plot          # the same from the context
 ```
 
 **What to plot:**
 ```bash
-ff plot CS4SG1U1 --var dy            # one component (aleDisp_y)
-ff plot CS4SG1U1 --var d             # every component, one panel each
-ff plot CS4SG1U1 --var dx,dy         # some of them
-ff plot CS4SG1U1 --var tty           # surface output (totTrac_y, oisd)
-ff plot CS4SG1U1 --var pd            # pendulum pendDisp (pv, pa: velocity, acceleration)
+ff plot --case CS4SG1U1 --var dy            # one component (aleDisp_y)
+ff plot --case CS4SG1U1 --var d             # every component, one panel each
+ff plot --case CS4SG1U1 --var dx,dy         # some of them
+ff plot --case CS4SG1U1 --var tty           # surface output (totTrac_y, oisd)
+ff plot --case CS4SG1U1 --var pd            # pendulum pendDisp (pv, pa: velocity, acceleration)
 ```
 `data show` lists every variable and its short name. Variables from the othd
 and oisd files cannot share a plot; `--othid`/`--osgid` pick the group.
 
 **Window and plot type:**
 ```bash
-ff plot CS4SG1U1 --var dy --t1 2000 --t2 4000     # tsIds, as in data table
-ff plot CS4SG1U1 --var dy --last 1000             # or use last:1000
-ff plot CS4SG1U1 --var dy --plot-type fft --last 2000   # spectrum, peak in the legend
-ff plot CS4SG1U1 --var d --plot-type traj2d       # dx against dy (traj3d: all three)
+ff plot --case CS4SG1U1 --var dy --t1 2000 --t2 4000     # tsIds, as in data table
+ff plot --case CS4SG1U1 --var dy --last 1000             # or use last:1000
+ff plot --case CS4SG1U1 --var dy --plot-type fft --last 2000   # spectrum, peak in the legend
+ff plot --case CS4SG1U1 --var d --plot-type traj2d       # dx against dy (traj3d: all three)
 ```
 
 **Styling and output:**
 ```bash
-ff plot CS4SG1U1 --var dy \
+ff plot --case CS4SG1U1 --var dy \
   --title "Node 10 Displacement" --xlabel "Time (s)" --ylabel "Displacement (m)"
-ff plot CS4SG1U1 --var dy --output displacement.png   # .png, .pdf, .svg, .eps
-ff plot CS4SG1U1 --var dy --gnu                       # in the terminal
+ff plot --case CS4SG1U1 --var dy --output displacement.png   # .png, .pdf, .svg, .eps
+ff plot --case CS4SG1U1 --var dy --gnu                       # in the terminal
 ```
 
 ### Compare Cases
@@ -590,7 +622,7 @@ plot:
 
 **Use template:**
 ```bash
-ff plot CS4SG1U1 --config plot_config.yaml
+ff plot --case CS4SG1U1 --config plot_config.yaml
 ```
 
 ### Case Configuration
@@ -712,7 +744,7 @@ export FLEXFLOW_OUTPUT_DIR=/path/to/output
 # Enable debug mode
 export FLEXFLOW_DEBUG=1
 
-ff case show CS4SG1U1
+ff case show --case CS4SG1U1
 ```
 
 ## Tips and Best Practices
@@ -751,14 +783,14 @@ ff case show CS4SG1U1
 
 **Quick case inspection:**
 ```bash
-ff case show CS4SG1U1 && \
+ff case show --case CS4SG1U1 && \
 ff check CS4SG1U1/output/riser.othd && \
-ff data show CS4SG1U1 --limit 10
+ff data show --case CS4SG1U1 --limit 10
 ```
 
 **Create and run simulation:**
 ```bash
-ff case create NEW_CASE && \
+ff case create --name NEW_CASE && \
 cd NEW_CASE && \
 # Edit config.yaml \
 ff case run NEW_CASE --dry-run && \
@@ -768,8 +800,8 @@ ff case run NEW_CASE
 **Compare and export:**
 ```bash
 ff compare CS4SG1U1 CS4SG2U1 --output comparison.png
-ff data show CS4SG1U1 --format csv > case1.csv
-ff data show CS4SG2U1 --format csv > case2.csv
+ff data show --case CS4SG1U1 --format csv > case1.csv
+ff data show --case CS4SG2U1 --format csv > case2.csv
 ```
 
 ### Troubleshooting

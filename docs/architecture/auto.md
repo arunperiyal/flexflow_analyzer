@@ -509,14 +509,14 @@ passes, and remembers between logins how far each case got.
 *Cases that are not running*
 1. `run sq find` → which cases are running.
 2. `case check run` → does the run directory still hold a history file?
-3. If yes and not running: `case organise history --update` (run dir →
+3. If yes and not running: `case organise history update` (run dir →
    `othd_files/archive`, `oisd_files/archive`).
-4. `case organise history --clean`, then `--compile`.
+4. `case organise history clean`, then `--compile`.
 5. Upload the history to cloud (mapped path).
 6. Not running + history was in the run dir ⇒ there are `.out` not yet
    converted: `run post`, with first/last step taken from the newest `.othd`
    in `archive/`.
-7. Post job done ⇒ `case organise plt --delete-ascii`.
+7. Post job done ⇒ `case organise plt ascii`.
 8. Upload binary PLTs to cloud.
 9. Delete the binary PLTs once they're on cloud.
 10. Delete the `.out` (PLTs exist now); keep `.rst` every N steps (usually
@@ -526,7 +526,7 @@ passes, and remembers between logins how far each case got.
 *Cases that are running*
 12–14. Find running cases that take a lot of disk (outFreq 5 writes many
     `.out`/`.rst`): `case report`.
-15. Running ⇒ no `organise history --update`.
+15. Running ⇒ no `organise history update`.
 16. Take first/last step of the live `.othd` in the run dir; `run post`.
 17. Post done ⇒ delete ASCII PLT, upload plt PLT, check it's on cloud,
     delete binary PLT, delete `.out` up to the last converted step, thin
@@ -542,15 +542,15 @@ case as far as its checks allow and records the stage in
 
 | stage | what | runs when (all of these hold) | command used |
 |---|---|---|---|
-| **H1 archive** | move run-dir history to `archive/` | no main job of the case is RUNNING, PENDING or COMPLETING (any active state; squeue, by WorkDir), checked again just before the move. No waiting on the file's mtime (13.9) | `case organise history --update` |
-| **H2 clean+compile** | `--clean`, `--compile` | H1 done (or nothing to move) and `archive/` has a part not yet in `cleaned/` | `case organise history --clean --compile` |
+| **H1 archive** | move run-dir history to `archive/` | no main job of the case is RUNNING, PENDING or COMPLETING (any active state; squeue, by WorkDir), checked again just before the move. No waiting on the file's mtime (13.9) | `case organise history update` |
+| **H2 clean+compile** | `--clean`, `--compile` | H1 done (or nothing to move) and `archive/` has a part not yet in `cleaned/` | `case organise history clean compile` |
 | **H3 upload history** | archive/cleaned parts + compiled file; for a running case a snapshot of the live `.othd/.oisd` | cloud login ok; local file differs from the ledger | upgraded `case upload history` |
 | **P1 post** | submit post for steps `[t1, t2]` | no post job of the case in flight; **not running**: t1..t2 = first/last step of the newest `archive/` part, **running**: first step of the live `.othd`..last *settled* step; steps past a pending restart's `restartTsId` excluded; every step's `.out` complete (all `nsg` parts); quota headroom | `run post full` (or `convert` when ASCII PLT exist) |
 | **P2 post done** | check the result | sacct says the post job COMPLETED; every step in `[t1, t2]` has a **valid** binary PLT (§4.3). FAILED/TIMEOUT or a missing/invalid PLT ⇒ case stops here with *needs you* | — |
-| **C1 delete ASCII** | ASCII PLT in run dir | P2 ok for that step (binary valid and newer) | `case organise plt --delete-ascii` |
+| **C1 delete ASCII** | ASCII PLT in run dir | P2 ok for that step (binary valid and newer) | `case organise plt ascii` |
 | **U1 upload PLT** | binary PLTs `[t1, t2]` | P2 ok | upgraded `case upload plt` |
 | **V1 verify PLT** | md5 on cloud = local md5 | U1 done | new |
-| **C2 delete binary** | local binary PLTs | **V1 verified** for that file (ledger) | upgraded `case organise plt --delete-binary --verified` |
+| **C2 delete binary** | local binary PLTs | **V1 verified** for that file (ledger) | upgraded `case organise plt binary --verified` |
 | **C3 delete .out** | `.out` of steps ≤ t2 | that step's PLT is **V1 verified on cloud** (or valid in binary/); not the step being written; not past a pending restart | upgraded `case organise output --keep-freq K` |
 | **C4 thin .rst** | `.rst` not on the `keep_rst` grid (`.auto.conf`, your value; unset: no thinning) | never: the newest complete set, the set at `restartTsId` of a pending/running main, or any set past it | same |
 | **U2 upload .rst** | kept `.rst` sets | complete (all `nsg`), settled | upgraded `case upload rst` |
@@ -578,7 +578,7 @@ lose data:
    *running* case, `--update` moves the file the solver is writing (same
    inode on Lustre, so the solver keeps writing into `archive/`). → H1 only
    when no main job is running, pending or completing (queue read again
-   right before the move), and `organise history --update`
+   right before the move), and `organise history update`
    itself gets the same check (upgrade U-3).
 2. **Keeping `.rst` "every 500" deletes a restart point.** `BR0SG0U4P0`
    has a main job pending that resumes from **8250**, which isn't a multiple
@@ -635,8 +635,8 @@ disk_alert = 200G         # flag running cases above this
 |---|---|---|
 | U-1 | `run sq`, `case status` | G1 + G2: squeue errors (any stderr) raise; jobs matched to a case by WorkDir; shared `jobs_for_case()` incl. sacct for ended jobs |
 | U-2 | `run post` | callable from Python returning the job id; `--t1/--t2` taken from an `.othd` (`--from-othd PATH`); records the window in `.auto/state.json` |
-| U-3 | `case organise history --update` | refuses while a main job of the case is running, pending or completing (override `--force`) |
-| U-4 | `case organise plt --delete-binary` | `--verified`: only files whose md5 on cloud matches the ledger |
+| U-3 | `case organise history update` | refuses while a main job of the case is running, pending or completing (override `--force`) |
+| U-4 | `case organise plt binary` | `--verified`: only files whose md5 on cloud matches the ledger |
 | U-5 | `case organise output` | `.out` only when the PLT is valid (G3) / verified on cloud; never the `.rst` at a pending/running restart, nor the newest complete set; `--keep-freq` from `.auto.conf` |
 | U-6 | `case upload` | folder mapping from `.auto.conf`; key login via alias, password fallback; `.part` + rename; md5 check; ledger `.auto/ledger.jsonl`; creates folders |
 | U-7 | new `src/core/plt_valid.py` | header-only expected size (from `fxplt`), size vs the case's other PLTs |
@@ -774,7 +774,7 @@ has moved past it.
 A rule of the case folders, not a situation for `auto` to work around:
 **every case that has history keeps both `othd_files/{archive,cleaned}/` and
 `oisd_files/{archive,cleaned}/`.** `archive/` is never pruned
-(`case organise history --prune` is not part of the workflow, and `auto`
+(`case organise history prune` is not part of the workflow, and `auto`
 never runs it).
 
 `auto show` checks the rule for each case with history (a case with no run
@@ -941,7 +941,7 @@ deleted binary PLT gets `deleted: <when>`.
 - Nothing is ever deleted on the remote.
 - `archive/`, `cleaned/`, the compiled history, inputs and job scripts are
   never candidates.
-- The hand commands are unchanged: `case organise plt --delete-binary` and
+- The hand commands are unchanged: `case organise plt binary` and
   `case organise output` do not get the md5 check here (U-4, U-5 of 13.5
   stay open).
 - A restart part cut short inside a complete set is still not detected
@@ -950,3 +950,196 @@ deleted binary PLT gets `deleted: <when>`.
 **Cost.** The md5 of a 150 MB PLT is read once here and once on the remote
 for every binary PLT deleted. On the login node that is disk reading, not
 network; the remote one runs there (`md5sum` over SSH).
+
+### 13.14 `auto show`: every Action is a command (2026-11-14)
+
+Asked for by the user on 2026-11-13: the Action list of a section is the
+sequence of commands `auto apply` takes, so reading it tells what `apply`
+will do, and any of them can be run by hand.
+
+- An Action is always a command (`case ...` or `run ...`), with the case and
+  the remote named. No sentence starting `auto apply:`, no `wait:`, no
+  `[not built yet]`.
+- They are the plan's steps (`plan.steps`, `PlanStep` in `decide.py`), in
+  this order per section:
+
+  | Section | Actions, in order |
+  |---|---|
+  | History | `case download history --archive` (runs only on the remote), `case organise history`, `case upload history`, `case upload history --live` (a running job's files, as a snapshot) |
+  | PLT files | `case check plt --verify`, `run post full` / `convert`, `case upload plt` (`--missing` unless an old run's PLT must be replaced), `case organise plt ascii binary`, `case organise plt` |
+  | OUT files | `case organise output --all-out --keep-freq N` |
+  | RST files | `case upload rst`, `case organise output --keep-out --keep-freq N --keep-newest M` |
+  | Inputs and case files | `case upload --files ...` |
+
+- What is not a command is a row of the section: `Waiting` (a post job to
+  end first; post jobs one after the other), `Why` (why there is no command),
+  `Delete` and `Thin` (what the delete commands will take), `Live copy`,
+  `By hand`.
+- The delete commands follow the chain of `docs/usage/case-organise.md`:
+  each checks again when it runs and keeps what has nothing to stand in for
+  it. A range (`--t1`, `--t2`) never spans a file that is not meant to go.
+- `auto apply` does not run the check and delete steps yet (kinds `check`
+  and `delete` of `PlanStep`); the `By hand` row says so. That is the next
+  stage (PLAN.md, phases 17 and 6).
+
+### 13.15 `auto apply <target>` (2026-11-14)
+
+- `auto apply` takes a target: `history`, `plt`, `output`, `input`, `rst` or
+  `all`. It runs the steps of `plan.steps` whose `target` matches, in the
+  order of 13.14 (history, upload, post), each case stopping at its first
+  failed step. `all` is what `auto apply` did before.
+- With no target nothing is done and the targets are listed (exit 0).
+  `--only history,upload,post` still works, as `all` narrowed to those kinds
+  (deprecated).
+- Parsing: `auto apply <target> [case]`. A target word is always a target;
+  a case folder of that name is written `./plt`. With the case left out, the
+  `use case:` context is used.
+- `--dry-run` prints the steps of the target and then the check and delete
+  steps as `not run by apply yet`; nothing is sent or deleted. They run in
+  Phase 6, through the hand commands (`case check plt --verify`, `case
+  organise ...`), which do their own checks.
+- `output` and `rst` have only delete steps, so `auto apply output` and
+  `auto apply rst` do nothing until Phase 6.
+
+### 13.16 `case organise out` and `case organise rst` (2026-11-14)
+
+`case organise output` did two jobs, picked by opposite flags (`--all-out`,
+`--keep-out`). It is split: `out` deletes `.out` along the chain (no
+`--keep-freq`, `--keep-newest`), `rst` thins the `.rst` (no `--remote`); the
+old word and the two flags are gone. The command lines of 13.14 become:
+
+| Section | Action |
+|---|---|
+| OUT files | `case organise out <case> --t1 A --t2 B --remote R` |
+| RST files | `case organise rst <case> --keep-freq N --keep-newest M --t1 A --t2 B` |
+
+The `.out` step no longer needs `auto.keep_rst`: it is not about restart
+sets. Earlier sections keep the old command in the text they were written
+with.
+
+### 13.17 The `.vtu` caches in `binary/` (2026-11-18)
+
+`field render` and `field convert` leave `{problem}.{step}.vtu` (and `.z{N}.vtu`
+per zone) beside the PLTs, and `.partial`/`.deriving` files when a render is
+killed mid-write. `observe` lists them (`snap.vtu`: step, size, age, whether
+the binary PLT is still here); `decide._vtu` sorts them:
+
+| Kind | What auto does |
+|---|---|
+| leftover (`.partial`, `.deriving`) a day old or more | deleted (younger: a render may be writing it) |
+| cache whose PLT is here | deleted only with `auto.vtu_cache: delete`; default `keep`, and a note says how many and how much |
+| cache whose PLT is gone | never deleted: it cannot be rebuilt (a note) |
+
+The files go through the delete stage of 13.13 (`plan.ctx['delete']['vtu']`,
+rule C5, `auto apply --delete`, target `plt`) with no remote check: a render
+makes them again. The step shown is `case organise vtu <case> --leftovers`,
+or `case organise vtu <case>` with `vtu_cache: delete`; the age
+rule is auto's own. `auto show` adds `VTU` and `Delete VTU` rows to the PLT
+section. Names other than the render's are never touched.
+
+### 13.18 The command forms after Phase 31 (2026-11-19)
+
+The hand commands `auto show` lists changed their spelling; what they do did not. Earlier sections
+keep the old forms in the text they were written with:
+
+| Before | Now |
+|---|---|
+| `case organise plt C --delete-ascii --t1 A --t2 B --remote R` | `case organise plt C ascii --t1 A --t2 B --remote R` |
+| `case organise plt C --delete-binary ...` | `case organise plt C binary ...` |
+| `case organise history C --update --clean --compile` | `case organise history C update clean compile` |
+| `case check plt C --verify --remote R` | `case check plt C --remote R` |
+| `case organise vtu C --clean --leftovers` | `case organise vtu C --leftovers` (13.17) |
+
+With one remote in `.cases.yml`, `--remote R` may be left out of all of these.
+
+### 13.19 `auto status` offers rows (2026-11-25)
+
+`auto status` prints its table and exit code as before, and also offers the cases picked by
+`--only` to the command after a `|` (shellkit 0.1.8 rows: one run of that command per case,
+the row's keys set as context for it). One row per case, one key: `{case}` (its directory).
+
+| `--only` | The cases |
+|---|---|
+| `all` (default) | every case listed |
+| `needs` | those that need you (`plan.needs_you`) |
+| `todo` | those with something to do besides needing you or waiting (the "with something to do" of the footer) |
+| `running` | those with a main or post job in the queue (`ctx['main_now']`, `ctx['post_now']`) |
+
+A bad value is refused (exit 2) before anything is printed or offered. Nothing is offered outside
+the shell, or by a shellkit without rows; the table still prints. The second command asks its own
+questions: `auto apply` asks per case unless `--yes` (or `--dry-run`).
+
+```
+auto status * --only needs   | case show
+auto status * --only todo    | auto apply plt
+```
+
+### 13.20 The `case organise` command lines after Phase 37 (2026-11-26)
+
+The case is `--case NAME`, never a word (`.claude/rules/command-design.md`). The hand commands
+`auto show` lists for `case organise` changed their spelling; what they do did not. 13.18 keeps the
+forms it was written with.
+
+| Before (13.18) | Now |
+|---|---|
+| `case organise history C update clean compile` | `case organise history update clean compile --case C` |
+| `case organise plt C ascii --t1 A --t2 B --remote R` | `case organise plt ascii --case C --t1 A --t2 B --remote R` |
+| `case organise plt C binary ...` | `case organise plt binary --case C ...` |
+| `case organise out C ...`, `rst C ...`, `vtu C ...` | `case organise out --case C ...` (also `rst`, `vtu`) |
+
+`auto apply` reads the same steps, so its `history` line is `organise history update clean compile`.
+`case upload`, `case check` and `run post` keep the case as a word until Phase 38.
+
+### 13.21 The `auto` command lines after Phase 44 (2026-11-26)
+
+The case is `--case NAME` (`*` for every case in `.cases.yml`), never a word; `apply`'s target stays the
+one word after it (`.claude/rules/command-design.md`). 13.15 and 13.18 keep the forms they were written
+with.
+
+| Before | Now |
+|---|---|
+| `auto show C`, `auto commands C`, `auto status C`, `auto log C` | `auto show --case C` (also `commands`, `status`, `log`) |
+| `auto show '*'` | `auto show --case '*'` |
+| `auto apply plt C --remote R` | `auto apply plt --case C --remote R` |
+| `auto apply C` | refused: `'C' is not a target ...; the case is a flag now: --case C` |
+
+`auto status --case * --only needs | case show` (13.19) and `auto status ... | auto apply plt` pass a case
+to the next command as `{case}` in the row; the next command's own `--case`, if typed, wins.
+
+### 13.22 `case check history|out --remote` (2026-11-26)
+
+`case check` reads the remote the way `auto` does, and only reads: the folder of the case's
+`.cases.yml`, `--remote NAME` or `use remote:`, else the only remote it lists (13.18). A bare
+`--remote` asks for the comparison; a `use remote:` left over from earlier does not turn it on.
+
+- `case check history --case C --remote`: for each file of the chosen groups (`--archive`,
+  `--cleaned`, `--compiled`) the size and the md5 here and there, read now. Identical, differs
+  (the size or the md5), not on the remote, or only on the remote (archive/ pruned here; `case
+  download history --archive` brings it back). It writes nothing, not even the ledger.
+- `case check out --case C --remote`: a PLT column next to each `.out`: its ASCII PLT here, its
+  binary PLT here, or its verified copy on the remote, judged by `core/chain.py` exactly as `case
+  organise out` does, so what `check` shows is what `organise` would delete. A step with none is
+  listed as "convert first" with the `run post full --case C --t1 A --t2 B` that makes it. The
+  remote is asked only when a step has no good PLT here. A copy only on the remote counts when the
+  ledger recorded it verified (13.13); one that is not recorded is not counted (Phase 30).
+- `case check plt --remote` (13.14) is unchanged.
+
+### 13.23 Adopting a remote PLT with no record (2026-11-26)
+
+A binary PLT put on the remote by hand has no ledger entry, so `Chain` (13.22) does not count it
+in place of its `.out`. Downloading 200 to 400 MB per step to verify it would defeat the point of
+cleaning the case, so `case check plt --remote --adopt` (`core/transfer/adopt.py`) judges it where
+it lies:
+
+- **whole**: `plt_valid.check_plt_open` reads the header and the zone preambles over SFTP
+  (`cloud.opener`, a seekable file) and the exact size must equal the listed one;
+- **newer than the `.out`**: the remote write time is after the newest `.out` of that step left
+  here (none left: nothing to be older than); otherwise it is refused and the step is to be posted
+  again;
+- **md5 on the remote** (md5sum), recorded so a later change is reported as "changed".
+
+The entry is `verified: 'adopted'` with the remote's write time as `mtime`. `verify_plts` reads it
+like a verified record for a copy only on the remote; the local binary PLT is never deleted on the
+strength of it (that needs `verified_now`, an md5 against the local file). It does not prove the
+data equals the file it was made from. `auto` never adopts. `RemoteCopies.unrecorded(step)` lets
+`Chain` say "on the remote, not recorded" for the rest.

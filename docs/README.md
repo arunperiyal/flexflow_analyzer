@@ -1,6 +1,6 @@
 # FlexFlow documentation
 
-Where each document is. `flexflow docs <topic>` opens the ones marked with a
+Where each document is. `docs <topic>` opens the ones marked with a
 topic name.
 
 ## Installation
@@ -48,6 +48,6 @@ stay as they are.
 ## Adding a document
 
 Put it in the folder that matches its purpose, add a row here, and if it
-should open with `flexflow docs`, add it to `TOPICS` in
+should open with `docs`, add it to `TOPICS` in
 `src/commands/utils/docs_impl/command.py`, to the help text beside it and to
 the topic lists in `src/cli/completion.py`.

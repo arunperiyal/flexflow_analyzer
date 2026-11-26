@@ -9,7 +9,7 @@ verified; what does not is taken out of it.
                         # PLT only there is as the ledger recorded it, no step is lost
     result.summary()    # one line
 
-`case check plt --verify` prints it; `auto` reads it before anything that
+`case check plt --remote` prints it; `auto` reads it before anything that
 relies on the remote copy.
 """
 
@@ -187,7 +187,7 @@ def verify_plts(case_dir, problem: str, cloud, remote_name: str, ledger=None,
         name = f"{problem}.{step}.plt"
         rel = f"binary/{name}"
         entry = ledger.get(remote_name, case, rel) if ledger is not None else None
-        if not entry or entry.get('verified') != 'md5' or not entry.get('md5'):
+        if not entry or entry.get('verified') not in ('md5', 'adopted') or not entry.get('md5'):
             result.only_there.append(name)
             word = "only on the remote, no record of a verified copy"
         elif entry.get('size') != there[step]:

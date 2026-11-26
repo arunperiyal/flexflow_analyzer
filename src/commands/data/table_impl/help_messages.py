@@ -11,7 +11,7 @@ The time history of chosen variables, as a table. {Colors.BOLD}Time runs down th
 and variables across the columns.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    flexflow data table [{Colors.YELLOW}case{Colors.RESET}] --var {Colors.YELLOW}NAME{Colors.RESET} [options]
+    data table [--case {Colors.YELLOW}NAME{Colors.RESET}] --var {Colors.YELLOW}NAME{Colors.RESET} [options]
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
     {Colors.YELLOW}--var NAME{Colors.RESET}             Variable or component. Repeat it, or comma-separate.
@@ -21,8 +21,10 @@ and variables across the columns.
                            `data show` lists every name this case has.{Colors.RESET}
     {Colors.YELLOW}--t1 TSID{Colors.RESET}              First tsId (alone: from there to the end)
     {Colors.YELLOW}--t2 TSID{Colors.RESET}              Last tsId
-    {Colors.YELLOW}--last N{Colors.RESET}               Only the last N steps (of the --t1/--t2 window).
-                           From context: use last:N
+    {Colors.YELLOW}--last N{Colors.RESET}               Only the last N steps (of the `use t1:`/`t2:` window).
+                           From context: use last:N. Not with a typed --t1/--t2:
+                           typing both is refused, and a typed --t1/--t2 makes a
+                           `use last:` ignored (it says so)
     {Colors.YELLOW}--node N{Colors.RESET}               Node to read       (default: 0)
     {Colors.YELLOW}--othid ID{Colors.RESET}             othId -- which probe set to read from the othd
                            files (default: the first). From context: use othid:N
@@ -66,12 +68,12 @@ and variables across the columns.
     For scripts: {Colors.DIM}use case:CS4SG1U1 var:dy last:1000{Colors.RESET}, then {Colors.DIM}data table --output{Colors.RESET}.
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
-    flexflow data table CS4SG1U1 --var aleDisp_y --node 24
-    flexflow data table CS4SG1U1 --var aleDisp --node 24 --tail 20
-    flexflow data table CS4SG1U1 --var vel_y,pres --node 24 --t1 4000 --t2 5000
-    flexflow data table CS4SG1U1 --var totTrac_y --output trac.csv
-    flexflow data table CS4SG1U1 --var dy --last 1000 --output
-    flexflow data table * --var dy --last 1000 --output
+    data table --case CS4SG1U1 --var aleDisp_y --node 24
+    data table --case CS4SG1U1 --var aleDisp --node 24 --tail 20
+    data table --case CS4SG1U1 --var vel_y,pres --node 24 --t1 4000 --t2 5000
+    data table --case CS4SG1U1 --var totTrac_y --output trac.csv
+    data table --case CS4SG1U1 --var dy --last 1000 --output
+    data table --case * --var dy --last 1000 --output
 """)
 
 
@@ -80,17 +82,17 @@ def print_table_examples():
 {Colors.BOLD}{Colors.CYAN}Data Table Examples{Colors.RESET}
 
   {Colors.BOLD}The last 20 steps of cross-flow displacement at node 24:{Colors.RESET}
-    flexflow data table CS4SG1U1 --var aleDisp_y --node 24 --tail 20
+    data table --case CS4SG1U1 --var aleDisp_y --node 24 --tail 20
 
   {Colors.BOLD}All three components at once:{Colors.RESET}
-    flexflow data table CS4SG1U1 --var aleDisp --node 24
+    data table --case CS4SG1U1 --var aleDisp --node 24
 
   {Colors.BOLD}A window, by tsId:{Colors.RESET}
-    flexflow data table CS4SG1U1 --var aleDisp_y --node 24 --t1 4000 --t2 5000
+    data table --case CS4SG1U1 --var aleDisp_y --node 24 --t1 4000 --t2 5000
 
   {Colors.BOLD}Everything, to a file for plotting:{Colors.RESET}
-    flexflow data table CS4SG1U1 --var aleDisp_y --node 24 --output disp.csv
+    data table --case CS4SG1U1 --var aleDisp_y --node 24 --output disp.csv
 
   {Colors.BOLD}The last 1000 steps, to CS4SG1U1/data_tables/dy.csv:{Colors.RESET}
-    flexflow data table CS4SG1U1 --var dy --last 1000 --output
+    data table --case CS4SG1U1 --var dy --last 1000 --output
 """)

@@ -107,9 +107,9 @@ const FlowChart = (() => {
     {
       id: 'watch', kind: 'step', col: 1, row: 10, label: ['Watch the queue'],
       title: 'Watch the queue',
-      command: 'run sq watch\n# run sc <id|name> cancels a job',
+      command: 'run sq watch\n# run sc --job <id> | --name <name> cancels a job',
       optional: true,
-      detail: `Refreshes the Slurm queue. "run sq find <key>" looks for jobs
+      detail: `Refreshes the Slurm queue. "run sq find --key <key>" looks for jobs
         by name or work directory.`,
     },
     {
@@ -150,7 +150,7 @@ const FlowChart = (() => {
         Stop before a queued restart's restartTsId: the steps after it will
         be computed again.
 
-        Do not run "case organise history --update" on a running case: it
+        Do not run "case organise history update" on a running case: it
         would move the file the solver is writing.`,
     },
     {
@@ -174,7 +174,7 @@ const FlowChart = (() => {
     {
       id: 'history', kind: 'step', col: 1, row: 14, label: ['Organise the history'],
       title: 'Organise the history',
-      command: 'case check run\ncase organise history --update --clean --compile',
+      command: 'case check run\ncase organise history update clean compile',
       detail: `"case check run" shows whether the run directory still holds
         .othd and .oisd files. --update moves them into othd_files/archive/
         and oisd_files/archive/, --clean writes each run without the steps a
@@ -246,18 +246,18 @@ const FlowChart = (() => {
     {
       id: 'cleanup', kind: 'step', col: 1, row: 20, label: ['Delete what is', 'safely copied'],
       title: 'Delete what is safely copied',
-      command: 'case organise output --keep-freq <N>\ncase organise plt --delete-ascii\ncase organise plt --delete-binary',
-      detail: `Only after the upload check above: --delete-binary does not
+      command: 'case organise out\ncase organise rst --keep-freq <N>\ncase organise plt ascii\ncase organise plt binary',
+      detail: `Only after the upload check above: binary does not
         look at the remote.
 
-        In this order. "organise output" deletes each step's .out once its
-        .plt exists, so it has to run while the PLTs are still here; it keeps
-        the .rst of the steps divisible by N (your choice, e.g. 500), plus
+        In this order. "organise out" deletes each step's .out once its
+        .plt exists, so it has to run while the PLTs are still here;
+        "organise rst" keeps the .rst of the steps divisible by N (your choice, e.g. 500), plus
         the restart point in simflow.config, the two newest complete sets
         (--keep-newest, default 2: if the newest was cut short when the job
         was killed, the one before it restarts the run) and a set still being
-        written. --delete-ascii deletes the ASCII PLTs that have a newer
-        binary copy, so it goes before --delete-binary.`,
+        written. ascii deletes the ASCII PLTs that have a newer
+        binary copy, so it goes before binary.`,
     },
     {
       id: 'uploadRst', kind: 'step', col: 1, row: 21, label: ['Upload the restart sets', 'on the upload grid'],
@@ -326,7 +326,7 @@ const FlowChart = (() => {
     {
       id: 'autoShow', kind: 'step', col: 3, row: 12, label: ['See the plan'],
       title: 'See the plan (auto)',
-      command: 'auto show <case>\nuse case:*\nauto status\nauto commands',
+      command: 'auto show [--case NAME]\nuse case:*\nauto status\nauto commands',
       detail: `For the case (the argument or "use case:"), or every case in
         .cases with "use case:*", like case check: its state, then what "auto
         apply" would do and why: organise the history, a post job and its
@@ -344,19 +344,23 @@ const FlowChart = (() => {
     {
       id: 'autoApply', kind: 'step', col: 3, row: 13, label: ['Carry it out'],
       title: 'Carry it out (auto)',
-      command: 'auto apply --dry-run\nauto apply\nauto apply --only upload',
+      command: 'auto apply all --dry-run\nauto apply all\nauto apply all --delete\nauto apply plt CASE',
       detail: `Does the additive steps for each case, in this order, planned
         again from the files and the queue right before each: organise the
         history (when no main job is active), upload what the remote lacks
         (to a temporary name, checked by md5, then renamed; recorded in
         auto_logs/ledger.json), submit a post job for the first stretch of
         steps with no PLT yet. It shows what it will do and asks once.
-        Nothing is deleted. A step that fails stops that case; the record of
-        the run is auto_logs/auto_<time>.log.
+        A step that fails stops that case; the record of the run is
+        auto_logs/auto_<time>.log.
 
         Post jobs still go through Slurm, so run it again at the next login
-        to carry on. Deleting what is safely copied (.out, PLTs, .rst
-        thinning) is not built yet: those steps stay by hand.`,
+        to carry on. Without --delete nothing is deleted: auto show lists the
+        delete commands (case organise out, case organise rst, case organise plt
+        ascii, binary) for you to run, each checking again when it
+        runs. With --delete (or --only delete) a delete stage follows the upload: the
+        ASCII PLT, binary PLT and .out whose copy on the remote passes an md5 check
+        made right then, and the .rst sets off the keep_rst grid.`,
     },
     {
       id: 'autoNeeds', kind: 'step', col: 3, row: 14, label: ['Handle what', 'it left to you'],

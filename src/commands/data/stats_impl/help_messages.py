@@ -10,7 +10,7 @@ def print_statistics_help():
 One row per variable instead of one row per timestep.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    flexflow data stats [{Colors.YELLOW}case{Colors.RESET}] --var {Colors.YELLOW}NAME{Colors.RESET} --func {Colors.YELLOW}FUNC{Colors.RESET} [options]
+    data stats [--case {Colors.YELLOW}NAME{Colors.RESET}] --var {Colors.YELLOW}NAME{Colors.RESET} --func {Colors.YELLOW}FUNC{Colors.RESET} [options]
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
     {Colors.YELLOW}--var NAME{Colors.RESET}             Variable or component. Repeat it, or comma-separate.
@@ -19,8 +19,10 @@ One row per variable instead of one row per timestep.
     {Colors.YELLOW}--func FUNC{Colors.RESET}            What to work out. Repeat it, or comma-separate.
     {Colors.YELLOW}--t1 TSID{Colors.RESET}              First tsId (alone: from there to the end)
     {Colors.YELLOW}--t2 TSID{Colors.RESET}              Last tsId
-    {Colors.YELLOW}--last N{Colors.RESET}               Only the last N steps (of the --t1/--t2 window).
-                           From context: use last:N
+    {Colors.YELLOW}--last N{Colors.RESET}               Only the last N steps (of the `use t1:`/`t2:` window).
+                           From context: use last:N. Not with a typed --t1/--t2:
+                           typing both is refused, and a typed --t1/--t2 makes a
+                           `use last:` ignored (it says so)
     {Colors.YELLOW}--node N{Colors.RESET}               Node to read       (default: 0)
     {Colors.YELLOW}--othid ID{Colors.RESET}             othId -- which probe set to read from the othd
                            files (default: the first). From context: use othid:N
@@ -72,6 +74,15 @@ One row per variable instead of one row per timestep.
     between two outputs never names a file that was not written. The step size
     comes from outFreq in simflow.config, or {Colors.YELLOW}--freq{Colors.RESET}.
 
+{Colors.BOLD}PIPING:{Colors.RESET}
+    maxloc, minloc and zeroloc offer the PLT they chose to the command after a
+    `|`, which then runs once per case with `case` and `time` set from it:
+
+        use case:* last:1000 node:25 var:dy; data stats --func maxloc | case download plt
+
+    Each case in `*` gets its own run. Several variables or both directions
+    of zeroloc offer one run each.
+
 {Colors.BOLD}ZEROLOC:{Colors.RESET}
     Where the cylinder passes through its undeflected position -- the frame
     halfway between the extremes, moving fastest.
@@ -94,12 +105,13 @@ One row per variable instead of one row per timestep.
     the answer, and how far from zero it sits is said out loud.
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
-    flexflow data stats CS4SG1U1 --var aleDisp_y --node 24 --func max,rms
-    flexflow data stats CS4SG1U1 --var aleDisp_y --node 24 --func maxloc,minloc
-    flexflow data stats CS4SG1U1 --var aleDisp_y --node 24 --func zeroloc
-    flexflow data stats CS4SG1U1 --var totTrac --func rms,std --t1 3000 --t2 5000
-    flexflow data stats CS4SG1U1 --var dy --func rms,std --last 1000
-    flexflow data stats CS4SG1U1 --var aleDisp --node 24 --func range --output swing.csv
+    data stats --case CS4SG1U1 --var aleDisp_y --node 24 --func max,rms
+    data stats --case CS4SG1U1 --var aleDisp_y --node 24 --func maxloc,minloc
+    data stats --case CS4SG1U1 --var aleDisp_y --node 24 --func zeroloc
+    data stats --case CS4SG1U1 --var totTrac --func rms,std --t1 3000 --t2 5000
+    data stats --case CS4SG1U1 --var dy --func rms,std --last 1000
+    data stats --case * --var dy --node 25 --last 1000 --func maxloc | case download plt
+    data stats --case CS4SG1U1 --var aleDisp --node 24 --func range --output swing.csv
 """)
 
 
@@ -108,14 +120,14 @@ def print_statistics_examples():
 {Colors.BOLD}{Colors.CYAN}Data Stats Examples{Colors.RESET}
 
   {Colors.BOLD}Amplitude of cross-flow vibration, once the run has settled:{Colors.RESET}
-    flexflow data stats CS4SG1U1 --var aleDisp_y --node 24 --func rms --t1 3000
+    data stats --case CS4SG1U1 --var aleDisp_y --node 24 --func rms --t1 3000
 
   {Colors.BOLD}Which PLT to render at each end of the cycle:{Colors.RESET}
-    flexflow data stats CS4SG1U1 --var aleDisp_y --node 24 --func maxloc,minloc
+    data stats --case CS4SG1U1 --var aleDisp_y --node 24 --func maxloc,minloc
 
   {Colors.BOLD}Peak-to-peak, every component:{Colors.RESET}
-    flexflow data stats CS4SG1U1 --var aleDisp --node 24 --func range
+    data stats --case CS4SG1U1 --var aleDisp --node 24 --func range
 
   {Colors.BOLD}Integrated loads:{Colors.RESET}
-    flexflow data stats CS4SG1U1 --var totTrac --func max,rms,maxloc
+    data stats --case CS4SG1U1 --var totTrac --func max,rms,maxloc
 """)

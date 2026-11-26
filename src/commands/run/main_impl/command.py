@@ -97,32 +97,29 @@ def execute_main(args):
     _execute_main_on_case(case_dir.resolve(), args)
 
 
-_MAIN_USAGE = "Usage: run main [restart [--time TSID] | reset] [case_directory] [options]"
+_MAIN_USAGE = "Usage: run main [restart [--time TSID] | reset] [--case NAME] [options]"
 
 
 def _take_main_mode(args) -> bool:
     """
-    Read the mode word: run main restart [case] [--time TSID] / run main reset [case].
+    Read the mode word: run main restart [--time TSID] / run main reset.
 
     Sets args.restart (the step from --time, or None), args.restart_last (restart
-    without --time: from the last written, unnumbered .rst) and args.reset, and moves
-    the case that follows the mode word into args.case. Returns False (after printing
-    why) on bad input.
+    without --time: from the last written, unnumbered .rst) and args.reset. Returns
+    False (after printing why) on bad input. The case is --case NAME, never a word.
     """
-    words = list(getattr(args, 'words', None) or [])
     args.restart = None
     args.restart_last = False
     args.reset = False
     time = getattr(args, 'time', None)
 
-    mode = getattr(args, 'case', None)
+    mode = getattr(args, 'mode', None)
+    if mode not in (None, 'restart', 'reset'):
+        print(f"Error: run main: '{mode}' is not a mode (restart, reset); "
+              f"the case is a flag now: --case {mode}")
+        print(_MAIN_USAGE)
+        return False
     if mode == 'restart':
-        if words and words[0].isdigit():
-            print(f"Error: 'run main restart {words[0]}' is no longer accepted; "
-                  f"the step is given with --time:")
-            print(f"  run main restart [case] --time {words[0]}")
-            return False
-        args.case = words.pop(0) if words else None
         if time is None:
             args.restart_last = True
         else:
@@ -136,14 +133,9 @@ def _take_main_mode(args) -> bool:
                 return False
     elif mode == 'reset':
         args.reset = True
-        args.case = words.pop(0) if words else None
 
     if time is not None and mode != 'restart':
-        print("Error: --time belongs to restart (usage: run main restart [case] --time TSID)")
-        return False
-    if words:
-        print(f"Error: unexpected argument '{words[0]}'")
-        print(_MAIN_USAGE)
+        print("Error: --time belongs to restart (usage: run main restart --time TSID)")
         return False
     return True
 
@@ -1105,9 +1097,9 @@ Submit the main simulation job script to SLURM queue.
 This runs the primary FlexFlow simulation (mpiSimflow).
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    run main [case_directory] [options]
-    run main restart [case_directory] [--time TSID] [options]
-    run main reset [case_directory] [options]
+    run main [--case NAME] [options]
+    run main restart [--case NAME] [--time TSID] [options]
+    run main reset [--case NAME] [options]
 
 {Colors.BOLD}SUBCOMMANDS:{Colors.RESET}
     {Colors.YELLOW}restart{Colors.RESET}               Restart the case. Asks for confirmation first (-y skips it)

@@ -6,7 +6,7 @@ all cases of a batch (global defaults).
 
 ## Overview
 
-When using `flexflow case create --from-config`, the `time` section in your YAML file allows you to set time stepping parameters that will be automatically updated in the `.def` file.
+When using `case create --from-config`, the `time` section in your YAML file allows you to set time stepping parameters that will be automatically updated in the `.def` file.
 
 ## The Replacement Process
 
@@ -90,7 +90,7 @@ time:
 
 Then run:
 ```bash
-flexflow case create --from-config case_config.yaml --ref-case ./reference_case
+case create --from-config case_config.yaml --ref-case ./reference_case
 ```
 
 Result: The created case's `.def` file will have:
@@ -344,7 +344,7 @@ To verify your time parameters were applied:
 
 1. Create a case with `--dry-run` first:
    ```bash
-   flexflow case create --from-config config.yaml --dry-run --verbose
+   case create --from-config config.yaml --dry-run --verbose
    ```
 
 2. Check the log output for time parameter confirmation
@@ -358,12 +358,12 @@ To verify your time parameters were applied:
 
 For more information:
 ```bash
-flexflow case create --help
-flexflow case create --examples
+case create --help
+case create --examples
 ```
 
 To see examples in the help system:
 ```
-flexflow case create --examples
+case create --examples
 # Look for "Example 5" and "Example 9" which show time parameter usage
 ```

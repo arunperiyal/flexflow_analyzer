@@ -25,37 +25,37 @@ Submit and manage SLURM jobs for FlexFlow simulations.
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
     # Validate case structure and check SLURM status
-    run check Case001
+    run check --case Case001
 
     # Verbose check with error details
-    run check Case001 --verbose
+    run check --case Case001 --verbose
 
     # Show SBATCH headers of the job scripts
-    run check headers Case001
+    run check headers --case Case001
 
     # Count mesh elements and check for triangles
-    run check mesh Case001
+    run check mesh --case Case001
 
     # Submit preprocessing job
-    run pre Case001
+    run pre --case Case001
 
     # Submit main simulation
-    run main Case001
+    run main --case Case001
 
     # Submit main with restart
-    run main restart Case001 --time 5000
+    run main restart --case Case001 --time 5000
 
     # Submit main fresh, ignoring restart settings
-    run main reset Case001
+    run main reset --case Case001
 
     # Submit postprocessing with cleanup
-    run post full Case001 --cleanup
+    run post full --case Case001 --cleanup
 
     # Convert existing .plt files to binary only
-    run post convert Case001
+    run post convert --case Case001
 
     # List the slurm-* files with their job type, by type
-    run list log Case001 --sort type
+    run list log --case Case001 --sort type
 
     # Check job queue
     run sq
@@ -64,25 +64,25 @@ Submit and manage SLURM jobs for FlexFlow simulations.
     run sq watch
 
     # Find jobs for one case
-    run sq find CS4SG3U3P0
+    run sq find --key CS4SG3U3P0
 
     # Sort queue by a column
     run sq --sort submitted
 
     # Show detail for a specific job
-    run sq 1258586
+    run sq --job 1258586
 
     # Show job stdout tail
-    run sq 1258586 --out -n 50
+    run sq --job 1258586 --out -n 50
 
     # Submit a script directly
-    run sb postFlex.sh
+    run sb --script postFlex.sh
 
     # Cancel job by ID
-    run sc 1258586
+    run sc --job 1258586
 
     # Cancel all jobs named 'postCase005'
-    run sc postCase005
+    run sc --name postCase005
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
     -h, --help     Show help for specific subcommand

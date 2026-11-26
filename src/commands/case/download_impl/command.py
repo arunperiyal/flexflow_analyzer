@@ -16,7 +16,7 @@ from rich.progress import Progress, BarColumn, TextColumn, DownloadColumn, Trans
 from rich.table import Table
 from rich import box
 from . import budget
-from .history import (HistoryTransferMixin, HISTORY_SETS, history_label, history_sets,
+from .history import (HistoryTransferMixin, HISTORY_SETS, LIVE, history_label, history_sets,
                       history_target)
 
 # Loose files worth carrying with a case: what defines the run, and the othd maps
@@ -158,11 +158,11 @@ So do the restarts ({Colors.CYAN}.restarts{Colors.RESET}, `case organise history
 the remote gets the restarts it lacks.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    flexflow case upload [{Colors.YELLOW}case{Colors.RESET}] --remote {Colors.YELLOW}REMOTE{Colors.RESET} [options]
-    flexflow case upload plt [{Colors.YELLOW}case{Colors.RESET}] [--t1 STEP] [--t2 STEP] [options]
-    flexflow case upload rst [{Colors.YELLOW}case{Colors.RESET}] [--t1 STEP] [--t2 STEP] [options]
-    flexflow case upload input [{Colors.YELLOW}case{Colors.RESET}] [options]
-    flexflow case upload history [{Colors.YELLOW}case{Colors.RESET}] [--archive] [--cleaned] [--compiled] [options]
+    case upload [--case {Colors.YELLOW}NAME{Colors.RESET}] --remote {Colors.YELLOW}REMOTE{Colors.RESET} [options]
+    case upload plt [--case {Colors.YELLOW}NAME{Colors.RESET}] [--t1 STEP] [--t2 STEP] [options]
+    case upload rst [--case {Colors.YELLOW}NAME{Colors.RESET}] [--t1 STEP] [--t2 STEP] [options]
+    case upload input [--case {Colors.YELLOW}NAME{Colors.RESET}] [options]
+    case upload history [--case {Colors.YELLOW}NAME{Colors.RESET}] [--archive] [--cleaned] [--compiled] [options]
 
 {Colors.BOLD}ARGUMENTS:{Colors.RESET}
     {Colors.YELLOW}plt{Colors.RESET}                    The binary PLTs in binary/ only -- with --t1/--t2,
@@ -191,12 +191,13 @@ the remote gets the restarts it lacks.
     {Colors.YELLOW}--archive{Colors.RESET}              history: only archive/ (combinable; none: all three)
     {Colors.YELLOW}--cleaned{Colors.RESET}              history: only cleaned/
     {Colors.YELLOW}--compiled{Colors.RESET}             history: only the compiled file
+    {Colors.YELLOW}--live{Colors.RESET}                 history: the run directory's .othd/.oisd as they are now,
+                           while a job is still writing them (a snapshot, not compared)
     {Colors.YELLOW}--remote-path PATH{Colors.RESET}     The folder holding the cases on the remote; the case goes to
                          PATH/<case>. Default: the remote's folder in the case folder's
                          .cases.yml (remotes: {{NAME: DIR}}), else `remote set-path`
     {Colors.YELLOW}--force{Colors.RESET}                Create remote directories if they do not exist
     {Colors.YELLOW}--resume{Colors.RESET}               Resume the last interrupted upload
-    {Colors.YELLOW}--examples{Colors.RESET}             Show usage examples
     {Colors.YELLOW}-h, --help{Colors.RESET}             Show this help message
 
 {Colors.BOLD}DESCRIPTION:{Colors.RESET}
@@ -206,7 +207,7 @@ the remote gets the restarts it lacks.
     Use 'use remote:<name>' in the interactive shell to set a default remote
     so --remote can be omitted.
 
-    Wildcard mode ('case upload *') uploads all cases listed in the .cases.yml
+    Wildcard mode ('case upload --case *') uploads all cases listed in the .cases.yml
     file in the current directory.
 
 {Colors.BOLD}CHECKED COPIES:{Colors.RESET}
@@ -244,7 +245,7 @@ the remote gets the restarts it lacks.
     The two flags read as they do everywhere else in FlexFlow: both bounds make
     a range, one alone names that single step. They need {Colors.YELLOW}plt{Colors.RESET} or {Colors.YELLOW}rst{Colors.RESET},
     since nothing else in a case is written per step. The t1/t2 context
-    supplies them: {Colors.DIM}use t1:1000 t2:5000{Colors.RESET}, then {Colors.DIM}case upload plt CS4SG1U1{Colors.RESET}.
+    supplies them: {Colors.DIM}use t1:1000 t2:5000{Colors.RESET}, then {Colors.DIM}case upload plt --case CS4SG1U1{Colors.RESET}.
 
     {Colors.YELLOW}--missing{Colors.RESET} carries only the selected files the remote binary/ lacks,
     or holds at another size (a copy an interrupted transfer cut short), and
@@ -297,27 +298,28 @@ the remote gets the restarts it lacks.
     web app) take it only while it is newer than archive/, cleaned/ and every
     run; so when it was not up to date where it came from, or the other side
     has runs it does not, it is made older than them there, and the readers
-    take the runs until the next `case organise history --compile`.
+    take the runs until the next `case organise history compile`.
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
-    case upload history CS4SG1U1 --remote server
-    case upload history CS4SG1U1 --remote server --cleaned --compiled
-    case upload plt CS4SG1U1 --remote server --t1 1000 --t2 5000
-    case upload plt CS4SG1U1 --remote server --t1 5000
-    case upload plt CS4SG1U1 --remote server --missing
-    case upload input CS4SG1U1 --remote server
-    case upload rst CS4SG1U1 --remote server --t1 4000
-    case upload rst CS4SG1U1 --remote server --freq 1000 --missing   # every 1000 steps, what is not there
-    case upload rst CS4SG1U1 --remote server --t1 3000 --t2 4000 --force
-    case upload rst CS4SG1U1 --remote server
-    case upload CS4SG1U1 --remote server --files
-    case upload CS4SG1U1 --remote server --files "*.map"
-    case upload * --remote server --files --force
-    case upload CS4SG1U1 --remote server --dir binary --files
+    case upload history --case CS4SG1U1 --remote server
+    case upload history --case CS4SG1U1 --remote server --cleaned --compiled
+    case upload history --case CS4SG1U1 --remote server --live          # a running job's history, as it is now
+    case upload plt --case CS4SG1U1 --remote server --t1 1000 --t2 5000
+    case upload plt --case CS4SG1U1 --remote server --t1 5000
+    case upload plt --case CS4SG1U1 --remote server --missing
+    case upload input --case CS4SG1U1 --remote server
+    case upload rst --case CS4SG1U1 --remote server --t1 4000
+    case upload rst --case CS4SG1U1 --remote server --freq 1000 --missing   # every 1000 steps, what is not there
+    case upload rst --case CS4SG1U1 --remote server --t1 3000 --t2 4000 --force
+    case upload rst --case CS4SG1U1 --remote server
+    case upload --case CS4SG1U1 --remote server --files
+    case upload --case CS4SG1U1 --remote server --files "*.map"
+    case upload --case * --remote server --files --force
+    case upload --case CS4SG1U1 --remote server --dir binary --files
 
 {Colors.BOLD}CONTEXT:{Colors.RESET}
     Set remote context:    use remote:myserver
-    Then run:              case upload CS4SG1U1
+    Then run:              case upload --case CS4SG1U1
 """)
 
 
@@ -336,11 +338,11 @@ So do the restarts ({Colors.CYAN}.restarts{Colors.RESET}, `case organise history
 the restarts found only on the remote are added here.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    flexflow case download [{Colors.YELLOW}case{Colors.RESET}] --remote {Colors.YELLOW}REMOTE{Colors.RESET} [options]
-    flexflow case download plt [{Colors.YELLOW}case{Colors.RESET}] [--t1 STEP] [--t2 STEP] [--freq N] [options]
-    flexflow case download rst [{Colors.YELLOW}case{Colors.RESET}] [--t1 STEP] [--t2 STEP] [options]
-    flexflow case download input [{Colors.YELLOW}case{Colors.RESET}] [options]
-    flexflow case download history [{Colors.YELLOW}case{Colors.RESET}] [--archive] [--cleaned] [--compiled] [options]
+    case download [--case {Colors.YELLOW}NAME{Colors.RESET}] --remote {Colors.YELLOW}REMOTE{Colors.RESET} [options]
+    case download plt [--case {Colors.YELLOW}NAME{Colors.RESET}] [--t1 STEP] [--t2 STEP] [--freq N] [options]
+    case download rst [--case {Colors.YELLOW}NAME{Colors.RESET}] [--t1 STEP] [--t2 STEP] [options]
+    case download input [--case {Colors.YELLOW}NAME{Colors.RESET}] [options]
+    case download history [--case {Colors.YELLOW}NAME{Colors.RESET}] [--archive] [--cleaned] [--compiled] [options]
 
 {Colors.BOLD}ARGUMENTS:{Colors.RESET}
     {Colors.YELLOW}plt{Colors.RESET}                    binary/ only -- with --t1/--t2, only the timesteps
@@ -374,7 +376,6 @@ the restarts found only on the remote are added here.
                          .cases.yml (remotes: {{NAME: DIR}}), else `remote set-path`
     {Colors.YELLOW}--force{Colors.RESET}                Create the local case directory if it does not exist
     {Colors.YELLOW}--resume{Colors.RESET}               Resume the last interrupted download
-    {Colors.YELLOW}--examples{Colors.RESET}             Show usage examples
     {Colors.YELLOW}-h, --help{Colors.RESET}             Show this help message
 
 {Colors.BOLD}DESCRIPTION:{Colors.RESET}
@@ -385,7 +386,7 @@ the restarts found only on the remote are added here.
     Use 'use remote:<name>' in the interactive shell to set a default remote
     so --remote can be omitted.
 
-    Wildcard mode ('case download *') downloads all cases listed in the .cases.yml
+    Wildcard mode ('case download --case *') downloads all cases listed in the .cases.yml
     file in the current directory.
 
 {Colors.BOLD}FILES:{Colors.RESET}
@@ -407,7 +408,7 @@ the restarts found only on the remote are added here.
     The two flags read as they do everywhere else in FlexFlow: both bounds make
     a range, one alone names that single step. They need {Colors.YELLOW}plt{Colors.RESET} or {Colors.YELLOW}rst{Colors.RESET},
     since nothing else in a case is written per step. The t1/t2 context
-    supplies them: {Colors.DIM}use t1:1000 t2:5000{Colors.RESET}, then {Colors.DIM}case download plt CS4SG1U1{Colors.RESET}.
+    supplies them: {Colors.DIM}use t1:1000 t2:5000{Colors.RESET}, then {Colors.DIM}case download plt --case CS4SG1U1{Colors.RESET}.
 
     {Colors.YELLOW}--freq N{Colors.RESET} thins what is left to the steps that are multiples of N,
     as it does for `field` sweeps -- with or without a range. It also comes
@@ -463,28 +464,28 @@ the restarts found only on the remote are added here.
     web app) take it only while it is newer than archive/, cleaned/ and every
     run; so when it was not up to date where it came from, or the other side
     has runs it does not, it is made older than them there, and the readers
-    take the runs until the next `case organise history --compile`.
+    take the runs until the next `case organise history compile`.
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
-    case download history CS4SG1U1 --remote server
-    case download history CS4SG1U1 --remote server --compiled
+    case download history --case CS4SG1U1 --remote server
+    case download history --case CS4SG1U1 --remote server --compiled
     case download history * --remote server --cleaned --compiled
-    case download plt CS4SG1U1 --remote server --t1 1000 --t2 5000
-    case download plt CS4SG1U1 --remote server --t1 1000 --t2 5000 --freq 500
-    case download plt CS4SG1U1 --remote server --freq 1000
-    case download plt CS4SG1U1 --remote server --t1 5000
-    case download plt CS4SG1U1 --remote server --missing
-    case download plt CS4SG1U1 --remote server --t1 3000 --t2 5000 --missing
-    case download input CS4SG1U1 --remote server
-    case download rst CS4SG1U1 --remote server --t1 4000
-    case download rst CS4SG1U1 --remote server
-    case download CS4SG1U1 --remote server --files
-    case download CS4SG1U1 --remote server --files "*.map"
-    case download * --remote server --files --force
+    case download plt --case CS4SG1U1 --remote server --t1 1000 --t2 5000
+    case download plt --case CS4SG1U1 --remote server --t1 1000 --t2 5000 --freq 500
+    case download plt --case CS4SG1U1 --remote server --freq 1000
+    case download plt --case CS4SG1U1 --remote server --t1 5000
+    case download plt --case CS4SG1U1 --remote server --missing
+    case download plt --case CS4SG1U1 --remote server --t1 3000 --t2 5000 --missing
+    case download input --case CS4SG1U1 --remote server
+    case download rst --case CS4SG1U1 --remote server --t1 4000
+    case download rst --case CS4SG1U1 --remote server
+    case download --case CS4SG1U1 --remote server --files
+    case download --case CS4SG1U1 --remote server --files "*.map"
+    case download --case * --remote server --files --force
 
 {Colors.BOLD}CONTEXT:{Colors.RESET}
     Set remote context:    use remote:myserver
-    Then run:              case download CS4SG1U1
+    Then run:              case download --case CS4SG1U1
 """)
 
 
@@ -498,15 +499,18 @@ class CaseUploadCommand(HistoryTransferMixin):
         self._sending = None        # (remote name, local case path) of the target in hand
         self._ledgers = {}          # {folder of cases: Ledger}
 
-    def _send(self, ssh, local_file: str, remote_file: str, callback=None) -> None:
+    def _send(self, ssh, local_file: str, remote_file: str, callback=None,
+              snapshot: bool = False) -> None:
         """One file to the remote, the way `auto` sends it (core/transfer):
         to a temporary name, compared with the local file by size and md5,
         then renamed. IOError when it fails; nothing is then left under the
         real name. A file of the case in hand is written to the ledger of the
-        case's folder."""
+        case's folder. `snapshot`: a file a job is still writing, sent as it
+        is and not compared."""
         from src.core.transfer.cloud import send_checked
         mtime = os.stat(local_file).st_mtime
-        res = send_checked(ssh, local_file, remote_file, callback=callback, mkdir=False)
+        res = send_checked(ssh, local_file, remote_file, callback=callback, mkdir=False,
+                           snapshot=snapshot)
         if not res.ok:
             raise IOError(f"{os.path.basename(local_file)}: {res.detail}")
         self._sent[res.verified] = self._sent.get(res.verified, 0) + 1
@@ -518,14 +522,14 @@ class CaseUploadCommand(HistoryTransferMixin):
             rel = Path(local_file).resolve().relative_to(case_dir).as_posix()
         except ValueError:
             return
-        if os.stat(local_file).st_mtime != mtime:
+        if not snapshot and os.stat(local_file).st_mtime != mtime:
             return                  # written again while it went: not a checked copy
         from src.core.transfer.ledger import Ledger
         ledger = self._ledgers.get(case_dir.parent)
         if ledger is None:
             ledger = self._ledgers[case_dir.parent] = Ledger(case_dir.parent)
         ledger.record(remote_name, case_dir.name, rel, res.size, res.md5, res.verified,
-                      mtime=mtime, path=remote_file)
+                      mtime=None if snapshot else mtime, path=remote_file)
 
     def _report_checks(self) -> None:
         """How the files of this upload were checked."""
@@ -687,8 +691,7 @@ class CaseUploadCommand(HistoryTransferMixin):
     def _transfer_mode(self, args, direction: str):
         """(mode, problem): binary/rst/input/history/None from the first word, or what is wrong.
 
-        `case upload CS4` puts the case in the first positional; it is moved to
-        `case` (the parser does not fill the case context in that situation).
+        The case is `--case NAME` (or `use case:`), never a word.
         """
         if self._get_arg(args, 'binary', False):
             return None, (f"--binary is now a word: `case {direction} plt` "
@@ -699,11 +702,8 @@ class CaseUploadCommand(HistoryTransferMixin):
         if what in ('binary', 'rst', 'input', 'history'):
             return what, None
         if what is not None:
-            case = self._get_arg(args, 'case')
-            if case is not None:
-                return None, (f"'{what}' is not binary, rst, input or history (did you mean "
-                              f"`case {direction} binary {case}`?)")
-            args.case = what
+            return None, (f"'{what}' is not plt, rst, input or history; the case is a flag "
+                          f"now: `case {direction} plt --case {what}`")
         return None, None
 
     def _execute_transfer(self, args, direction: str) -> int:
@@ -715,7 +715,7 @@ class CaseUploadCommand(HistoryTransferMixin):
         action_label = 'Upload' if is_upload else 'Download'
         target_label = 'upload' if is_upload else 'download'
 
-        if self._get_arg(args, 'help', False) is True or self._get_arg(args, 'examples', False) is True:
+        if self._get_arg(args, 'help', False) is True:
             help_fn()
             return 0
 
@@ -810,6 +810,8 @@ class CaseUploadCommand(HistoryTransferMixin):
                 )
                 return 1
             sets = [s for s in HISTORY_SETS if self._get_arg(args, s, False)]
+            if is_upload and self._get_arg(args, 'live', False):
+                sets.append(LIVE)
             if sets and mode != 'history':
                 self.console.print(
                     f"[red]Error:[/red] --{'/--'.join(sets)} pick the history sets; "
@@ -1096,10 +1098,8 @@ class CaseUploadCommand(HistoryTransferMixin):
             for target in all_targets:
                 if target['case_path'] not in synced:
                     synced.add(target['case_path'])
-                    self.sync_case_status(ssh, target['remote_case_path'],
-                                          target['case_path'], is_upload)
-                    self.sync_restarts(ssh, target['remote_case_path'],
-                                       target['case_path'], is_upload)
+                    self.sync_case_notes(ssh, target['remote_case_path'],
+                                         target['case_path'], is_upload)
 
             ssh.disconnect()
             self._sending = None
@@ -1126,6 +1126,24 @@ class CaseUploadCommand(HistoryTransferMixin):
             if state is not None:
                 self._finalize_transfer_state(state, success=False)
             return 1
+
+    def sync_case_notes(self, ssh, remote_case_path: str, local_case_path: str,
+                        is_upload: bool) -> None:
+        """Carry .casestatus.md and .restarts of one case. An upload to a case
+        folder the remote does not have (the case's own upload failed, or
+        carried nothing) leaves them: one line says so, not an SFTP error for
+        each file. Never fails the transfer."""
+        try:
+            missing = is_upload and not ssh.remote_path_exists(remote_case_path)
+        except Exception:
+            missing = False         # cannot tell: try, and let each carry say what failed
+        if missing:
+            self.console.print(f"[yellow]⚠[/yellow]  {Path(local_case_path).name}: not on the remote "
+                               f"yet ({remote_case_path}) -- .casestatus.md and .restarts not "
+                               f"carried; upload the case first")
+            return
+        self.sync_case_status(ssh, remote_case_path, local_case_path, is_upload)
+        self.sync_restarts(ssh, remote_case_path, local_case_path, is_upload)
 
     def sync_case_status(self, ssh, remote_case_path: str, local_case_path: str,
                          is_upload: bool) -> None:
@@ -2305,7 +2323,7 @@ class CaseUploadCommand(HistoryTransferMixin):
         """
         return self._execute_transfer(args, 'download')
 
-        if getattr(args, "help", False) or getattr(args, "examples", False):
+        if getattr(args, "help", False):
             show_download_help()
             return 0
 

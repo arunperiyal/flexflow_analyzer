@@ -130,3 +130,92 @@ def test_bad_limits(case):
         execute_check(args(case=str(case), var=["dy"], blocks=1))
     with pytest.raises(SystemExit):
         execute_check(args(case=str(case), var=["dy"], min_cycles=2))
+
+
+# --- rows for the command after a `|` (shellkit 0.1.8) ---------------------------------
+
+from types import SimpleNamespace
+
+
+@pytest.fixture
+def offered(monkeypatch):
+    rows = []
+    monkeypatch.setattr('shellkit.current_runtime',
+                        lambda: SimpleNamespace(emit=lambda r: rows.extend(r)))
+    return rows
+
+
+def test_offers_the_steady_tsid_of_the_case(case, offered):
+    execute_check(args(case=str(case), var=["dy"]))
+    assert len(offered) == 1 and set(offered[0]) == {'case', 't1'}
+    assert offered[0]['case'] == str(case) and 500 < offered[0]['t1'] < 3000
+
+
+def test_no_steady_start_offers_nothing_and_says_so(tmp_path, offered, capsys):
+    d = tmp_path / "CS2"
+    (d / "othd_files").mkdir(parents=True)
+    tsids = np.arange(1, 6001)
+    x = np.exp(tsids / 1500.0) * np.sin(2 * np.pi * tsids * 0.01)   # never settles
+    (d / "othd_files" / "riser1.othd").write_text(_othd(tsids, x))
+    (d / "simflow.config").write_text("problem = riser\nnp = 1\n")
+    execute_check(args(case=str(d), var=["dy"]))
+    assert offered == [] and 'nothing offered' in plain(capsys)
+
+
+def test_without_a_shell_or_with_an_older_one_the_table_is_still_shown(case, monkeypatch, capsys):
+    monkeypatch.setattr('shellkit.current_runtime', lambda: None)
+    execute_check(args(case=str(case), var=["dy"]))
+    monkeypatch.setattr('shellkit.current_runtime', lambda: SimpleNamespace())   # no emit
+    execute_check(args(case=str(case), var=["dy"]))
+    assert plain(capsys).count("amplitude growing") == 2
+
+
+def _settling_case(parent, name, tau):
+    d = parent / name
+    (d / "othd_files").mkdir(parents=True)
+    tsids = np.arange(1, 6001)
+    t = tsids * 0.01
+    (d / "othd_files" / "riser1.othd").write_text(
+        _othd(tsids, (1 - np.exp(-t / tau)) * np.sin(2 * np.pi * t)))
+    (d / "simflow.config").write_text("problem = riser\nnp = 1\n")
+    return {"name": name, "path": str(d)}
+
+
+@pytest.fixture
+def two_cases(tmp_path, monkeypatch):
+    from registry_files import write_registry
+    write_registry(tmp_path, [_settling_case(tmp_path, "S1", 2.0),
+                              _settling_case(tmp_path, "S2", 6.0)])
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv('HOME', str(tmp_path / 'home'))
+
+
+def _shell(line, capsys):
+    import io
+    from rich.console import Console
+    from shellkit import Runtime
+    from src.cli.app import create_app
+    out = io.StringIO()
+    rt = Runtime(create_app(), console=Console(file=out, width=200, color_system=None),
+                 err_console=Console(file=out, width=200, color_system=None))
+    status = rt.execute_line(line)
+    return status, out.getvalue() + capsys.readouterr().out
+
+
+def test_piped_into_stats_each_case_starts_at_its_own_steady_step(two_cases, capsys):
+    status, text = _shell('data check steady --case * --var dy | data stats --var dy --func rms', capsys)
+    assert status == 0, text
+    assert '── 1/2  case:S1 t1:' in text and '── 2/2  case:S2 t1:' in text
+    starts = [int(line.split('t1:')[1]) for line in text.splitlines() if line.startswith('── ')]
+    assert starts[0] < starts[1]                      # the slower case settles later
+    for start in starts:
+        assert f"tsId {start}..6000" in text          # each stats window starts at its row
+
+
+def test_the_row_wins_over_a_last_in_the_context(two_cases, capsys):
+    status, text = _shell('use last:5000; data check steady --case S1 --var dy | '
+                          'data stats --var dy --func rms', capsys)
+    assert status == 0, text
+    start = int([l for l in text.splitlines() if l.startswith('── ')][0].split('t1:')[1])
+    assert start > 6000 - 5000                        # the steady step lies inside the last 5000
+    assert f"tsId {start}..6000 ({6000 - start + 1} steps)" in text

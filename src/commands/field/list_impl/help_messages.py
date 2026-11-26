@@ -12,7 +12,7 @@ discoverable from your data: a colormap lives in matplotlib, and a derived
 variable lives in FlexFlow.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    flexflow field list <what>
+    field list <what>
 
 {Colors.BOLD}WHAT:{Colors.RESET}
     {Colors.YELLOW}--color{Colors.RESET}          Colormaps for {Colors.YELLOW}color.preset{Colors.RESET}, grouped by the kind of
@@ -27,9 +27,9 @@ variable lives in FlexFlow.
     {Colors.YELLOW}--help, -h{Colors.RESET}       Show this help message
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
-    flexflow field list --color
-    flexflow field list --color -v
-    flexflow field list --variables
+    field list --color
+    field list --color -v
+    field list --variables
 
 {Colors.BOLD}NOTES:{Colors.RESET}
     {Colors.DIM}- For what a specific case holds -- its zones and the variables already

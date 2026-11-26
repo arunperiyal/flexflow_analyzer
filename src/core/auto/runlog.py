@@ -8,9 +8,12 @@ pasted into a conversation). Also the lock that keeps two runs off one folder.
 """
 
 import os
+import re
 import socket
 import time
+from datetime import datetime
 from pathlib import Path
+from typing import List, NamedTuple, Optional
 
 from src.core.transfer.ledger import logs_dir
 
@@ -59,10 +62,10 @@ class FolderLock:
 
 
 class RunLog:
-    def __init__(self, folder):
+    def __init__(self, folder, stamp=None):
         self.dir = logs_dir(folder)
         self.dir.mkdir(parents=True, exist_ok=True)
-        self.path = self.dir / f"auto_{time.strftime('%Y-%m-%d_%H%M%S')}.log"
+        self.path = self.dir / f"auto_{stamp or time.strftime('%Y-%m-%d_%H%M%S')}.log"
         self._f = open(self.path, 'a', buffering=1)
 
     def line(self, case: str, kind: str, text: str):
@@ -72,3 +75,62 @@ class RunLog:
 
     def close(self):
         self._f.close()
+
+
+# -- reading the logs back (`auto log`) -------------------------------------------------
+
+_LINE = re.compile(r'^(\d\d:\d\d:\d\d)  (\S+)\s+(\S+)\s*(.*)$')
+_NAME = re.compile(r'^auto_(\d{4}-\d\d-\d\d)_(\d\d)(\d\d)(\d\d)\.log$')
+
+
+class LogEntry(NamedTuple):
+    time: str
+    case: str           # '' for the lines of the run itself (start, end)
+    kind: str           # history, upload, delete, post, problem, start, end
+    text: str
+
+
+def list_logs(folder) -> List[Path]:
+    """The run logs of this folder of cases, newest first."""
+    return sorted((p for p in logs_dir(folder).glob('auto_*.log') if _NAME.match(p.name)),
+                  key=lambda p: p.name, reverse=True)
+
+
+def started_at(path) -> Optional[datetime]:
+    """When the run began, from the log's name."""
+    m = _NAME.match(Path(path).name)
+    if not m:
+        return None
+    return datetime.strptime(f"{m.group(1)} {m.group(2)}{m.group(3)}{m.group(4)}", '%Y-%m-%d %H%M%S')
+
+
+def read_log(path) -> List[LogEntry]:
+    """The lines of one log. A line that does not match the format is kept as text of the
+    kind '' (a log written by hand or cut short)."""
+    entries = []
+    for raw in Path(path).read_text(errors='replace').splitlines():
+        m = _LINE.match(raw)
+        if not m:
+            entries.append(LogEntry('', '', '', raw))
+            continue
+        when, case, kind, text = m.groups()
+        entries.append(LogEntry(when, '' if case == '-' else case, kind, text))
+    return entries
+
+
+def is_failure(entry: LogEntry) -> bool:
+    """A step that failed, or a case that could not be read."""
+    return entry.kind == 'problem' or entry.text.startswith('FAILED')
+
+
+def summarise(entries: List[LogEntry]) -> dict:
+    """What one run did, for the list: its command, how it ended, the cases it touched."""
+    start = next((e.text for e in entries if e.kind == 'start'), '')
+    end = next((e.text for e in entries if e.kind == 'end'), None)
+    cases = []
+    for e in entries:
+        if e.case and e.case not in cases:
+            cases.append(e.case)
+    steps = [e for e in entries if e.case and e.text.startswith(('ok:', 'FAILED'))]
+    return dict(start=start, end=end, cases=cases, steps=len(steps),
+                failed=sum(1 for e in entries if is_failure(e)))

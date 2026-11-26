@@ -14,10 +14,11 @@ Inspect OTHD/OISD time step ranges and validate simflow.config consistency.
 Pick one subcommand.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    case check <{Colors.YELLOW}subcommand{Colors.RESET}> [{Colors.YELLOW}case_directory{Colors.RESET}] [options]
+    case check <{Colors.YELLOW}subcommand{Colors.RESET}> [--case {Colors.YELLOW}NAME{Colors.RESET}] [options]
 
-{Colors.BOLD}ARGUMENTS:{Colors.RESET}
-    {Colors.YELLOW}case_directory{Colors.RESET}    Path to case directory (optional if context is set)
+{Colors.BOLD}THE CASE:{Colors.RESET}
+    {Colors.YELLOW}--case NAME{Colors.RESET}    The case directory (default: `use case:`; a typed one wins).
+                     Never a word: `case check plt CS1` is refused.
 
 {Colors.BOLD}SUBCOMMANDS:{Colors.RESET}
 
@@ -40,6 +41,10 @@ Pick one subcommand.
           {Colors.YELLOW}--cleaned{Colors.RESET}   only cleaned/
           {Colors.YELLOW}--compiled{Colors.RESET}  only the compiled file
         The flags combine; with none, every group is shown.
+          {Colors.YELLOW}--remote [NAME]{Colors.RESET}  also compare each history file here with its copy on the
+                         remote, by size and md5 read now: identical, differs, not
+                         on the remote, or only on the remote (archive/ pruned
+                         here?). Read-only; NAME as for `plt --remote`
 
     {Colors.CYAN}config{Colors.RESET}
         Validate simflow.config for consistency:
@@ -74,10 +79,10 @@ Pick one subcommand.
             restart computed again, so it does not join up with the frames around
             it. Steps before the first .out/.rst left past R cannot be dated.
 
-    {Colors.CYAN}plt --verify{Colors.RESET}
+    {Colors.CYAN}plt --remote [NAME]{Colors.RESET}
         Compare each binary PLT in binary/ with its copy on the remote
-        ({Colors.YELLOW}--remote NAME{Colors.RESET}, or {Colors.DIM}use remote:NAME{Colors.RESET}; its folder comes from the
-        case folder's .cases.yml), reading both sides now:
+        ({Colors.YELLOW}--remote NAME{Colors.RESET}, or {Colors.DIM}use remote:NAME{Colors.RESET}, or the only one the
+        case folder's .cases.yml lists; its folder comes from there), reading both sides now:
           • {Colors.GREEN}verified{Colors.RESET}: same size and same md5, and the local file is whole.
             Written to auto_logs/ledger.json, the record of checked copies
             (a remote without md5sum has the copy read back and hashed here)
@@ -86,7 +91,7 @@ Pick one subcommand.
           • {Colors.RED}differs{Colors.RESET}: another size or another md5 (a restart that wrote
             the local file again, a damaged copy)
           • {Colors.RED}not on the remote{Colors.RESET}: no copy yet; send it with
-            {Colors.DIM}case upload plt <case> --missing{Colors.RESET}
+            {Colors.DIM}case upload plt --case <case> --missing{Colors.RESET}
           • {Colors.RED}broken here{Colors.RESET}: the local file is empty or cut short; it is
             never verified, since its copy is the same broken file. The line
             under it says how to make it again, going back along the chain:
@@ -98,6 +103,15 @@ Pick one subcommand.
             or {Colors.YELLOW}no record{Colors.RESET} to compare with
           • {Colors.RED}in neither place{Colors.RESET}: with --t1, --t2 and --freq together, the
             steps of that series with no PLT here and none on the remote
+        {Colors.YELLOW}--adopt{Colors.RESET} (with --remote): record the PLTs that are only on the remote
+        and have no record (put there by hand), WITHOUT downloading them. Each
+        is judged where it lies: the header is read over SFTP and must give
+        exactly the listed size (whole), the remote write time must be after
+        the newest .out of that step left here (a restart's new .out is never
+        deleted on an earlier run's PLT), and md5 is taken on the remote so a
+        later change is seen. It records "adopted", which does not prove the
+        data equals the file it was made from: none is here to compare with.
+        Then `case organise out` counts the copy in place of the .out.
         A file that is not verified is taken out of the ledger. {Colors.YELLOW}--t1{Colors.RESET}/{Colors.YELLOW}--t2{Colors.RESET}
         pick a range of steps, {Colors.YELLOW}--freq N{Colors.RESET} the multiples of N, {Colors.YELLOW}-v{Colors.RESET} prints a line
         per file. The exit code is 0 when nothing is wrong: every PLT here
@@ -122,6 +136,11 @@ Pick one subcommand.
           • {Colors.YELLOW}--freq N{Colors.RESET} expects a step every N timesteps (N, 2N, ... up to --t2
             or the last step found) and lists each one with neither file
             as missing
+          • {Colors.YELLOW}--remote [NAME]{Colors.RESET} adds a PLT column: what stands in for each .out
+            (its ASCII PLT here, its binary PLT here, or its verified copy on
+            the remote) as `case organise out` judges it, and lists the steps
+            with none as "convert first". The remote is asked only for a step
+            with no good PLT here; NAME as for `plt --remote`
 
     {Colors.CYAN}data{Colors.RESET}
         The completeness of the case's data files (was `case status`).
@@ -141,39 +160,48 @@ Pick one subcommand.
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
     # Check run directory OTHD/OISD files
-    case check run CS4SG1U1
+    case check run --case CS4SG1U1
 
     # Show the OTHD/OISD history files, one table per group
-    case check history CS4SG1U1
+    case check history --case CS4SG1U1
 
     # Only cleaned/ and the compiled file
-    case check history CS4SG1U1 --cleaned --compiled
+    case check history --case CS4SG1U1 --cleaned --compiled
+
+    # Compare the history with its copy on the remote (size and md5)
+    case check history --case CS4SG1U1 --remote cloud
 
     # Validate simflow.config
-    case check config CS4SG1U1
+    case check config --case CS4SG1U1
 
     # Check PLT files against expected set
-    case check plt CS4SG1U1
-    case check plt CS4SG1U1 --freq 50
-    case check plt CS4SG1U1 --t1 0 --t2 1000
+    case check plt --case CS4SG1U1
+    case check plt --case CS4SG1U1 --freq 50
+    case check plt --case CS4SG1U1 --t1 0 --t2 1000
 
     # Compare the binary PLTs with their copies on the remote (size and md5)
-    case check plt CS4SG1U1 --verify --remote cloud
-    case check plt CS4SG1U1 --verify --remote cloud --t1 8950 --t2 9900 --freq 50
+    case check plt --case CS4SG1U1 --remote cloud
+    case check plt --case CS4SG1U1 --remote cloud --t1 8950 --t2 9900 --freq 50
+
+    # Record the copies that are only on the remote, no download (header read there)
+    case check plt --case CS1 --remote cloud --adopt --t1 50 --t2 8250
 
     # Check .def File() references exist
-    case check def CS4SG1U1
+    case check def --case CS4SG1U1
 
     # List timesteps with .out/.rst files in the run directory
-    case check out CS4SG1U1
-    case check out CS4SG1U1 --t1 0 --t2 1000
-    case check out CS4SG1U1 --freq 1000          # flag missing restart steps
+    case check out --case CS4SG1U1
+    case check out --case CS4SG1U1 --t1 0 --t2 1000
+
+    # ... and which of them have a PLT here or on the remote (the rest: convert first)
+    case check out --case CS4SG1U1 --remote cloud
+    case check out --case CS4SG1U1 --freq 1000          # flag missing restart steps
 
     # Data file completeness (was `case status`)
-    case check data CS4SG1U1
+    case check data --case CS4SG1U1
 
     # Run everything
-    case check all CS4SG1U1
+    case check all --case CS4SG1U1
 
     # Using context
     use case CS4SG1U1

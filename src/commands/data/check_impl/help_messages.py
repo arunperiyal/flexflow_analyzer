@@ -10,7 +10,7 @@ def print_check_help():
 Verdicts on the time history.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    flexflow data check steady [{Colors.YELLOW}case{Colors.RESET}] --var {Colors.YELLOW}NAME{Colors.RESET} [options]
+    data check steady [--case {Colors.YELLOW}NAME{Colors.RESET}] --var {Colors.YELLOW}NAME{Colors.RESET} [options]
 
 {Colors.BOLD}SUBCOMMANDS:{Colors.RESET}
     {Colors.YELLOW}steady{Colors.RESET}                 Whether a variable has settled, and from which tsId
@@ -27,15 +27,17 @@ Whether the history of a variable has settled into a steady state -- a
 steady oscillation, or a steady value -- and from which tsId it has.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    flexflow data check steady [{Colors.YELLOW}case{Colors.RESET}] --var {Colors.YELLOW}NAME{Colors.RESET} [options]
+    data check steady [--case {Colors.YELLOW}NAME{Colors.RESET}] --var {Colors.YELLOW}NAME{Colors.RESET} [options]
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
     {Colors.YELLOW}--var NAME{Colors.RESET}             Variable or component. Repeat it, or comma-separate;
                            each component is judged on its own
     {Colors.YELLOW}--t1 TSID{Colors.RESET}              First tsId (alone: from there to the end)
     {Colors.YELLOW}--t2 TSID{Colors.RESET}              Last tsId
-    {Colors.YELLOW}--last N{Colors.RESET}               Only the last N steps (of the --t1/--t2 window).
-                           From context: use last:N
+    {Colors.YELLOW}--last N{Colors.RESET}               Only the last N steps (of the `use t1:`/`t2:` window).
+                           From context: use last:N. Not with a typed --t1/--t2:
+                           typing both is refused, and a typed --t1/--t2 makes a
+                           `use last:` ignored (it says so)
     {Colors.YELLOW}--node N{Colors.RESET}               Node to read       (default: 0)
     {Colors.YELLOW}--othid ID{Colors.RESET} / {Colors.YELLOW}--osgid ID{Colors.RESET}  Probe set / surface group, as for `data table`
     {Colors.YELLOW}--blocks K{Colors.RESET}             Blocks of whole cycles compared   (default: 4)
@@ -83,11 +85,23 @@ steady oscillation, or a steady value -- and from which tsId it has.
     judged). It is looked for inside the window: with --last, it is about the
     window start when all of it is steady. "-" when no rest passes.
 
+{Colors.BOLD}PIPING:{Colors.RESET}
+    Each variable with a steady start offers it to the command after a `|`,
+    which then runs once per case with {Colors.YELLOW}t1{Colors.RESET} set to that tsId (and `var`
+    when several variables were checked), so it works on the settled part:
+
+        use case:* node:25 var:dy; data check steady | data stats --func rms,std
+
+    A variable whose "from" is "-" offers nothing, and it is said. With
+    `use last:N` the window still ends where it did; the row's t1 lies inside
+    it. Needs shellkit 0.1.8; without it the table still prints.
+
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
-    flexflow data check steady CS4SG1U1 --var dy --node 24
-    flexflow data check steady CS4SG1U1 --var dx,dy --node 24 --last 4000
-    flexflow data check steady CS4SG1U1 --var tt --oisd --tol 0.1 -v
-    flexflow data check steady * --var dy --last 4000
+    data check steady --case CS4SG1U1 --var dy --node 24
+    data check steady --case CS4SG1U1 --var dx,dy --node 24 --last 4000
+    data check steady --case CS4SG1U1 --var tt --oisd --tol 0.1 -v
+    data check steady --case * --var dy --last 4000
+    data check steady --case * --var dy --node 25 | data stats --var dy --func rms,std
 """)
 
 
@@ -96,12 +110,16 @@ def print_steady_examples():
 {Colors.BOLD}{Colors.CYAN}Data Check Steady Examples{Colors.RESET}
 
   {Colors.BOLD}Has the cross-flow displacement settled, and from when?{Colors.RESET}
-    flexflow data check steady CS4SG1U1 --var dy --node 24
+    data check steady --case CS4SG1U1 --var dy --node 24
 
   {Colors.BOLD}Only the last 4000 steps, with the blocks shown:{Colors.RESET}
-    flexflow data check steady CS4SG1U1 --var dy --node 24 --last 4000 -v
+    data check steady --case CS4SG1U1 --var dy --node 24 --last 4000 -v
 
   {Colors.BOLD}From the shell context:{Colors.RESET}
     use case:CS4SG1U1 var:dy node:24 last:4000
     data check steady
+
+  {Colors.BOLD}The statistics of the settled part of every case:{Colors.RESET}
+    use case:* node:25 var:dy
+    data check steady | data stats --func rms,std
 """)

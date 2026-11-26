@@ -16,6 +16,7 @@ Code with no args to hand (helpers deep in a command) reads the shell state
 through current_case() / current_dir() / current_rundir().
 """
 
+import argparse
 from pathlib import Path
 from typing import Optional
 
@@ -125,10 +126,50 @@ CONTEXTS = [
 # Arguments that fall back to a context
 # ---------------------------------------------------------------------------
 
+def values_used(args, dests):
+    """The values a command will use, each tagged where it came from, for the line
+    a deleting command prints before it asks (.claude/rules/command-design.md, rule 8):
+    `case CS1 (use) · t1 9850 (typed)`. A value equal to the one in `use` is tagged
+    use; a flag typed with the same value as `use` reads the same either way."""
+    rt = current_runtime()
+    store = rt.context if rt is not None else None
+    parts = []
+    for dest in dests:
+        value = getattr(args, dest, None)
+        if value is None or value is False or value == '':
+            continue
+        entry = store.entry(dest) if store is not None else None
+        from_use = entry is not None and (str(entry.value) == str(value)
+                                          or entry.raw == str(value))
+        if dest == 'case':
+            shown = '*' if value == '*' else Path(str(value)).name
+        elif isinstance(value, float) and value == int(value):
+            shown = str(int(value))
+        else:
+            shown = str(value)
+        parts.append(f"{dest.replace('_', '-')} {shown} ({'use' if from_use else 'typed'})")
+    return ' · '.join(parts)
+
+
+def no_words(parser, flag='--case'):
+    """A hidden catch-all for words a command does not take. The command refuses one
+    (often the old positional value) saying which flag it is now: BaseCommand.run does it."""
+    parser.add_argument('words', nargs='*', help=argparse.SUPPRESS)
+    parser.set_defaults(word_flag=flag)
+
+
 def case_arg(parser, dest='case', help='Case directory path', **kwargs):
     """The positional case, filled from `use case:` when omitted."""
     flags = () if dest == 'case' else (dest,)
     return add_context_arg(parser, 'case', *flags, required=False, help=help, **kwargs)
+
+
+def case_flag(parser, *flags, dest=None, help='The case directory (default: use case:); * for every case'):
+    """`--case NAME`: the case a command works on, filled from `use case:` when left
+    out; a typed one overrides it. Never a word (`.claude/rules/command-design.md`)."""
+    extra = {'dest': dest} if dest else {}
+    return add_context_arg(parser, 'case', *(flags or ('--case',)), required=False,
+                           metavar='NAME', type=str, help=help, **extra)
 
 
 def context_flag(parser, key, *flags, **kwargs):
@@ -158,6 +199,42 @@ def freq_arg(parser, **kwargs):
     return context_flag(parser, 'freq', '--freq', **kwargs)
 
 
+# Which typed flags displace which `use` values, and which typed flags cannot be typed
+# together (.claude/rules/command-design.md, rule 6). Written once, here: a flag typed on
+# the line makes the `use` value of the keys beside it ignored, and says so. `--last` displaces
+# nothing: typed with a `use t1:`/`t2:` it cuts that window.
+DISPLACED_BY = {'last': ('t1', 't2'),         # use last:N is ignored when --t1 or --t2 is typed
+                'time': ('t1', 't2')}         # use time:S fills no end when either is typed
+# typed together, the flag and the ones it displaces contradict each other
+CANNOT_BE_TYPED_WITH = {'t1': ('last',), 't2': ('last',), 'last': ('t1', 't2')}
+
+
+class _Exclusive(argparse._StoreAction):
+    """A flag that refuses to be typed with the flags it contradicts."""
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        for dest in CANNOT_BE_TYPED_WITH.get(self.dest, ()):
+            if hasattr(namespace, dest) and explicit(namespace, dest):
+                parser.error(f"--{self.dest} and --{dest} cannot both be typed: one already "
+                             f"says which steps are wanted. Type one; the other can come "
+                             f"from `use`.")
+        super().__call__(parser, namespace, values, option_string)
+
+
+def displaced_by(ns, key):
+    """The flags typed on this line that displace the `use` value of `key`."""
+    return ['--' + dest for dest in DISPLACED_BY.get(key, ()) if explicit(ns, dest)]
+
+
+def say_ignored(key, store, typed):
+    """The line that says a `use` value was left out, and why."""
+    rt = current_runtime()
+    if rt is None:
+        return
+    rt.console.print(f"[dim]{key}: {store.get(key)} (use) ignored: "
+                     f"{' and '.join(typed)} typed[/dim]")
+
+
 def last_arg(parser, **kwargs):
     """
     --last N: the last N steps of the history, filled from `use last:N`.
@@ -170,10 +247,13 @@ def last_arg(parser, **kwargs):
     kwargs.setdefault('metavar', 'N')
 
     def resolve(store, ns):
-        if explicit(ns, 't1') or explicit(ns, 't2'):
+        typed = displaced_by(ns, 'last')
+        if typed:
+            if store.is_set('last'):
+                say_ignored('last', store, typed)
             return None
         return store.get('last') if store.is_set('last') else None
-    return context_flag(parser, 'last', '--last', resolve=resolve, **kwargs)
+    return context_flag(parser, 'last', '--last', resolve=resolve, action=_Exclusive, **kwargs)
 
 
 def time_window(parser, t1_flag='--t1', t2_flag='--t2', when=None,
@@ -200,7 +280,11 @@ def time_window(parser, t1_flag='--t1', t2_flag='--t2', when=None,
                 return None
             if store.is_set(key):
                 return store.get(key)
-            if store.is_set('time') and not explicit(ns, other_dest):
+            if store.is_set('time'):
+                typed = displaced_by(ns, 'time')
+                if typed:
+                    say_ignored('time', store, typed)
+                    return None
                 return store.get('time')
             return None
         return resolve
@@ -209,6 +293,7 @@ def time_window(parser, t1_flag='--t1', t2_flag='--t2', when=None,
                                   ('t2', t2_flags, t1_dest, t2_kwargs)):
         kw = dict(kw or {})
         kw.setdefault('type', float)
+        kw.setdefault('action', _Exclusive)
         context_flag(parser, key, *flags, resolve=end(key, other), **kw)
 
 

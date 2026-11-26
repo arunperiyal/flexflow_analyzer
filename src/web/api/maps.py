@@ -6,6 +6,7 @@ import numpy as np
 from flask import Blueprint, current_app, jsonify, request
 
 from src.commands.case.out_impl.command import WriteError, write_case_maps
+from ..services.logbuf import capture, log
 from src.core.domain import DomainConfig
 from src.utils.logger import Logger
 
@@ -185,13 +186,16 @@ def write_maps(name):
 
     def run():
         logger = Logger(verbose=True)
-        for block in targets:
-            try:
-                write_case_maps(case_dir, block, logger)
-            except WriteError as exc:
-                if not exc.skip:
-                    raise
-                continue
+        log.add(f"writing the maps of {name}")
+        with capture():
+            for block in targets:
+                try:
+                    write_case_maps(case_dir, block, logger)
+                except WriteError as exc:
+                    if not exc.skip:
+                        raise
+                    continue
+        log.add(f"maps of {name} written")
 
         domain = DomainConfig.find(case_dir)
         return _all_map_summaries(case_dir, domain)

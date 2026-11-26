@@ -52,30 +52,26 @@ def execute_post(args):
 
 
 POST_MODES = ('full', 'convert')
-_POST_USAGE = "Usage: run post {full|convert} [case_directory] [options]"
+_POST_USAGE = "Usage: run post {full|convert} [--case NAME] [options]"
 
 
 def _take_post_mode(args) -> bool:
     """
-    Read the mode word: run post full [case] / run post convert [case].
+    Read the mode word: run post full / run post convert.
 
-    Sets args.convert and moves the case that follows the mode word into
-    args.case. A mode is needed to submit; --cleanup-only and --show work
-    without one. Returns False (after printing why) on bad input.
+    Sets args.convert. A mode is needed to submit; --cleanup-only and --show work
+    without one. Returns False (after printing why) on bad input. The case is
+    --case NAME, never a word.
     """
-    words = list(getattr(args, 'words', None) or [])
-    mode = getattr(args, 'case', None)
-    if mode in POST_MODES:
-        args.case = words.pop(0) if words else None
-    else:
-        mode = None
+    mode = getattr(args, 'mode', None)
+    if mode is not None and mode not in POST_MODES:
+        print(f"Error: run post: '{mode}' is not a mode ({', '.join(POST_MODES)}); "
+              f"the case is a flag now: --case {mode}")
+        print(_POST_USAGE)
+        return False
     args.post_mode = mode
     args.convert = mode == 'convert'
 
-    if words:
-        print(f"Error: unexpected argument '{words[0]}'")
-        print(_POST_USAGE)
-        return False
     if mode is None and not (getattr(args, 'cleanup_only', False) or getattr(args, 'show', False)):
         print("Error: run post needs a mode: full (simPlt + simPlt2Bin) or convert (simPlt2Bin only)")
         print(_POST_USAGE)
@@ -824,9 +820,9 @@ Submit the postprocessing job script to SLURM queue.
 This typically runs simPlt (PLT generation) and simPlt2Bin (binary conversion).
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    run post full [case_directory] [options]
-    run post convert [case_directory] [options]
-    run post [case_directory] --cleanup-only | --show
+    run post full [--case NAME] [options]
+    run post convert [--case NAME] [options]
+    run post [--case NAME] --cleanup-only | --show
 
 {Colors.BOLD}SUBCOMMANDS:{Colors.RESET}
     {Colors.YELLOW}full{Colors.RESET}                 Run simPlt then simPlt2Bin

@@ -129,9 +129,9 @@ def test_case_upload_rst_without_steps_sends_every_step(cmd, case):
     (dict(what='input', files=True), 'carries the .def and its File(...) only'),
     (dict(t1=4000.0), 'need `case upload plt` or `rst`'),
     (dict(what='input', t1=4000.0), 'not per step'),
-    (dict(what='sgd'), "'sgd' is not binary, rst, input or history"),
+    (dict(what='sgd'), "'sgd' is not plt, rst, input or history; the case is a flag now"),
     (dict(binary=True), '--binary is now a word'),
-    (dict(what='CS1', case='CS2'), "'CS1' is not binary, rst, input or history"),
+    (dict(what='CS1', case='CS2'), "case upload plt --case CS1"),
 ])
 def test_case_upload_errors(cmd, case, capsys, kw, message):
     kw.setdefault('case', str(case))
@@ -139,12 +139,11 @@ def test_case_upload_errors(cmd, case, capsys, kw, message):
     assert message in ' '.join(capsys.readouterr().out.split())
 
 
-def test_the_case_may_come_first(cmd, case):
-    """`case upload CS1` (no binary/rst): the first word is the case."""
-    with patch.object(cmd, 'upload_directory', return_value=True) as up, \
-            patch.object(transfer, 'SSHClientWrapper'):
-        assert cmd.execute_upload(args(what=str(case), dir='othd_files')) == 0
-    assert up.call_args.args[2] == str(case)
+def test_the_case_as_the_first_word_is_refused_and_says_what_to_type(cmd, case, capsys):
+    """`case upload CS1` is the old form: the case is `--case CS1` now."""
+    assert cmd.execute_upload(args(what=str(case), dir='othd_files')) == 1
+    text = ' '.join(capsys.readouterr().out.split())
+    assert 'is a flag now' in text and f'--case {case}' in text
 
 
 def test_in_the_shell_the_case_context_fills_only_a_mode(tmp_path, monkeypatch):
@@ -167,7 +166,8 @@ def test_in_the_shell_the_case_context_fills_only_a_mode(tmp_path, monkeypatch):
     ns = parsed('case upload rst --t1 5')
     assert (ns.what, ns.case.endswith('CaseA')) == ('rst', True)
     ns = parsed('case upload CS9')
-    assert (ns.what, ns.case) == ('CS9', None)        # moved to case by the command
+    assert ns.what == 'CS9'                           # a word: the command refuses it
+    assert parsed('case upload --case CaseB').case == 'CaseB'    # typed, over use
     assert rt.execute_line('use t1:4000') == 0
     assert parsed('case upload rst').t1 == 4000.0
     assert parsed('case upload input').t1 is None     # the inputs are not per step
@@ -331,6 +331,6 @@ def test_the_flags_parse_for_upload_and_download():
     parser = argparse.ArgumentParser()
     CaseCommand().setup_parser(parser.add_subparsers(dest='command'))
     for verb in ('upload', 'download'):
-        a = parser.parse_args(['case', verb, 'rst', 'C1', '--freq', '1000', '--missing',
+        a = parser.parse_args(['case', verb, 'rst', '--case', 'C1', '--freq', '1000', '--missing',
                                '--t1', '1000', '--t2', '5000'])
         assert (a.what, a.freq, a.missing, a.t1, a.t2) == ('rst', 1000, True, 1000.0, 5000.0)

@@ -99,9 +99,9 @@ def list_available_docs(docs_dir):
         print(f"  {Colors.CYAN}{key:12s}{Colors.RESET} - {description}")
 
     print(f"\n{Colors.BOLD}Usage:{Colors.RESET}")
-    print(f"  flexflow docs <name>")
-    print(f"  flexflow docs main")
-    print(f"  flexflow docs run")
+    print(f"  docs <name>")
+    print(f"  docs main")
+    print(f"  docs run")
 
 
 def docs_command(args):

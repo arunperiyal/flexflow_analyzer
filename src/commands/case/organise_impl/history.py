@@ -178,14 +178,23 @@ class HistoryMixin:
         steps = [step for step in STEPS if getattr(self.args, step, False)]
         if not steps:
             self.console.print(
-                "[yellow]Nothing to do — pass --update, --clean, --compile, "
-                "--verify and/or --prune[/yellow]"
+                "[yellow]Nothing to do — name an action: update, clean, compile, "
+                "verify and/or prune[/yellow]"
             )
             return
         if not self.case.problem_name:
             self.console.print("[red]'problem' is not set in simflow.config — "
                                "cannot name the history files[/red]")
             return
+
+        self._clean_runs = None   # `clean 1,2,3`: the archive runs to clean, or None for all
+        raw = getattr(self.args, 'clean', False)
+        if isinstance(raw, str):
+            try:
+                self._clean_runs = history.parse_runs(raw)
+            except ValueError as e:
+                self.console.print(f"[red]clean {raw}: {e}[/red]")
+                return
 
         self._migrate_flat()
 
@@ -317,7 +326,8 @@ class HistoryMixin:
 
     # --- the plan: which steps of which run survive ------------------------------
 
-    def _plan(self, ext: str, label: str, quiet: bool = False) -> Optional[dict]:
+    def _plan(self, ext: str, label: str, quiet: bool = False, sources=None,
+              ignore_record: bool = False) -> Optional[dict]:
         """
         Read every run (archive/, or cleaned/ once pruned) in run order. A
         tsId at or below one already taken is a restart: everything from that
@@ -326,6 +336,11 @@ class HistoryMixin:
         A last step cut off by a killed job is left out. All runs must share
         one header (`mask`/`nOths` or `nOsfs`).
 
+        With `sources` (the archive runs of `clean 1,2,3`) only those runs
+        count, labelled 1..N in that order: the cleaned file names. Without
+        them the cleaned/.runs.json of an earlier selection stands in, unless
+        `ignore_record`.
+
         Returns None (and says why, unless quiet) when that cannot be done.
         """
         def say(text):
@@ -333,8 +348,24 @@ class HistoryMixin:
                 self.console.print(text)
 
         problem = self.case.problem_name
+        if sources is None and not ignore_record:
+            record = history.selection(self.case_dir, ext)
+            sources = [record[k] for k in sorted(record)] or None
+        if sources is None:
+            items = list(history.runs(self.case_dir, ext, problem, use_record=not ignore_record).items())
+        else:
+            have = history.archived(self.case_dir, ext, problem)
+            absent = [n for n in sources if n not in have]
+            if not have:        # this kind has no runs at all (an othd-only case)
+                items = []
+            elif absent:
+                say(f"  [red]✗[/red]  {label}: no run {', '.join(map(str, absent))} in "
+                    f"{ext}_files/archive/ (there: {', '.join(map(str, have)) or 'none'})")
+                return None
+            else:
+                items = [(k, have[n]) for k, n in enumerate(sources, 1)]
         scanned = []
-        for n, path in history.runs(self.case_dir, ext, problem).items():
+        for n, path in items:
             check = check_file(path)
             if check['problems']:
                 say(f"  [red]✗[/red]  {label}: {self._rel(path)}: {'; '.join(check['problems'])} — "
@@ -347,7 +378,7 @@ class HistoryMixin:
             scanned.append((n, path, header, blocks, dropped))
         if not scanned:
             return {'header': b'', 'merged': [], 'runs': {}, 'superseded': 0, 'restarts': [],
-                    'dropped': [], 'swapped': []}
+                    'dropped': [], 'swapped': [], 'sources': {}}
         if len({header for _, _, header, blocks, _ in scanned if blocks}) > 1:
             say(f"  [red]✗[/red]  {label} runs have different headers "
                 f"(different probe/surface sets) — cannot join them")
@@ -391,6 +422,7 @@ class HistoryMixin:
             'restarts': restarts,
             'dropped': [(path, d[0]) for _, path, _, _, d in scanned if d],
             'swapped': swapped,
+            'sources': dict(enumerate(sources, 1)) if sources is not None else {},
         }
 
     @staticmethod
@@ -460,14 +492,25 @@ class HistoryMixin:
         redid, without a cut-off last step. A run with nothing left has no
         cleaned file. Once archive/ is pruned the cleaned file is the run's
         only copy: changing or removing cleaned files asks first
-        (once per type), unless --no-confirm. Returns False if nothing could be done
+        (once per type), unless --yes. Returns False if nothing could be done
         or the answer was no.
         """
         problem = self.case.problem_name
         dry_run = getattr(self.args, 'dry_run', False)
+        explicit = self._clean_runs
         written = False
+        had = [label for ext, label in self._types() if history.selection(self.case_dir, ext)]
+        if explicit is None and had and not dry_run:
+            self.console.print(f"  [yellow]⚠[/yellow]  cleaned/ was made from a selection of runs "
+                               f"(.runs.json): a plain `clean` cleans every run of archive/ instead")
+            if not self.args.yes:
+                self.console.print("[bold yellow]Clean every run and drop the selection?[/bold yellow] "
+                                   "\\[y/N]: ", end="")
+                if self._read_answer() not in ('y', 'yes'):
+                    self.console.print("[dim]  Clean stopped, nothing changed[/dim]")
+                    return False
         for ext, label in self._types():
-            plan = self._plan(ext, label)
+            plan = self._plan(ext, label, sources=explicit, ignore_record=explicit is None)
             if plan is None:
                 return False
             if not plan['runs']:
@@ -490,6 +533,7 @@ class HistoryMixin:
 
             archived = history.archived(self.case_dir, ext, problem)
             out_dir = history.cleaned_dir(self.case_dir, ext)
+            old_source = history.selection(self.case_dir, ext)   # what each cleaned file came from
             changes = []   # (run, path, blocks or None to delete, only copy)
             for n, blocks in self._cleaned_blocks(plan).items():
                 path = out_dir / f'{problem}{n}.{ext}'
@@ -497,7 +541,10 @@ class HistoryMixin:
                     continue
                 if not blocks and not path.exists():
                     continue
-                changes.append((n, path, blocks, n not in archived and path.exists()))
+                changes.append((n, path, blocks, path.exists() and old_source.get(n, n) not in archived))
+            for n, path in history.cleaned(self.case_dir, ext, problem).items():
+                if n not in plan['runs']:      # a selection that no longer holds it
+                    changes.append((n, path, None, old_source.get(n, n) not in archived))
 
             merged = plan['merged']
             notes = [f"{len(plan['runs'])} run(s)", f"tsId {_range([m[0] for m in merged])}",
@@ -505,21 +552,35 @@ class HistoryMixin:
             if plan['superseded']:
                 notes.append(f"{plan['superseded']:,} redone by later runs")
             self.console.print(f"  {label}: {', '.join(notes)}")
+            if explicit is not None:
+                self.console.print("    " + ", ".join(f"{problem}{k}.{ext} ← archive {v}"
+                                                      for k, v in plan['sources'].items()))
+                ts = [m[0] for m in merged]
+                interval = _interval(ts)
+                gaps = [(a + interval, b - interval) for a, b in zip(ts, ts[1:]) if b - a > interval]
+                if gaps:
+                    self.console.print(f"  [yellow]⚠[/yellow]  {label}: {_missing(gaps, interval):,} "
+                                       f"tsId(s) in none of these runs ({_fmt_runs(gaps)})")
             if not changes:
                 self.console.print(f"    [dim]cleaned/ is up to date[/dim]")
                 record()
+                self._write_record(ext, plan)
                 continue
             for n, path, blocks, only in changes:
                 kept = [m[0] for m in merged if m[1] == n]
-                text = (f"{len(kept):,} steps, tsId {_range(kept)}" if blocks
-                        else "nothing left — every step redone later: removed")
+                if blocks:
+                    text = f"{len(kept):,} steps, tsId {_range(kept)}"
+                elif n not in plan['runs']:
+                    text = "not in the selection: removed" if explicit is not None else "no run left: removed"
+                else:
+                    text = "nothing left — every step redone later: removed"
                 warn = " [yellow](only copy: archive/ pruned)[/yellow]" if only else ""
                 self.console.print(f"    {self._rel(path)}: {text}{warn}"
                                    + (" [dim](dry run)[/dim]" if dry_run else ""))
             if dry_run:
                 continue
             only = [c for c in changes if c[3]]
-            if not self.args.no_confirm:
+            if not self.args.yes:
                 if only:
                     self.console.print(
                         f"[bold yellow]{len(only)} cleaned file(s) above are the only copy of their "
@@ -539,7 +600,20 @@ class HistoryMixin:
                 else:
                     path.unlink()
                 self.stats['cleaned'] += 1
+            self._write_record(ext, plan)
         return True
+
+    def _write_record(self, ext: str, plan: dict):
+        """cleaned/.runs.json after a `clean 1,2,3`; a plain --clean drops it."""
+        if getattr(self.args, 'dry_run', False):
+            return
+        explicit = self._clean_runs
+        if explicit is None:
+            history.write_selection(self.case_dir, ext, {})
+            return
+        left = [n for n in history.archived(self.case_dir, ext, self.case.problem_name)
+                if n not in explicit]
+        history.write_selection(self.case_dir, ext, plan['sources'], left)
 
     def _record_restarts(self, plan: dict):
         """Keep where the runs took over (.restarts): the cleaned and compiled
@@ -596,11 +670,11 @@ class HistoryMixin:
             plan = self._plan(ext, label, quiet=True)
             if plan is None or self._stale_cleaned(ext, plan):
                 self.console.print(f"  [yellow]⚠[/yellow]  {label}: cleaned/ is out of date with "
-                                   f"archive/ — run --clean first; not compiled")
+                                   f"archive/ — run `clean` first; not compiled")
                 continue
             header, blocks, problems = self._compiled_plan(ext)
             if problems:
-                self.console.print(f"  [red]✗[/red]  {label}: {'; '.join(problems)} — run --clean")
+                self.console.print(f"  [red]✗[/red]  {label}: {'; '.join(problems)} — run `clean`")
                 continue
             if not blocks:
                 self.console.print(f"  [dim]{label}: nothing in cleaned/ — skipped[/dim]")
@@ -617,7 +691,7 @@ class HistoryMixin:
                                + (" [dim](dry run)[/dim]" if dry_run else ""))
             if dry_run:
                 continue
-            if not getattr(self.args, 'no_confirm', False):
+            if not getattr(self.args, 'yes', False):
                 self.console.print(f"[bold yellow]Write {self._rel(out)}"
                                    f"{' (replaces the one there)' if out.exists() else ''}?"
                                    f"[/bold yellow] \\[y/N]: ", end="")
@@ -681,7 +755,7 @@ class HistoryMixin:
                 problems = check['problems'] + check['cut']
                 problems += [p for p in joined if p.startswith(path.name)]
                 if n in stale:
-                    problems.append("out of date with archive/ — run --clean")
+                    problems.append("out of date with archive/ — run `clean`")
                 row(path, check, problems)
             if plan is not None:
                 missing = [n for n in stale if n not in history.cleaned(self.case_dir, ext, problem)]
@@ -689,7 +763,7 @@ class HistoryMixin:
                     any_file = True
                     all_ok = False
                     table.add_row(f"{ext}_files/cleaned/{problem}{n}.{ext}", "—", "—",
-                                  "[red]missing — run --clean[/red]")
+                                  "[red]missing — run `clean`[/red]")
                 ts = [m[0] for m in plan['merged']]
                 interval = _interval(ts)
                 gaps = [(a + interval, b - interval) for a, b in zip(ts, ts[1:]) if b - a > interval]
@@ -702,7 +776,7 @@ class HistoryMixin:
                 problems = check['problems'] + check['cut']
                 header, blocks, joined = self._compiled_plan(ext)
                 if not joined and not self._same(out, self._chunks(header or b'', blocks)):
-                    problems.append("not cleaned/ joined — run --compile")
+                    problems.append("not cleaned/ joined — run `compile`")
                 row(out, check, problems)
 
         if not any_file:
@@ -726,7 +800,7 @@ class HistoryMixin:
         """
         Delete archive/ for each type whose cleaned/ reads through and is
         what --clean would write now: every step the archive holds that
-        counts is then in cleaned/. Asks first unless --no-confirm; --dry-run
+        counts is then in cleaned/. Asks first unless --yes; --dry-run
         only lists. rcv_files/ is not touched.
         """
         problem = self.case.problem_name
@@ -737,10 +811,15 @@ class HistoryMixin:
             if not parts:
                 self.console.print(f"  [dim]{label}: archive/ is empty — nothing to prune[/dim]")
                 continue
+            if history.selection(self.case_dir, ext):
+                self.console.print(f"  [yellow]⚠[/yellow]  {label}: cleaned/ was made from a selection "
+                                   f"of runs (.runs.json), so archive/ holds runs it does not — nothing "
+                                   f"pruned. A plain --clean cleans every run and lifts this.")
+                continue
             plan = self._plan(ext, label, quiet=True)
             if plan is None or self._stale_cleaned(ext, plan):
                 self.console.print(f"  [yellow]⚠[/yellow]  {label}: cleaned/ is out of date with "
-                                   f"archive/ — run --clean first; nothing pruned")
+                                   f"archive/ — run `clean` first; nothing pruned")
                 continue
             bad = [p.name for p in history.cleaned(self.case_dir, ext, problem).values()
                    if check_file(p)['problems'] or check_file(p)['cut']]
@@ -761,7 +840,7 @@ class HistoryMixin:
         if dry_run:
             self.console.print(f"  [bold cyan]Dry run:[/bold cyan] {len(to_delete)} file(s) would be deleted")
             return
-        if not self.args.no_confirm:
+        if not self.args.yes:
             self.console.print(f"[bold yellow]Delete {len(to_delete)} archived file(s)? "
                                f"cleaned/ keeps their steps.[/bold yellow] \\[y/N]: ", end="")
             if self._read_answer() not in ('y', 'yes'):

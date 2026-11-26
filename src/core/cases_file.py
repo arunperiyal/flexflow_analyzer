@@ -23,11 +23,12 @@ Every section is optional; a missing section reads as empty.
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional, Tuple
 
 FILENAME = '.cases.yml'
 AUTO_KEYS = ('keep_rst', 'keep_newest_rst', 'upload_rst', 'disk_alert', 'qos', 'account',
-             'partition')
+             'partition', 'vtu_cache', 'steady_var', 'steady_last', 'steady_tol',
+             'steady_mean_tol', 'steady_min_cycles')
 
 HEADER = """\
 # flexflow: the cases of this folder, where they go on each remote, and auto's
@@ -105,6 +106,16 @@ def read(folder) -> CasesFile:
                      cases=[{'name': str(c.get('name') or Path(c['path']).name),
                              'path': str(c['path'])} for c in cases],
                      remotes={str(k): v for k, v in remotes.items()}, auto=dict(auto))
+
+
+def remote_of(cf: CasesFile, remote: Optional[str]) -> Tuple[Optional[str], bool]:
+    """(the remote to use, whether it was chosen for the user): the one named, else the
+    only one the file lists, else None."""
+    if remote:
+        return remote, False
+    if len(cf.remotes) == 1:
+        return next(iter(cf.remotes)), True
+    return None, False
 
 
 def read_or_new(folder) -> CasesFile:

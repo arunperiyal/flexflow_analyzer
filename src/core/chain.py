@@ -23,6 +23,7 @@ Nothing here deletes anything.
 """
 
 import os
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Dict, Iterable, Optional, Tuple
@@ -47,7 +48,8 @@ class RemoteCopies:
     remote is as it should be -- md5-checked against the local file just now,
     or, with no local file, against the ledger's record; verified is the set
     of steps checked against the local file just now; problem is why the
-    remote could not be asked, or None.
+    remote could not be asked, or None. An optional fourth item is the set of
+    steps whose copy is on the remote with no record at all.
     """
 
     def __init__(self, load: Optional[Callable[[], Tuple[Dict[int, float], set, Optional[str]]]],
@@ -55,6 +57,7 @@ class RemoteCopies:
         self._load, self._unset = load, unset
         self._good: Optional[Dict[int, float]] = None
         self._verified: set = set()
+        self._unrecorded: set = set()
         self.problem: Optional[str] = None
 
     def _ask(self):
@@ -62,7 +65,9 @@ class RemoteCopies:
             if self._load is None:
                 self._good, self.problem = {}, self._unset
             else:
-                self._good, self._verified, self.problem = self._load()
+                got = self._load()
+                self._good, self._verified, self.problem = got[:3]
+                self._unrecorded = got[3] if len(got) > 3 else set()
 
     def written(self, step: int) -> Optional[float]:
         """When the PLT of this step that the remote holds was written here,
@@ -70,10 +75,20 @@ class RemoteCopies:
         self._ask()
         return self._good.get(step)
 
+    def unrecorded(self, step: int) -> bool:
+        """The remote holds a PLT of this step, but the ledger has no record of
+        it having been checked against a whole local file."""
+        self._ask()
+        return step in self._unrecorded
+
     def verified_now(self, step: int) -> bool:
         """The local binary PLT of this step matches its copy by md5, read now."""
         self._ask()
         return step in self._verified
+
+
+def _when(t: Optional[float]) -> str:
+    return time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(t)) if t is not None else '?'
 
 
 def _mtime(path) -> float:
@@ -131,9 +146,15 @@ class Chain:
             if self.remote.problem:
                 tried.append(f"no binary PLT here, and the remote was not asked: "
                              f"{self.remote.problem}")
+            elif self.remote.unrecorded(step):
+                tried.append(f"{binary.name} is on the remote, not recorded: nothing says "
+                             f"it was checked against a whole file, so it cannot stand in "
+                             f"for {than}")
             return None
         if old(written):
-            tried.append(f"the copy of {binary.name} on the remote is not newer than {than}")
+            tried.append(f"the copy of {binary.name} on the remote was written here "
+                         f"{_when(written)}, not after {than} ({_when(newest)}); a restart "
+                         f"may have written {than} again: post this step again")
             return None
         return StandIn(True, 'remote', f"{binary.name} is on the remote, as verified")
 
@@ -182,6 +203,15 @@ class Chain:
         return StandIn(False, why=self.remote.problem or "no verified copy on the remote",
                        found=self.remote.problem is None)
 
+    def for_binary_unverified(self, step: int) -> StandIn:
+        """--no-verify: the remote is not asked, so only this file is judged: it
+        stands in for nothing, but may go when it is a whole PLT (a file cut
+        short is kept, as it is on the remote's side too)."""
+        check = self.binary_check(step)
+        if check.ok:
+            return StandIn(True, 'waived', "whole here; its copy on the remote was not checked")
+        return StandIn(False, why=f"it is {check.reason}", found=True)
+
 
 def remote_copies(case_dir, problem: str, remote_name: Optional[str], window=None,
                   freq: Optional[int] = None, run_dir=None) -> RemoteCopies:
@@ -191,29 +221,31 @@ def remote_copies(case_dir, problem: str, remote_name: Optional[str], window=Non
     case_dir = Path(case_dir)
 
     def load():
-        from .transfer.cloud import CloudError, open_for_folder
+        from .transfer.cloud import CloudError, open_for_folder, remote_name_for
         from .transfer.ledger import Ledger
         from .transfer.verify import verify_plts
+        used = remote_name_for(case_dir.parent, remote_name)
         try:
             cloud = open_for_folder(case_dir.parent, remote_name)
         except CloudError as e:
             return {}, set(), str(e)
         try:
             ledger = Ledger(case_dir.parent)
-            result = verify_plts(case_dir, problem, cloud, remote_name, ledger,
+            result = verify_plts(case_dir, problem, cloud, used, ledger,
                                  window=window, freq=freq, run_dir=run_dir)
         except CloudError as e:
             return {}, set(), str(e)
         finally:
             cloud.close()
         good, verified = {}, set()
+        unrecorded = {int(n.rsplit('.', 2)[-2]) for n in result.only_there}
         for name in result.verified + result.kept_there:
             step = int(name.rsplit('.', 2)[-2])
-            entry = ledger.get(remote_name, case_dir.name, f"binary/{name}") or {}
+            entry = ledger.get(used, case_dir.name, f"binary/{name}") or {}
             if entry.get('mtime') is not None:
                 good[step] = entry['mtime']
         for name in result.verified:
             verified.add(int(name.rsplit('.', 2)[-2]))
-        return good, verified, None
+        return good, verified, None, unrecorded
 
     return RemoteCopies(load)
