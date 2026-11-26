@@ -4,7 +4,7 @@ Subcommands: plot, case
 """
 
 from ..base import BaseCommand
-from src.cli.context import case_arg
+from src.cli.context import case_flag, no_words
 
 
 class TemplateCommand(BaseCommand):
@@ -32,8 +32,9 @@ class TemplateCommand(BaseCommand):
         plot_parser.add_argument('plot_type', nargs='?',
                                 choices=['single', 'multi', 'multiple'],
                                 help='Plot template type: single or multi')
-        plot_parser.add_argument('output', nargs='?', type=str,
+        plot_parser.add_argument('--output', type=str, metavar='FILE',
                                 help='Output file path (optional)')
+        no_words(plot_parser, '--output')
         plot_parser.add_argument('--force', action='store_true',
                                 help='Force overwrite if file exists')
         plot_parser.add_argument('-v', '--verbose', action='store_true',
@@ -47,8 +48,9 @@ class TemplateCommand(BaseCommand):
         case_parser.add_argument('case_type', nargs='?',
                                 choices=['single', 'multi', 'multiple'],
                                 help='Case template type: single or multi')
-        case_parser.add_argument('output', nargs='?', type=str,
+        case_parser.add_argument('--output', type=str, metavar='FILE',
                                 help='Output file path (optional)')
+        no_words(case_parser, '--output')
         case_parser.add_argument('--force', action='store_true',
                                 help='Force overwrite if file exists')
         case_parser.add_argument('-v', '--verbose', action='store_true',
@@ -62,8 +64,9 @@ class TemplateCommand(BaseCommand):
         script_parser.add_argument('script_type', nargs='?',
                                    choices=['pre', 'main', 'post', 'env'],
                                    help='Script type: pre, main, post, or env')
-        case_arg(script_parser, dest='case_dir', type=str,
-                 help='Case directory to create scripts in (optional)')
+        case_flag(script_parser, dest='case_dir',
+                  help='Case directory to create scripts in (default: use case:)')
+        no_words(script_parser)
         script_parser.add_argument('--simflow-home', type=str, metavar='PATH',
                                   help='Set SIMFLOW_HOME path in the generated simflow_env.sh')
         script_parser.add_argument('--partition', type=str, metavar='NAME',
@@ -141,10 +144,10 @@ class TemplateCommand(BaseCommand):
         console.print(table)
         console.print()
         console.print("[bold]EXAMPLES:[/bold]")
-        console.print("    template plot single my_plot.yaml")
-        console.print("    template plot multi comparison.yaml")
-        console.print("    template case single my_case.yaml")
-        console.print("    template case multi batch_cases.yaml")
+        console.print("    template plot single --output my_plot.yaml")
+        console.print("    template plot multi --output comparison.yaml")
+        console.print("    template case single --output my_case.yaml")
+        console.print("    template case multi --output batch_cases.yaml")
         console.print("    template script post Case001")
         console.print("    template script post Case001 --partition shared")
         console.print("    template script main Case001 --partition medium")

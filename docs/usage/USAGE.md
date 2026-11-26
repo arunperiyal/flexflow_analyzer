@@ -104,11 +104,11 @@ after the `|` (`grep`, `sort`) still reads the text, as always.
 ### Def File Parameters
 
 ```bash
-def var                  # define{} variables;  def var Ur 2.0 sets one
-def time                 # timeSteppingControl{};  def time maxTime 7000
+def var                  # define{} variables;  def var --name Ur --value 2.0 sets one
+def time                 # timeSteppingControl{};  def time maxTime --value 7000
 def freq                 # outFreq of outputSimulation{} (out) and outputRestart{} (rst)
-def freq out 50          # write output every 50 steps
-def freq rst 500         # write a restart every 500 steps
+def freq out --value 50          # write output every 50 steps
+def freq rst --value 500         # write a restart every 500 steps
 ```
 
 ### Version and Comments
@@ -181,7 +181,7 @@ ff case show --case CS4SG1U1 --json       # JSON format
 Create a new case directory from a template:
 
 ```bash
-ff case create MY_NEW_CASE
+ff case create --name MY_NEW_CASE
 ```
 
 **Interactive prompts:**
@@ -191,8 +191,8 @@ ff case create MY_NEW_CASE
 
 **Options:**
 ```bash
-ff case create MY_CASE --template standard    # Use specific template
-ff case create MY_CASE --no-interactive       # Use defaults
+ff case create --name MY_CASE --template standard    # Use specific template
+ff case create --name MY_CASE --no-interactive       # Use defaults
 ```
 
 **What gets created:**
@@ -268,7 +268,7 @@ The `--by-dir` flag is useful when running multiple simulations:
 **Example workflow:**
 ```bash
 # Create case
-ff case create MY_SIMULATION
+ff case create --name MY_SIMULATION
 
 # Review and edit configuration
 cd MY_SIMULATION
@@ -288,13 +288,13 @@ Manage remote machines for file transfer operations:
 
 ```bash
 # Add a new remote machine
-ff remote add myserver --user john --ip 192.168.1.100 --password secret123
+ff remote add --name myserver --user john --ip 192.168.1.100 --password secret123
 
 # List all configured remotes
 ff remote list
 
 # Update remote settings
-ff remote modify myserver --port 2222 --password newpass
+ff remote modify --name myserver --port 2222 --password newpass
 
 # Set base path for case uploads
 ff remote set-path myserver /home/john/simulations
@@ -437,7 +437,7 @@ ff case upload ../mySimulation --remote hpc-cluster --remote-path /alternate/pat
 Quickly inspect OTHD or OISD files:
 
 ```bash
-ff check riser.othd
+ff check --file riser.othd
 ff check CS4SG1U1/output/riser.othd
 ```
 
@@ -449,8 +449,8 @@ ff check CS4SG1U1/output/riser.othd
 
 **Options:**
 ```bash
-ff check riser.othd --time-steps 0 5000    # Specific time range
-ff check riser.othd --nodes 1 10 20        # Specific nodes
+ff check --file riser.othd --time-steps 0 5000    # Specific time range
+ff check --file riser.othd --nodes 1 10 20        # Specific nodes
 ```
 
 ### Show Data
@@ -790,7 +790,7 @@ ff data show --case CS4SG1U1 --limit 10
 
 **Create and run simulation:**
 ```bash
-ff case create NEW_CASE && \
+ff case create --name NEW_CASE && \
 cd NEW_CASE && \
 # Edit config.yaml \
 ff case run NEW_CASE --dry-run && \

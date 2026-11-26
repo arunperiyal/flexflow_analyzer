@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+### ⚠️ Names, values and files are flags
+
+Phase 41. Breaking, no aliases; a value typed as a word is refused and the
+message names the flag:
+
+| Before | Now |
+|---|---|
+| `case create CS9 --ref-case R` | `case create --name CS9 --ref-case R` |
+| `remote add hpc1 --user U` (also `modify`, `delete`, `set-path`) | `remote add --name hpc1 --user U` |
+| `check riser.othd` | `check --file riser.othd` |
+| `field check snap.vtu` | `field check --file snap.vtu` |
+| `template plot single my.yaml` (also `case`) | `template plot single --output my.yaml` |
+| `template script main CASE` | `template script main --case CASE` |
+| `def var DIA 2.0` | `def var --name DIA --value 2.0` |
+| `def time maxTime 7000`, `def freq out 50` | `def time maxTime --value 7000`, `def freq out --value 50` |
+
+`def var|time|freq` take `--case` (also `-c`) from `use case:` like the other
+commands. `docs TOPIC` and the type words (`single`, `main`, `maxTime`, `out`)
+stay words.
+
 ### ⚠️ `data`, `plot` and `field`: the case is `--case NAME`, never a word
 
 Phase 40, the same rule as `case`. Breaking, no aliases; a case typed as a word

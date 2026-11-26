@@ -1,6 +1,7 @@
 """Remote command implementation"""
 
 from ..base import BaseCommand
+from src.cli.context import no_words
 
 
 class RemoteCommand(BaseCommand):
@@ -30,7 +31,8 @@ class RemoteCommand(BaseCommand):
             add_help=False,
             help='Add a new remote machine'
         )
-        add_parser.add_argument('name', nargs='?', help='Remote name')
+        add_parser.add_argument('--name', type=str, metavar='NAME', help='Remote name')
+        no_words(add_parser, '--name')
         add_parser.add_argument('--user', type=str, metavar='USER', help='SSH username')
         add_parser.add_argument('--ip', type=str, metavar='IP', help='IP address or hostname')
         add_parser.add_argument('--password', type=str, metavar='PASS', help='SSH password')
@@ -44,7 +46,8 @@ class RemoteCommand(BaseCommand):
             add_help=False,
             help='Modify a remote machine'
         )
-        modify_parser.add_argument('name', nargs='?', help='Remote name')
+        modify_parser.add_argument('--name', type=str, metavar='NAME', help='Remote name')
+        no_words(modify_parser, '--name')
         modify_parser.add_argument('--user', type=str, metavar='USER', help='SSH username')
         modify_parser.add_argument('--ip', type=str, metavar='IP', help='IP address or hostname')
         modify_parser.add_argument('--password', type=str, metavar='PASS', help='SSH password')
@@ -57,7 +60,8 @@ class RemoteCommand(BaseCommand):
             add_help=False,
             help='Delete a remote machine'
         )
-        delete_parser.add_argument('name', nargs='?', help='Remote name')
+        delete_parser.add_argument('--name', type=str, metavar='NAME', help='Remote name')
+        no_words(delete_parser, '--name')
         delete_parser.add_argument('-h', '--help', action='store_true', help='Show help')
 
         # remote list subcommand
@@ -74,7 +78,8 @@ class RemoteCommand(BaseCommand):
             add_help=False,
             help='Set base path for a remote'
         )
-        setpath_parser.add_argument('name', nargs='?', help='Remote name')
+        setpath_parser.add_argument('--name', type=str, metavar='NAME', help='Remote name')
+        no_words(setpath_parser, '--name')
         setpath_parser.add_argument('--path', type=str, metavar='PATH', help='Base directory on remote')
         setpath_parser.add_argument('-h', '--help', action='store_true', help='Show help')
 

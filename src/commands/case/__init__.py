@@ -104,7 +104,9 @@ class CaseCommand(BaseCommand):
         # case create (was: new)
         create_parser = case_subparsers.add_parser('create', add_help=False,
                                                    help='Create new case')
-        create_parser.add_argument('case_name', nargs='?', help='Name of the new case')
+        create_parser.add_argument('--name', dest='case_name', type=str, metavar='NAME',
+                                   help='Name of the new case')
+        no_words(create_parser, '--name')
         create_parser.add_argument('--ref-case', type=str, default='./refCase',
                                   help='Path to reference case directory')
         create_parser.add_argument('--problem-name', type=str,

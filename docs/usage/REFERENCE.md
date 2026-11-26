@@ -61,7 +61,7 @@ ff                    # Start interactive shell
 ```bash
 case show              # Show case info (uses current case)
 case show --case <case>       # Show specific case info
-case create <name>     # Create new case
+case create --name <name>     # Create new case
 case run --case <case>        # Submit SLURM jobs
 case status [case]     # The case's notes (.casestatus.md) and where it is
 case status update [--case NAME] [-m TEXT] [--state STATE]   # edit ($EDITOR), log a line, set the state
@@ -85,7 +85,7 @@ field extract [--case NAME]   # Extract field data
 
 ### File Inspection
 ```bash
-check <file>           # Inspect OTHD/OISD file
+check --file <file>           # Inspect OTHD/OISD file
 ```
 
 ### Visualization

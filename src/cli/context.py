@@ -151,10 +151,11 @@ def values_used(args, dests):
     return ' · '.join(parts)
 
 
-def no_words(parser):
+def no_words(parser, flag='--case'):
     """A hidden catch-all for words a command does not take. The command refuses one
-    (often the old positional case) with what to type: BaseCommand.run does it."""
+    (often the old positional value) saying which flag it is now: BaseCommand.run does it."""
     parser.add_argument('words', nargs='*', help=argparse.SUPPRESS)
+    parser.set_defaults(word_flag=flag)
 
 
 def case_arg(parser, dest='case', help='Case directory path', **kwargs):
@@ -163,11 +164,12 @@ def case_arg(parser, dest='case', help='Case directory path', **kwargs):
     return add_context_arg(parser, 'case', *flags, required=False, help=help, **kwargs)
 
 
-def case_flag(parser, help='The case directory (default: use case:); * for every case'):
+def case_flag(parser, *flags, dest=None, help='The case directory (default: use case:); * for every case'):
     """`--case NAME`: the case a command works on, filled from `use case:` when left
     out; a typed one overrides it. Never a word (`.claude/rules/command-design.md`)."""
-    return add_context_arg(parser, 'case', '--case', required=False, metavar='NAME',
-                           type=str, help=help)
+    extra = {'dest': dest} if dest else {}
+    return add_context_arg(parser, 'case', *(flags or ('--case',)), required=False,
+                           metavar='NAME', type=str, help=help, **extra)
 
 
 def context_flag(parser, key, *flags, **kwargs):

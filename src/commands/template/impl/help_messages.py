@@ -11,7 +11,7 @@ def print_plot_help():
 Generate plot configuration templates.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    template plot {Colors.YELLOW}<type>{Colors.RESET} [output_file]
+    template plot {Colors.YELLOW}<type>{Colors.RESET} [--output FILE]
 
 {Colors.BOLD}TEMPLATE TYPES:{Colors.RESET}
     {Colors.CYAN}single{Colors.RESET}     Single plot configuration (time-domain, FFT, trajectories)
@@ -31,11 +31,11 @@ Generate plot configuration templates.
 
     {Colors.BOLD}Generate single plot template:{Colors.RESET}
         template plot single
-        template plot single my_plot.yaml
+        template plot single --output my_plot.yaml
 
     {Colors.BOLD}Generate multi-case comparison template:{Colors.RESET}
         template plot multi
-        template plot multi comparison.yaml
+        template plot multi --output comparison.yaml
 
     {Colors.BOLD}Use generated template:{Colors.RESET}
         # 1. Edit the YAML file
@@ -45,7 +45,7 @@ Generate plot configuration templates.
         plot --input-file plot_single.yaml
 
 {Colors.BOLD}WORKFLOW:{Colors.RESET}
-    1. Generate template:    template plot single my_config.yaml
+    1. Generate template:    template plot single --output my_config.yaml
     2. Edit configuration:   vi my_config.yaml
     3. Generate plot:        plot --input-file my_config.yaml
 """)
@@ -59,7 +59,7 @@ def print_case_help():
 Generate case creation configuration templates.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    template case {Colors.YELLOW}<type>{Colors.RESET} [output_file]
+    template case {Colors.YELLOW}<type>{Colors.RESET} [--output FILE]
 
 {Colors.BOLD}TEMPLATE TYPES:{Colors.RESET}
     {Colors.CYAN}single{Colors.RESET}     Single case configuration
@@ -82,11 +82,11 @@ Generate case creation configuration templates.
 
     {Colors.BOLD}Generate single case template:{Colors.RESET}
         template case single
-        template case single my_case.yaml
+        template case single --output my_case.yaml
 
     {Colors.BOLD}Generate batch cases template:{Colors.RESET}
         template case multi
-        template case multi batch_cases.yaml
+        template case multi --output batch_cases.yaml
 
     {Colors.BOLD}Use generated template:{Colors.RESET}
         # 1. Edit the YAML file
@@ -98,7 +98,7 @@ Generate case creation configuration templates.
 {Colors.BOLD}WORKFLOW:{Colors.RESET}
 
     {Colors.BOLD}For single case:{Colors.RESET}
-        1. Generate template:    template case single my_case.yaml
+        1. Generate template:    template case single --output my_case.yaml
         2. Edit configuration:   vi my_case.yaml
            - Modify case_name, problem_name
            - Set geo parameters (groove_depth, etc.)
@@ -106,7 +106,7 @@ Generate case creation configuration templates.
         3. Create case:          case create --from-config my_case.yaml --ref-case ./refCase
 
     {Colors.BOLD}For multiple cases:{Colors.RESET}
-        1. Generate template:    template case multi my_cases.yaml
+        1. Generate template:    template case multi --output my_cases.yaml
         2. Edit configuration:   vi my_cases.yaml
            - Define parameter variations in the 'cases' list
            - Each case gets unique name and parameters
@@ -125,7 +125,7 @@ def print_template_examples():
 
 {Colors.BOLD}Single Plot Configuration:{Colors.RESET}
     # Generate template
-    template plot single my_plot.yaml
+    template plot single --output my_plot.yaml
 
     # Edit to configure:
     #   - Case directory
@@ -139,7 +139,7 @@ def print_template_examples():
 
 {Colors.BOLD}Multi-Case Comparison:{Colors.RESET}
     # Generate template
-    template plot multi comparison.yaml
+    template plot multi --output comparison.yaml
 
     # Edit to configure:
     #   - Multiple case directories
@@ -156,7 +156,7 @@ def print_template_examples():
 
 {Colors.BOLD}Single Case Creation:{Colors.RESET}
     # Generate template
-    template case single my_case.yaml
+    template case single --output my_case.yaml
 
     # Edit to configure:
     #   - case_name: testCase
@@ -170,7 +170,7 @@ def print_template_examples():
 
 {Colors.BOLD}Batch Case Generation:{Colors.RESET}
     # Generate template
-    template case multi batch_cases.yaml
+    template case multi --output batch_cases.yaml
 
     # Edit the 'cases' list to define multiple cases:
     #   cases:

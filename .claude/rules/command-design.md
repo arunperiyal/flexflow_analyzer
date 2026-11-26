@@ -50,4 +50,4 @@ that does not yet is listed at the end and fixed by its own phase.
 
 ## Not yet following these
 
-Everything except `case organise` (Phase 37). The rest is Phase 38.
+`run` (Phase 43) and `auto` (Phase 44); everything else follows them.
