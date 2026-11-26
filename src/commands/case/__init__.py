@@ -274,6 +274,8 @@ class CaseCommand(BaseCommand):
                                     help='Show only cleaned/ (combinable)')
         history_check_parser.add_argument('--compiled', action='store_true',
                                     help='Show only the compiled file (combinable)')
+        history_check_parser.add_argument('--remote', nargs='?', const='', default=None, metavar='NAME',
+                         help='Also compare the history files with their copies on the remote, by size and md5 (NAME: else `use remote:`, else the only remote .cases.yml lists)')
         history_check_parser.add_argument('-v', '--verbose', action='store_true',
                                     help='Enable verbose output')
         history_check_parser.add_argument('-h', '--help', action='store_true',
@@ -336,6 +338,8 @@ class CaseCommand(BaseCommand):
         out_check_parser.add_argument('--freq', type=int, metavar='N',
                                     help='Expect a step every N timesteps and list the ones '
                                          'with neither .out nor .rst')
+        out_check_parser.add_argument('--remote', nargs='?', const='', default=None, metavar='NAME',
+                         help='Also look for the PLT that stands in for each .out here or on the remote (NAME: else `use remote:`, else the only remote .cases.yml lists)')
         out_check_parser.add_argument('-v', '--verbose', action='store_true',
                                     help='Enable verbose output')
         out_check_parser.add_argument('-h', '--help', action='store_true',

@@ -68,6 +68,8 @@ def execute_case_check(args):
     # --archive/--cleaned/--compiled pick which `history` tables to print
     # (only on the `history` subcommand; none chosen prints them all).
     history_parts = tuple(p for p in HISTORY_PARTS if getattr(args, p, False))
+    # --remote on `history` / `out` also looks at the remote; given (even bare) is what asks
+    remote = getattr(args, 'remote', None) if subcommand in ('history', 'out') else None
 
     # Get case name from args or interactive context
     case_name = _get_case_name(args)
@@ -77,7 +79,7 @@ def execute_case_check(args):
     # Check if wildcard - if so, iterate over all cases
     if is_wildcard_case(case_name):
         _execute_check_on_all_cases(args, do_run, do_history, do_config, do_plt, do_def, do_out, freq, t1, t2,
-                                    history_parts)
+                                    history_parts, remote)
         return
 
     # Single case execution
@@ -86,7 +88,7 @@ def execute_case_check(args):
         return
 
     _execute_check_on_case(case_dir, do_run, do_history, do_config, do_plt, do_def, do_out, freq, t1, t2,
-                           history_parts)
+                           history_parts, remote)
 
 
 def _get_case_name(args) -> Optional[str]:
@@ -105,7 +107,7 @@ def _get_case_name(args) -> Optional[str]:
 
 
 def _execute_check_on_all_cases(args, do_run, do_history, do_config, do_plt, do_def, do_out,
-                                freq=None, t1=None, t2=None, history_parts=None):
+                                freq=None, t1=None, t2=None, history_parts=None, remote=None):
     """Execute check on all cases from .cases.yml file."""
     from src.cli.context import current_dir
 
@@ -136,7 +138,7 @@ def _execute_check_on_all_cases(args, do_run, do_history, do_config, do_plt, do_
             continue
 
         _execute_check_on_case(case_path, do_run, do_history, do_config, do_plt, do_def, do_out, freq, t1, t2,
-                               history_parts)
+                               history_parts, remote)
 
     console.print(f"[cyan]{'─' * 60}[/cyan]")
     console.print(f"[green]✓ Processed {len(cases)} cases[/green]")
@@ -144,7 +146,7 @@ def _execute_check_on_all_cases(args, do_run, do_history, do_config, do_plt, do_
 
 
 def _execute_check_on_case(case_dir: Path, do_run, do_history, do_config, do_plt, do_def, do_out,
-                           freq=None, t1=None, t2=None, history_parts=None):
+                           freq=None, t1=None, t2=None, history_parts=None, remote=None):
     """Execute check on a single case."""
     logger  = Logger(verbose=False)
     console = Console()
@@ -177,6 +179,10 @@ def _execute_check_on_case(case_dir: Path, do_run, do_history, do_config, do_plt
 
     if do_history:
         _check_history(cfg, case_dir, console, history_parts)
+        if remote is not None:
+            from .history_remote import print_history_remote
+            ok = print_history_remote(case_dir, cfg, console, remote, history_parts)
+            any_error = any_error or not ok
 
     if do_plt:
         _check_plt(cfg, case_dir, console, freq, t1, t2)
@@ -184,7 +190,7 @@ def _execute_check_on_case(case_dir: Path, do_run, do_history, do_config, do_plt
     if do_out:
         # `case check all --freq` is the PLT frequency; only `case check out
         # --freq` is the frequency of the .out/.rst files.
-        _check_out(cfg, case_dir, console, t1, t2, freq=None if do_plt else freq)
+        _check_out(cfg, case_dir, console, t1, t2, freq=None if do_plt else freq, remote=remote)
 
     console.print()
 
@@ -802,15 +808,48 @@ def _fmt_steps(steps: List[int], freq: Optional[int], limit: int = 12) -> str:
 # --out check
 # ---------------------------------------------------------------------------
 
+def _out_chain(cfg, case_dir, run_dir, problem, remote, t1, t2, freq):
+    """core/chain.py for `case check out --remote`: the remote is asked only for a step
+    with no good PLT here (`remote` '' means `use remote:`, else the only remote)."""
+    from ....core.chain import Chain, remote_copies
+    from .history_remote import _context_remote
+    window = None if t1 is None and t2 is None else (t1, t2)
+    name = remote or _context_remote() or None
+    return Chain(case_dir, problem, run_dir,
+                 remote=remote_copies(case_dir, problem, name, window=window, freq=freq,
+                                      run_dir=run_dir))
+
+
+def _say_convert_first(console, case_dir, chain, steps, out_parts):
+    """After the table: which steps have a .out and no PLT that stands in for it."""
+    if chain.remote.problem:
+        console.print(f"  [yellow]⚠[/yellow]  The remote was not asked: "
+                      f"{escape(str(chain.remote.problem))}")
+    if not steps:
+        console.print("  [green]✓[/green] every .out has a PLT that stands in for it")
+        return
+    first, last = min(steps), max(steps)
+    shown = ', '.join(_fmt_tsid(s) for s in sorted(steps)[:10]) + (', ...' if len(steps) > 10 else '')
+    console.print(f"  [red]✗[/red] {len(steps)} step(s) with a .out and no PLT that stands in "
+                  f"for it, here or on the remote: {shown}")
+    console.print(f"  [dim]Convert them first: run post full --case {escape(case_dir.name)} "
+                  f"--t1 {first} --t2 {last}[/dim]")
+
+
 def _check_out(cfg, case_dir: Path, console: Console,
                t1: Optional[float] = None, t2: Optional[float] = None,
-               freq: Optional[int] = None):
+               freq: Optional[int] = None, remote: Optional[str] = None):
     """List timesteps for which .out/.rst files are present in the run directory.
 
     With `freq`, the steps freq, 2*freq, ... are expected too: each one with
     neither file is listed as missing. They run up to t2, or to the last step
     found -- not maxTimeSteps, so a run still going does not show its future
     steps as missing.
+
+    With `remote` (given, even as ''), a PLT column says what stands in for each
+    step's .out -- its ASCII PLT here, its binary PLT here, or its verified copy
+    on the remote -- as `case organise out` judges it, and the steps with none
+    are listed as "convert first".
     """
     console.print("[bold]Out/Rst file check[/bold]")
 
@@ -833,12 +872,15 @@ def _check_out(cfg, case_dir: Path, console: Console,
 
     out_steps: dict = {}
     rst_steps: dict = {}
+    out_parts: dict = {}                # step -> every .out part of it
     for f in run_dir.iterdir():
         m = pattern.match(f.name)
         if not m:
             continue
         step = int(m.group(1))
         (out_steps if m.group(2) == 'out' else rst_steps)[step] = f
+        if m.group(2) == 'out':
+            out_parts.setdefault(step, []).append(f)
 
     if t1 is not None or t2 is not None:
         out_steps = {s: f for s, f in out_steps.items() if _step_in_bounds(s, t1, t2)}
@@ -860,21 +902,38 @@ def _check_out(cfg, case_dir: Path, console: Console,
         return
     all_steps = sorted(set(all_steps) | missing)
 
+    chain = _out_chain(cfg, case_dir, run_dir, problem, remote, t1, t2, freq) \
+        if remote is not None else None
+    convert_first = []                  # steps with a .out and no PLT that stands in for it
+
     tbl = Table(box=box.SIMPLE, show_header=True, header_style="bold yellow")
     tbl.add_column("tsId", justify="right", style="cyan")
     tbl.add_column(".out", justify="center")
     tbl.add_column(".rst", justify="center")
+    if chain is not None:
+        tbl.add_column("PLT", no_wrap=True)
     if freq:
         tbl.add_column("", no_wrap=True)
 
     for step in all_steps:
         if step in missing:
             tbl.add_row(f"[red]{_fmt_tsid(step)}[/red]", '[red]✗[/red]', '[red]✗[/red]',
-                        '[red]missing[/red]')
+                        *(['[dim]—[/dim]'] if chain is not None else []), '[red]missing[/red]')
             continue
         out_icon = '[green]✓[/green]' if step in out_steps else '[dim]—[/dim]'
         rst_icon = '[green]✓[/green]' if step in rst_steps else '[dim]—[/dim]'
-        tbl.add_row(_fmt_tsid(step), out_icon, rst_icon, *([''] if freq else []))
+        plt_cell = []
+        if chain is not None:
+            if step in out_parts:
+                stand = chain.for_out(step, out_parts[step])
+                if stand.ok:
+                    plt_cell = [f"[green]✓[/green] {stand.by}"]
+                else:
+                    convert_first.append(step)
+                    plt_cell = ["[red]✗[/red] " + ("not whole or older" if stand.found else "none")]
+            else:
+                plt_cell = ['[dim]—[/dim]']
+        tbl.add_row(_fmt_tsid(step), out_icon, rst_icon, *plt_cell, *([''] if freq else []))
 
     console.print(tbl)
     present = [s for s in all_steps if s not in missing]
@@ -886,4 +945,6 @@ def _check_out(cfg, case_dir: Path, console: Console,
             console.print(f"  [red]✗[/red] {len(missing)} step(s) missing at --freq {freq}")
         else:
             console.print(f"  [green]✓[/green] no step missing at --freq {freq}")
+    if chain is not None:
+        _say_convert_first(console, case_dir, chain, convert_first, out_parts)
     console.print()
