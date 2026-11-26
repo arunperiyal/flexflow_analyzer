@@ -819,9 +819,18 @@ message says `--case`.
 
 ### Phase 42: one test walks every command (branch `walk-test`)
 
-Asks the completer at every position of every command and checks the rules:
-words before flags, no positional value, no abbreviation. Tasks when it is
-started.
+`test_scripts/test_command_rules.py` walks the whole parser tree and checks the
+rules, so a command added later that breaks one fails: at most 3 levels, every
+positional is a word (choices or a completer, never a value name), a command that
+works on a case takes `--case` (not a positional), a parser with a value flag
+catches a stray word, and the completer answers at every position and offers the
+first word of each command.
+
+- [x] The test, shown to fail on a scratch command with a positional case, a
+      positional with no choices and a fourth level
+- [x] `docs TOPIC` gets its words (a completer); the last positional without one
+- [x] `CHANGELOG.md`
+
 
 ### Phase 12: `case check --remote`, verify against the remote (branch `check-remote`)
 

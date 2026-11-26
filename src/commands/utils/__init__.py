@@ -6,6 +6,11 @@ Commands: docs
 from ..base import BaseCommand
 
 
+def _complete_topic(rt, prefix):
+    from .docs_impl.command import TOPICS
+    return [(name, what) for name, (_, what) in TOPICS.items()]
+
+
 class DocsCommand(BaseCommand):
     """View documentation"""
 
@@ -21,7 +26,7 @@ class DocsCommand(BaseCommand):
             help=self.description
         )
         parser.add_argument('topic', nargs='?',
-                           help='Documentation topic (main, plot, compare, info, template)')
+                           help='Documentation topic (`docs` lists them)').completer = _complete_topic
         parser.add_argument('-h', '--help', action='store_true',
                            help='Show help for docs command')
         return parser
