@@ -58,7 +58,7 @@ class PlotCommand(BaseCommand):
         time_window(parser,
                     t1_kwargs=dict(type=_step, metavar='TSID', help='First tsId'),
                     t2_kwargs=dict(type=_step, metavar='TSID', help='Last tsId'))
-        last_arg(parser, help='Only the last N steps (of the --t1/--t2 window)')
+        last_arg(parser, help='Only the last N steps (of the `use t1:`/`t2:` window); not with a typed --t1/--t2')
 
         # Styling options
         parser.add_argument('--plot-style', type=str, help='Plot style string')

@@ -717,20 +717,52 @@ After this phase:
 - [x] Help, `docs/usage/`, the other help texts that show the old form,
       `CHANGELOG.md`
 
-### Phase 38: the other commands follow the rules (branches decided per group)
+### Phase 38: flags displace flags, and are typed in full (branch `flag-rules`)
 
-After Phase 37, one phase per group so each can be tested on its own. Not split
-into tasks yet; each group gets its tasks when it is started.
+Rules 4 and 6 of `.claude/rules/command-design.md`, for the whole program.
+Breaks no command line except a shortened flag.
 
-- the displacement of flags (rule 6) in `src/cli/context.py`, with the refusal
-  of two flags that displace each other (`--t1` with `--last`)
-- `allow_abbrev=False` on every parser
-- `--case` and no positional case: `case show/check/upload/download/status/...`,
-  `data`, `plot`, `field`, `run`, `auto`
-- names as flags: `case create --name`, `remote add|modify|delete|set-path
-  --name`, `template ... --output`
-- the typed/`use` tag in the `Using ...` lines of every deleting command
-- one test that walks every command and asks the completer at each position
+- Displacement: a flag declares which context keys a typed value displaces
+  (`--t1`/`--t2` displace `last` and `time`; `--time` displaces `t1`/`t2`; `--last`
+  displaces nothing), once, in `src/cli/context.py`; the line says what was
+  ignored (`last: 1000 (use) ignored: --t1 typed`). Two typed flags that
+  displace each other are refused, naming both. Today `last_arg` and
+  `time_window` each carry their own rule; they become one.
+- `allow_abbrev=False` on every parser of every command (a shortened flag is
+  refused), with a test that walks the parser tree so a new parser without it
+  fails.
+
+- [x] Write the plan: Phases 38 to 42
+- [x] The displacement declaration in `src/cli/context.py`, read by `last_arg`,
+      `time_window` and the other context flags; the "ignored" line
+- [x] Refuse two typed flags that displace each other (`--t1` with `--last`),
+      in every command that has them (`data`, `plot`, `case upload/download`)
+- [x] `allow_abbrev=False` on every parser; a test over the whole tree
+- [x] Help text, `docs/usage/`, `CHANGELOG.md`
+
+### Phase 39: `--case` for the `case` commands (branch `case-flag-case`)
+
+The case is `--case NAME` and never a word for `case show`, `run`, `check`
+(run, history, config, plt, def, out), `status`, `upload`, `download`, `domain`,
+`report`, `write`. The old forms are refused with the new one. The lines `auto
+show` writes for `case upload`, `case check` and `run post` change with it.
+Tasks when it is started.
+
+### Phase 40: `--case` for the other commands (branch `other-flag-case`)
+
+The same for `data`, `plot`, `field`, `run` and `auto`. Tasks when it is
+started.
+
+### Phase 41: names as flags (branch `names-as-flags`)
+
+`case create --name NAME`, `remote add|modify|delete|set-path --name NAME`,
+`template ... --output FILE`. Tasks when it is started.
+
+### Phase 42: one test walks every command (branch `walk-test`)
+
+Asks the completer at every position of every command and checks the rules:
+words before flags, no positional value, no abbreviation. Tasks when it is
+started.
 
 ### Phase 12: `case check --remote`, verify against the remote (branch `check-remote`)
 

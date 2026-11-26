@@ -12,6 +12,7 @@ from rich import box
 from rich.panel import Panel
 
 from shellkit import App, Setting
+from shellkit.parser import ShellkitParser
 
 from src.cli import builtins as ff_builtins
 from src.cli.context import CONTEXTS
@@ -90,6 +91,16 @@ def _percent(raw) -> int:
     return value
 
 
+class FlexParser(ShellkitParser):
+    """Every FlexFlow parser: flags are typed in full, never shortened
+    (.claude/rules/command-design.md, rule 4). Subparsers take the class of the
+    parser they are added to, so this covers the whole tree."""
+
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault('allow_abbrev', False)
+        super().__init__(*args, **kwargs)
+
+
 def create_app() -> App:
     """The FlexFlow shellkit App, with every command registered."""
     from __version__ import __version__
@@ -112,6 +123,7 @@ def create_app() -> App:
                           'On a login node, keep transfers under this % of a core '
                           '(0: no limit)', choices=('50', '70', '0'))],
         file_style=ff_builtins.file_style,
+        parser_class=FlexParser,
         source_dir=Path(__file__).resolve().parents[2],
     )
     for builtin in ff_builtins.builtins():

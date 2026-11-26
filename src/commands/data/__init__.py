@@ -53,7 +53,7 @@ class DataCommand(BaseCommand):
         time_window(table_parser, 
                     t1_kwargs=dict(metavar='TSID', help='First tsId (alone: from there to the end)'),
                     t2_kwargs=dict(metavar='TSID', help='Last tsId'))
-        last_arg(table_parser, help='Only the last N steps (of the --t1/--t2 window)')
+        last_arg(table_parser, help='Only the last N steps (of the `use t1:`/`t2:` window); not with a typed --t1/--t2')
         node_arg(table_parser, help='Node to read (default: 0)')
         table_parser.add_argument('--output', nargs='?', const=True, type=str, metavar='FILE',
                                  help='Write every row to a .csv instead of printing '
@@ -94,7 +94,7 @@ class DataCommand(BaseCommand):
         time_window(stats_parser, 
                     t1_kwargs=dict(metavar='TSID', help='First tsId (alone: from there to the end)'),
                     t2_kwargs=dict(metavar='TSID', help='Last tsId'))
-        last_arg(stats_parser, help='Only the last N steps (of the --t1/--t2 window)')
+        last_arg(stats_parser, help='Only the last N steps (of the `use t1:`/`t2:` window); not with a typed --t1/--t2')
         node_arg(stats_parser, help='Node to read (default: 0)')
         stats_parser.add_argument('--output', type=str, metavar='FILE',
                                  help='Also write the summary to a .csv')
@@ -133,7 +133,7 @@ class DataCommand(BaseCommand):
         time_window(steady_parser,
                     t1_kwargs=dict(metavar='TSID', help='First tsId (alone: from there to the end)'),
                     t2_kwargs=dict(metavar='TSID', help='Last tsId'))
-        last_arg(steady_parser, help='Only the last N steps (of the --t1/--t2 window)')
+        last_arg(steady_parser, help='Only the last N steps (of the `use t1:`/`t2:` window); not with a typed --t1/--t2')
         node_arg(steady_parser, help='Node to read (default: 0)')
         othid_arg(steady_parser,
                   help='othId (probe set) to read from the othd files (default: the first)')
