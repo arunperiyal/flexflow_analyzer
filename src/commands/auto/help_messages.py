@@ -111,6 +111,12 @@ def print_auto_help():
                                default) deletes only a killed render's leftovers (.partial,
                                .deriving, a day old), `delete` also the caches whose PLT is
                                here; one whose PLT is gone is never deleted
+      steady_var: aleDisp_y    judge a finished case (reached maxTimeSteps, nothing queued) on
+                               this variable over the last steady_last steps (default 2000):
+                               steady is a note, otherwise the case needs you, with the
+                               `def time` and `run main restart` that run it longer. Also
+                               steady_tol (0.05), steady_mean_tol (0.1), steady_min_cycles
+                               (10), as in `data check steady`. Edit .cases.yml; unset: off
       qos / account / partition  only if set: passed to post jobs
 
 {b}EXIT CODE{r}: 0 nothing needs you; 1 a case needs you, or the queue could

@@ -37,6 +37,11 @@ class AutoConf:
     account: Optional[str] = None
     partition: Optional[str] = None
     vtu_cache: str = 'keep'             # 'delete': the .vtu caches of binary/ may go
+    steady_var: Optional[str] = None    # the variable a finished case is judged on; None: off
+    steady_last: int = 2000             # steps from the end judged
+    steady_tol: float = 0.05
+    steady_mean_tol: float = 0.1
+    steady_min_cycles: int = 10
 
     @property
     def is_local(self) -> bool:
@@ -66,6 +71,28 @@ def check_vtu_cache(value) -> str:
     if str(value).lower() not in ('keep', 'delete'):
         raise AutoConfError(f"auto.vtu_cache must be keep or delete, got {value!r}")
     return str(value).lower()
+
+
+def check_steady(a: dict) -> dict:
+    """The steady_* settings of auto: -> AutoConf fields (13.24)."""
+    out = {}
+    var = a.get('steady_var')
+    if var is not None and not str(var).strip():
+        raise AutoConfError("auto.steady_var is empty: name a variable (e.g. dy) or remove it")
+    out['steady_var'] = str(var).strip() if var else None
+    for key, kind in (('steady_last', int), ('steady_min_cycles', int),
+                      ('steady_tol', float), ('steady_mean_tol', float)):
+        if a.get(key) is None:
+            continue
+        try:
+            value = kind(a[key])
+        except (TypeError, ValueError):
+            raise AutoConfError(f"auto.{key} must be a number, got {a[key]!r}")
+        if value <= 0 or (kind is int and value < 2):
+            raise AutoConfError(f"auto.{key} must be {'2 or more' if kind is int else 'above 0'}, "
+                                f"got {a[key]!r}")
+        out[key] = value
+    return out
 
 
 def check_rst_grids(keep, upload):
@@ -107,7 +134,8 @@ def read(folder, remote: Optional[str]) -> AutoConf:
                     keep_rst=keep, upload_rst=upload, keep_newest_rst=newest,
                     disk_alert=parse_size(a['disk_alert']) if a.get('disk_alert') else None,
                     qos=a.get('qos') or None, account=a.get('account') or None,
-                    partition=a.get('partition') or None, vtu_cache=vtu_cache)
+                    partition=a.get('partition') or None, vtu_cache=vtu_cache,
+                    **check_steady(a))
 
 
 def set_up(folder, remote: Optional[str] = None, path: Optional[str] = None,

@@ -27,7 +27,8 @@ from typing import Dict, List, Optional, Tuple
 
 FILENAME = '.cases.yml'
 AUTO_KEYS = ('keep_rst', 'keep_newest_rst', 'upload_rst', 'disk_alert', 'qos', 'account',
-             'partition', 'vtu_cache')
+             'partition', 'vtu_cache', 'steady_var', 'steady_last', 'steady_tol',
+             'steady_mean_tol', 'steady_min_cycles')
 
 HEADER = """\
 # flexflow: the cases of this folder, where they go on each remote, and auto's
