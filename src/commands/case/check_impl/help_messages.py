@@ -103,6 +103,15 @@ Pick one subcommand.
             or {Colors.YELLOW}no record{Colors.RESET} to compare with
           • {Colors.RED}in neither place{Colors.RESET}: with --t1, --t2 and --freq together, the
             steps of that series with no PLT here and none on the remote
+        {Colors.YELLOW}--adopt{Colors.RESET} (with --remote): record the PLTs that are only on the remote
+        and have no record (put there by hand), WITHOUT downloading them. Each
+        is judged where it lies: the header is read over SFTP and must give
+        exactly the listed size (whole), the remote write time must be after
+        the newest .out of that step left here (a restart's new .out is never
+        deleted on an earlier run's PLT), and md5 is taken on the remote so a
+        later change is seen. It records "adopted", which does not prove the
+        data equals the file it was made from: none is here to compare with.
+        Then `case organise out` counts the copy in place of the .out.
         A file that is not verified is taken out of the ledger. {Colors.YELLOW}--t1{Colors.RESET}/{Colors.YELLOW}--t2{Colors.RESET}
         pick a range of steps, {Colors.YELLOW}--freq N{Colors.RESET} the multiples of N, {Colors.YELLOW}-v{Colors.RESET} prints a line
         per file. The exit code is 0 when nothing is wrong: every PLT here
@@ -173,6 +182,9 @@ Pick one subcommand.
     # Compare the binary PLTs with their copies on the remote (size and md5)
     case check plt --case CS4SG1U1 --remote cloud
     case check plt --case CS4SG1U1 --remote cloud --t1 8950 --t2 9900 --freq 50
+
+    # Record the copies that are only on the remote, no download (header read there)
+    case check plt --case CS1 --remote cloud --adopt --t1 50 --t2 8250
 
     # Check .def File() references exist
     case check def --case CS4SG1U1

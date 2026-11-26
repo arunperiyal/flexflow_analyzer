@@ -663,9 +663,9 @@ class CaseOrganizer(HistoryMixin):
             if unrecorded:
                 self.console.print(
                     f"  [dim]{len(unrecorded)} of them are on the remote with no record. To "
-                    f"make them count, bring them back (case download plt --case "
-                    f"{self.case_dir.name} --t1 .. --t2 ..) and run case check plt --case "
-                    f"{self.case_dir.name} --remote, which records the copies it verifies.[/dim]")
+                    f"make them count, without downloading: case check plt --case "
+                    f"{self.case_dir.name} --remote --adopt --t1 .. --t2 .. (reads each "
+                    f"header there, checks it is newer than its .out, records it).[/dim]")
             if len(unrecorded) < len(bad):
                 self.console.print("  [dim]The others: post those steps again (run post full "
                                    "--t1 .. --t2 ..), then run this again.[/dim]")

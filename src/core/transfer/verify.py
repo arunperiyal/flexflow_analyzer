@@ -187,7 +187,7 @@ def verify_plts(case_dir, problem: str, cloud, remote_name: str, ledger=None,
         name = f"{problem}.{step}.plt"
         rel = f"binary/{name}"
         entry = ledger.get(remote_name, case, rel) if ledger is not None else None
-        if not entry or entry.get('verified') != 'md5' or not entry.get('md5'):
+        if not entry or entry.get('verified') not in ('md5', 'adopted') or not entry.get('md5'):
             result.only_there.append(name)
             word = "only on the remote, no record of a verified copy"
         elif entry.get('size') != there[step]:

@@ -56,6 +56,7 @@ def execute_verify(args) -> int:
     window = _window(getattr(args, 't1', None), getattr(args, 't2', None))
     freq = getattr(args, 'freq', None)
     verbose = bool(getattr(args, 'verbose', False))
+    adopt = bool(getattr(args, 'adopt', False))
 
     clouds, ledgers, code = {}, {}, 0
     try:
@@ -85,6 +86,12 @@ def execute_verify(args) -> int:
                 console.print(f"[bold]PLT verify[/bold]  [dim]{escape(case_dir.name)}: binary/"
                               f"{escape(problem)}.<step>.plt against {escape(cloud.where)}[/dim]")
                 say = (lambda line: console.print(f"  [dim]{escape(line)}[/dim]")) if verbose else None
+                if adopt:
+                    from src.core.transfer.adopt import adopt_plts
+                    adoption = adopt_plts(case_dir, problem, cloud, used, ledgers[folder],
+                                          window=window, freq=freq, say=say,
+                                          run_dir=cfg.run_dir(case_dir))
+                    _print_adoption(console, adoption)
                 result = verify_plts(case_dir, problem, cloud, used, ledgers[folder],
                                      window=window, freq=freq, say=say,
                                      run_dir=cfg.run_dir(case_dir))
@@ -98,6 +105,24 @@ def execute_verify(args) -> int:
         for cloud in clouds.values():
             cloud.close()
     return code
+
+
+def _print_adoption(console, adoption) -> None:
+    rows = Table.grid(padding=(0, 2))
+    rows.add_column(no_wrap=True)
+    rows.add_column()
+    if adoption.adopted:
+        rows.add_row("[green]adopted[/green]", _steps(adoption.adopted))
+    for name, why in adoption.refused.items():
+        rows.add_row("[red]not adopted[/red]", f"{escape(name)}: {escape(why)}")
+    if adoption.recorded:
+        rows.add_row("[dim]already recorded[/dim]", _steps(adoption.recorded))
+    console.print(rows)
+    if adoption.adopted:
+        console.print("  [dim]Adopted means: whole (header read on the remote, no download), "
+                      "written after its .out here, md5 taken on the remote. It does not "
+                      "prove the data equals the file it was made from: there is none here "
+                      "to compare with.[/dim]")
 
 
 def _print(console, result) -> None:

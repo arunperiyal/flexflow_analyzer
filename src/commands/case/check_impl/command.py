@@ -39,6 +39,11 @@ def execute_case_check(args):
         print_check_help()
         return
 
+    if subcommand == 'plt' and getattr(args, 'adopt', False) and \
+            getattr(args, 'remote', None) is None:
+        print("Error: case check plt --adopt: it records copies on the remote, so say which: "
+              "--remote [NAME]")
+        return 2
     if subcommand == 'plt' and getattr(args, 'remote', None) is not None:
         # binary/ against the remote copy; with --freq only the multiples of it
         from .verify import execute_verify
@@ -930,7 +935,9 @@ def _check_out(cfg, case_dir: Path, console: Console,
                     plt_cell = [f"[green]✓[/green] {stand.by}"]
                 else:
                     convert_first.append(step)
-                    plt_cell = ["[red]✗[/red] " + ("not whole or older" if stand.found else "none")]
+                    word = ("on the remote, not recorded" if 'not recorded' in stand.why
+                            else "not whole or older" if stand.found else "none")
+                    plt_cell = ["[red]✗[/red] " + word]
             else:
                 plt_cell = ['[dim]—[/dim]']
         tbl.add_row(_fmt_tsid(step), out_icon, rst_icon, *plt_cell, *([''] if freq else []))

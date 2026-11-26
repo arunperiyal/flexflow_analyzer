@@ -1123,3 +1123,23 @@ to the next command as `{case}` in the row; the next command's own `--case`, if 
   remote is asked only when a step has no good PLT here. A copy only on the remote counts when the
   ledger recorded it verified (13.13); one that is not recorded is not counted (Phase 30).
 - `case check plt --remote` (13.14) is unchanged.
+
+### 13.23 Adopting a remote PLT with no record (2026-11-26)
+
+A binary PLT put on the remote by hand has no ledger entry, so `Chain` (13.22) does not count it
+in place of its `.out`. Downloading 200 to 400 MB per step to verify it would defeat the point of
+cleaning the case, so `case check plt --remote --adopt` (`core/transfer/adopt.py`) judges it where
+it lies:
+
+- **whole**: `plt_valid.check_plt_open` reads the header and the zone preambles over SFTP
+  (`cloud.opener`, a seekable file) and the exact size must equal the listed one;
+- **newer than the `.out`**: the remote write time is after the newest `.out` of that step left
+  here (none left: nothing to be older than); otherwise it is refused and the step is to be posted
+  again;
+- **md5 on the remote** (md5sum), recorded so a later change is reported as "changed".
+
+The entry is `verified: 'adopted'` with the remote's write time as `mtime`. `verify_plts` reads it
+like a verified record for a copy only on the remote; the local binary PLT is never deleted on the
+strength of it (that needs `verified_now`, an md5 against the local file). It does not prove the
+data equals the file it was made from. `auto` never adopts. `RemoteCopies.unrecorded(step)` lets
+`Chain` say "on the remote, not recorded" for the rest.

@@ -309,6 +309,10 @@ class CaseCommand(BaseCommand):
                                       help='Also compare each PLT in binary/ with its copy on '
                                            'the remote, by size and md5 (NAME: else `use remote:`, '
                                            'else the only remote .cases.yml lists)')
+        plt_check_parser.add_argument('--adopt', action='store_true',
+                                      help='With --remote: record the PLTs that are only on the '
+                                           'remote with no record, after reading their header '
+                                           'there (nothing is downloaded)')
         plt_check_parser.add_argument('-v', '--verbose', action='store_true',
                                     help='Enable verbose output')
         plt_check_parser.add_argument('-h', '--help', action='store_true',

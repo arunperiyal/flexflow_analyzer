@@ -8,6 +8,12 @@
   recorded" for a step whose PLT is on the remote with no ledger record,
   instead of "no PLT yet", and tell how to make it count: bring it back with
   `case download plt`, then `case check plt --remote` records what it verifies.
+- `case check plt --remote --adopt [--t1 A --t2 B]` records the PLTs that are
+  only on the remote with no record, without downloading them: the header is
+  read over SFTP (whole), the remote write time must be after the newest
+  `.out` of that step here, the md5 is taken on the remote. Adopted copies
+  then stand in for their `.out` in `case organise out`. It does not prove the
+  data equals the file it was made from. `auto` never adopts.
 - The "not newer than its .out" message gives both times and the likely cause
   (a restart wrote the `.out` again).
 

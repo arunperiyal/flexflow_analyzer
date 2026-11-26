@@ -63,8 +63,9 @@ def _tstr(f):
 
 
 class PltFile:
-    def __init__(self, path):
+    def __init__(self, path, opener=None):
         self.path = str(path)
+        self._opener = opener or open
         self.vars = []
         self.zones = []          # list of dicts: name, ztype, npts, nelem
         self._data_start = None  # byte offset of the data section (after EOH)
@@ -77,7 +78,7 @@ class PltFile:
 
     # ---- header / zone records -------------------------------------------
     def _parse_header(self):
-        f = open(self.path, "rb")
+        f = self._opener(self.path, "rb")
         self._f = f
 
         magic = f.read(8)
