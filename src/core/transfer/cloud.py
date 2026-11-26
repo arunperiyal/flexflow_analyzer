@@ -190,6 +190,11 @@ class LocalCloud:
         except OSError:
             return None
 
+    def opener(self, case_name: str, rel: str):
+        """open(name, mode) for <root>/<case>/<rel>: a seekable file, read only."""
+        target = self.root / case_name / rel
+        return lambda _name, mode='rb': open(target, mode)
+
     def put(self, local, case_name: str, rel: str, snapshot: bool = False) -> PutResult:
         """Copy `local` to <root>/<case>/<rel>: to a temporary name first, checked
         (md5 of both), then renamed, so the real name never holds a half file."""
@@ -285,6 +290,12 @@ class SftpCloud:
         """md5 of <root>/<case>/<rel>, computed on the remote now; None when the file is not
         there or the remote has no md5sum (a deletion is then never cleared)."""
         return remote_md5(self.ssh, posixpath.join(self.root, case_name, rel))
+
+    def opener(self, case_name: str, rel: str):
+        """open(name, mode) for <root>/<case>/<rel>: a seekable SFTP file, read only,
+        so a header can be read without the data crossing the wire."""
+        target = posixpath.join(self.root, case_name, rel)
+        return lambda _name, mode='rb': self.ssh.sftp_client.open(target, 'rb')
 
     def put(self, local, case_name: str, rel: str, snapshot: bool = False) -> PutResult:
         """Send `local` to <root>/<case>/<rel>, checked (send_checked)."""

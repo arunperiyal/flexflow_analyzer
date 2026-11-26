@@ -128,53 +128,6 @@ loop (`run sq watch [N]`), a search (`run sq find KEY`) and one job
       key, a job id that is not in the queue
 - [ ] Tests, help text, completion, `CHANGELOG.md`
 
-### Phase 30: `case organise out` with PLTs only on the remote, unrecorded (branch `unrecorded-remote-plt`)
-
-Found on a real case (`CH4SG3U3P1`, the cluster, `binary/` empty here). `case
-check plt --verify` finds 180 PLTs on the remote and none here: 15 (8300 to
-9000) "as recorded when verified", 165 (50 to 8250) "no record of a verified
-copy to compare with" (PLTs that got there by hand, not by `case upload`).
-`case organise out --t1 8050 --t2 8300` then keeps every `.out` with two
-messages, both saying less than the truth:
-
-- 8050 to 8250: "Keeping .out of 5 step(s) with no riser.<step>.plt yet ...
-  Convert them first (run post full ...)". **Wrong:** the PLTs are on the
-  remote. The chain (`core/chain.py`, `remote_copies` in `RemoteCopies.load`)
-  takes only the recorded copies (`verified + kept_there`); an unrecorded one
-  (`only_there`) is left out, so the step reads as "no PLT anywhere" and the
-  advice is to post it again, which is not needed.
-- 8300: "the copy of riser.8300.plt on the remote is not newer than its .out".
-  The record's time is when the local file was written (`mtime` of the ledger
-  entry); the `.out` is newer than that. It may be right (a restart wrote the
-  `.out` again after the PLT) or not (the `.out` touched later); the message
-  gives no times, so the user cannot tell which.
-
-The rule that a PLT must be verified and newer than the `.out` stays: it is
-what keeps a restart's new `.out` from being deleted on the strength of the
-earlier run's PLT. What is missing is the way out for a copy that is there but
-unrecorded, and the right words.
-
-- [ ] Name it as it is: a step with an unrecorded copy on the remote is "on the
-      remote, not recorded", not "no PLT yet", in `case organise out`, `plt`
-      and `auto show` (`found`/`why` in `core/chain.py`, the `none` and `bad`
-      messages in `organizer.py`)
-- [ ] Say how to get a record: for each step the command that makes the
-      remote copy count (see the next task), instead of "post again"
-- [ ] A way to record copies that are only there, with the user vouching:
-      `case check plt --remote --adopt [--t1 A --t2 B]` writes the ledger
-      entry from the remote's size, md5 and write time (it cannot compare with
-      a local file: it says so), and says what it did not prove. Decide with
-      the user whether this, or `--trust-remote` on `case organise out`, or
-      downloading the PLT to check it, is the way
-- [ ] The "not newer than its .out" message gives both times (the PLT's and the
-      `.out`'s) and the likely cause (a restart wrote the `.out` again), and
-      what to do (post that step again)
-- [ ] `auto` is not changed: it never adopts a copy by itself; `auto show`
-      reads "not recorded" as a thing for the user (a `needs` item with the
-      command)
-- [ ] Tests (a dummy case with unrecorded, recorded and older-than-`.out`
-      copies on the folder remote), help text, `CHANGELOG.md`
-
 ## Backlog
 
 Not split into tasks yet. Each needs a decision before it becomes a phase.
@@ -267,6 +220,7 @@ As noted on 2026-11-26.
 | 28 | `no-verify` | `case organise plt binary --no-verify`: delete whole binary PLTs without asking the remote |
 | 29 | `auto-vtu` | `auto` cleans up the `.vtu` caches (§13.17) |
 | 31 | `flag-vocabulary` | One flag vocabulary for `case`, `run` and `auto`: actions are words, `--yes`, one remote is the default (§13.18) |
+| 30 | `unrecorded-remote-plt` | A remote PLT with no record is named as such; `case check plt --remote --adopt` records it from its header read over SFTP, no download (§13.23) |
 | 32 | `pipe-rows` | Pipe rows between commands (shellkit 0.1.8): `data stats --func maxloc \| case download plt` |
 | 12 | `check-remote` | `case check history --remote` and `case check out --remote` (a PLT column: ASCII here, binary here, or the verified copy on the remote; the rest "convert first"); `case check plt --remote` came with Phases 13 and 18 (`auto.md` §13.22) |
 
