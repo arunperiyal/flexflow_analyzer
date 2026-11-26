@@ -21,6 +21,9 @@ Loaded from `.claude/rules/`:
   PRs, Claude commits one task at a time and resolves conflicts; the user
   tests and reports in `bug-report.md`; plain commit messages.
 - `output.md`: no Claude Artifacts; where documents go.
+- `command-design.md`: at most 3 levels of words, values are flags (`--case`,
+  `--name`), `use` fills what is left out and a typed flag wins, flags typed in
+  full, deleting commands list and ask first.
 
 ## Where to look
 

@@ -51,10 +51,10 @@ def execute_organise(args):
         print(f"Error: {problem}", file=sys.stderr)
         sys.exit(2)
 
-    # Show help if no case directory provided
     if not args.case:
-        print_organise_help()
-        return
+        print(f"Error: case organise {subcommand}: no case given. Name one with "
+              f"--case NAME (* for every case), or `use case:NAME`.", file=sys.stderr)
+        sys.exit(2)
 
     problem = _check_keep_flags(args, subcommand)
     if problem:
@@ -78,6 +78,7 @@ def execute_organise(args):
         from .organizer import CaseOrganizer
         organizer = CaseOrganizer(case, args, logger, console)
 
+        _say_values(console, args, subcommand)
         # Run organization
         organizer.organize(subcommand)
 
@@ -91,33 +92,40 @@ def execute_organise(args):
         sys.exit(1)
 
 
-# What `plt` and `history` are told to do is said in words after the case:
-#   case organise plt CASE ascii binary      case organise history CASE update clean 1-3 compile
+# What `plt` and `history` are told to do is said in words; the case is `--case NAME` or
+# `use case:` (.claude/rules/command-design.md):
+#   case organise plt ascii binary      case organise history update clean 1-3 compile
 ACTIONS = {'plt': {'ascii': 'delete_ascii', 'binary': 'delete_binary'},
            'history': {'update': 'update', 'clean': 'clean', 'compile': 'compile',
                        'verify': 'verify', 'prune': 'prune'}}
 
 
+def _as_case_word(word):
+    """What to add to the message when the word looks like a case: the old form
+    `case organise history CS1 update` named the case right after the word."""
+    return f"; the case is a flag now: --case {word}"
+
+
 def _read_actions(args, subcommand):
     """Set the flags the organizer reads (delete_ascii, update, ...) from the action
-    words; what is wrong with them, or None. With the case from `use case:` the first
-    word lands in `case`: an action word there is an action."""
+    words; what is wrong with them, or None. A word that is not an action is refused
+    and the message says to use --case (the old form took the case as a word)."""
     allowed = ACTIONS.get(subcommand)
     if allowed is None:
+        stray = list(getattr(args, 'words', None) or [])
+        if stray:
+            return (f"case organise {subcommand} takes no words ('{stray[0]}')"
+                    f"{_as_case_word(stray[0])}")
         return None
     for attr in allowed.values():
         setattr(args, attr, False)
     words = list(getattr(args, 'actions', None) or [])
-    if getattr(args, 'case', None) in allowed:
-        from src.cli.context import current_case
-        words.insert(0, args.case)
-        args.case = current_case()
     i = 0
     while i < len(words):
         word = words[i]
         if word not in allowed:
             return (f"case organise {subcommand}: '{word}' is not an action "
-                    f"({', '.join(allowed)})")
+                    f"({', '.join(allowed)}){_as_case_word(word)}")
         if word == 'clean' and i + 1 < len(words) and re.fullmatch(r'[\d,\-]+', words[i + 1]):
             args.clean = words[i + 1]         # the archive runs to clean: 1,2,3 or 1-3
             i += 1
@@ -125,6 +133,23 @@ def _read_actions(args, subcommand):
             setattr(args, allowed[word], True)
         i += 1
     return None
+
+
+# What each subcommand reads from the flags and `use`, in the order it is said
+VALUES = {'history': ('case', 't1', 't2'),
+          'out': ('case', 'remote', 't1', 't2'),
+          'rst': ('case', 'keep_freq', 'keep_newest', 't1', 't2'),
+          'plt': ('case', 'remote', 'freq', 'keep_freq', 't1', 't2'),
+          'vtu': ('case', 't1', 't2')}
+
+
+def _say_values(console, args, subcommand, case_name=None):
+    """Before the question: the values this run uses, typed or from `use`."""
+    from src.cli.context import values_used
+    text = values_used(args, VALUES.get(subcommand, ('case',)))
+    if case_name:                       # over `*`: each case by its name
+        text = text.replace('case * (', f'case {case_name} (', 1)
+    console.print(f"[dim]Values used: {text}[/dim]")
 
 
 def _check_keep_flags(args, subcommand):
@@ -209,6 +234,7 @@ def _execute_organise_on_all_cases(args, logger, console, subcommand):
             from .organizer import CaseOrganizer
             organizer = CaseOrganizer(case, args, logger, console)
 
+            _say_values(console, args, subcommand, case_name)
             # Run organization
             organizer.organize(subcommand)
             

@@ -345,7 +345,7 @@ def _history(w):
             n = max(numbers, default=0) + 1
             plan.ctx['organise'] = ('update', n)
             plan.step('history', 'history', 'organise',
-                      f"case organise history {name} update clean compile")
+                      f"case organise history update clean compile --case {name}")
             plan.add('history', f"Move {snap.run_rel}/{p}.othd and .oisd into archive/ as run "
                                 f"{n}, then clean and compile "
                                 f"(organise history update clean compile)")
@@ -362,7 +362,7 @@ def _history(w):
         if uncleaned:
             plan.ctx['organise'] = ('clean', uncleaned)
             plan.step('history', 'history', 'organise',
-                      f"case organise history {name} clean compile")
+                      f"case organise history clean compile --case {name}")
             plan.add('history', f"Clean and compile archive run(s) "
                                 f"{', '.join(map(str, uncleaned))}, not yet in cleaned/ "
                                 f"(organise history clean compile)")
@@ -865,16 +865,16 @@ def _deletions(w):
                       note="the binary PLTs here against their copies on the remote, by md5")
         for a, b in runs_apart(ascii, []):
             plan.step('plt', 'delete', 'delete-ascii',
-                      f"case organise plt {name} ascii --t1 {a} --t2 {b} --remote {remote}")
+                      f"case organise plt ascii --case {name} --t1 {a} --t2 {b} --remote {remote}")
         for a, b in runs_apart(binary, set(snap.binary) - set(binary)):
             plan.step('plt', 'delete', 'delete-binary',
-                      f"case organise plt {name} binary --t1 {a} --t2 {b} --remote {remote}")
+                      f"case organise plt binary --case {name} --t1 {a} --t2 {b} --remote {remote}")
         for a, b in runs_apart(outs, set(snap.out) - set(outs)):
             plan.step('output', 'delete', 'delete-out',
-                      f"case organise out {name} --t1 {a} --t2 {b} --remote {remote}")
+                      f"case organise out --case {name} --t1 {a} --t2 {b} --remote {remote}")
         if conf.keep_rst and snap.rst and thin:
             plan.step('rst', 'delete', 'thin-rst',
-                      f"case organise rst {name} --keep-freq {conf.keep_rst} "
+                      f"case organise rst --case {name} --keep-freq {conf.keep_rst} "
                       f"--keep-newest {conf.keep_newest_rst} --t1 {min(thin)} --t2 {max(thin)}")
         if sacct_ok:                     # with no queue or remote read, nothing is a candidate
             plan.ctx['delete'] = {
@@ -928,7 +928,7 @@ def _vtu(w):
         plan.add('delete', f".vtu: {' and '.join(what)}; the next render converts the PLT "
                            f"again.", 'delete')
         flags = '' if conf.vtu_cache == 'delete' else ' --leftovers'
-        plan.step('plt', 'delete', 'delete-vtu', f"case organise vtu {snap.name}{flags}",
+        plan.step('plt', 'delete', 'delete-vtu', f"case organise vtu --case {snap.name}{flags}",
                   note="leftovers a day old" + (", caches with a PLT here"
                                                 if conf.vtu_cache == 'delete' else ''))
     if caches and conf.vtu_cache != 'delete':

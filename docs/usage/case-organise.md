@@ -6,8 +6,17 @@
 `history`, `out`, `rst`, `plt` and `vtu`. Running without a subcommand shows help.
 
 ```bash
-case organise <subcommand> [case_directory] [options]
+case organise <subcommand> [actions] [--case NAME] [options]
 ```
+
+The case is `--case NAME` (`*` for every case in `.cases.yml`, each asking its
+own question) or the one set by `use case:`; a typed `--case` overrides `use`.
+It is never a word, so Tab right after `history` or `plt` offers the actions.
+A flag left out is filled from `use` (`t1`, `t2`, `freq`, `remote`) and a typed
+one wins. Every flag is typed in full; abbreviations are refused. Before it
+asks, a command prints `Values used: case CS1 (use) · t1 9850 (typed)`.
+The old `case organise history CS1 update` is refused with a message that
+says to use `--case CS1`.
 
 ## Subcommands
 
@@ -17,10 +26,10 @@ Keeps the OTHD/OISD history of the case in three stages, the same under
 `othd_files/` and `oisd_files/`:
 
 ```
-othd_files/archive/{problem}N.othd   as job N wrote it          (--update, mainFlex.sh)
-othd_files/cleaned/{problem}N.othd   run N without the steps a   (--clean)
+othd_files/archive/{problem}N.othd   as job N wrote it          (update, mainFlex.sh)
+othd_files/cleaned/{problem}N.othd   run N without the steps a   (clean)
                                      later run redid
-othd_files/{problem}.othd            cleaned/ joined: one file   (--compile)
+othd_files/{problem}.othd            cleaned/ joined: one file   (compile)
 ```
 
 N numbers the jobs in the order they ran, and one N is the same run in
@@ -308,21 +317,21 @@ window `--t1 N --t2 N`, the same way it works for `case upload/download plt`.
 ## Options
 
 ```bash
-case organise history CS4SG1U1 update                         # Move the run's data into archive/
-case organise history CS4SG1U1 clean                          # Each run without what later runs redid
-case organise history CS4SG1U1 clean compile                # ... and one joined file per type
-case organise history CS4SG1U1 verify                         # Check archive/, cleaned/, compiled
-case organise history CS4SG1U1 clean compile verify prune   # ... then delete archive/
-case organise out CS4SG1U1                                      # Delete the .out a PLT stands in for
-case organise rst CS4SG1U1                                      # Thin the .rst
-case organise history CS4SG1U1 update --t1 0 --t2 1000        # Only archive files in [0, 1000]
-case organise rst CS4SG1U1 --keep-freq 5000                   # Custom retention
-case organise out CS4SG1U1 --t2 5000                            # Only clean up to timestep 5000
-case organise history CS4SG1U1 prune --yes             # Skip confirmation
-case organise history CS4SG1U1 prune --log                    # Log deletions to file
-case organise plt CS4SG1U1 ascii                       # Delete run-dir PLT with newer binary/ copy
-case organise plt CS4SG1U1 binary --t1 0 --t2 1000     # Delete binary/ PLT for a timestep range
-case organise plt CS4SG1U1 ascii binary       # Both directions in one call
+case organise history update --case CS4SG1U1                         # Move the run's data into archive/
+case organise history clean --case CS4SG1U1                          # Each run without what later runs redid
+case organise history clean compile --case CS4SG1U1                # ... and one joined file per type
+case organise history verify --case CS4SG1U1                         # Check archive/, cleaned/, compiled
+case organise history clean compile verify prune --case CS4SG1U1   # ... then delete archive/
+case organise out --case CS4SG1U1                                     # Delete the .out a PLT stands in for
+case organise rst --case CS4SG1U1                                     # Thin the .rst
+case organise history update --case CS4SG1U1 --t1 0 --t2 1000        # Only archive files in [0, 1000]
+case organise rst --case CS4SG1U1 --keep-freq 5000                   # Custom retention
+case organise out --case CS4SG1U1 --t2 5000                            # Only clean up to timestep 5000
+case organise history prune --case CS4SG1U1 --yes             # Skip confirmation
+case organise history prune --case CS4SG1U1 --log                    # Log deletions to file
+case organise plt ascii --case CS4SG1U1                       # Delete run-dir PLT with newer binary/ copy
+case organise plt binary --case CS4SG1U1 --t1 0 --t2 1000     # Delete binary/ PLT for a timestep range
+case organise plt ascii binary --case CS4SG1U1       # Both directions in one call
 ```
 
 ## Default Behavior
@@ -332,8 +341,8 @@ either delete flag, shows help or a "nothing to do" message:
 
 ```bash
 case organise                    # → shows help
-case organise history CS4SG1U1   # → "Nothing to do — name update, clean, compile, verify and/or prune"
-case organise plt CS4SG1U1       # → "Nothing to do — name ascii and/or binary"
+case organise history --case CS4SG1U1  # → "Nothing to do — name update, clean, compile, verify and/or prune"
+case organise plt --case CS4SG1U1      # → "Nothing to do — name ascii and/or binary"
 ```
 
 ## Safety

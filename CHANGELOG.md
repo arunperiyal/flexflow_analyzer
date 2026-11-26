@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+### ⚠️ `case organise`: the case is `--case NAME`, never a word
+
+The rules for every command are in `.claude/rules/command-design.md`;
+`case organise` is the first to follow them (Phase 37). Breaking, no aliases:
+
+| Before | Now |
+|---|---|
+| `case organise history CS1 update clean` | `case organise history update clean --case CS1` |
+| `case organise plt CS1 binary --t1 0` | `case organise plt binary --case CS1 --t1 0` |
+| `case organise out CS1`, `rst`, `vtu` | `case organise out --case CS1` (also `rst`, `vtu`) |
+| a shortened flag (`--no-ver`) | refused: flags are typed in full |
+
+- With the case from `use case:` nothing changes except that `update` and
+  `ascii` now complete straight after `history` and `plt`.
+- Before it asks, each run prints the values it uses, each tagged `(typed)` or
+  `(use)`: `Values used: case CS1 (use) · t1 9850 (typed)`. Over `--case *`
+  each case has its own line and its own question.
+- No case given says what to type, instead of showing the help.
+- `auto show` and `auto commands` write the new form.
+- The messages of `history verify` say `run clean` / `run compile`, not the old
+  flags.
+
 ### 🐛 Tab completion of `case organise plt` and `history`
 
 - With the case set by `use case:`, `case organise plt <Tab>` offered only

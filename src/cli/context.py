@@ -125,10 +125,42 @@ CONTEXTS = [
 # Arguments that fall back to a context
 # ---------------------------------------------------------------------------
 
+def values_used(args, dests):
+    """The values a command will use, each tagged where it came from, for the line
+    a deleting command prints before it asks (.claude/rules/command-design.md, rule 8):
+    `case CS1 (use) · t1 9850 (typed)`. A value equal to the one in `use` is tagged
+    use; a flag typed with the same value as `use` reads the same either way."""
+    rt = current_runtime()
+    store = rt.context if rt is not None else None
+    parts = []
+    for dest in dests:
+        value = getattr(args, dest, None)
+        if value is None or value is False or value == '':
+            continue
+        entry = store.entry(dest) if store is not None else None
+        from_use = entry is not None and (str(entry.value) == str(value)
+                                          or entry.raw == str(value))
+        if dest == 'case':
+            shown = '*' if value == '*' else Path(str(value)).name
+        elif isinstance(value, float) and value == int(value):
+            shown = str(int(value))
+        else:
+            shown = str(value)
+        parts.append(f"{dest.replace('_', '-')} {shown} ({'use' if from_use else 'typed'})")
+    return ' · '.join(parts)
+
+
 def case_arg(parser, dest='case', help='Case directory path', **kwargs):
     """The positional case, filled from `use case:` when omitted."""
     flags = () if dest == 'case' else (dest,)
     return add_context_arg(parser, 'case', *flags, required=False, help=help, **kwargs)
+
+
+def case_flag(parser, help='The case directory (default: use case:); * for every case'):
+    """`--case NAME`: the case a command works on, filled from `use case:` when left
+    out; a typed one overrides it. Never a word (`.claude/rules/command-design.md`)."""
+    return add_context_arg(parser, 'case', '--case', required=False, metavar='NAME',
+                           type=str, help=help)
 
 
 def context_flag(parser, key, *flags, **kwargs):

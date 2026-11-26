@@ -159,25 +159,25 @@ def test_parse_and_check(parse):
         args = parse(*words)
         assert _read_actions(args, 'plt') is None
         return args, _check_keep_flags(args, 'plt')
-    args, problem = check('plt', 'C1', 'binary', '--t1', '4000', '--t2', '5000',
+    args, problem = check('plt', 'binary', '--case', 'C1', '--t1', '4000', '--t2', '5000',
                           '--freq', '1', '--keep-freq', '5')
     assert (args.freq, args.keep_freq) == (1, 5) and problem is None
     assert args.delete_binary and not args.delete_ascii
-    assert 'only applies to `binary`' in check('plt', 'C1', 'ascii', '--keep-freq', '5')[1]
-    assert check('plt', 'C1', 'ascii', '--freq', '50')[1] is None
-    assert 'must be 1 or more' in check('plt', 'C1', 'binary', '--freq', '0')[1]
+    assert 'only applies to `binary`' in check('plt', 'ascii', '--case', 'C1', '--keep-freq', '5')[1]
+    assert check('plt', 'ascii', '--case', 'C1', '--freq', '50')[1] is None
+    assert 'must be 1 or more' in check('plt', 'binary', '--case', 'C1', '--freq', '0')[1]
     with pytest.raises(SystemExit):
-        parse('rst', 'C1', '--keep-every', '2')
-    assert parse('rst', 'C1', '--keep-freq', '500').keep_freq == 500
+        parse('rst', '--case', 'C1', '--keep-every', '2')
+    assert parse('rst', '--case', 'C1', '--keep-freq', '500').keep_freq == 500
     for gone in ('--all-out', '--keep-out'):
         with pytest.raises(SystemExit):
-            parse('rst', 'C1', gone)
-    assert parse('out', 'C1', '--t2', '500').organise_subcommand == 'out'
+            parse('rst', '--case', 'C1', gone)
+    assert parse('out', '--case', 'C1', '--t2', '500').organise_subcommand == 'out'
 
 
 def test_the_output_word_is_gone_and_the_error_names_the_new_ones(parse, capsys):
     with pytest.raises(SystemExit):
-        parse('output', 'C1')
+        parse('output', '--case', 'C1')
     err = capsys.readouterr().err
     assert "invalid choice: 'output'" in err and 'out, rst' in err
 
@@ -209,25 +209,29 @@ def test_output_keeps_out_newer_than_its_plt(tmp_path, run_dir):
     assert 50 not in left and 100 in left
 
 
-def test_the_actions_are_words_after_the_case(parse, monkeypatch):
-    a = parse('plt', 'C1', 'ascii', 'binary')
+def test_the_actions_are_words_and_the_case_is_a_flag(parse, monkeypatch):
+    a = parse('plt', 'ascii', 'binary', '--case', 'C1')
     assert _read_actions(a, 'plt') is None and a.delete_ascii and a.delete_binary and a.case == 'C1'
-    a = parse('history', 'C1', 'update', 'clean', '1,3', 'compile')
+    a = parse('history', 'update', 'clean', '1,3', 'compile', '--case', 'C1')
     assert _read_actions(a, 'history') is None
     assert (a.update, a.clean, a.compile, a.verify, a.prune) == (True, '1,3', True, False, False)
-    a = parse('history', 'C1', 'clean')
+    a = parse('history', 'clean', '--case', 'C1')
     _read_actions(a, 'history')
     assert a.clean is True
-    # the case from `use case:`: the first word lands in `case` and is an action
-    import src.cli.context as context
-    monkeypatch.setattr(context, 'current_case', lambda: '/the/case')
-    a = parse('plt', 'binary')
-    assert _read_actions(a, 'plt') is None and a.delete_binary and a.case == '/the/case'
-    # a word that is no action, and the old flags, are said
-    assert "'prune' is not an action (ascii, binary)" in _read_actions(parse('plt', 'C1', 'prune'), 'plt')
-    for old in ('--delete-binary', '--delete-ascii'):
+    a = parse('plt', 'binary')                     # the case from `use case:`
+    assert _read_actions(a, 'plt') is None and a.delete_binary
+
+
+def test_the_old_form_with_the_case_as_a_word_is_refused_and_says_what_to_type(parse):
+    for words, sub in ((('history', 'CS1', 'update'), 'history'), (('plt', 'CS1', 'binary'), 'plt'),
+                       (('out', 'CS1'), 'out'), (('rst', 'CS1'), 'rst'), (('vtu', 'CS1'), 'vtu')):
+        message = _read_actions(parse(*words), sub)
+        assert message and 'use --case CS1' not in message and '--case CS1' in message, words
+        assert "'CS1'" in message
+
+
+def test_flags_are_typed_in_full_no_abbreviations(parse):
+    for words in (('out', '--no-ver', '--t1', '5'), ('plt', 'binary', '--dry', '--t1', '5'),
+                  ('rst', '--keep-f', '5'), ('history', 'update', '--ye')):
         with pytest.raises(SystemExit):
-            parse('plt', 'C1', old)
-    for old in ('--update', '--compile', '--prune', '--verify'):
-        with pytest.raises(SystemExit):
-            parse('history', 'C1', old)
+            parse(*words)

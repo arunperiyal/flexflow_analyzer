@@ -79,8 +79,7 @@ def test_what_apply_says_it_will_do_is_what_the_steps_say(plans):
         assert ('upload' in said) == bool(plan.to_send()), snap.name
         assert ('post' in said) == bool(plan.due('post')), snap.name
         if 'history' in said:
-            assert plan.due('history')[0].command == f"case {said['history']}".replace(
-                'organise history', f'organise history {snap.name}', 1)
+            assert plan.due('history')[0].command == f"case {said['history']} --case {snap.name}"
         if 'upload' in said:
             assert said['upload'].startswith(f"{len(plan.to_send())} files")
         if 'post' in said:

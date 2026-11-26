@@ -686,6 +686,52 @@ flags after them, or the case argument. Note: the subcommand is spelled
 - [x] Fix it, with a test that asks the completer for each position
 - [x] `CHANGELOG.md`
 
+### Phase 37: `case organise` follows the command rules (branch `command-levels`)
+
+From the user (2026-11-26): after `case organise history` the shell expected a
+case directory, so `update` did not complete. The rules decided with the user
+are in `.claude/rules/command-design.md`: at most 3 levels of words; every value
+is a flag (`--case NAME`, `*` for all, or `use case:`); `use` fills what is left
+out and a typed flag wins; flags typed in full; deleting commands print their
+values (typed or from `use`) and ask per case. The old forms are removed, not
+kept as aliases; a command given one says what to type now.
+
+After this phase:
+
+    case organise history update clean compile verify prune [--case NAME]
+    case organise plt ascii binary [--case NAME]
+    case organise out|rst|vtu [--case NAME]
+
+- [x] The rules in `.claude/rules/command-design.md`, listed in `CLAUDE.md`
+- [x] A `--case` flag helper in `src/cli/context.py` (context fallback, `*`);
+      `allow_abbrev=False` on the organise parsers
+- [x] `case organise history|plt|out|rst|vtu`: no positional case; the words
+      first; a case typed as a word is refused with "use --case NAME". `auto`
+      writes the new form in its command lines; the leftover `--update` /
+      `--clean` / `--compile` in the history messages now read `update` /
+      `clean` / `compile`
+- [x] The values used are printed, each tagged typed or from `use`, before the
+      question; over `*` it asks once per case
+- [x] Remove `words_in_case_slot` (Phase 36's workaround); a completion test for
+      every position of every organise command
+- [x] Help, `docs/usage/`, the other help texts that show the old form,
+      `CHANGELOG.md`
+
+### Phase 38: the other commands follow the rules (branches decided per group)
+
+After Phase 37, one phase per group so each can be tested on its own. Not split
+into tasks yet; each group gets its tasks when it is started.
+
+- the displacement of flags (rule 6) in `src/cli/context.py`, with the refusal
+  of two flags that displace each other (`--t1` with `--last`)
+- `allow_abbrev=False` on every parser
+- `--case` and no positional case: `case show/check/upload/download/status/...`,
+  `data`, `plot`, `field`, `run`, `auto`
+- names as flags: `case create --name`, `remote add|modify|delete|set-path
+  --name`, `template ... --output`
+- the typed/`use` tag in the `Using ...` lines of every deleting command
+- one test that walks every command and asks the completer at each position
+
 ### Phase 12: `case check --remote`, verify against the remote (branch `check-remote`)
 
 Found on a real case (`BR0SG0U1P0`, PLTs moved to the remote by hand; none
