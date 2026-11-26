@@ -23,14 +23,11 @@ def execute_check(args):
         show_check_help()
         return
 
-    # Mode word: run check headers|mesh [case]
-    mode = None
-    if getattr(args, 'case', None) in CHECK_MODES:
-        mode = args.case
-        args.case = getattr(args, 'case_after', None)
-    elif getattr(args, 'case_after', None):
-        print(f"Error: unexpected argument '{args.case_after}'")
-        print("Usage: run check [headers|mesh] [case_directory]")
+    # Mode word: run check [headers|mesh] [--case NAME]
+    mode = getattr(args, 'mode', None)
+    if mode is not None and mode not in CHECK_MODES:
+        print(f"Error: run check: '{mode}' is not a mode ({', '.join(CHECK_MODES)}); "
+              f"the case is a flag now: --case {mode}")
         return
     args.check_mode = mode
 
@@ -445,8 +442,8 @@ Verify that the case directory has all required files and structure.
 Also checks the status of the last submitted SLURM job.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    run check [case_directory] [options]
-    run check headers [case_directory]
+    run check [--case NAME] [options]
+    run check headers [--case NAME]
     run check mesh [case_directory | file.msh]
 
 {Colors.BOLD}SUBCOMMANDS:{Colors.RESET}

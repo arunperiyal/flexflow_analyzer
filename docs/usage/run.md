@@ -208,8 +208,8 @@ run pre Case001 --dry-run
      - Resume simulation from last available restart file
 
    - **Manual restart** (with `run main restart`):
-     - Use `run main restart [case] --time <tsId>` to restart from a specific time step (the positional `run main restart 5000` is no longer accepted)
-     - `run main restart [case]` without `--time` restarts from the last written (unnumbered) .rst file; both forms ask for confirmation first (`-y` skips it)
+     - Use `run main restart [--case NAME] --time <tsId>` to restart from a specific time step (the positional `run main restart 5000` is no longer accepted)
+     - `run main restart [--case NAME]` without `--time` restarts from the last written (unnumbered) .rst file; both forms ask for confirmation first (`-y` skips it)
      - Runs the restart algorithm (see Restart Algorithm section below)
 
 4. **Simulation Execution:**
@@ -1343,12 +1343,12 @@ The `run` command integrates seamlessly with other FlexFlow Manager commands:
 
 | Command                          | Description                               | Example                        |
 | -------------------------------- | ----------------------------------------- | ------------------------------ |
-| `run check [case]`               | Validate case directory                   | `run check Case001`            |
-| `run pre [case]`                 | Submit preprocessing job                  | `run pre Case001`              |
-| `run main [case]`                | Submit main simulation                    | `run main Case001`             |
+| `run check [--case NAME]`               | Validate case directory                   | `run check Case001`            |
+| `run pre [--case NAME]`                 | Submit preprocessing job                  | `run pre Case001`              |
+| `run main [--case NAME]`                | Submit main simulation                    | `run main Case001`             |
 | `run main restart --time <tsId>` | Restart from specific time step (without `--time`: from the last written .rst) | `run main restart --time 5000` |
 | `run main --dependency <job_id>` | Submit with SLURM dependency              | `run main --dependency 123456` |
-| `run post full [case]`                | Submit postprocessing (no auto cleanup)   | `run post full Case001`             |
+| `run post full [--case NAME]`                | Submit postprocessing (no auto cleanup)   | `run post full Case001`             |
 | `run post full --cleanup`             | Submit postprocessing with cleanup job    | `run post full --cleanup`           |
 | `run post full --t2 <tsId>`         | Process up to specific time step          | `run post full --t2 5000`         |
 | `run post full --last <N>`            | Process last N time steps                 | `run post full --last 2500`         |

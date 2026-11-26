@@ -107,9 +107,9 @@ const FlowChart = (() => {
     {
       id: 'watch', kind: 'step', col: 1, row: 10, label: ['Watch the queue'],
       title: 'Watch the queue',
-      command: 'run sq watch\n# run sc <id|name> cancels a job',
+      command: 'run sq watch\n# run sc --job <id> | --name <name> cancels a job',
       optional: true,
-      detail: `Refreshes the Slurm queue. "run sq find <key>" looks for jobs
+      detail: `Refreshes the Slurm queue. "run sq find --key <key>" looks for jobs
         by name or work directory.`,
     },
     {

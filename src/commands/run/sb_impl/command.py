@@ -23,10 +23,11 @@ def execute_sb(args):
     script = getattr(args, 'script', None)
     if not script:
         print("Error: No script specified")
-        print("Usage: run sb <script> [sbatch_args...]")
+        print("Usage: run sb --script FILE [--sbatch-args 'ARGS']")
         return
 
-    extra = getattr(args, 'extra', []) or []
+    import shlex
+    extra = shlex.split(getattr(args, 'sbatch_args', None) or '')
     submit_job(script, extra)
 
 

@@ -588,3 +588,19 @@ def test_data_plot_field_words_and_the_case_flag_complete(rt):
     check()
     use(rt, 'case:CaseA')
     check()
+
+
+def test_run_words_complete_and_the_case_is_a_flag(rt):
+    def check():
+        assert texts(rt, 'run check ') == ['headers', 'mesh']
+        assert texts(rt, 'run main ') == ['restart', 'reset']
+        assert texts(rt, 'run post ') == ['full', 'convert']
+        assert texts(rt, 'run list ') == ['log']
+        assert texts(rt, 'run sq ') == ['watch', 'find'] or set(['watch', 'find']) <= set(texts(rt, 'run sq '))
+        for line in ('run check', 'run pre', 'run main', 'run main restart', 'run post full',
+                     'run list log'):
+            assert '--case' in texts(rt, line + ' --'), line
+            assert texts(rt, f'{line} --case Case') == ['CaseA/', 'CaseB/'], line
+    check()
+    use(rt, 'case:CaseA')
+    check()

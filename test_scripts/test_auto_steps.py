@@ -86,7 +86,7 @@ def test_what_apply_says_it_will_do_is_what_the_steps_say(plans):
             # the first post step, with the same mode and window
             first = plan.due('post')[0].command
             mode, t1, t2 = said['post'].split()[2], said['post'].split()[4], said['post'].split()[6]
-            assert first.startswith(f"run post {mode} {snap.name} --t1 {t1} --t2 {t2}")
+            assert first.startswith(f"run post {mode} --case {snap.name} --t1 {t1} --t2 {t2}")
         # --only narrows it to the kinds named
         assert [k for k, _ in _intended(plan, {'post'}) if k != 'detail'] == \
             (['post'] if plan.due('post') else [])

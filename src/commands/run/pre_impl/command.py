@@ -506,7 +506,7 @@ Submit the preprocessing job script to SLURM queue.
 This typically runs mesh generation (gmsh) and mesh conversion (simGmshCnvt).
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    run pre [case_directory] [options]
+    run pre [--case NAME] [options]
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
     {Colors.YELLOW}--gmsh PATH{Colors.RESET}      Override gmsh executable (sbatch --export=GMSH=PATH, script unchanged)

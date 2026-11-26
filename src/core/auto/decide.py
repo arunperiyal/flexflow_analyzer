@@ -604,7 +604,7 @@ def _post(w):
                     for n, (a, b, d, mode) in enumerate(jobs):
                         freq_part = f" --freq {d}" if (len(jobs) > 1 or d != f) else ''
                         plan.step('plt', 'post', 'post',
-                                  f"run post {mode} {name} --t1 {a} --t2 {b}{freq_part} "
+                                  f"run post {mode} --case {name} --t1 {a} --t2 {b}{freq_part} "
                                   f"--no-remote", now=(n == 0),
                                   note='' if n == 0 else 'after the post job before it has ended')
                         count = len(range(a, b + 1, d))
@@ -955,8 +955,8 @@ def _stopped_short(w):
         plan.ctx['restart_from'] = sets[-1] if sets else None
         if not last_main and not sets:
             return                      # nothing known: no job history, no set to name
-        ask = (f"run main restart {snap.name} --time {sets[-1]}" if sets
-               else f"run main restart {snap.name} --time <tsId>")
+        ask = (f"run main restart --case {snap.name} --time {sets[-1]}" if sets
+               else f"run main restart --case {snap.name} --time <tsId>")
         why = (f" (the newest complete restart set; a set cut short by the stop is not used)"
                if sets else " (no complete restart set found)")
         how = (f"main job {last_main.jobid} ended {last_main.state}" if last_main
