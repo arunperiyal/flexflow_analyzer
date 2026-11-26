@@ -522,8 +522,8 @@ def test_a_typed_window_beats_the_last_context(rt):
         a = parsed(rt, f'{line} --t1 2000')
         assert (a.t1, a.last) == (2000, None), line
         assert parsed(rt, f'{line} --t2 3000').last is None, line
-        a = parsed(rt, f'{line} --t1 2000 --last 50')       # a typed --last still cuts
-        assert (a.t1, a.last) == (2000, 50), line
+        with pytest.raises(Exception, match='cannot both be typed'):   # two typed flags that
+            parsed(rt, f'{line} --t1 2000 --last 50')                  # contradict: refused
 
 
 def test_the_t1_context_keeps_the_last_context(rt):
