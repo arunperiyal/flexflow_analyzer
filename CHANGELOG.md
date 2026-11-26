@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### 🧪 One test walks every command
+
+`test_scripts/test_command_rules.py` checks `.claude/rules/command-design.md` over
+the whole parser tree (levels, words and values, `--case`, stray words, completion at
+every position), so a command added later that breaks a rule fails. `docs TOPIC` now
+completes its topics.
+
 ### ⚠️ `auto`: the case is `--case NAME`, never a word
 
 Phase 44, the last command to follow the rule. Breaking, no aliases; the old
