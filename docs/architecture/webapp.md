@@ -428,67 +428,48 @@ ssh -L 8080:localhost:8080 cluster                          # on the laptop
 
 ## 11. Phases
 
-### Phase 1 — skeleton and the Case menu
+The checklist that stood here was checked against the code on 2026-11-27 and
+retired; the plan is `docs/development/PLAN.md`. What is built:
 
-- [ ] `src/web/` package, app factory, `python -m src.web`, loopback guard
-- [ ] Three-pane layout from figure 1
-- [ ] Refactor `scan_for_cases()` / `write_cases_file()` out of `execute_add()`,
-      with a test pinning the CLI output first
-- [ ] `services/registry.py`, `services/logbuf.py`
-- [ ] `/api/cases` (list, scan, add, delete), `/api/log`
-- [ ] Menu bar with a working `Case → Add / Delete`
+| Was listed | Where it is now |
+|---|---|
+| `src/web/` package, app factory, `python -m src.web`, loopback guard | `src/web/server.py`, `__main__.py` |
+| Three-pane layout | `templates/index.html`, `static/js/layout.js` |
+| `scan_for_cases()` / `write_cases_file()` split out of `case add` | `src/commands/case/add_impl/command.py` |
+| `services/registry.py` | built; `services/logbuf.py` was not (see below) |
+| `/api/cases` (list, scan, browse, add, delete) | `api/cases.py` |
+| Menu bar, `Case → Add / Delete` | `static/js/menu.js` |
+| `mapfile.py`, `frame.py`, `project.py`, `loader.py` | `src/web/services/` |
+| `/meta`, `/maps`, `/maps/<file>`, `/history` | `api/cases.py`, `api/maps.py`, `api/history.py` |
+| The three cross-checks in the dialog | `api/maps.py` |
+| Vendored Plotly | `static/vendor/plotly-basic.min.js`, `plotly-gl3d.min.js` |
+| `Plot → New`, the picker, the View selector, "Write map now" | `newplot.js`, `picker.js`, `POST /maps` |
+| Panel tree, stacked subplots with a shared time axis | `panels.js`, `plot.js` |
+| `Plot → Layout…`, `Clear panel` | `layout.js`, `menu.js` |
+| Background load with a job-status endpoint | `api/jobs.py`, `services/jobs.py` |
+| Optional 3-D picker (lazy `gl3d` bundle) | `picker.js` |
+| Per-panel title editing | `panels.js`, `traceedit.js` |
+| `web start` / `web stop` in the shell | `src/cli/builtins.py` |
+| Matplotlib export at 300 dpi | `api/export.py` |
+| The `OTHDReader` bug (group-aware `plot` / `compare`) | `OTHDReader(group=...)`, `test_data_group_ids.py` |
 
-Done when a case can be added and removed from the browser and `.cases` matches
-what `case add` would have written.
+Built beyond this list: field extract and render (`api/field.py`, `vtkjs`), FFT
+(`api/fft.py`), spatial plots (`api/spatial.py`), data statistics
+(`api/data.py`), settings (`api/settings.py`), the flowchart (`flowchart.js`).
 
-### Phase 2 — the picker and the plot workspace
-
-- [ ] `services/mapfile.py`: parse the `#` header and CSV of `othd.*.map`
-- [ ] `services/frame.py`: resolve a map's block through `DomainConfig.outputs()`
-      to its body; degrade cleanly when there is no `domain.yml`, no matching
-      body, or a `null` radius
-- [ ] `services/project.py`: (probe, frame) → the view list and the projection,
-      with unit tests per probe type (a straight riser, a catenary, a ring with
-      `closed: yes`, a helix, a grid) each run with and without a frame
-- [ ] `services/loader.py`: `scan`/`load` cache, lock, LRU
-- [ ] `/api/cases/<n>/meta`, `/maps`, `/maps/<file>`, `/history`
-- [ ] Three cross-checks surfaced in the dialog: predicted `othId`, row count,
-      and node file against `outputs[].nodes`
-- [ ] Vendor `plotly-basic.min.js`
-- [ ] `Plot → New` (figure 2): mode, case, probe set, picker, View selector,
-      coordinate snap, discovered components, routing
-- [ ] "Write map now" for a case with no map, with confirmation
-- [ ] Panel tree; Plotly stacked subplots with `matches: 'x'`
-- [ ] Spinner and teed stdout during first load
-
-Done when `Plot → New` picks three rows off a riser by mouse — by arc length when
-`domain.yml` is there, on coordinate axes when it is not — puts two cases into two
-panels with a shared time axis, and adding a fourth row redraws from cache.
-
-### Phase 3 — polish
-
-- [ ] `Plot → Layout…` and `Plot → Clear panel`
-- [ ] Background load with a job-status endpoint
-- [ ] Optional 3-D picker view, lazy-loading a vendored `gl3d` bundle
-- [ ] Per-panel title editing and y-axis lock
-- [ ] `web start` / `web stop` in the REPL. Note `FlexFlowApp.run()`
-      (`src/cli/app.py:236`) ignores `argv` and always starts the shell, so this
-      belongs in `handle_shell_command()`, not as an argparse command
-- [ ] Matplotlib export at 300 dpi via `plot_utils`
-
-### Separate branch — the `OTHDReader` bug
-
-Not part of this work, but blocking trust in existing CLI output (§3): make
-`plot` / `compare` group-aware, most simply by moving `FlexFlowCase` onto
-`series.py`. Needs a test with a two-group othd.
+Not built, and now in the plan (Phase 45): `/api/log` with `services/logbuf.py`
+and the spinner with teed stdout during a first load, and a y-axis lock per
+panel. The open questions of section 13 stay open.
 
 ---
 
-## 12. Out of scope
+## 12. What the web UI does not do
 
-PLT/field visualisation, force coefficients, FFT and trajectory plots, run
-submission and SLURM monitoring, remote transfers, authentication, multi-user
-state.
+Never in scope: authentication and multi-user state (section 10), run
+submission and SLURM monitoring, remote transfers. In scope since this section
+was first written, and built: PLT field rendering and extraction, FFT, spatial
+(trajectory) plots, data statistics, export. Force coefficients are plotted as
+any other OISD series when the data carries them.
 
 ---
 

@@ -81,17 +81,14 @@ own `docs/PLAN.md` before writing code; they may have changed.
 - [ ] Bring `.claude/context/NEXT_SESSION.md` up to date (only when the user
       asks: it still names the old doc paths)
 
-### Phase 11: web UI, close the old checklist (branch `webapp-checklist`)
+### Phase 45: web UI, what the old checklist left (branch `webapp-leftovers`)
 
-`docs/architecture/webapp.md` §11 lists its phases with every box unticked,
-but most of it is built (the package, the picker, panels, `web start` /
-`web stop`, export, and more that §12 called out of scope: field render, FFT,
-spatial plots).
+The old checklist (`webapp.md` §11) was checked against the code on
+2026-11-27 and retired (Phase 11, done). Two items it listed are not built:
 
-- [ ] Go through §11 against the code and tick what exists
-- [ ] Move what is left into this file as a new phase, and replace §11 with a
-      pointer here
-- [ ] Rewrite §12 "Out of scope" to match what the web UI now does
+- [ ] `/api/log` and `services/logbuf.py`: the spinner with the teed stdout
+      while a case loads for the first time
+- [ ] A y-axis lock per panel
 
 ### Phase 27: `run sq` is easier to use (branch `run-sq-usage`)
 
@@ -175,6 +172,7 @@ As noted on 2026-11-26.
 | 4 | `repo-cleanup` | Removed `module_backup/`, `main_old.py`, the shadowed command files, root `mainFlex.sh` and `sample.yaml`; `.gitignore` tidied. The `config` command was left (backlog). Still open, on the user's word: delete the local branches already merged |
 | 5 | `web-render-tests` | The two failing render tests: the route they fetched was removed on purpose in `70d5224`; the tests now go through `save` and `render-file/<token>` |
 | 7 | `auto-steady` | `auto` judges a finished case with the steady check; not steady goes to Needs you with the commands to run longer (§13.24) |
+| 11 | `webapp-checklist` | `webapp.md` §11 checked against the code and retired; §12 rewritten; what was left is Phase 45 |
 | 12 | `checked-transfer` | `case upload` and `auto` send through one checked path (`src/core/transfer/`: temporary name, size and md5, rename) and one ledger, whose entries now hold the local `mtime` and the remote `path`; `--to` / `--from` became `--remote`; the crash of `case upload --help` fixed |
 | 13 | `plt-verify` | `case upload plt` / `case download plt` (the old word `binary` still works); `case check plt --verify --remote NAME` compares each binary PLT with its remote copy by size and md5, writes the ledger and exits 0 only when all are verified (`verify_plts()` in `src/core/transfer/verify.py`) |
 | 18 | `plt-verify-chain` | `case check plt --verify` after the user's review: md5 by reading the copy back when the remote has no `md5sum`; PLTs only on the remote compared with the ledger's record (an emptied `binary/` is fine); steps in neither place listed; a broken PLT says how to make it again (`run post convert`, else `run post full`); a remote that is not set says so |
