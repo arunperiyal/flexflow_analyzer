@@ -201,7 +201,7 @@ def _history(v):
                 parts.append(f"{kind} runs {runs_text(runs)}")
         s.row('Only there', ' · '.join(parts) + f" (on {remote}, not here)")
     if only and (only.get(('othd', 'archive')) or only.get(('oisd', 'archive'))):
-        s.actions.append(f"case download history {name} --archive --remote {remote}")
+        s.actions.append(f"case download history --case {name} --archive --remote {remote}")
     for step in plan.steps_of('live'):
         s.row('Live copy', step.note)
     for key in ('organise', 'upload-history', 'live'):

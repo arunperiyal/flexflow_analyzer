@@ -77,3 +77,32 @@ def test_over_every_case_each_one_is_named_in_its_values(shell, tmp_path, capsys
     text += capsys.readouterr().out
     assert 'Values used: case CS1 (typed)' in text and 'Values used: case CS2 (typed)' in text
     assert text.count('Dry run:') == 2                   # each case is its own run
+
+
+# --- the other `case` commands (Phase 39) ------------------------------------------------
+
+OLD_FORMS = ('case show CS1', 'case run CS1', 'case out CS1', 'case check run CS1',
+             'case check history CS1', 'case check config CS1', 'case check plt CS1',
+             'case check def CS1', 'case check out CS1', 'case check data CS1',
+             'case check all CS1', 'case upload CS1', 'case download CS1',
+             'case upload plt CS1', 'case status CS1', 'case domain CS1', 'case domain body CS1')
+
+
+@pytest.mark.parametrize('line', OLD_FORMS)
+def test_the_case_as_a_word_is_refused_and_says_what_to_type(shell, capsys, line):
+    status, text = shell(line)
+    seen = capsys.readouterr()
+    err = text + seen.out + seen.err
+    assert status != 0 and '--case' in err, line
+
+
+def test_a_typed_case_flag_is_taken_by_every_case_command(shell):
+    import argparse
+    from src.commands.case import CaseCommand
+    parser = argparse.ArgumentParser()
+    CaseCommand().setup_parser(parser.add_subparsers(dest='command'))
+    for line in ('show', 'run', 'out', 'check run', 'check history', 'check config',
+                 'check plt', 'check def', 'check out', 'check data', 'check all', 'upload plt',
+                 'download rst', 'status', 'domain body', 'organise history update'):
+        got = parser.parse_args(['case', *line.split(), '--case', 'CS1'])
+        assert got.case == 'CS1', line

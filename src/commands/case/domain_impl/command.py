@@ -80,26 +80,18 @@ def _current_context_case():
 
 
 def resolve_target_and_case(args):
-    """Split `case domain [body|field] [CASE]` into (target, case).
+    """(target, case) of `case domain [body|field] [--case NAME]`.
 
-    The target and the case share one positional slot each, and argparse cannot
-    tell them apart on its own: making `body`/`field` a sub-parser would reject
-    `case domain BR0SG0U1P0 --init`, because a case name is not one of the
-    choices. So the first word is read as the target only when it *is* `body` or
-    `field`, and otherwise falls through to being the case.
-
-    The case resolves as everywhere else in the CLI: the argument, then the
-    interactive case context, then the current directory.
+    The target is the one word; the case is `--case NAME`, else the `use case:`
+    one, else the current directory. A word that is not `body` or `field` is
+    refused: the old form took the case as a word.
     """
     target = getattr(args, 'target', None)
     case = getattr(args, 'case', None)
     if target is not None and target not in TARGETS:
-        if case is not None:
-            raise DomainCommandError(
-                f"Unknown target '{target}'. Say "
-                + " or ".join(f"`case domain {t}`" for t in TARGETS)
-                + ", or give just a case directory for a summary of it.")
-        target, case = None, target
+        raise DomainCommandError(
+            f"'{target}' is not a target: say " + " or ".join(f"`case domain {t}`" for t in TARGETS)
+            + f". The case is a flag now: --case {target}")
     if case is None:
         case = _current_context_case() or os.getcwd()
     return target, case
@@ -124,7 +116,7 @@ def _load(case_dir, must_exist=True):
     if must_exist and not domain.exists:
         raise DomainCommandError(
             f"No {FILENAME} in {case_dir.name}. Write one from the case's own .def "
-            f"with `case domain {case_dir.name} --init`.", skip=True)
+            f"with `case domain --init --case {case_dir.name}`.", skip=True)
     return domain
 
 

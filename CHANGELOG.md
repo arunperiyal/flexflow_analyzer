@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### ⚠️ The other `case` commands: the case is `--case NAME`, never a word
+
+Phase 39, the same rule as `case organise`. Breaking, no aliases; the old form
+is refused and the message says what to type:
+
+| Before | Now |
+|---|---|
+| `case show CS1`, `run`, `out` | `case show --case CS1` (also `run`, `out`) |
+| `case check plt CS1 --remote R` | `case check plt --case CS1 --remote R` (also `run`, `history`, `config`, `def`, `out`, `data`, `all`) |
+| `case upload plt CS1 --t1 5`, `download rst CS1` | `case upload plt --case CS1 --t1 5` |
+| `case upload CS1 --files ...` | `case upload --case CS1 --files ...` |
+| `case status CS1`, `case status update CS1` | `case status --case CS1`, `case status update --case CS1` |
+| `case domain body CS1 --init` | `case domain body --init --case CS1` |
+
+With the case from `use case:` nothing changes. `auto show`, `auto commands`
+and the hints `field compute` prints write the new form. Completion: the words
+(`plt`, `rst`, `update`, `body`, ...) now complete straight after the command.
+
 ### 🛡️ Flags are typed in full, and a typed flag displaces `use` values
 
 Rules 4 and 6 of `.claude/rules/command-design.md`, for every command (Phase 38).

@@ -1,4 +1,4 @@
-"""`case check plt <case> --remote [NAME]`: the binary PLTs in binary/ against their
+"""`case check plt --case <case> --remote [NAME]`: the binary PLTs in binary/ against their
 copies on the remote, by size and md5 read now on both sides
 (src/core/transfer/verify.py). Exit code 0 only when every one is verified."""
 
@@ -43,7 +43,7 @@ def execute_verify(args) -> int:
     name = getattr(args, 'case', None) or current_case()
     if not name:
         console.print("[red]Error:[/red] No case directory specified.")
-        console.print("Usage:  case check plt <dir> --remote [NAME]")
+        console.print("Usage:  case check plt [--case NAME] --remote [NAME]")
         return 1
     if is_wildcard_case(name):
         cases = [Path(c['path']) for c in load_cases_from_directory(current_dir())]

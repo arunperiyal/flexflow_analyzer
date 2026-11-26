@@ -12,7 +12,7 @@ Fast command-line tool for analyzing offshore riser simulation data.
 ff
 
 # Example commands
-flexflow → case show CS4SG1U1
+flexflow → case show --case CS4SG1U1
 flexflow → check riser.othd
 flexflow → plot CS4SG1U1 --node 10
 ```
@@ -52,16 +52,16 @@ flexflow → plot CS4SG1U1 --node 10
 
 ```bash
 # Case operations
-case show <case>           # Show case info
+case show --case <case>           # Show case info
 case create <name>         # Create new case
-case run <case>            # Submit jobs
+case run --case <case>            # Submit jobs
 case organise <case>       # Clean up case files
-case out <case> --map      # Write othd maps (row → node/point coordinates)
-case out <case> --list     # Table of the case's outputTimeHistory blocks
-case domain <case> --init  # Declare the field and bodies, in domain.yml
+case out --case <case> --map      # Write othd maps (row → node/point coordinates)
+case out --case <case> --list     # Table of the case's outputTimeHistory blocks
+case domain --case <case> --init  # Declare the field and bodies, in domain.yml
 case domain body --list    # What the domain is made of
-case upload <case> --remote R  # Send case data/files to a remote
-case download <case> --remote R
+case upload --case <case> --remote R  # Send case data/files to a remote
+case download --case <case> --remote R
 
 # Data inspection
 check <file>               # Inspect OTHD/OISD files

@@ -743,10 +743,21 @@ Breaks no command line except a shortened flag.
 ### Phase 39: `--case` for the `case` commands (branch `case-flag-case`)
 
 The case is `--case NAME` and never a word for `case show`, `run`, `check`
-(run, history, config, plt, def, out), `status`, `upload`, `download`, `domain`,
-`report`, `write`. The old forms are refused with the new one. The lines `auto
-show` writes for `case upload`, `case check` and `run post` change with it.
-Tasks when it is started.
+(run, history, config, plt, def, out, data, all), `status`, `upload`,
+`download`, `domain`, `out`. The old forms are refused with the new one. The
+lines `auto show` writes for `case upload`, `case download` and `case check`
+change with it; `run post` waits for Phase 40, `case create` for Phase 41.
+
+- [x] `--case` and a refused stray word on `show`, `run`, `out` and every
+      `check` subcommand
+- [x] `status` (`update` is the word), `upload` / `download` (`plt|rst|input|
+      history` is the word) and `domain` (`body|field` is the word): `--case`,
+      and a case typed as a word is refused with "use --case NAME"
+- [x] `auto` writes the new lines (`case upload plt --case C ...`, `case check
+      plt --case C ...`) and the hints `field compute` prints
+- [x] Tests: every old form refused, `--case` taken by every command, the words
+      complete with or without a case in context
+- [x] Help, `docs/usage/`, `README.md`, `CHANGELOG.md`
 
 ### Phase 40: `--case` for the other commands (branch `other-flag-case`)
 
