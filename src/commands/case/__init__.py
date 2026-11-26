@@ -7,7 +7,7 @@ import argparse
 import sys
 from ..base import BaseCommand
 from src.cli.completers import described, file_flags
-from src.cli.context import case_arg, case_flag, context_flag, freq_arg, time_window
+from src.cli.context import case_arg, case_flag, context_flag, freq_arg, no_words, time_window
 from .common_flags import organise_flags
 
 
@@ -49,7 +49,7 @@ def _transfer_positionals(parser, direction):
                         ).completer = complete
     case_flag(parser, help=('The local case directory (default: use case:)' if direction == 'upload'
                             else 'The local case directory, the destination (default: use case:)'))
-    _no_words(parser)
+    no_words(parser)
     for name, where in (('archive', 'archive/'), ('cleaned', 'cleaned/'),
                         ('compiled', 'the compiled file')):
         parser.add_argument(f'--{name}', action='store_true',
@@ -70,12 +70,6 @@ def _transfer_positionals(parser, direction):
 
 
 STATUS_STATES = ('new', 'meshing', 'running', 'stopped', 'done', 'failed', 'archived')
-
-
-def _no_words(parser):
-    """A subcommand with no action words: a word typed there (often the old
-    positional case) is read by the command and refused with what to type."""
-    parser.add_argument('words', nargs='*', help=argparse.SUPPRESS)
 
 
 class CaseCommand(BaseCommand):
@@ -101,7 +95,7 @@ class CaseCommand(BaseCommand):
         show_parser = case_subparsers.add_parser('show', add_help=False,
                                                  help='Show case information')
         case_flag(show_parser)
-        _no_words(show_parser)
+        no_words(show_parser)
         show_parser.add_argument('-v', '--verbose', action='store_true',
                                 help='Enable verbose output')
         show_parser.add_argument('-h', '--help', action='store_true',
@@ -136,7 +130,7 @@ class CaseCommand(BaseCommand):
         run_parser = case_subparsers.add_parser('run', add_help=False,
                                                help='Submit and monitor SLURM jobs')
         case_flag(run_parser)
-        _no_words(run_parser)
+        no_words(run_parser)
         run_parser.add_argument('--no-monitor', action='store_true',
                                help='Submit jobs without monitoring')
         run_parser.add_argument('--clean', action='store_true',
@@ -187,7 +181,7 @@ class CaseCommand(BaseCommand):
             sub = organise_subparsers.add_parser(word, add_help=False, allow_abbrev=False,
                                                  help=f'Delete {what} from the run dir')
             case_flag(sub)
-            _no_words(sub)
+            no_words(sub)
             if word == 'rst':
                 sub.add_argument('--keep-freq', type=int, metavar='N',
                                  help='Keep the .rst of steps divisible by N (default: 10 * freq)')
@@ -239,7 +233,7 @@ class CaseCommand(BaseCommand):
         vtu_parser = organise_subparsers.add_parser('vtu', add_help=False, allow_abbrev=False,
                                     help='Delete the .vtu caches field render keeps in binary/')
         case_flag(vtu_parser)
-        _no_words(vtu_parser)
+        no_words(vtu_parser)
         vtu_parser.add_argument('--leftovers', action='store_true',
                                     help='Only the .partial/.deriving files a killed render left')
         vtu_parser.add_argument('--orphans', action='store_true',
@@ -261,7 +255,7 @@ class CaseCommand(BaseCommand):
         run_check_parser = check_subparsers.add_parser('run', add_help=False,
                                     help='Check .othd/.oisd in the active run directory')
         case_flag(run_check_parser)
-        _no_words(run_check_parser)
+        no_words(run_check_parser)
         run_check_parser.add_argument('-v', '--verbose', action='store_true',
                                     help='Enable verbose output')
         run_check_parser.add_argument('-h', '--help', action='store_true',
@@ -271,7 +265,7 @@ class CaseCommand(BaseCommand):
         history_check_parser = check_subparsers.add_parser('history', add_help=False,
                                     help='Show the time step range of every OTHD/OISD history file')
         case_flag(history_check_parser)
-        _no_words(history_check_parser)
+        no_words(history_check_parser)
         history_check_parser.add_argument('--archive', action='store_true',
                                     help='Show only archive/ (combinable; none shows every group)')
         history_check_parser.add_argument('--cleaned', action='store_true',
@@ -287,7 +281,7 @@ class CaseCommand(BaseCommand):
         config_check_parser = check_subparsers.add_parser('config', add_help=False,
                                     help='Validate simflow.config consistency')
         case_flag(config_check_parser)
-        _no_words(config_check_parser)
+        no_words(config_check_parser)
         config_check_parser.add_argument('-v', '--verbose', action='store_true',
                                     help='Enable verbose output')
         config_check_parser.add_argument('-h', '--help', action='store_true',
@@ -297,7 +291,7 @@ class CaseCommand(BaseCommand):
         plt_check_parser = check_subparsers.add_parser('plt', add_help=False,
                                     help='Check PLT files in binary/ and run dir against expected set')
         case_flag(plt_check_parser)
-        _no_words(plt_check_parser)
+        no_words(plt_check_parser)
         freq_arg(plt_check_parser, metavar='N',
                  help='PLT output frequency to check against, '
                       'overriding outFreq from simflow.config')
@@ -320,7 +314,7 @@ class CaseCommand(BaseCommand):
         def_check_parser = check_subparsers.add_parser('def', add_help=False,
                                     help='Check that all File() references in the .def file exist')
         case_flag(def_check_parser)
-        _no_words(def_check_parser)
+        no_words(def_check_parser)
         def_check_parser.add_argument('-v', '--verbose', action='store_true',
                                     help='Enable verbose output')
         def_check_parser.add_argument('-h', '--help', action='store_true',
@@ -330,7 +324,7 @@ class CaseCommand(BaseCommand):
         out_check_parser = check_subparsers.add_parser('out', add_help=False,
                                     help='List timesteps for which .out/.rst files are present in the run directory')
         case_flag(out_check_parser)
-        _no_words(out_check_parser)
+        no_words(out_check_parser)
         out_check_parser.add_argument('--t1', type=float, metavar='STEP',
                                     help='Only check timesteps >= STEP')
         out_check_parser.add_argument('--t2', type=float, metavar='STEP',
@@ -349,7 +343,7 @@ class CaseCommand(BaseCommand):
         data_check_parser = check_subparsers.add_parser('data', add_help=False,
                                     help='Check case data file completeness (was: case status)')
         case_flag(data_check_parser)
-        _no_words(data_check_parser)
+        no_words(data_check_parser)
         data_check_parser.add_argument('-v', '--verbose', action='store_true',
                                     help='Enable verbose output')
         data_check_parser.add_argument('-h', '--help', action='store_true',
@@ -359,7 +353,7 @@ class CaseCommand(BaseCommand):
         all_check_parser = check_subparsers.add_parser('all', add_help=False,
                                     help='Run every check (run + history + config + plt + def + out)')
         case_flag(all_check_parser)
-        _no_words(all_check_parser)
+        no_words(all_check_parser)
         freq_arg(all_check_parser, metavar='N',
                  help='PLT output frequency to check against, '
                       'overriding outFreq from simflow.config')
@@ -376,7 +370,7 @@ class CaseCommand(BaseCommand):
                                    ).completer = described(
             ('update', 'Edit the notes, or -m TEXT / --state STATE'))
         case_flag(status_parser)
-        _no_words(status_parser)
+        no_words(status_parser)
         status_parser.add_argument('-m', '--message', metavar='TEXT',
                                    help='update: add a timestamped line to the log')
         status_parser.add_argument('--state', choices=STATUS_STATES,
@@ -398,7 +392,7 @@ class CaseCommand(BaseCommand):
         write_parser = case_subparsers.add_parser('out', add_help=False,
                                                   help='Inspect a case\'s declared outputs and map them')
         case_flag(write_parser)
-        _no_words(write_parser)
+        no_words(write_parser)
         write_parser.add_argument('--list', action='store_true',
                                   help='Table of the outputTimeHistory blocks: name, input '
                                        'file, predicted othId, type, map file and probe')
@@ -436,7 +430,7 @@ class CaseCommand(BaseCommand):
                                    ).completer = described(
             ('body', 'Bodies in the domain'), ('field', 'The continuum they sit in'))
         case_flag(domain_parser)
-        _no_words(domain_parser)
+        no_words(domain_parser)
         domain_parser.add_argument('--init', action='store_true',
                                    help='Write domain.yml from the case .def and PLT zones')
         domain_parser.add_argument('--check', action='store_true',
@@ -570,13 +564,6 @@ class CaseCommand(BaseCommand):
 
     def execute(self, args):
         """Execute case command"""
-        stray = list(getattr(args, 'words', None) or [])
-        if stray:
-            sub = ' '.join(w for w in (getattr(args, 'case_subcommand', None),
-                                       getattr(args, 'check_subcommand', None)) if w)
-            print(f"Error: case {sub}: unexpected word '{stray[0]}'; the case is a flag "
-                  f"now: --case {stray[0]}", file=sys.stderr)
-            sys.exit(2)
         if hasattr(args, 'case_subcommand') and args.case_subcommand == 'show':
             # Delegate to show subcommand
             from .show_impl import command as show_cmd

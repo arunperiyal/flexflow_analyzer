@@ -72,15 +72,15 @@ case check data --case <case> # Data file completeness (was: case status)
 ### Data Operations
 ```bash
 data show              # Show data (uses current case)
-data show <case>       # Show specific case data
-data stats <case>      # Calculate statistics
+data show [--case NAME]       # Show specific case data
+data stats [--case NAME]      # Calculate statistics
 ```
 
 ### Field Operations
 ```bash
 field info             # Show PLT info (uses current case)
-field info <case>      # Show specific case PLT info
-field extract <case>   # Extract field data
+field info [--case NAME]      # Show specific case PLT info
+field extract [--case NAME]   # Extract field data
 ```
 
 ### File Inspection
@@ -91,7 +91,7 @@ check <file>           # Inspect OTHD/OISD file
 ### Visualization
 ```bash
 plot --node 10         # Plot (uses current case)
-plot <case> --node 10  # Plot specific case
+plot [--case NAME] --node 10  # Plot specific case
 compare <case1> <case2> # Compare cases
 ```
 

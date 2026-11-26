@@ -56,7 +56,7 @@ def test_piped_into_a_command_it_runs_per_case_at_that_step(registry, monkeypatc
     out = io.StringIO()
     rt = Runtime(create_app(), console=Console(file=out, width=200, color_system=None),
                  err_console=Console(file=io.StringIO(), width=200, color_system=None))
-    status = rt.execute_line('use freq:1; data stats * --var aleDisp_x --func maxloc | case show')
+    status = rt.execute_line('use freq:1; data stats --case * --var aleDisp_x --func maxloc | case show')
     text = out.getvalue()
     assert status == 0, text
     assert '── 1/2  case:Good1 time:' in text and '── 2/2  case:Good2 time:' in text

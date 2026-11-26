@@ -151,6 +151,12 @@ def values_used(args, dests):
     return ' · '.join(parts)
 
 
+def no_words(parser):
+    """A hidden catch-all for words a command does not take. The command refuses one
+    (often the old positional case) with what to type: BaseCommand.run does it."""
+    parser.add_argument('words', nargs='*', help=argparse.SUPPRESS)
+
+
 def case_arg(parser, dest='case', help='Case directory path', **kwargs):
     """The positional case, filled from `use case:` when omitted."""
     flags = () if dest == 'case' else (dest,)

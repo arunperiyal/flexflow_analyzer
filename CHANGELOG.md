@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### ⚠️ `data`, `plot` and `field`: the case is `--case NAME`, never a word
+
+Phase 40, the same rule as `case`. Breaking, no aliases; a case typed as a word
+is refused and the message says `--case NAME`:
+
+| Before | Now |
+|---|---|
+| `data stats CS1 --var dy`, `data show/table/check steady` | `data stats --case CS1 --var dy` |
+| `plot CS1 --var dy` | `plot --case CS1 --var dy` |
+| `field render iso CS1`, `compute force CS1`, `info`, `extract`, `convert` | `field render iso --case CS1` |
+| `data stats * --func maxloc \| case download plt` | `data stats --case * --func maxloc \| case download plt` |
+
+With the case from `use case:` nothing changes. `field convert` now takes the
+`use case:` case like the others.
+
 ### ⚠️ The other `case` commands: the case is `--case NAME`, never a word
 
 Phase 39, the same rule as `case organise`. Breaking, no aliases; the old form

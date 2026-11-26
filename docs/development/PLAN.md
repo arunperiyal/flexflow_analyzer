@@ -759,15 +759,40 @@ change with it; `run post` waits for Phase 40, `case create` for Phase 41.
       complete with or without a case in context
 - [x] Help, `docs/usage/`, `README.md`, `CHANGELOG.md`
 
-### Phase 40: `--case` for the other commands (branch `other-flag-case`)
+### Phase 40: `--case` for `data`, `plot` and `field` (branch `other-flag-case`)
 
-The same for `data`, `plot`, `field`, `run` and `auto`. Tasks when it is
-started.
+The case is `--case NAME` for `data show|table|stats|check steady`, `plot` and
+`field info|extract|compute|convert|render`; a case typed as a word is refused
+with "use --case NAME". The refusal of a stray word is now in `BaseCommand.run`
+for every command (parsers add a hidden `words` catch-all with `no_words`).
 
-### Phase 41: names as flags (branch `names-as-flags`)
+- [x] `BaseCommand.run` refuses a stray word and says `--case WORD`; `no_words`
+      in `src/cli/context.py`
+- [x] `--case` on `data`, `plot` and `field` (the words `quantity` and `mode`
+      stay words)
+- [x] Tests: every old form refused, `--case` taken, the words and `--case`
+      complete with and without a case in context
+- [x] Help, `docs/usage/`, `README.md`, `CHANGELOG.md`
 
-`case create --name NAME`, `remote add|modify|delete|set-path --name NAME`,
-`template ... --output FILE`. Tasks when it is started.
+### Phase 41: names, values and files as flags (branch `names-as-flags`)
+
+Rule 2: a value is a flag. `case create --name NAME`, `remote add|modify|delete|
+set-path --name NAME`, `template ... --output FILE`, `def var --name N --value V`
+(and `def time|freq`), `check --file F`, `field check --file F`, `docs --topic T`.
+Tasks when it is started.
+
+### Phase 43: `run` follows the rules (branch `run-flag-case`)
+
+`run check|pre|main|post|list` put a mode word in the case slot (`run post full
+CASE`, `run main restart TSID CASE`). The case becomes `--case NAME`, the mode
+stays a word, and the step of `run main restart` is `--time TSID`. The lines
+`auto show` writes for `run post` change with it. Tasks when it is started.
+
+### Phase 44: `auto` follows the rules (branch `auto-flag-case`)
+
+`auto show|commands|status|apply|log` take a case as the second word and
+`apply` a target as the first. The case becomes `--case NAME` (`*` for all), the
+target stays a word. Tasks when it is started.
 
 ### Phase 42: one test walks every command (branch `walk-test`)
 
