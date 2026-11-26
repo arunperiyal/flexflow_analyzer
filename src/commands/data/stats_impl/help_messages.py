@@ -10,7 +10,7 @@ def print_statistics_help():
 One row per variable instead of one row per timestep.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    data stats [{Colors.YELLOW}case{Colors.RESET}] --var {Colors.YELLOW}NAME{Colors.RESET} --func {Colors.YELLOW}FUNC{Colors.RESET} [options]
+    data stats [--case {Colors.YELLOW}NAME{Colors.RESET}] --var {Colors.YELLOW}NAME{Colors.RESET} --func {Colors.YELLOW}FUNC{Colors.RESET} [options]
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
     {Colors.YELLOW}--var NAME{Colors.RESET}             Variable or component. Repeat it, or comma-separate.
@@ -105,13 +105,13 @@ One row per variable instead of one row per timestep.
     the answer, and how far from zero it sits is said out loud.
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
-    data stats CS4SG1U1 --var aleDisp_y --node 24 --func max,rms
-    data stats CS4SG1U1 --var aleDisp_y --node 24 --func maxloc,minloc
-    data stats CS4SG1U1 --var aleDisp_y --node 24 --func zeroloc
-    data stats CS4SG1U1 --var totTrac --func rms,std --t1 3000 --t2 5000
-    data stats CS4SG1U1 --var dy --func rms,std --last 1000
-    data stats * --var dy --node 25 --last 1000 --func maxloc | case download plt
-    data stats CS4SG1U1 --var aleDisp --node 24 --func range --output swing.csv
+    data stats --case CS4SG1U1 --var aleDisp_y --node 24 --func max,rms
+    data stats --case CS4SG1U1 --var aleDisp_y --node 24 --func maxloc,minloc
+    data stats --case CS4SG1U1 --var aleDisp_y --node 24 --func zeroloc
+    data stats --case CS4SG1U1 --var totTrac --func rms,std --t1 3000 --t2 5000
+    data stats --case CS4SG1U1 --var dy --func rms,std --last 1000
+    data stats --case * --var dy --node 25 --last 1000 --func maxloc | case download plt
+    data stats --case CS4SG1U1 --var aleDisp --node 24 --func range --output swing.csv
 """)
 
 
@@ -120,14 +120,14 @@ def print_statistics_examples():
 {Colors.BOLD}{Colors.CYAN}Data Stats Examples{Colors.RESET}
 
   {Colors.BOLD}Amplitude of cross-flow vibration, once the run has settled:{Colors.RESET}
-    data stats CS4SG1U1 --var aleDisp_y --node 24 --func rms --t1 3000
+    data stats --case CS4SG1U1 --var aleDisp_y --node 24 --func rms --t1 3000
 
   {Colors.BOLD}Which PLT to render at each end of the cycle:{Colors.RESET}
-    data stats CS4SG1U1 --var aleDisp_y --node 24 --func maxloc,minloc
+    data stats --case CS4SG1U1 --var aleDisp_y --node 24 --func maxloc,minloc
 
   {Colors.BOLD}Peak-to-peak, every component:{Colors.RESET}
-    data stats CS4SG1U1 --var aleDisp --node 24 --func range
+    data stats --case CS4SG1U1 --var aleDisp --node 24 --func range
 
   {Colors.BOLD}Integrated loads:{Colors.RESET}
-    data stats CS4SG1U1 --var totTrac --func max,rms,maxloc
+    data stats --case CS4SG1U1 --var totTrac --func max,rms,maxloc
 """)

@@ -88,48 +88,48 @@ def print_plot_examples():
 {Colors.BOLD}{Colors.CYAN}Plot Command Examples{Colors.RESET}
 
 {Colors.BOLD}Basic Time Series:{Colors.RESET}
-    plot CS4SG1U1 --var dy --node 100
-    plot CS4SG1U1 --var d --node 100           # dx, dy, dz in three panels
-    plot CS4SG1U1 --var tty                    # totTrac_y from the oisd
+    plot --case CS4SG1U1 --var dy --node 100
+    plot --case CS4SG1U1 --var d --node 100           # dx, dy, dz in three panels
+    plot --case CS4SG1U1 --var tty                    # totTrac_y from the oisd
     use case:CS4SG1U1 node:100 var:dy; plot    # the same from the context
 
 {Colors.BOLD}A Window:{Colors.RESET}
-    plot CS4SG1U1 --var dy --t1 2000 --t2 4000
-    plot CS4SG1U1 --var dy --last 1000
-    plot CS4SG1U1 --var tty --archive 6        # only archive/riser6, not the whole history
-    plot CS4SG1U1 --var tty --archive 3,6      # runs 3 and 6, the later run wins a shared step
-    plot CS4SG1U1 --var dy --run               # the job running now, from the run directory
+    plot --case CS4SG1U1 --var dy --t1 2000 --t2 4000
+    plot --case CS4SG1U1 --var dy --last 1000
+    plot --case CS4SG1U1 --var tty --archive 6        # only archive/riser6, not the whole history
+    plot --case CS4SG1U1 --var tty --archive 3,6      # runs 3 and 6, the later run wins a shared step
+    plot --case CS4SG1U1 --var dy --run               # the job running now, from the run directory
 
 {Colors.BOLD}FFT and Trajectories:{Colors.RESET}
-    plot CS4SG1U1 --var dy --plot-type fft --last 2000
-    plot CS4SG1U1 --var d --plot-type traj2d    # dx against dy
-    plot CS4SG1U1 --var d --plot-type traj3d
+    plot --case CS4SG1U1 --var dy --plot-type fft --last 2000
+    plot --case CS4SG1U1 --var d --plot-type traj2d    # dx against dy
+    plot --case CS4SG1U1 --var d --plot-type traj3d
 
 {Colors.BOLD}Pendulum:{Colors.RESET}
-    plot CS4SG1U1 --var pd                      # pendDisp
-    plot CS4SG1U1 --var pd,pv,pa                # all three, one panel each
-    plot CS4SG1U1 --var pd --plot-type fft
+    plot --case CS4SG1U1 --var pd                      # pendDisp
+    plot --case CS4SG1U1 --var pd,pv,pa                # all three, one panel each
+    plot --case CS4SG1U1 --var pd --plot-type fft
 
 {Colors.BOLD}Styled Plots:{Colors.RESET}
     # Red solid line with circles, width 2
-    plot CS4SG1U1 --var dy --plot-style "red,2,-,o" --title "Node 100|16"
+    plot --case CS4SG1U1 --var dy --plot-style "red,2,-,o" --title "Node 100|16"
     # Custom hex color with stars
-    plot CS4SG1U1 --var dy --plot-style "#FF5733,1.5,-,*"
+    plot --case CS4SG1U1 --var dy --plot-style "#FF5733,1.5,-,*"
 
 {Colors.BOLD}Labels with LaTeX:{Colors.RESET}
-    plot CS4SG1U1 --var dy \\
+    plot --case CS4SG1U1 --var dy \\
         --title "Node Displacement $\\Delta y$|16|True" \\
         --xlabel 'Time $t$ (s)|14|True' \\
         --ylabel 'Displacement $\\delta$ (m)|14|True'
 
 {Colors.BOLD}Fonts:{Colors.RESET}
-    plot CS4SG1U1 --var dy --fontname serif --title "Case Study|16"
-    plot CS4SG1U1 --var dy --fontname "Liberation Serif"
+    plot --case CS4SG1U1 --var dy --fontname serif --title "Case Study|16"
+    plot --case CS4SG1U1 --var dy --fontname "Liberation Serif"
 
 {Colors.BOLD}Output:{Colors.RESET}
-    plot CS4SG1U1 --var dy --output plot.pdf    # .png, .pdf, .svg, .eps
-    plot CS4SG1U1 --var dy --gnu                # in the terminal (plotext)
-    plot CS4SG1U1 --var dy --no-display
+    plot --case CS4SG1U1 --var dy --output plot.pdf    # .png, .pdf, .svg, .eps
+    plot --case CS4SG1U1 --var dy --gnu                # in the terminal (plotext)
+    plot --case CS4SG1U1 --var dy --no-display
 
 {Colors.BOLD}Using YAML Configuration:{Colors.RESET}
     plot --input-file plot_config.yaml

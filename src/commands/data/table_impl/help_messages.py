@@ -11,7 +11,7 @@ The time history of chosen variables, as a table. {Colors.BOLD}Time runs down th
 and variables across the columns.
 
 {Colors.BOLD}USAGE:{Colors.RESET}
-    data table [{Colors.YELLOW}case{Colors.RESET}] --var {Colors.YELLOW}NAME{Colors.RESET} [options]
+    data table [--case {Colors.YELLOW}NAME{Colors.RESET}] --var {Colors.YELLOW}NAME{Colors.RESET} [options]
 
 {Colors.BOLD}OPTIONS:{Colors.RESET}
     {Colors.YELLOW}--var NAME{Colors.RESET}             Variable or component. Repeat it, or comma-separate.
@@ -68,12 +68,12 @@ and variables across the columns.
     For scripts: {Colors.DIM}use case:CS4SG1U1 var:dy last:1000{Colors.RESET}, then {Colors.DIM}data table --output{Colors.RESET}.
 
 {Colors.BOLD}EXAMPLES:{Colors.RESET}
-    data table CS4SG1U1 --var aleDisp_y --node 24
-    data table CS4SG1U1 --var aleDisp --node 24 --tail 20
-    data table CS4SG1U1 --var vel_y,pres --node 24 --t1 4000 --t2 5000
-    data table CS4SG1U1 --var totTrac_y --output trac.csv
-    data table CS4SG1U1 --var dy --last 1000 --output
-    data table * --var dy --last 1000 --output
+    data table --case CS4SG1U1 --var aleDisp_y --node 24
+    data table --case CS4SG1U1 --var aleDisp --node 24 --tail 20
+    data table --case CS4SG1U1 --var vel_y,pres --node 24 --t1 4000 --t2 5000
+    data table --case CS4SG1U1 --var totTrac_y --output trac.csv
+    data table --case CS4SG1U1 --var dy --last 1000 --output
+    data table --case * --var dy --last 1000 --output
 """)
 
 
@@ -82,17 +82,17 @@ def print_table_examples():
 {Colors.BOLD}{Colors.CYAN}Data Table Examples{Colors.RESET}
 
   {Colors.BOLD}The last 20 steps of cross-flow displacement at node 24:{Colors.RESET}
-    data table CS4SG1U1 --var aleDisp_y --node 24 --tail 20
+    data table --case CS4SG1U1 --var aleDisp_y --node 24 --tail 20
 
   {Colors.BOLD}All three components at once:{Colors.RESET}
-    data table CS4SG1U1 --var aleDisp --node 24
+    data table --case CS4SG1U1 --var aleDisp --node 24
 
   {Colors.BOLD}A window, by tsId:{Colors.RESET}
-    data table CS4SG1U1 --var aleDisp_y --node 24 --t1 4000 --t2 5000
+    data table --case CS4SG1U1 --var aleDisp_y --node 24 --t1 4000 --t2 5000
 
   {Colors.BOLD}Everything, to a file for plotting:{Colors.RESET}
-    data table CS4SG1U1 --var aleDisp_y --node 24 --output disp.csv
+    data table --case CS4SG1U1 --var aleDisp_y --node 24 --output disp.csv
 
   {Colors.BOLD}The last 1000 steps, to CS4SG1U1/data_tables/dy.csv:{Colors.RESET}
-    data table CS4SG1U1 --var dy --last 1000 --output
+    data table --case CS4SG1U1 --var dy --last 1000 --output
 """)

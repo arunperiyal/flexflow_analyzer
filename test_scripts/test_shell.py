@@ -162,10 +162,9 @@ def test_no_context_leaves_case_none(rt):
 
 
 def test_case_not_filled_where_the_command_resolves_it(rt):
-    # field convert never took the case from the context
     use(rt, 'case:CaseA')
-    assert parsed(rt, 'field convert').case is None
-    assert parsed(rt, 'case domain').case.endswith('CaseA')       # a flag now, filled like the rest
+    for line in ('field convert', 'case domain', 'data stats', 'plot', 'field info'):
+        assert parsed(rt, line).case.endswith('CaseA'), line       # a flag, filled like the rest
 
 
 def test_wildcard_case_is_passed_through(rt):
@@ -574,3 +573,18 @@ def test_login_cpu_limit_setting(rt):
     assert rt.execute_line('set login_cpu_limit 0') == 0
     assert rt.execute_line('set login_cpu_limit 120') != 0
     assert rt.settings.get('login_cpu_limit') == 0
+
+
+def test_data_plot_field_words_and_the_case_flag_complete(rt):
+    def check():
+        assert texts(rt, 'field render ') == ['iso', 'slice', 'colorbar']
+        assert texts(rt, 'field compute f') == ['force', 'force_coeff']
+        assert texts(rt, 'data check ') == ['steady']
+        for line in ('data show', 'data table', 'data stats', 'data check steady', 'plot',
+                     'field info', 'field extract', 'field convert', 'field compute force',
+                     'field render iso'):
+            assert '--case' in texts(rt, line + ' --'), line
+            assert texts(rt, f'{line} --case Case') == ['CaseA/', 'CaseB/'], line
+    check()
+    use(rt, 'case:CaseA')
+    check()

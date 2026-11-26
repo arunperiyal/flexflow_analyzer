@@ -4,7 +4,7 @@ Commands: plot, compare
 """
 
 from ..base import BaseCommand
-from src.cli.context import (case_arg, context_flag, last_arg, node_arg, osgid_arg,
+from src.cli.context import (case_flag, no_words, context_flag, last_arg, node_arg, osgid_arg,
                               othid_arg, time_window)
 
 
@@ -31,7 +31,8 @@ class PlotCommand(BaseCommand):
             help=self.description
         )
         # Required arguments
-        case_arg(parser, help='Case directory path')
+        case_flag(parser)
+        no_words(parser)
         parser.add_argument('--input-file', type=str, help='YAML input file')
         context_flag(parser, 'var', '--var', '--variable', dest='var', type=str,
                      action='append', metavar='NAME',

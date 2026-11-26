@@ -458,14 +458,14 @@ ff check riser.othd --nodes 1 10 20        # Specific nodes
 Preview time-series data in table format:
 
 ```bash
-ff data show CS4SG1U1
+ff data show --case CS4SG1U1
 ```
 
 **Options:**
 ```bash
-ff data show CS4SG1U1 --node 24            # Specific node
-ff data show CS4SG1U1 --limit 100          # First 100 rows
-ff data show CS4SG1U1 --format csv         # CSV output
+ff data show --case CS4SG1U1 --node 24            # Specific node
+ff data show --case CS4SG1U1 --limit 100          # First 100 rows
+ff data show --case CS4SG1U1 --format csv         # CSV output
 ```
 
 **Example output:**
@@ -481,7 +481,7 @@ Time      Node  Displacement_X  Displacement_Y  Displacement_Z
 Calculate statistics for time-series data:
 
 ```bash
-ff data stats CS4SG1U1
+ff data stats --case CS4SG1U1
 ```
 
 **Output includes:**
@@ -500,7 +500,7 @@ Work with Tecplot PLT files using PyTecplot integration.
 Show information about PLT files:
 
 ```bash
-ff field info CS4SG1U1
+ff field info --case CS4SG1U1
 ```
 
 **Output includes:**
@@ -511,8 +511,8 @@ ff field info CS4SG1U1
 
 **Options:**
 ```bash
-ff field info CS4SG1U1 --file riser.1000.plt    # Specific file
-ff field info CS4SG1U1 --verbose                # Detailed output
+ff field info --case CS4SG1U1 --file riser.1000.plt    # Specific file
+ff field info --case CS4SG1U1 --verbose                # Detailed output
 ```
 
 ### Extract Field Data
@@ -520,12 +520,12 @@ ff field info CS4SG1U1 --verbose                # Detailed output
 Extract specific field data to CSV:
 
 ```bash
-ff field extract CS4SG1U1 --field displacement --node 10
+ff field extract --case CS4SG1U1 --field displacement --node 10
 ```
 
 **Options:**
 ```bash
-ff field extract CS4SG1U1 \
+ff field extract --case CS4SG1U1 \
   --field velocity \
   --node 10 \
   --output velocity_node10.csv
@@ -539,35 +539,35 @@ ff field extract CS4SG1U1 \
 window. The variable comes from `--var` or the `var` context:
 
 ```bash
-ff plot CS4SG1U1 --var dy --node 10
+ff plot --case CS4SG1U1 --var dy --node 10
 use case:CS4SG1U1 node:10 var:dy; plot          # the same from the context
 ```
 
 **What to plot:**
 ```bash
-ff plot CS4SG1U1 --var dy            # one component (aleDisp_y)
-ff plot CS4SG1U1 --var d             # every component, one panel each
-ff plot CS4SG1U1 --var dx,dy         # some of them
-ff plot CS4SG1U1 --var tty           # surface output (totTrac_y, oisd)
-ff plot CS4SG1U1 --var pd            # pendulum pendDisp (pv, pa: velocity, acceleration)
+ff plot --case CS4SG1U1 --var dy            # one component (aleDisp_y)
+ff plot --case CS4SG1U1 --var d             # every component, one panel each
+ff plot --case CS4SG1U1 --var dx,dy         # some of them
+ff plot --case CS4SG1U1 --var tty           # surface output (totTrac_y, oisd)
+ff plot --case CS4SG1U1 --var pd            # pendulum pendDisp (pv, pa: velocity, acceleration)
 ```
 `data show` lists every variable and its short name. Variables from the othd
 and oisd files cannot share a plot; `--othid`/`--osgid` pick the group.
 
 **Window and plot type:**
 ```bash
-ff plot CS4SG1U1 --var dy --t1 2000 --t2 4000     # tsIds, as in data table
-ff plot CS4SG1U1 --var dy --last 1000             # or use last:1000
-ff plot CS4SG1U1 --var dy --plot-type fft --last 2000   # spectrum, peak in the legend
-ff plot CS4SG1U1 --var d --plot-type traj2d       # dx against dy (traj3d: all three)
+ff plot --case CS4SG1U1 --var dy --t1 2000 --t2 4000     # tsIds, as in data table
+ff plot --case CS4SG1U1 --var dy --last 1000             # or use last:1000
+ff plot --case CS4SG1U1 --var dy --plot-type fft --last 2000   # spectrum, peak in the legend
+ff plot --case CS4SG1U1 --var d --plot-type traj2d       # dx against dy (traj3d: all three)
 ```
 
 **Styling and output:**
 ```bash
-ff plot CS4SG1U1 --var dy \
+ff plot --case CS4SG1U1 --var dy \
   --title "Node 10 Displacement" --xlabel "Time (s)" --ylabel "Displacement (m)"
-ff plot CS4SG1U1 --var dy --output displacement.png   # .png, .pdf, .svg, .eps
-ff plot CS4SG1U1 --var dy --gnu                       # in the terminal
+ff plot --case CS4SG1U1 --var dy --output displacement.png   # .png, .pdf, .svg, .eps
+ff plot --case CS4SG1U1 --var dy --gnu                       # in the terminal
 ```
 
 ### Compare Cases
@@ -622,7 +622,7 @@ plot:
 
 **Use template:**
 ```bash
-ff plot CS4SG1U1 --config plot_config.yaml
+ff plot --case CS4SG1U1 --config plot_config.yaml
 ```
 
 ### Case Configuration
@@ -785,7 +785,7 @@ ff case show --case CS4SG1U1
 ```bash
 ff case show --case CS4SG1U1 && \
 ff check CS4SG1U1/output/riser.othd && \
-ff data show CS4SG1U1 --limit 10
+ff data show --case CS4SG1U1 --limit 10
 ```
 
 **Create and run simulation:**
@@ -800,8 +800,8 @@ ff case run NEW_CASE
 **Compare and export:**
 ```bash
 ff compare CS4SG1U1 CS4SG2U1 --output comparison.png
-ff data show CS4SG1U1 --format csv > case1.csv
-ff data show CS4SG2U1 --format csv > case2.csv
+ff data show --case CS4SG1U1 --format csv > case1.csv
+ff data show --case CS4SG2U1 --format csv > case2.csv
 ```
 
 ### Troubleshooting

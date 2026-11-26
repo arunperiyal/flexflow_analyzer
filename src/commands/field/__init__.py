@@ -4,7 +4,7 @@ Subcommands: info, extract, compute, convert, render, check
 """
 
 from ..base import BaseCommand
-from src.cli.context import case_arg, context_flag, freq_arg, timestep_arg
+from src.cli.context import case_flag, no_words, context_flag, freq_arg, timestep_arg
 from src.cli.completers import described, file_flags
 
 _BOX_CROP_ARGS = [('xmin', 'Minimum X coordinate'), ('xmax', 'Maximum X coordinate'),
@@ -40,7 +40,8 @@ class FieldCommand(BaseCommand):
         # field info (was: tecplot info)
         info_parser = field_subparsers.add_parser('info', add_help=False,
                                                  help='Show PLT file information')
-        case_arg(info_parser, help='Case directory path')
+        case_flag(info_parser)
+        no_words(info_parser)
         info_parser.add_argument('-v', '--verbose', action='store_true',
                                 help='Enable verbose output')
         info_parser.add_argument('-h', '--help', action='store_true',
@@ -63,7 +64,8 @@ class FieldCommand(BaseCommand):
         # field extract (was: tecplot extract)
         extract_parser = field_subparsers.add_parser('extract', add_help=False,
                                                     help='Extract data from PLT files')
-        case_arg(extract_parser, help='Case directory path')
+        case_flag(extract_parser)
+        no_words(extract_parser)
         extract_parser.add_argument('-v', '--verbose', action='store_true',
                                    help='Enable verbose output')
         extract_parser.add_argument('-h', '--help', action='store_true',
@@ -112,7 +114,8 @@ class FieldCommand(BaseCommand):
             ('wall_shear', 'Viscous wall shear, from the vorticity'),
             ('separation', 'Separation angle per section, per step'),
             ('lambda2', 'Vortex criterion, as a nodal field'))
-        case_arg(compute_parser, help='Case directory path')
+        case_flag(compute_parser)
+        no_words(compute_parser)
         compute_parser.add_argument('-v', '--verbose', action='store_true',
                                     help='Enable verbose output')
         compute_parser.add_argument('-h', '--help', action='store_true',
@@ -155,7 +158,8 @@ class FieldCommand(BaseCommand):
         # field convert (PLT -> VTU)
         convert_parser = field_subparsers.add_parser('convert', add_help=False,
                                                      help='Convert PLT to VTK .vtu')
-        convert_parser.add_argument('case', nargs='?', help='Case directory path')
+        case_flag(convert_parser)
+        no_words(convert_parser)
         convert_parser.add_argument('-v', '--verbose', action='store_true',
                                     help='Enable verbose output')
         convert_parser.add_argument('-h', '--help', action='store_true',
@@ -180,8 +184,8 @@ class FieldCommand(BaseCommand):
                                    ).completer = described(
             ('iso', 'Isosurface of a scalar'), ('slice', 'A cut plane, or a series of them'),
             ('colorbar', 'The colour scale on its own'))
-        case_arg(render_parser, help='Case directory path, or * for every '
-                                     'case in the .cases.yml registry')
+        case_flag(render_parser)
+        no_words(render_parser)
         render_parser.add_argument('-v', '--verbose', action='store_true',
                                    help='Enable verbose output')
         render_parser.add_argument('-h', '--help', action='store_true',

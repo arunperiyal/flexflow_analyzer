@@ -203,7 +203,7 @@ def _shell(line, capsys):
 
 
 def test_piped_into_stats_each_case_starts_at_its_own_steady_step(two_cases, capsys):
-    status, text = _shell('data check steady * --var dy | data stats --var dy --func rms', capsys)
+    status, text = _shell('data check steady --case * --var dy | data stats --var dy --func rms', capsys)
     assert status == 0, text
     assert '── 1/2  case:S1 t1:' in text and '── 2/2  case:S2 t1:' in text
     starts = [int(line.split('t1:')[1]) for line in text.splitlines() if line.startswith('── ')]
@@ -213,7 +213,7 @@ def test_piped_into_stats_each_case_starts_at_its_own_steady_step(two_cases, cap
 
 
 def test_the_row_wins_over_a_last_in_the_context(two_cases, capsys):
-    status, text = _shell('use last:5000; data check steady S1 --var dy | '
+    status, text = _shell('use last:5000; data check steady --case S1 --var dy | '
                           'data stats --var dy --func rms', capsys)
     assert status == 0, text
     start = int([l for l in text.splitlines() if l.startswith('── ')][0].split('t1:')[1])

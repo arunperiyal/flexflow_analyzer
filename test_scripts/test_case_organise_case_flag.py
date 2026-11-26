@@ -106,3 +106,29 @@ def test_a_typed_case_flag_is_taken_by_every_case_command(shell):
                  'download rst', 'status', 'domain body', 'organise history update'):
         got = parser.parse_args(['case', *line.split(), '--case', 'CS1'])
         assert got.case == 'CS1', line
+
+
+# --- data, plot, field (Phase 40) ---------------------------------------------------------
+
+OTHER_OLD_FORMS = ('data show CS1', 'data table CS1', 'data stats CS1', 'data check steady CS1',
+                   'plot CS1', 'field info CS1', 'field extract CS1', 'field convert CS1',
+                   'field compute force CS1', 'field render iso CS1')
+
+
+@pytest.mark.parametrize('line', OTHER_OLD_FORMS)
+def test_data_plot_field_refuse_the_case_as_a_word(shell, capsys, line):
+    status, text = shell(line)
+    seen = capsys.readouterr()
+    err = text + seen.out + seen.err
+    assert status != 0 and '--case CS1' in err, line
+
+
+def test_data_plot_field_take_the_case_flag(shell):
+    import argparse
+    from src.cli.app import create_app
+    parser = create_app().build_parser()
+    for line in ('data show', 'data table', 'data stats', 'data check steady', 'plot',
+                 'field info', 'field extract', 'field convert', 'field compute force',
+                 'field render iso'):
+        got = parser.parse_args([*line.split(), '--case', 'CS1'])
+        assert got.case == 'CS1', line
