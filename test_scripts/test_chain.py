@@ -41,9 +41,9 @@ def binary_plt(case, step, when, **kw):
     return at(write_plt(case / 'binary' / f'riser.{step}.plt', **kw), when)
 
 
-def remote(good=None, verified=(), problem=None):
+def remote(good=None, verified=(), problem=None, unrecorded=()):
     return RemoteCopies(lambda: ({s: T0 + t for s, t in (good or {}).items()},
-                                 set(verified), problem))
+                                 set(verified), problem, set(unrecorded)))
 
 
 def chain(case, **kw):
@@ -84,7 +84,7 @@ def test_out_with_no_ascii_stands_on_the_binary_then_on_the_remote(case):
     assert s.ok and s.by == 'remote'
     # the copy on the remote was made before the restart wrote the .out again
     s = chain(case, remote=remote(good={300: 30})).for_out(300, outs(case, 300, when=40))
-    assert not s.ok and 'not newer' in s.why
+    assert not s.ok and 'not after' in s.why
 
 
 def test_out_with_a_binary_cut_short_does_not_look_at_the_remote(case):
@@ -119,7 +119,7 @@ def test_ascii_with_no_binary_here_stands_on_the_remote_copy(case):
     ascii_plt(case, 100, 10)
     assert chain(case, remote=remote(good={100: 20})).for_ascii(100).by == 'remote'
     s = chain(case, remote=remote(good={100: 5})).for_ascii(100)
-    assert not s.ok and 'not newer' in s.why
+    assert not s.ok and 'not after' in s.why
     s = chain(case, remote=remote()).for_ascii(100)
     assert not s.ok and not s.found and s.why == 'no binary PLT here or on the remote'
     s = chain(case, remote=remote(problem='cannot log in')).for_ascii(100)
@@ -151,3 +151,25 @@ def test_the_remote_is_asked_once_and_only_when_needed(case):
     c.for_out(200, outs(case, 200))
     c.for_out(300, outs(case, 300))
     assert calls == [1]
+
+
+# --- a copy on the remote with no record ---------------------------------------------
+
+def test_an_unrecorded_remote_copy_is_named_as_such_not_as_no_plt(case):
+    s = chain(case, remote=remote(unrecorded={300})).for_out(300, outs(case, 300))
+    assert not s.ok and s.found
+    assert 'on the remote, not recorded' in s.why
+    assert 'no riser.300.plt anywhere' not in s.why
+
+
+def test_a_step_on_neither_side_is_still_no_plt(case):
+    s = chain(case, remote=remote(unrecorded={400})).for_out(300, outs(case, 300))
+    assert not s.ok and not s.found
+    assert 'anywhere' in s.why
+
+
+def test_the_older_than_out_message_gives_both_times(case):
+    s = chain(case, remote=remote(good={300: 5})).for_out(300, outs(case, 300, when=50))
+    assert not s.ok and s.found
+    assert 'not after its .out' in s.why and 'post this step again' in s.why
+    assert s.why.count('20') >= 2          # two dates

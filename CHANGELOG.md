@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### 🔎 PLTs only on the remote, not recorded
+
+- `case organise out`, `plt` and `auto show` now say "on the remote, not
+  recorded" for a step whose PLT is on the remote with no ledger record,
+  instead of "no PLT yet", and tell how to make it count: bring it back with
+  `case download plt`, then `case check plt --remote` records what it verifies.
+- The "not newer than its .out" message gives both times and the likely cause
+  (a restart wrote the `.out` again).
+
 ### 🔎 `case check history|out --remote`
 
 - `case check history --remote [NAME]` compares each history file with its copy

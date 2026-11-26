@@ -659,8 +659,16 @@ class CaseOrganizer(HistoryMixin):
                 self.console.print(f"    {step}: {bad[step]}")
             if len(bad) > 10:
                 self.console.print(f"    ... and {len(bad) - 10} more")
-            self.console.print("  [dim]Post those steps again (run post full --t1 .. --t2 ..), "
-                               "then run this again.[/dim]")
+            unrecorded = [st for st in sorted(bad) if 'not recorded' in bad[st]]
+            if unrecorded:
+                self.console.print(
+                    f"  [dim]{len(unrecorded)} of them are on the remote with no record. To "
+                    f"make them count, bring them back (case download plt --case "
+                    f"{self.case_dir.name} --t1 .. --t2 ..) and run case check plt --case "
+                    f"{self.case_dir.name} --remote, which records the copies it verifies.[/dim]")
+            if len(unrecorded) < len(bad):
+                self.console.print("  [dim]The others: post those steps again (run post full "
+                                   "--t1 .. --t2 ..), then run this again.[/dim]")
         if 'none' in kept_out:
             steps = kept_out['none']
             self.console.print(f"  [yellow]Keeping .out of {len(steps)} step(s) with no "

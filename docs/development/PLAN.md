@@ -154,11 +154,11 @@ what keeps a restart's new `.out` from being deleted on the strength of the
 earlier run's PLT. What is missing is the way out for a copy that is there but
 unrecorded, and the right words.
 
-- [ ] Name it as it is: a step with an unrecorded copy on the remote is "on the
+- [x] Name it as it is: a step with an unrecorded copy on the remote is "on the
       remote, not recorded", not "no PLT yet", in `case organise out`, `plt`
       and `auto show` (`found`/`why` in `core/chain.py`, the `none` and `bad`
       messages in `organizer.py`)
-- [ ] Say how to get a record: for each step the command that makes the
+- [x] Say how to get a record (for now: `case download plt`, then `case check plt --remote`, which records what it verifies): for each step the command that makes the
       remote copy count (see the next task), instead of "post again"
 - [ ] A way to record copies that are only there, with the user vouching:
       `case check plt --remote --adopt [--t1 A --t2 B]` writes the ledger
@@ -166,7 +166,7 @@ unrecorded, and the right words.
       a local file: it says so), and says what it did not prove. Decide with
       the user whether this, or `--trust-remote` on `case organise out`, or
       downloading the PLT to check it, is the way
-- [ ] The "not newer than its .out" message gives both times (the PLT's and the
+- [x] The "not newer than its .out" message gives both times (the PLT's and the
       `.out`'s) and the likely cause (a restart wrote the `.out` again), and
       what to do (post that step again)
 - [ ] `auto` is not changed: it never adopts a copy by itself; `auto show`
