@@ -87,6 +87,20 @@ loop (`run sq watch [N]`), a search (`run sq find KEY`) and one job
       key, a job id that is not in the queue
 - [ ] Tests, help text, completion, `CHANGELOG.md`
 
+### Phase 46: a PLT being converted is not an empty one (branch `check-plt-converting`)
+
+Found on the cluster on 2026-11-27: `run post convert` makes each
+`binary/riser.N.plt` empty at the start and writes the data to `pp*` temporary
+files in the case directory, moving it in when the file is done. `case check
+plt` called the files "empty" and the user took a working job for a failure.
+
+- [x] `case check plt`: when a `post` job of the case is active in the queue,
+      0-byte PLTs in `binary/` are shown as "being converted", not empty, and
+      do not fail the check; an unreadable queue changes nothing
+- [x] Test with a fake queue, help text, `CHANGELOG.md`
+- [ ] Later, own task: `pp*` leftovers of a cancelled post job are listed by
+      `case check plt` and removed by the user's word
+
 ## Backlog
 
 Not split into tasks yet. Each needs a decision before it becomes a phase.

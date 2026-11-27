@@ -151,3 +151,47 @@ def test_broken_binary_plt(case):
     text = check(case)
     assert '5 missing, 1 empty, 2 broken' in text
     assert rows(text)['broken'].startswith('400–450 (2) (in binary/; e.g. 400: cut short: 300 of 424 bytes')
+
+
+# --- a post job of the case is in the queue: empty binary PLTs are being made ---
+
+def _queue(monkeypatch, jobs, fail=False):
+    from src.core import slurm
+
+    def case_jobs(case_dir, user=None):
+        if fail:
+            raise slurm.QueueError('squeue failed')
+        return jobs
+    monkeypatch.setattr(slurm, 'available', lambda: True)
+    monkeypatch.setattr(slurm, 'case_jobs', case_jobs)
+
+
+def _job(name, state, kind_dir='/x'):
+    from src.core.slurm import Job
+    return Job('1', name, state, 'shared', kind_dir)
+
+
+def test_empty_is_converting_while_a_post_job_is_queued(case, monkeypatch):
+    _queue(monkeypatch, [_job('postC1', 'RUNNING')])
+    text = check(case)
+    assert '1 being converted' in text and 'empty' not in rows(text)
+    assert rows(text)['converting'].startswith('900')
+    # work in progress does not fail the check on its own
+    for t in (300, 650, 700, 750, 1200):
+        write_plt(case / 'binary' / f'riser.{t}.plt')
+    for t in (1550, 1600):
+        write_plt(case / 'RUN_1' / f'riser.{t}.plt')
+    assert check(case).count('✓') >= 1
+
+
+def test_empty_stays_empty_without_a_post_job(case, monkeypatch):
+    for jobs in ([], [_job('mainC1', 'RUNNING')], [_job('postC1', 'COMPLETED')]):
+        _queue(monkeypatch, jobs)
+        text = check(case)
+        assert rows(text)['empty'] == '900' and 'converting' not in text
+
+
+def test_unreadable_queue_changes_nothing(case, monkeypatch):
+    _queue(monkeypatch, [], fail=True)
+    text = check(case)
+    assert rows(text)['empty'] == '900' and 'converting' not in text
