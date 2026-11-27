@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### 📚 Installed documentation
+
+- The installer now copies non-markdown documentation assets, including HTML
+  flowcharts and SVG diagrams.
+- Links to markdown pages in converted documentation now point to their
+  installed HTML equivalents.
+- The multi-case template no longer points at an ignored example file.
+- Added development notes for running tests and using the dummy-case, fake
+  SLURM and HPC probe tools.
+- Updated the next-session notes to reference the current architecture
+  documentation paths.
+
 ### 🖥️ Web UI: the command window
 
 - A read-only log under the plot area (click "Log" to open it) shows what the

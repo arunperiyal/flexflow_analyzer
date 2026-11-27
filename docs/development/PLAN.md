@@ -66,21 +66,6 @@ own `docs/PLAN.md` before writing code; they may have changed.
 - [ ] VTU for FlowReel, with `field extract`
 - [ ] Tests, help text, a usage page in `docs/usage/`, `CHANGELOG.md`
 
-### Phase 10: documentation that installs and development notes (branch `docs-install`)
-
-- [ ] Installer (`src/installer/install.py`): copy the non-markdown files of
-      `docs/` too (`auto_flow.html`, the SVGs)
-- [ ] Installer: turn `.md` links into `.html` links in the converted pages
-- [ ] `src/templates/example_case_multi.yaml` points at
-      `examples/case_multi_with_globals.yaml`, which git ignores: track the
-      example or drop the pointer
-- [ ] `docs/development/testing.md`: how to run the tests, what
-      `examples/BR0SG0U1P0` is needed for
-- [ ] `docs/development/tools.md`: `make_dummy.py`, `fake_slurm.py`,
-      `hpc_probe.sh`
-- [ ] Bring `.claude/context/NEXT_SESSION.md` up to date (only when the user
-      asks: it still names the old doc paths)
-
 ### Phase 27: `run sq` is easier to use (branch `run-sq-usage`)
 
 From the user (2026-11-18): `run sq` is a little confusing to use. One command
@@ -163,6 +148,7 @@ As noted on 2026-11-26.
 | 4 | `repo-cleanup` | Removed `module_backup/`, `main_old.py`, the shadowed command files, root `mainFlex.sh` and `sample.yaml`; `.gitignore` tidied. The `config` command was left (backlog). Still open, on the user's word: delete the local branches already merged |
 | 5 | `web-render-tests` | The two failing render tests: the route they fetched was removed on purpose in `70d5224`; the tests now go through `save` and `render-file/<token>` |
 | 7 | `auto-steady` | `auto` judges a finished case with the steady check; not steady goes to Needs you with the commands to run longer (§13.24) |
+| 10 | `docs-install` | The installer copies the docs' HTML and SVG files and turns `.md` links into `.html`; `docs/development/testing.md` and `tools.md`; the multi-case template fixed |
 | 11 | `webapp-checklist` | `webapp.md` §11 checked against the code and retired; §12 rewritten; what was left is Phase 45 |
 | 45 | `webapp-leftovers` | The web UI's command window (`/api/log`, `logbuf.py`) and the working spinner; the y-axis lock was already built |
 | 12 | `checked-transfer` | `case upload` and `auto` send through one checked path (`src/core/transfer/`: temporary name, size and md5, rename) and one ledger, whose entries now hold the local `mtime` and the remote `path`; `--to` / `--from` became `--remote`; the crash of `case upload --help` fixed |
