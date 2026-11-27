@@ -87,6 +87,19 @@ loop (`run sq watch [N]`), a search (`run sq find KEY`) and one job
       key, a job id that is not in the queue
 - [ ] Tests, help text, completion, `CHANGELOG.md`
 
+### Phase 47: `auto` does not plan a deletion on an unrecorded remote copy (branch `auto-unrecorded`)
+
+Found on the cluster on 2026-11-28: `auto show` planned `case organise out`
+for 12 `.out` whose PLTs were on the remote, put there by hand. It saw them
+in the remote listing; `case organise out` counts a remote copy only when
+the ledger records a check (md5 or adopted), so it kept all 12.
+
+- [x] `decide._deletions`: a step with no PLT here whose remote copy has no
+      ledger record (`md5` or `adopted`) leaves the `.out` list, and a
+      *needs you* item gives the `case check plt --remote --adopt` command
+      for the range; `auto` still never adopts
+- [x] Test on a dummy case, `auto.md` §13.25, `CHANGELOG.md`
+
 ## Backlog
 
 Not split into tasks yet. Each needs a decision before it becomes a phase.

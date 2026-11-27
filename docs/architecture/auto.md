@@ -1143,3 +1143,18 @@ like a verified record for a copy only on the remote; the local binary PLT is ne
 strength of it (that needs `verified_now`, an md5 against the local file). It does not prove the
 data equals the file it was made from. `auto` never adopts. `RemoteCopies.unrecorded(step)` lets
 `Chain` say "on the remote, not recorded" for the rest.
+
+### 13.25 A remote copy with no record is not a stand-in
+
+`auto show` read the remote by its listing, so a PLT put there by hand counted as a copy and the
+`.out` of its step was planned for `case organise out`. That command counts a remote copy only
+when the ledger records a check (`verified` `md5` or `adopted`, with an md5), so it kept the
+`.out`: the plan promised a deletion that could not happen (found 2026-11-28, 12 `.out` of
+`CH4SG3U2P1`).
+
+`decide._unrecorded_copy(w, t)`: step `t` has no binary or ASCII PLT here, its binary PLT is in the
+remote listing, and the ledger has no such record. `_deletions` takes those steps out of the
+`.out` list (`del_out`, so no `delete-out` command spans them) and adds one *needs you* item,
+topic `adopt`, with the command for the range: `case check plt --case C --remote R --adopt --t1 a
+--t2 b --freq f`. `auto` still never adopts and `apply` runs no such command; adopting is the
+user's act (§13.23). Once the record exists, the next plan lists the steps again.

@@ -750,6 +750,19 @@ def _broken_plts(w):
             plan.add('flag', f"binary/{p}.{t}.plt is broken: {c.reason}.")
 
 
+def _unrecorded_copy(w, t) -> bool:
+    """Step t has no PLT here and its PLT on the remote is not recorded as checked
+    (no ledger entry verified by md5 or adopted)."""
+    snap = w.snap
+    if t in snap.binary or t in snap.ascii:
+        return False
+    rel = f"binary/{w.p}.{t}.plt"
+    if not w.cloud or not w.cloud.get(rel):
+        return False
+    e = snap.ledger.get(rel)
+    return not (e and e.get('verified') in ('md5', 'adopted') and e.get('md5'))
+
+
 def _deletions(w):
     """What may go once its copy on the cloud is checked (not carried out yet)."""
     snap, conf, plan = w.snap, w.conf, w.plan
@@ -771,6 +784,19 @@ def _deletions(w):
     if cloud is not None and not post_now:
         gone = [t for t in covered if not provisional(t)]
         outs = [t for t in gone if t in snap.out and (not running or t in snap.settled)]
+        # A PLT that is only on the remote and has no record of a check cannot stand in for a
+        # .out: `case organise out` keeps it (core/chain.py). Plan no deletion on it; say how
+        # to make it count. Adopting is the user's act, so auto only names the command.
+        unrecorded = [t for t in outs if _unrecorded_copy(w, t)]
+        if unrecorded:
+            outs = [t for t in outs if t not in unrecorded]
+            lo, hi = min(unrecorded), max(unrecorded)
+            plan.add('needs', f".out of {steps_phrase(unrecorded, f).lower()} stay: their PLTs are "
+                              f"on {conf.remote}, but nothing records that they were checked "
+                              f"(put there by hand?). To make them count, without downloading: "
+                              f"`case check plt --case {snap.name} --remote {conf.remote} "
+                              f"--adopt --t1 {lo} --t2 {hi} --freq {f}`, then plan again.",
+                     'adopt')
         ascii = [t for t in gone if t in snap.ascii]
         binary = [t for t in gone if local_ok(t)]
         cand_binary, cand_ascii, cand_outs, no_mtime = [], [], [], []

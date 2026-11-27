@@ -54,9 +54,28 @@ def test_unbroken_prefix_posts_the_rest():
     assert not plan.needs_you
 
 
+def recorded(*steps, how='md5'):
+    return {f"binary/riser.{t}.plt": dict(verified=how, md5='x', size=424, mtime=1.0)
+            for t in steps}
+
+
 def test_all_on_cloud_posts_nothing():
-    plan = decide(snap(cloud=cloud_with(*range(50, 601, 50))), CONF, True, True)
+    plan = decide(snap(cloud=cloud_with(*range(50, 601, 50)), ledger=recorded(*range(450, 601, 50))),
+                  CONF, True, True)
     assert plan.post is None and not plan.needs_you
+
+
+def test_all_on_cloud_with_no_record_says_how_to_adopt():
+    """.out left, their PLTs only on the remote and never checked: nothing is planned for the
+    .out, and the user is told the command that makes the copies count."""
+    plan = decide(snap(cloud=cloud_with(*range(50, 601, 50))), CONF, True, True)
+    assert plan.post is None and plan.needs_you
+    assert plan.ctx['del_out'] == []
+    text = kinds(plan, 'needs')[0]
+    assert '--adopt --t1 450 --t2 600 --freq 50' in text and 'nothing records' in text
+    adopted = decide(snap(cloud=cloud_with(*range(50, 601, 50)),
+                          ledger=recorded(*range(450, 601, 50), how='adopted')), CONF, True, True)
+    assert not adopted.needs_you
 
 
 def test_whole_local_plt_counts_as_converted():
