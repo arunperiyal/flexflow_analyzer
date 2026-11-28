@@ -1174,3 +1174,47 @@ asked the user to check its log, which also held back the plan for the later ste
 `snap.post_windows` for every job not already there; the casestatus line wins. Only the first
 8 KB of each file is read. What stays open is the other half: with a real miss, one flagged step
 still holds the post of every later step back.
+
+### 13.27 One delete path (design, 2026-11-28; not built)
+
+Phase 6's last task. `auto apply --delete` deletes through `executor.do_delete`, one file at a
+time from the explicit lists in `plan.ctx['delete']`. `case organise out|plt|rst` delete through
+`core/chain.py`. `auto show` prints the chain commands as the Action, so the thing it shows is
+not the thing `apply --delete` runs. Phases 47 and 49 each found a case where `auto`'s idea of a
+copy and the chain's differed; the next difference will be found the same way, on the cluster.
+
+**Where the two disagree today.**
+
+| | `do_delete` (C1–C5) | the chain commands |
+|---|---|---|
+| a copy on the remote counts when | the ledger has an `md5` entry with `mtime`, and md5 and size match now | `md5`, or `adopted` for a `.out` only (§13.23), with the "written after" test |
+| what stands in for a `.out` | the binary PLT's remote copy only | its ASCII PLT here, its binary PLT here, or a copy on the remote |
+| restart (newer `.out`) | `newer_than` against the binary PLT's time | `old(written)` against the newest `.out` of the step |
+| a PLT that is broken | left, reason said | left, with the way to make it again |
+| .vtu caches (C5) | deleted | not touched |
+
+What only `apply` has, and must keep: the hold-back while the case needs you or a post job is
+queued (`delete_hold`, `provisional`), `settled`, the one question with totals, the three-
+failures stop, the `.casestatus.md` line, `ledger.mark_deleted` / `mark_mismatch`.
+
+**Option A (recommended): `apply` runs the commands `auto show` lists.** For each `delete`
+step of the plan (`case organise out --t1 a --t2 b --remote R`, ...) `apply` calls the command
+in-process with `--yes` after its own question, and reads its result. The hold-backs and the
+question stay in `apply`; the per-file checks go to the chain, which is the one place that
+decides. `--dry-run` passes through as the command's own `--dry-run`. `do_delete` and
+`plan.ctx['delete']` are removed once a test shows both paths delete the same files on the same
+dummy cases (case13, 14, 15). The `mark_deleted`, `mark_mismatch` and `.casestatus.md` lines
+move into the chain commands, which then also serve a hand run. Costs: the question can no longer
+list exact files, only ranges and what the command's own dry run counts (`apply` can run it with
+`--dry-run` first to get the numbers); a range can reach a file that is not meant to go, but the
+chain keeps what has nothing to stand in for it, and `runs_apart` already keeps ranges from
+spanning such files.
+
+**Option B: keep both, test they agree.** One test per dummy case runs both paths and compares
+the files left. Small and safe, and the duplicate stays; each rule is written twice.
+
+Steps for A, each its own commit: (1) the chain commands record `deleted` / `mismatch` in the
+ledger and write the `.casestatus.md` line; (2) a test that runs `do_delete` and the commands on
+case13–15 and compares; (3) `apply` calls the commands and takes its numbers from their dry
+run; (4) remove `do_delete`, `ctx['delete']` and the C-rule text of 13.13; (5) C5 (.vtu) moves to
+`case organise` or stays a separate, documented rule.
