@@ -695,9 +695,19 @@ def _check_plt(cfg, case_dir: Path, console: Console, freq: Optional[int] = None
             if not result.ok:
                 broken[t] = result.reason
 
+    # simPlt2Bin makes each binary PLT empty at the start and fills it when the
+    # file is done (the data waits in pp* files meanwhile), so with a post job
+    # of this case in the queue a 0-byte file is work in progress, not a fault
+    converting = []
+    if empty and _post_job_active(case_dir):
+        converting = [t for t in empty if t in stats.get('binary/', {})]
+        empty = [t for t in empty if t not in converting]
+
     bad = missing or empty or stale or broken
     mark = "[red]✗[/red]" if bad else "[green]✓[/green]"
     parts = [f"[red]{len(missing)} missing[/red]" if missing else "none missing"]
+    if converting:
+        parts.append(f"[cyan]{len(converting)} being converted[/cyan]")
     if empty:
         parts.append(f"[yellow]{len(empty)} empty[/yellow]")
     if broken:
@@ -713,6 +723,10 @@ def _check_plt(cfg, case_dir: Path, console: Console, freq: Optional[int] = None
     details.add_column()
     if missing:
         details.add_row("    [red]missing[/red]", _fmt_steps(missing, out_freq))
+    if converting:
+        details.add_row("    [cyan]converting[/cyan]",
+                        f"{_fmt_steps(converting, out_freq)}  [dim](empty in binary/ while a post job "
+                        f"of this case is in the queue; the data is in pp* files until each is done)[/dim]")
     if empty:
         details.add_row("    [yellow]empty[/yellow]", _fmt_steps(empty, out_freq))
     if broken:
@@ -745,6 +759,18 @@ def _check_plt(cfg, case_dir: Path, console: Console, freq: Optional[int] = None
     if details.row_count:
         console.print(details)
     console.print()
+
+
+def _post_job_active(case_dir: Path) -> bool:
+    """Whether a post job of this case is pending or running. A queue that
+    cannot be read counts as no: the files are then reported as they are."""
+    from ....core import slurm
+    if not slurm.available():
+        return False
+    try:
+        return any(j.kind == 'post' and j.active for j in slurm.case_jobs(case_dir))
+    except slurm.QueueError:
+        return False
 
 
 def _stale_plts(stats: dict, run_dir: Optional[Path], problem: str, restart: int):

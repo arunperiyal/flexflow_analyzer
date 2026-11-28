@@ -70,6 +70,10 @@ Pick one subcommand.
           • A step counts as present in either place; up to the last step
             found, the ones with no file are {Colors.RED}missing{Colors.RESET} and 0-byte ones
             {Colors.YELLOW}empty{Colors.RESET}, shown as runs: {Colors.DIM}300 · 650–750 (3) · 1200{Colors.RESET}
+          • While a `run post` job of the case is in the SLURM queue, a 0-byte
+            file in binary/ is {Colors.CYAN}being converted{Colors.RESET}, not empty: simPlt2Bin makes
+            each file empty first and fills it when that file is done (the data
+            waits in pp* files in the case directory). It does not fail the check.
           • Steps after the last one found are {Colors.DIM}not yet{Colors.RESET} written (the run
             stopped or is still going), apart from the gaps
           • Also lists extra files (off the freq grid) and steps in both places

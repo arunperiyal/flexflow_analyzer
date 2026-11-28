@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### 🔎 `case check plt` knows a conversion is running
+
+- While a `run post` job of the case is pending or running, a 0-byte PLT in
+  `binary/` is shown as "being converted", not "empty", and does not fail the
+  check. `simPlt2Bin` makes each file empty first and fills it when that file
+  is done. Without SLURM, or when the queue cannot be read, nothing changes.
+
 ### 📚 Installed documentation
 
 - The installer now copies non-markdown documentation assets, including HTML
