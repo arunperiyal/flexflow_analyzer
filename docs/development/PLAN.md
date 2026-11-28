@@ -54,8 +54,10 @@ organise out` (Phase 14). Both paths now exist side by side.
       chosen 2026-11-28), in five commits:
   - [x] The chain commands write down what they delete: the ledger's `deleted`
         and `mismatch` marks, and a `.casestatus.md` line
-  - [ ] A test that runs `do_delete` and the commands on case13, 14 and 15
-        and compares the files left
+  - [x] A test that runs `do_delete` and the commands on case13, 14 and 15
+        (and 3, 4, 6, 11) and compares the files left; it found that a copy
+        with another md5 let the chain delete the ASCII PLT and `.out`, now
+        kept
   - [ ] `apply` runs the commands of the plan's delete steps after its own
         question, and takes its numbers from their dry run
   - [ ] `do_delete`, `plan.ctx['delete']` and the C-rule text of §13.13 are

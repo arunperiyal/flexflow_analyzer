@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### 🛡️ `case organise` keeps a step whose remote copy has another md5
+
+- With `--remote`, when a local binary PLT and its copy on the remote have
+  the same size and another md5, one of them is damaged and nothing says
+  which. `case organise plt ascii` now keeps that step's ASCII PLT (it used
+  to go on the strength of the whole local binary PLT), and says why.
+
 ### 🧹 `case organise` writes down what it deleted
 
 - After `case organise out`, `rst`, `plt` or `vtu` deletes files, the case's

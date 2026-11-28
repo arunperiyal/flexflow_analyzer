@@ -1218,3 +1218,13 @@ ledger and write the `.casestatus.md` line; (2) a test that runs `do_delete` and
 case13–15 and compares; (3) `apply` calls the commands and takes its numbers from their dry
 run; (4) remove `do_delete`, `ctx['delete']` and the C-rule text of 13.13; (5) C5 (.vtu) moves to
 `case organise` or stays a separate, documented rule.
+
+**Built so far (2026-11-28).** Step 1: the chain commands write the ledger's `deleted` and
+`mismatch` marks and a `.casestatus.md` line (`case organise out deleted: 5 .out; 2.1GB freed`).
+Step 2: `test_auto_delete_paths.py` runs `do_delete` and the listed commands on the dummy cases
+13, 14, 15, 3, 4, 6 and 11 and compares the files left. Case 14, a remote copy with the size of
+the local binary PLT and another md5, differed: the commands deleted the ASCII PLT of the step on
+the strength of the whole local binary PLT. The chain now asks the remote, when one is named, and
+keeps everything on that step until the cause is known (`RemoteCopies.mismatched`). The cost: a
+local binary PLT that stands in for something is compared with its remote copy by md5, not just
+checked for being whole.
