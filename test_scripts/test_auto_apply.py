@@ -443,7 +443,7 @@ def test_dry_run_with_delete_lists_and_deletes_nothing(dummy, capsys):
     before = rst_files_of(dummy, 'case5')
     assert apply('case5', only='delete', dry_run=True) == 0
     out = ' '.join(capsys.readouterr().out.split())
-    assert 'C4 restart sets' in out and 'a dry run of each' in out
+    assert 'restart sets step 750: 4 files' not in out and 'restart sets' in out and 'a dry run of each' in out
     assert rst_files_of(dummy, 'case5') == before
 
 
@@ -469,7 +469,7 @@ def test_the_delete_flag_adds_the_stage_to_a_plain_apply(dummy, capsys):
     apply('case5', dry_run=True)
     assert 'C4' not in capsys.readouterr().out
     apply('case5', delete=True, dry_run=True)
-    assert 'C4' in capsys.readouterr().out
+    assert 'restart sets' in capsys.readouterr().out
 
 
 def test_the_order_is_history_upload_delete_post():

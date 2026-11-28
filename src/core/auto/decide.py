@@ -777,10 +777,9 @@ def _deletions(w):
                               f"right, then send it again.")
 
     # -- deletions, once the copies on the cloud are checked ----------------------
-    # Two lists. The commands and rows `auto show` prints (ascii, binary, outs, thin) are for
-    # the hand commands, which check every file along the chain when they run. The candidates
-    # of `auto apply --delete` (cand_*, plan.ctx['delete']) are explicit files, held back as
-    # a whole while the case needs you (auto.md 13.13); the executor checks each again.
+    # The commands and rows `auto show` prints (ascii, binary, outs, thin) are the hand
+    # commands, which check every file along the chain when they run; `auto apply --delete`
+    # runs the same commands (auto.md 13.27), held back as a whole while the case needs you.
     if cloud is not None and not post_now:
         gone = [t for t in covered if not provisional(t)]
         outs = [t for t in gone if t in snap.out and (not running or t in snap.settled)]
@@ -799,7 +798,6 @@ def _deletions(w):
                      'adopt')
         ascii = [t for t in gone if t in snap.ascii]
         binary = [t for t in gone if local_ok(t)]
-        cand_binary, cand_ascii, cand_outs, no_mtime = [], [], [], []
         hold = [i.text for i in plan.items if i.kind == 'needs'
                 and not i.text.startswith('Main job')]
         hold += [f"binary/{p}.{t}.plt is broken: {c.reason}" for t, c in sorted(snap.binary.items())
@@ -808,52 +806,6 @@ def _deletions(w):
         # what `auto apply --delete` may run: the delete commands below, only when the queue
         # was read and the case does not need you
         plan.ctx['delete_allowed'] = bool(sacct_ok and not hold)
-        if sacct_ok:
-            def plt_rel(t):
-                return f"binary/{p}.{t}.plt"
-
-            def entry(t):
-                e = snap.ledger.get(plt_rel(t))
-                return e if e and e.get('verified') == 'md5' and e.get('md5') else None
-
-            def written(t):
-                """When the binary PLT of step t was written: its mtime here, or the one the
-                ledger kept when it was sent (None: unknown)."""
-                if t in snap.binary:
-                    return snap.binary_time.get(t)
-                e = entry(t)
-                return e.get('mtime') if e else None
-
-            def has_copy(t):
-                """The remote holds a file of that name and size (md5 is the executor's)."""
-                there = cloud.get(plt_rel(t), 0)
-                if t in snap.binary:
-                    return snap.binary[t].ok and there == snap.binary[t].size and there > 0
-                e = entry(t)
-                return bool(e and there and there == e.get('size')
-                            and not stale_plt(t))
-
-            steps = sorted(t for t in set(snap.binary) | set(snap.out) | snap.ascii
-                           | {int(m.group(1)) for k in cloud
-                              for m in [re.match(rf'binary/{re.escape(p)}\.(\d+)\.plt$', k)] if m}
-                           if not provisional(t))
-            if not hold:
-                for t in steps:
-                    if not has_copy(t):
-                        continue
-                    if t in snap.binary:
-                        cand_binary.append(t)
-                    wr = written(t)
-                    if t in snap.ascii or t in snap.out:
-                        if wr is None:
-                            no_mtime.append(t)
-                            continue
-                        if t in snap.ascii and wr > snap.ascii_time.get(t, 0):
-                            cand_ascii.append(t)
-                        if (t in snap.out and t in snap.settled
-                                and wr > snap.out_time.get(t, 0)):
-                            cand_outs.append(t)
-            plan.ctx['delete_no_mtime'] = no_mtime
         parts = []
         if ascii:
             parts.append(f"ASCII PLTs, {steps_phrase(ascii, f).lower()}")
@@ -882,9 +834,7 @@ def _deletions(w):
                     keep.add(back[-1])
             thin = [t for t in snap.rst if t % conf.keep_rst and t not in keep
                     and not provisional(t) and not stale_rst(t) and not (running and snap.live and t >= snap.live[1])]
-        plan.ctx.update(del_ascii=ascii, del_binary=binary, del_out=outs, thin=thin,
-                        cand_ascii=cand_ascii, cand_binary=cand_binary, cand_out=cand_outs,
-                        cand_thin=[] if hold or not sacct_ok else thin)
+        plan.ctx.update(del_ascii=ascii, del_binary=binary, del_out=outs, thin=thin)
         # The commands that delete, each along the chain (core/chain.py): it checks again
         # when it runs and keeps what has nothing to stand in for it. A range never spans a
         # file that is not meant to go.
@@ -905,19 +855,6 @@ def _deletions(w):
             plan.step('rst', 'delete', 'thin-rst',
                       f"case organise rst --case {name} --keep-freq {conf.keep_rst} "
                       f"--keep-newest {conf.keep_newest_rst} --t1 {min(thin)} --t2 {max(thin)}")
-        if sacct_ok:                     # with no queue or remote read, nothing is a candidate
-            plan.ctx['delete'] = {
-                'ascii': {f"{snap.run_rel}/{p}.{t}.plt": snap.ascii_size.get(t, 0)
-                          for t in cand_ascii},
-                'binary': {f"binary/{p}.{t}.plt": snap.binary[t].size for t in cand_binary},
-                'out': {x.relative_to(snap.dir).as_posix(): x.stat().st_size
-                        for t in cand_outs for x in snap.out[t] if x.exists()},
-                'rst': {k: v for t in plan.ctx['cand_thin'] for k, v in snap.rst_files.get(t, {}).items()},
-            }
-        if no_mtime:
-            plan.add('note', f"{steps_phrase(no_mtime, f)}: the ASCII PLT and .out stay; the ledger "
-                             f"has no time for the binary PLT that is gone here (sent before the "
-                             f"delete stage existed).", 'delete')
         for part in parts:
             plan.add('delete', part)
         if conf.keep_rst and snap.rst and thin:
@@ -947,7 +884,7 @@ def _vtu(w):
     size = lambda vs: _size_text(sum(v.size for v in vs))
     plan.ctx['vtu'] = dict(leftovers=leftovers, fresh=fresh, caches=caches, orphans=orphans)
     if go:
-        plan.ctx.setdefault('delete', {})['vtu'] = {v.rel: v.size for v in go}
+        plan.ctx['vtu_go'] = {v.rel: v.size for v in go}
         what = []
         if leftovers:
             what.append(f"{len(leftovers)} leftover{'s' if len(leftovers) != 1 else ''} of a "

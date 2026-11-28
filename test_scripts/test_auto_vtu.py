@@ -12,7 +12,6 @@ import pytest
 from src.core.auto import conf as conf_mod
 from src.core.auto.conf import AutoConf, AutoConfError
 from src.core.auto.decide import decide
-from src.core.auto.executor import do_delete
 from src.core.auto.observe import VtuFile
 from test_auto_decide import snap
 from test_auto_show import dummy  # noqa: F401  (the fixture)
@@ -43,7 +42,7 @@ def test_no_vtu_no_step():
 
 def test_an_old_leftover_goes_a_young_one_stays():
     plan = plan_for([vtu('riser.100.partial.vtu', age=2 * DAY), vtu('riser.200.deriving.vtu', age=60)])
-    assert list(plan.ctx['delete']['vtu']) == ['binary/riser.100.partial.vtu']
+    assert list(plan.ctx['vtu_go']) == ['binary/riser.100.partial.vtu']
     assert 'killed render' in texts(plan, 'delete')[0]
     assert 'younger than a day' in texts(plan, 'note')[0]
     step, = plan.steps_of('delete-vtu')
@@ -53,17 +52,17 @@ def test_an_old_leftover_goes_a_young_one_stays():
 def test_a_cache_with_its_plt_is_kept_unless_the_config_says_delete():
     caches = [vtu('riser.100.vtu', plt=True), vtu('riser.100.z1.vtu', plt=True)]
     keep = plan_for(caches)
-    assert 'vtu' not in (keep.ctx.get('delete') or {})
+    assert not keep.ctx.get('vtu_go')
     assert 'kept' in texts(keep, 'note')[0] and 'vtu_cache: delete' in texts(keep, 'note')[0]
     gone = plan_for(caches, cache='delete')
-    assert sorted(gone.ctx['delete']['vtu']) == ['binary/riser.100.vtu', 'binary/riser.100.z1.vtu']
+    assert sorted(gone.ctx['vtu_go']) == ['binary/riser.100.vtu', 'binary/riser.100.z1.vtu']
     assert gone.steps_of('delete-vtu')[0].command == 'case organise vtu --case case --age-hours 24'
 
 
 def test_a_cache_without_its_plt_is_reported_never_deleted():
     for cache in ('keep', 'delete'):
         plan = plan_for([vtu('riser.100.vtu', plt=False)], cache=cache)
-        assert 'vtu' not in (plan.ctx.get('delete') or {})
+        assert not plan.ctx.get('vtu_go')
         assert 'cannot be rebuilt' in texts(plan, 'note')[0]
 
 
@@ -72,21 +71,6 @@ def test_vtu_cache_setting_is_checked():
     assert conf_mod.check_vtu_cache('DELETE') == 'delete'
     with pytest.raises(AutoConfError):
         conf_mod.check_vtu_cache('always')
-
-
-def test_the_executor_deletes_them_without_a_remote(tmp_path):
-    case = tmp_path / 'c1'
-    (case / 'binary').mkdir(parents=True)
-    f = case / 'binary' / 'riser.100.vtu'
-    f.write_bytes(b'x' * 10)
-    other = case / 'binary' / 'mine.vtu'
-    other.write_bytes(b'y')
-    said = []
-    plan = SimpleNamespace(ctx={'delete': {'vtu': {'binary/riser.100.vtu': 10}}})
-    step = do_delete(SimpleNamespace(name='c1', dir=case, problem='riser'), plan,
-                     SimpleNamespace(remote='local', keep_rst=None), None, None, said.append)
-    assert step.ok and '1 .vtu' in step.text
-    assert not f.exists() and other.exists()
 
 
 def test_a_dummy_case_with_vtu_files(dummy):
@@ -104,7 +88,7 @@ def test_a_dummy_case_with_vtu_files(dummy):
             old = time.time() - age
             os.utime(binary / name, (old, old))
     plan = plans(dummy, 'case3')[0]['case3']
-    assert sorted(plan.ctx['delete']['vtu']) == ['binary/riser.9998.partial.vtu']
+    assert sorted(plan.ctx['vtu_go']) == ['binary/riser.9998.partial.vtu']
     info = plan.ctx['vtu']
     assert len(info['caches']) == 2 and [v.step for v in info['orphans']] == [9999]
     assert [v.step for v in info['fresh']] == [9997]

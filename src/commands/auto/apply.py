@@ -8,9 +8,10 @@
     their target), in the order below. With no target nothing is done and the
     targets are listed. The check and delete steps (`case check plt --remote`,
     `case organise ...`) are listed as not run by apply. --delete (or --only
-    delete) adds the delete stage, after the upload: files whose copy on the
-    remote passes an md5 check made then, and the restart sets off the
-    keep_rst grid (auto.md 13.13); it takes the files of the target.
+    delete) adds the delete stage, after the upload: it runs the `case
+    organise ...` commands of the plan (the ones `auto show` lists), which
+    keep every file with nothing to stand in for it (auto.md 13.27); a dry
+    run of each makes the question's totals.
 
 For each case, in this order, with the plan made again from the files and the
 queue right before each step (so a step runs on what is there now, not on what
@@ -18,9 +19,8 @@ was there when the run started):
 
     history   case organise history update clean compile
     upload    the files the plan lists, to <remote>/<case>/..., each checked
-    delete    --delete or --only delete: the local files whose copy on the remote passes
-              an md5 check made at that moment, and the restart sets off the keep_rst
-              grid (auto.md 13.13)
+    delete    --delete or --only delete: the plan's `case organise ...` commands, run in
+              order after the one question (auto.md 13.27)
     post      `run post` for the first stretch of steps with no PLT yet
 
 A step that fails stops that case (the steps after it depend on it); the other
@@ -118,27 +118,25 @@ def delete_totals(plan):
         len(vtu), sum(vtu.values())
 
 
-RULE = {'ascii': 'C1', 'binary': 'C2', 'out': 'C3'}
-
-
 def _delete_breakdown(plan):
+    """What the dry runs of the delete commands listed, by kind of file."""
+    import re
     from src.core.auto.decide import _size_text, steps_phrase
-    d, c = plan.ctx.get('delete') or {}, plan.ctx
+    d = plan.ctx.get('delete') or {}
     lines = []
-    for key, label, steps in (('ascii', 'ASCII PLTs', c.get('cand_ascii')),
-                              ('binary', 'binary PLTs', c.get('cand_binary')),
-                              ('out', '.out files', c.get('cand_out'))):
-        if d.get(key):
-            lines.append(f"{RULE[key]} "
-                         f"{label}, {steps_phrase(steps or []).lower()}: {len(d[key])} files, "
-                         f"{_size_text(sum(d[key].values()))}")
-    if d.get('vtu'):
-        lines.append(f"C5 .vtu files: {len(d['vtu'])} files, "
-                     f"{_size_text(sum(d['vtu'].values()))}")
-    if d.get('rst'):
-        lines.append(f"C4 restart sets {steps_phrase(c.get('cand_thin') or []).lower()}: no copy, off the "
-                     f"keep_rst grid ({_size_text(sum(d['rst'].values()))})")
-    if c.get('delete_hold'):
+    for key, label in (('ascii', 'ASCII PLTs'), ('binary', 'binary PLTs'), ('out', '.out files'),
+                       ('vtu', '.vtu files'), ('rst', 'restart sets')):
+        files = d.get(key)
+        if not files:
+            continue
+        steps = sorted({int(m.group(1)) for rel in files
+                        for m in [re.search(r'\.(\d+)(?:\.\w+)*?(?:_\d+)?\.(?:plt|out|rst|vtu)$', rel)] if m})
+        where = f", {steps_phrase(steps).lower()}" if steps else ''
+        tail = ": no copy, off the keep_rst grid" if key == 'rst' else ''
+        n = len(files) if key != 'rst' else len(steps)
+        what = f"{n} {'sets' if key == 'rst' else 'files'}"
+        lines.append(f"{label}{where}: {what}, {_size_text(sum(files.values()))}{tail}")
+    if plan.ctx.get('delete_hold'):
         lines.append("nothing is deleted while the case needs you (auto show)")
     return lines
 
