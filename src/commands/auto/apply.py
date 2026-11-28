@@ -360,9 +360,9 @@ def execute_apply(args) -> int:
             else:
                 console.print(f"    {MARK[kind]} {escape(text)}")
     if getattr(args, 'dry_run', False):
-        console.print("[dim]--dry-run: nothing was deleted or sent"
-                      + ("; what would be deleted is what a dry run of each `case organise` "
-                         "command lists" if 'delete' in only else '') + ".[/dim]")
+        console.print("[dim]--dry-run: nothing was done."
+                      + (" What would be deleted is what a dry run of each `case organise` "
+                         "command lists." if 'delete' in only else '') + "[/dim]")
         console.rule(style='cyan')
         return 0
     if not getattr(args, 'yes', False):

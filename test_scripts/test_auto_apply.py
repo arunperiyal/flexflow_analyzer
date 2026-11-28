@@ -443,7 +443,7 @@ def test_dry_run_with_delete_lists_and_deletes_nothing(dummy, capsys):
     before = rst_files_of(dummy, 'case5')
     assert apply('case5', only='delete', dry_run=True) == 0
     out = ' '.join(capsys.readouterr().out.split())
-    assert 'C4 restart sets' in out and 'only computed in a real run' in out
+    assert 'C4 restart sets' in out and 'a dry run of each' in out
     assert rst_files_of(dummy, 'case5') == before
 
 
