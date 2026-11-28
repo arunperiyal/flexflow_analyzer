@@ -101,6 +101,22 @@ at what really stays before designing.
       a file while a post job of the case is in the queue
 - [ ] Tests, help text, `CHANGELOG.md`
 
+### Phase 49: the steps a post job was given are read from its slurm output (branch `auto-post-window-log`)
+
+Found on the cluster on 2026-11-28 (`BR0SG0U1P0`): post job 1241409 was given
+steps 6130..6460 (`End Time: 6460` in `slurm-1241409.out`), but its
+`.casestatus.md` had only the "submitted" line, no "started: steps" line, and
+`auto` took every `.out` written before the job ended as given to it. It
+raised *needs you* for steps 6465-6485, which also held back the rest of the
+plan.
+
+- [x] `observe.post_window_from_log`: the window from the header of
+      `slurm-<id>.out`, used when `.casestatus.md` has none
+- [x] Test, `auto.md` §13.26, `CHANGELOG.md`
+- [ ] Left open: with a real miss, only the missed steps are flagged and the
+      steps after them still get a post job (today the first one holds the
+      whole plan back). Needs a decision on the holes rule first.
+
 ## Backlog
 
 Not split into tasks yet. Each needs a decision before it becomes a phase.
