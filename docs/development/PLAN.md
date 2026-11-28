@@ -87,19 +87,19 @@ loop (`run sq watch [N]`), a search (`run sq find KEY`) and one job
       key, a job id that is not in the queue
 - [ ] Tests, help text, completion, `CHANGELOG.md`
 
-### Phase 46: a PLT being converted is not an empty one (branch `check-plt-converting`)
+### Phase 48: `pp*` leftovers of a cancelled post job (branch `post-leftovers`)
 
-Found on the cluster on 2026-11-27: `run post convert` makes each
-`binary/riser.N.plt` empty at the start and writes the data to `pp*` temporary
-files in the case directory, moving it in when the file is done. `case check
-plt` called the files "empty" and the user took a working job for a failure.
+`simPlt2Bin` writes each binary PLT to a `pp*` temporary file in the case
+directory and moves it into `binary/` when the file is done (seen 2026-11-27).
+A post job that is cancelled or fails may leave them, about 130 MB each, up to
+36 at a time, on a disk that is over quota. Not yet seen on the cluster: look
+at what really stays before designing.
 
-- [x] `case check plt`: when a `post` job of the case is active in the queue,
-      0-byte PLTs in `binary/` are shown as "being converted", not empty, and
-      do not fail the check; an unreadable queue changes nothing
-- [x] Test with a fake queue, help text, `CHANGELOG.md`
-- [ ] Later, own task: `pp*` leftovers of a cancelled post job are listed by
-      `case check plt` and removed by the user's word
+- [ ] Write the design note (what a leftover looks like, how it is told from
+      a running job's file)
+- [ ] `case check plt` lists them; removing them asks first and never touches
+      a file while a post job of the case is in the queue
+- [ ] Tests, help text, `CHANGELOG.md`
 
 ## Backlog
 
@@ -165,6 +165,8 @@ As noted on 2026-11-26.
 | 10 | `docs-install` | The installer copies the docs' HTML and SVG files and turns `.md` links into `.html`; `docs/development/testing.md` and `tools.md`; the multi-case template fixed |
 | 11 | `webapp-checklist` | `webapp.md` §11 checked against the code and retired; §12 rewritten; what was left is Phase 45 |
 | 45 | `webapp-leftovers` | The web UI's command window (`/api/log`, `logbuf.py`) and the working spinner; the y-axis lock was already built |
+| 46 | `check-plt-converting` | `case check plt` shows a 0-byte binary PLT as "being converted" while a post job of the case is queued, and does not fail the check on it |
+| 47 | `auto-unrecorded` | `auto` plans no `.out` deletion on a remote PLT with no record of a check, and names the `--adopt` command under *needs you* (§13.25) |
 | 12 | `checked-transfer` | `case upload` and `auto` send through one checked path (`src/core/transfer/`: temporary name, size and md5, rename) and one ledger, whose entries now hold the local `mtime` and the remote `path`; `--to` / `--from` became `--remote`; the crash of `case upload --help` fixed |
 | 13 | `plt-verify` | `case upload plt` / `case download plt` (the old word `binary` still works); `case check plt --verify --remote NAME` compares each binary PLT with its remote copy by size and md5, writes the ledger and exits 0 only when all are verified (`verify_plts()` in `src/core/transfer/verify.py`) |
 | 18 | `plt-verify-chain` | `case check plt --verify` after the user's review: md5 by reading the copy back when the remote has no `md5sum`; PLTs only on the remote compared with the ledger's record (an emptied `binary/` is fine); steps in neither place listed; a broken PLT says how to make it again (`run post convert`, else `run post full`); a remote that is not set says so |
