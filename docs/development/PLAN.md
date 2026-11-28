@@ -58,8 +58,10 @@ organise out` (Phase 14). Both paths now exist side by side.
         (and 3, 4, 6, 11) and compares the files left; it found that a copy
         with another md5 let the chain delete the ASCII PLT and `.out`, now
         kept
-  - [ ] `apply` runs the commands of the plan's delete steps after its own
-        question, and takes its numbers from their dry run
+  - [x] `apply` runs the commands of the plan's delete steps after its own
+        question (`core/auto/organise_run.py`), and takes its numbers from a
+        dry run of each (`--result FILE`); the `.vtu` command got
+        `--age-hours`
   - [ ] `do_delete`, `plan.ctx['delete']` and the C-rule text of §13.13 are
         removed
   - [ ] The `.vtu` caches (C5) get a place in `case organise` or stay a

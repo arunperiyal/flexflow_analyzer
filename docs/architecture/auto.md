@@ -1228,3 +1228,12 @@ the strength of the whole local binary PLT. The chain now asks the remote, when 
 keeps everything on that step until the cause is known (`RemoteCopies.mismatched`). The cost: a
 local binary PLT that stands in for something is compared with its remote copy by md5, not just
 checked for being whole.
+
+Step 3 (2026-11-28): `auto apply --delete` runs the plan's delete steps (`core/auto/organise_run.py`).
+The hold-back stays in `apply` (`plan.ctx['delete_allowed']`: the queue was read and the case does
+not need you); the question's totals come from a dry run of each command (`--result FILE`, which
+writes the files and sizes as JSON); the real run is each command with `--yes`, one process each, in
+the order `auto show` lists. A command that fails stops the stage. One visible change: the dry run
+records a remote copy with another md5 in the ledger, so the plan made right before the stage holds
+the whole case, where `do_delete` had left only that step's files. `organise vtu --age-hours 24`
+keeps the 24-hour rule for leftovers that the old executor applied itself.

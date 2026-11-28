@@ -5,6 +5,7 @@ Handles cleaning and organizing case directories.
 """
 
 import os
+import time
 import re
 import shutil
 from pathlib import Path
@@ -216,6 +217,7 @@ class CaseOrganizer(HistoryMixin):
                 f"[bold cyan]Dry run:[/bold cyan] {len(self.files_to_delete)} files "
                 f"would be deleted. No changes made."
             )
+            self._write_result(dry_run=True)
             return
 
         if has_deletions and not self.args.yes:
@@ -225,6 +227,7 @@ class CaseOrganizer(HistoryMixin):
 
         if has_deletions:
             self._perform_deletions()
+        self._write_result(dry_run=False)
 
         # Final summary
         self._show_final_summary(subcommand)
@@ -340,18 +343,26 @@ class CaseOrganizer(HistoryMixin):
             return
 
         pattern = re.compile(rf'^{re.escape(problem)}\.(\d+)(\.z\d+)?(\.partial|\.deriving)?\.vtu$')
-        found, orphans = [], []
+        found, orphans, young = [], [], []
         for path in binary_dir.glob(f'{problem}.*.vtu'):
             match = pattern.match(path.name)
             if not match or not self._step_in_bounds(int(match.group(1)), t1, t2):
                 continue
             if getattr(self.args, 'leftovers', False) and not match.group(3):
                 continue                # only what a killed render left
+            age = getattr(self.args, 'age_hours', None)
+            if age is not None and time.time() - path.stat().st_mtime < age * 3600:
+                young.append(path)      # a render may be writing it
+                continue
             if not match.group(3) and not getattr(self.args, 'orphans', False) \
                     and not (binary_dir / f'{problem}.{match.group(1)}.plt').exists():
                 orphans.append(path)        # a cache that cannot be rebuilt stays
                 continue
             found.append((int(match.group(1)), path, match))
+        if young:
+            self.console.print(f"  [dim]Leaving {len(young)} .vtu modified in the last "
+                               f"{self.args.age_hours:g} h: a render may be writing "
+                               f"{'it' if len(young) == 1 else 'them'}[/dim]")
         if orphans:
             self.console.print(f"  [yellow]Keeping {len(orphans)} .vtu with no .plt "
                                f"(they cannot be rebuilt):[/yellow] "
@@ -936,6 +947,36 @@ class CaseOrganizer(HistoryMixin):
             self.console.print(f"\n[dim]Log saved to: {self.log_file}[/dim]")
         self._record_deletions()
 
+    def _write_result(self, dry_run: bool):
+        """--result FILE (for `auto apply`, which runs this command and reads what it did):
+        the files listed for deletion (dry run) or deleted, with their sizes, and how many
+        could not be deleted. A file that cannot be written is not an error of the run."""
+        path = getattr(self.args, 'result', None)
+        if not path:
+            return
+        import json
+
+        def rel(p):
+            try:
+                return Path(p).relative_to(self.case_dir).as_posix()
+            except ValueError:
+                return str(p)
+        if dry_run:
+            files = []
+            for f in self.files_to_delete:
+                try:
+                    files.append([rel(f), f.stat().st_size])
+                except OSError:
+                    pass
+            failed = 0
+        else:
+            files = [[rel(f), size] for f, size in self.deleted]
+            failed = len(self.files_to_delete) - len(self.deleted)
+        try:
+            Path(path).write_text(json.dumps({'dry_run': dry_run, 'files': files, 'failed': failed}))
+        except OSError as e:
+            self.logger.warning(f"could not write {path}: {e}")
+
     def _record_deletions(self):
         """What went, written down where it is looked for later: the ledger learns that a
         binary PLT is gone here (its copy on the remote then stands in for it), and the
@@ -953,7 +994,7 @@ class CaseOrganizer(HistoryMixin):
             if path.suffix == '.rst':
                 rst_sets.add(path.name.rsplit('_', 1)[0])
         if '.rst' in counts:
-            counts['restart sets'] = len(rst_sets)
+            counts['restart set' if len(rst_sets) == 1 else 'restart sets'] = len(rst_sets)
             del counts['.rst']
         try:
             self._ledger_deleted([p for p, _ in self.deleted

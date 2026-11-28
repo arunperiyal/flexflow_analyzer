@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### 🧹 `auto apply --delete` runs the commands `auto show` lists
+
+- The delete stage no longer has code of its own: it runs the `case organise
+  plt ascii|binary`, `out`, `rst` and `vtu` commands of the plan, in order, as
+  you would, after its one question. What it says it will delete is what a dry
+  run of each command lists. So a copy accepted by hand is accepted by `auto`,
+  and the other way round. A case with a remote copy of another md5 is now
+  held as a whole (the dry run finds it), not only its own steps.
+- `case organise vtu --age-hours N` leaves a `.vtu` modified in the last N
+  hours (`auto` passes 24).
+
 ### 🛡️ `case organise` keeps a step whose remote copy has another md5
 
 - With `--remote`, when a local binary PLT and its copy on the remote have

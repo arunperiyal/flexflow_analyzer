@@ -461,8 +461,8 @@ def test_only_delete_removes_the_restart_sets_off_the_grid_and_logs_it(dummy):
     assert apply('case5', only='delete') == 0
     after = rst_files_of(dummy, 'case5')
     assert 0 < len(after) < len(before)
-    assert 'deleted' in last_log(dummy) and 'C4 restart set' in last_log(dummy)
-    assert 'auto deleted:' in (dummy / 'bare' / 'case5' / '.casestatus.md').read_text()
+    assert 'deleted' in last_log(dummy) and 'restart set' in last_log(dummy)
+    assert 'case organise rst deleted:' in (dummy / 'bare' / 'case5' / '.casestatus.md').read_text()
 
 
 def test_the_delete_flag_adds_the_stage_to_a_plain_apply(dummy, capsys):

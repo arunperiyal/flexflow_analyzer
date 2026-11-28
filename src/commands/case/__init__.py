@@ -240,6 +240,9 @@ class CaseCommand(BaseCommand):
                                     help='Only the .partial/.deriving files a killed render left')
         vtu_parser.add_argument('--orphans', action='store_true',
                                     help='Also the .vtu whose .plt is gone (it cannot be rebuilt)')
+        vtu_parser.add_argument('--age-hours', type=float, default=None, metavar='N',
+                                    help='Leave a file modified in the last N hours '
+                                         '(a render may be writing it)')
         time_window(vtu_parser,
                     t1_kwargs=dict(metavar='STEP', help='Only target timesteps >= STEP'),
                     t2_kwargs=dict(metavar='STEP', help='Only target timesteps <= STEP'))

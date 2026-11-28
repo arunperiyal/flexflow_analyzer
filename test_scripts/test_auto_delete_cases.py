@@ -63,7 +63,8 @@ def test_case13_every_rule_applies_and_the_remote_is_untouched(dummy):
     assert cloud_files(dummy, 'case13') == remote
     entry = Ledger(dummy / 'bare').get('local', 'case13', 'binary/riser.900.plt')
     assert entry['deleted'] and entry['verified'] == 'md5' and entry['mtime']
-    assert 'auto deleted:' in (dummy / 'bare' / 'case13' / '.casestatus.md').read_text()
+    status = (dummy / 'bare' / 'case13' / '.casestatus.md').read_text()
+    assert 'case organise out deleted:' in status and 'case organise plt deleted:' in status
 
 
 def test_case13_a_second_run_finds_nothing_more(dummy, capsys):
@@ -73,18 +74,17 @@ def test_case13_a_second_run_finds_nothing_more(dummy, capsys):
     assert 'nothing to do' in capsys.readouterr().out
 
 
-def test_case14_a_copy_that_differs_keeps_that_steps_files_and_needs_you(dummy):
+def test_case14_a_copy_that_differs_holds_the_whole_case_and_needs_you(dummy):
+    """The dry run that makes the question's totals finds the copy with another md5 and
+    records it; the plan made right before the stage then holds the case: nothing goes."""
     before = files(dummy, 'case14')
-    assert delete('case14') == 1                                   # a failed step
-    after = files(dummy, 'case14')
-    for t in (900, 950):
-        assert kinds(before, t) <= after                           # all of the step stays
-    for t in (800, 850, 1000):
-        assert not (kinds(before, t) & after - {n for n in after if n.endswith('.rst')})
+    assert delete('case14') == 0
+    assert files(dummy, 'case14') == before
     assert Ledger(dummy / 'bare').get('local', 'case14', 'binary/riser.900.plt')['mismatch']
     from src.commands.auto.show import gather, resolve_cases
     (snap, plan), = gather(resolve_cases('case14', dummy / 'bare'), 'local')[0]
     assert plan.needs_you and 'md5' in [i.text for i in plan.items if i.kind == 'needs'][0]
+    assert not plan.ctx['delete_allowed']
 
 
 def test_case15_an_out_newer_than_its_plt_stays_the_plt_goes(dummy):

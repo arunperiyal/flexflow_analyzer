@@ -281,3 +281,38 @@ def test_a_copy_with_another_md5_is_marked_for_auto_show(world):
     copy.write_bytes(copy.read_bytes()[:-1] + b'?')
     organise(world, 'plt', delete_binary=True)
     assert Ledger(world.folder).get('local', 'CS1', 'binary/riser.300.plt')['mismatch']
+
+
+# --- --result: what `auto apply` reads after it runs the command (13.27) ----------------
+
+def test_result_lists_what_a_dry_run_would_delete_and_what_a_run_deleted(world, tmp_path):
+    import json
+    out = tmp_path / 'r.json'
+    organise(world, 'out', t1=100, t2=200, dry_run=True, result=str(out))
+    planned = json.loads(out.read_text())
+    assert planned['dry_run'] and planned['failed'] == 0
+    assert sorted(f for f, _ in planned['files']) == sorted(
+        f'RUN_1/riser.{t}_{k}.out' for t in (100, 200) for k in range(2))
+    assert (world.run / 'riser.100_0.out').exists()
+    organise(world, 'out', t1=100, t2=200, result=str(out))
+    done = json.loads(out.read_text())
+    assert not done['dry_run'] and len(done['files']) == 4 and done['failed'] == 0
+    assert not (world.run / 'riser.100_0.out').exists()
+
+
+def test_result_is_written_even_when_nothing_goes(world, tmp_path):
+    import json
+    out = tmp_path / 'r.json'
+    organise(world, 'out', t1=9000, t2=9999, result=str(out))
+    assert json.loads(out.read_text())['files'] == []
+
+
+def test_age_hours_leaves_a_young_vtu(world):
+    young = world.binary / 'riser.100.vtu'
+    old = world.binary / 'riser.200.vtu'
+    young.write_text('v')
+    old.write_text('v')
+    at(old, -3 * 24 * 3600)
+    os.utime(old, (T0 - 3 * 24 * 3600, T0 - 3 * 24 * 3600))
+    organise(world, 'vtu', age_hours=24)
+    assert young.exists() and not old.exists()

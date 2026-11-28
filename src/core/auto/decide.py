@@ -805,6 +805,9 @@ def _deletions(w):
         hold += [f"binary/{p}.{t}.plt is broken: {c.reason}" for t, c in sorted(snap.binary.items())
                  if not c.ok]
         plan.ctx['delete_hold'] = hold
+        # what `auto apply --delete` may run: the delete commands below, only when the queue
+        # was read and the case does not need you
+        plan.ctx['delete_allowed'] = bool(sacct_ok and not hold)
         if sacct_ok:
             def plt_rel(t):
                 return f"binary/{p}.{t}.plt"
@@ -953,7 +956,8 @@ def _vtu(w):
             what.append(f"{len(caches)} cache{'s' if len(caches) != 1 else ''} ({size(caches)})")
         plan.add('delete', f".vtu: {' and '.join(what)}; the next render converts the PLT "
                            f"again.", 'delete')
-        flags = '' if conf.vtu_cache == 'delete' else ' --leftovers'
+        flags = (' --age-hours 24' if conf.vtu_cache == 'delete'
+                 else ' --leftovers --age-hours 24')
         plan.step('plt', 'delete', 'delete-vtu', f"case organise vtu --case {snap.name}{flags}",
                   note="leftovers a day old" + (", caches with a PLT here"
                                                 if conf.vtu_cache == 'delete' else ''))

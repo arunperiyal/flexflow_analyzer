@@ -224,10 +224,41 @@ def _intended(plan, only):
     return out
 
 
+def _delete_by_commands(plan, folder, say):
+    """The delete stage: the plan's `case organise ...` commands, run in order (auto.md 13.27)."""
+    from src.core.auto import organise_run
+    from src.core.auto.executor import Step
+    ran = organise_run.run_all(plan_for_delete(plan), folder, say)
+    kinds = {}
+    freed = 0
+    for one, step in zip(ran, organise_run.delete_steps(plan)):
+        kinds[organise_run.KIND_OF[step.key]] = kinds.get(organise_run.KIND_OF[step.key], 0) + len(one.files)
+        freed += sum(one.files.values())
+    import re
+    sets = {m.group(1) for one, step in zip(ran, organise_run.delete_steps(plan))
+            if organise_run.KIND_OF[step.key] == 'rst'
+            for rel in one.files for m in [re.search(r'\.(\d+)_\d+\.rst$', rel)] if m}
+    kinds['rst'] = len(sets)
+    words = {'ascii': 'ASCII PLT', 'binary': 'binary PLT', 'out': '.out', 'rst': 'restart set',
+             'vtu': '.vtu'}
+    parts = [f"{n} {words[k]}" + ('s' if n != 1 and k == 'rst' else '')
+             for k, n in kinds.items() if n]
+    text = f"deleted {', '.join(parts) if parts else 'nothing'}; {_size_text_of({'x': freed})} freed"
+    bad = [o for o in ran if not o.ok]
+    if bad:
+        return Step('delete', False, text + f"; {bad[0].command} did not finish",
+                    '\n'.join(bad[0].output.strip().splitlines()[-6:]))
+    return Step('delete', True, text)
+
+
+def plan_for_delete(plan):
+    return plan
+
+
 def _run_case(case_dir, remote, only, target, clouds, ledgers, log, console):
     """The steps taken for one case: [Step]."""
     from src.commands.auto.show import gather
-    from src.core.auto import executor
+    from src.core.auto import executor, organise_run
     steps = []
     name = Path(case_dir).name
     for kind in KINDS:
@@ -251,13 +282,10 @@ def _run_case(case_dir, remote, only, target, clouds, ledgers, log, console):
             step = executor.do_upload(snap, plan, conf, cloud, ledgers[Path(case_dir).parent],
                                       lambda text: (log.line(name, 'upload', text),
                                                     console.print(f"    [dim]{escape(text)}[/dim]")))
-        elif kind == 'delete' and any((plan.ctx.get('delete') or {}).values()):
-            cloud = clouds.get((conf.remote, conf.path))
-            if cloud is None:
-                continue
-            step = executor.do_delete(snap, plan, conf, cloud, ledgers[Path(case_dir).parent],
-                                      lambda text: (log.line(name, 'delete', text),
-                                                    console.print(f"    [dim]{escape(text)}[/dim]")))
+        elif kind == 'delete' and organise_run.delete_steps(plan):
+            step = _delete_by_commands(plan, Path(case_dir).parent,
+                                       lambda text: (log.line(name, 'delete', text),
+                                                     console.print(f"    [dim]{escape(text)}[/dim]")))
         elif kind == 'post' and plan.due('post'):
             step = executor.do_post(snap, plan, conf)
         else:
@@ -308,7 +336,12 @@ def execute_apply(args) -> int:
         console.print("[red]Nothing was done.[/red]")
         return 1
 
-    # what would be done
+    # what would be done. What would be deleted is what the plan's delete commands report
+    # on a dry run of each (auto.md 13.27): the commands decide, apply does not decide again
+    if 'delete' in only:
+        from src.core.auto import organise_run
+        for snap, plan in first:
+            plan.ctx['delete'] = organise_run.listed(for_target(plan, target), Path(snap.dir).parent)
     todo = [(snap, plan, _intended(for_target(plan, target), only)) for snap, plan in first]
     todo = [t for t in todo if any(kind not in ('detail', 'later') for kind, _ in t[2])]
     console.print()
@@ -327,9 +360,9 @@ def execute_apply(args) -> int:
             else:
                 console.print(f"    {MARK[kind]} {escape(text)}")
     if getattr(args, 'dry_run', False):
-        console.print("[dim]--dry-run: nothing was done."
-                      + (" The md5 of each copy is only computed in a real run, so some of "
-                         "these may be left." if 'delete' in only else '') + "[/dim]")
+        console.print("[dim]--dry-run: nothing was deleted or sent"
+                      + ("; what would be deleted is what a dry run of each `case organise` "
+                         "command lists" if 'delete' in only else '') + ".[/dim]")
         console.rule(style='cyan')
         return 0
     if not getattr(args, 'yes', False):

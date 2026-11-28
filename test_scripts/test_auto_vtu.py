@@ -47,7 +47,7 @@ def test_an_old_leftover_goes_a_young_one_stays():
     assert 'killed render' in texts(plan, 'delete')[0]
     assert 'younger than a day' in texts(plan, 'note')[0]
     step, = plan.steps_of('delete-vtu')
-    assert step.command == 'case organise vtu --case case --leftovers'
+    assert step.command == 'case organise vtu --case case --leftovers --age-hours 24'
 
 
 def test_a_cache_with_its_plt_is_kept_unless_the_config_says_delete():
@@ -57,7 +57,7 @@ def test_a_cache_with_its_plt_is_kept_unless_the_config_says_delete():
     assert 'kept' in texts(keep, 'note')[0] and 'vtu_cache: delete' in texts(keep, 'note')[0]
     gone = plan_for(caches, cache='delete')
     assert sorted(gone.ctx['delete']['vtu']) == ['binary/riser.100.vtu', 'binary/riser.100.z1.vtu']
-    assert gone.steps_of('delete-vtu')[0].command == 'case organise vtu --case case'
+    assert gone.steps_of('delete-vtu')[0].command == 'case organise vtu --case case --age-hours 24'
 
 
 def test_a_cache_without_its_plt_is_reported_never_deleted():
