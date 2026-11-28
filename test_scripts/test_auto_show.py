@@ -312,7 +312,7 @@ def test_a_case_that_needs_you_has_no_deletion_candidates(dummy):
     assert 'auto apply --delete deletes nothing' in dict(sec['plt'].rows)['Deleting']
     results, _, _ = gather(resolve_cases('case6', dummy / 'bare'), 'local')
     ctx = results[0][1].ctx
-    assert ctx['delete_hold'] and not any(ctx['delete'].values())
+    assert ctx['delete_hold'] and not ctx['delete_allowed']
 
 
 def test_a_single_step_reads_as_a_step(dummy):

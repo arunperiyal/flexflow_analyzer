@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+### 🧹 `auto apply --delete` runs the commands `auto show` lists
+
+- The delete stage no longer has code of its own: it runs the `case organise
+  plt ascii|binary`, `out`, `rst` and `vtu` commands of the plan, in order, as
+  you would, after its one question. What it says it will delete is what a dry
+  run of each command lists. So a copy accepted by hand is accepted by `auto`,
+  and the other way round. A case with a remote copy of another md5 is now
+  held as a whole (the dry run finds it), not only its own steps.
+- `case organise vtu --age-hours N` leaves a `.vtu` modified in the last N
+  hours (`auto` passes 24).
+
+### 🛡️ `case organise` keeps a step whose remote copy has another md5
+
+- With `--remote`, when a local binary PLT and its copy on the remote have
+  the same size and another md5, one of them is damaged and nothing says
+  which. `case organise plt ascii` now keeps that step's ASCII PLT (it used
+  to go on the strength of the whole local binary PLT), and says why.
+
+### 🧹 `case organise` writes down what it deleted
+
+- After `case organise out`, `rst`, `plt` or `vtu` deletes files, the case's
+  `.casestatus.md` gets a line (`case organise out deleted: 5 .out; 2.1GB
+  freed`), and a binary PLT deleted with `--remote` is marked deleted in the
+  ledger, so its copy on the remote stands in for it later. A copy on the
+  remote that has the same size and another md5 is marked in the ledger, and
+  `auto show` then puts the case under *needs you*. First of five steps to
+  have `auto apply --delete` use these commands instead of its own code.
+
 ### 🔎 `auto` reads a post job's steps from its slurm output
 
 - When `.casestatus.md` has no "post job N started: steps a..b" line, `auto`

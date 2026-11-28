@@ -821,135 +821,24 @@ Replaces "upload only the newest complete set" (13.7, point 2) and the
 Real case (BR0SG0U1P0, cloud holds 500, 4000, 5000; local 34 sets): with
 upload_rst 1000, 1000/2000/3000 are due (5740 is not).
 
-### 13.13 The delete stage of `auto apply` (2026-11-13, design; not built)
+### 13.13 The delete stage of `auto apply` (2026-11-13; replaced 2026-11-28 by 13.27)
 
-> **To be rewritten** (same day): `auto apply` is to run the commands `auto
-> show` lists, so the md5 check moves to `case check plt --verify` and the
-> refusal to delete an unchecked file to `case organise plt` / `output`. The
-> rules below stay; who carries them out changes. See Phases 12 to 17 and
-> Phase 6 in `docs/development/PLAN.md`.
+The first design had `auto` delete files itself, from explicit lists, each checked again by md5
+right before it went (rules C1 to C4: ASCII PLT, binary PLT, `.out`, restart sets). That code
+(`executor.do_delete`, `plan.ctx['delete']` candidates) is gone: `auto apply --delete` runs the
+`case organise ...` commands that `auto show` lists, and the chain (`core/chain.py`) decides file
+by file. What this section fixed, and still holds, lives elsewhere now:
 
-Makes real the stages C1–C4 of 13.2, in the order of 13.7, with the rules
-below. Where this differs from 13.2, 13.4 or 13.7, this is the newer text.
+- *what stands in for a file*: `core/chain.py` (`.out` <- ASCII PLT <- binary PLT <- the remote
+  copy with the same md5, read when it is deleted; "written after" is the restart guard);
+- *when a case gets no deletion at all* (the queue or the remote cannot be read, a post job is
+  queued, the case needs you over its data): `decide.py`, `plan.ctx['delete_allowed']`;
+- *order* `history -> upload -> delete -> post`, *one question with totals*, *the log*:
+  `commands/auto/apply.py`;
+- *restart sets off the `keep_rst` grid go without a copy*: `case organise rst --keep-freq`.
 
-**What "a checked copy" means.** For a binary PLT `binary/<p>.<t>.plt`:
-
-1. the remote holds a file of the same name and the same size, and
-2. the md5 of the local file and the md5 of the remote file, **both computed
-   at the moment of deleting**, are equal.
-
-The ledger is not trusted on its own: it says what was true when the file was
-sent. A copy that was only compared by size (a remote without `md5sum`,
-ledger `verified: size`) never clears a deletion. The result of the check is
-written to the ledger (`verified: md5`, `when`, and from now on the local
-file's `mtime`), so a later run knows the remote copy without the local file.
-
-This also covers copies `auto` did not send (PLTs uploaded by hand before
-`auto` existed): they have no ledger entry, and need none, because both md5s
-are computed now.
-
-**What is deleted, and what clears it.**
-
-| | file | deleted only when all of these hold |
-|---|---|---|
-| C1 | ASCII PLT `<run>/<p>.<t>.plt` | the binary PLT of step `t` has a checked copy; that binary PLT was written after this ASCII file |
-| C2 | binary PLT `binary/<p>.<t>.plt` | it is whole (`plt_valid`); it has a checked copy |
-| C3 | `.out` of step `t`, all `nsg` parts | the binary PLT of step `t` has a checked copy; that binary PLT was written after the newest `.out` part of the step; the step is settled (§4.1) |
-| C4 | restart set `<p>.<t>_*.rst` | `auto.keep_rst` is set and `t` is not a multiple of it; `t` is none of: the `restartTsId` of a queued or running main job, one of the `keep_newest_rst` newest complete sets, the newest set of any kind, the set a stopped case would restart from, a set at or past the step a running case is on |
-
-"Written after" compares modification times on this machine: the binary
-PLT's own, or, when the binary PLT is already deleted here, the `mtime` the
-ledger recorded for it. A ledger entry without `mtime` (made before this
-stage existed) does not clear C1 or C3; those files stay and are reported.
-In that case (binary PLT gone here) the remote file's md5, computed now, must
-equal the ledger's.
-
-This one rule is the restart guard. After a restart from `T` the solver
-writes the `.out` of the steps above `T` again; they are then newer than the
-PLT made from the earlier run, so nothing above `T` is deleted until a post
-job has made the PLT again from the new run and that PLT has a checked copy.
-Kept as well, as today: with a restart **queued**, no file of a step above
-`T` is deleted (`provisional`), and a binary PLT here from before a restart
-(`stale_plt`) is not a candidate.
-
-C4 is the only deletion without a copy: the sets off the `keep_rst` grid are
-deleted for good, as `case organise output --keep-freq` does by hand. That
-is what `keep_rst` means (13.12). The question asked before deleting says so
-in words, with the number of sets and their size. `upload_rst` being a
-multiple of `keep_rst` (13.12) keeps every set due for upload out of C4.
-
-**When a case gets no deletion at all** (fail closed):
-
-- the remote cannot be reached or listed, or the queue or `sacct` could not
-  be read;
-- a post job of the case is pending, running or completing;
-- the case needs you for a reason about its data: PLTs with holes, a post
-  job that ended badly, lost steps, `archive/` pruned or missing (13.11), a
-  broken binary PLT. A case that only needs a restart queued ("stopped at
-  step N") is not held back by that.
-
-**Order.** `history → upload → delete → post`. Deleting comes before the post
-job is submitted: once a post job of the case is in the queue the case gets
-no deletion, and freeing the space first leaves room for the PLTs the job
-will write. Inside the stage: C1, C2, C3, C4. The plan is made again from the
-files and the queue right before the stage, as for every other step.
-
-**Each file, right before it goes.** Size here against size there; md5 here
-against md5 there (C2), or md5 there against the ledger (C1/C3 with the
-binary PLT gone here); the "written after" times read again. A file whose
-check fails is left and reported with the reason; nothing is forced, and the
-other files go on. Three remote failures in a row stop the stage for the
-run. A remote copy whose md5 differs from the local file or the ledger puts
-the case under *needs you* on the next `auto show`.
-
-Files are deleted one by one from an explicit list, not by a step range:
-a range could reach a file that was not checked.
-
-**Asking.** As 13.7: once, at the start, after the whole plan. The plan
-lists per case what will go if its checks pass (count, size, which rule), and
-the question names the totals, with restart sets apart:
-
-```
-Do this for 3 case(s)? This DELETES up to 412 files (61.3 GB) whose copies
-on cloud pass the md5 check, and 28 restart sets (22.4 GB) that have no copy
-(off the keep_rst grid). [y/N]
-```
-
-`--yes` skips the question. `--dry-run` lists the same and deletes nothing;
-it says the md5 is only computed in a real run.
-
-**Command surface.**
-
-```
-auto apply [case] --remote NAME --delete            # the additive steps, then delete
-auto apply [case] --remote NAME --only delete       # delete only
-```
-
-Deleting is **not** part of a plain `auto apply` for now: it has to be asked
-for with `--delete` or `--only delete` (13.4 had it on by default with
-`--no-delete`). Once it has run on the real cases for a while this can be
-turned round.
-
-**Records.** Every file deleted and every file left is a line in the run log
-(`auto_logs/auto_<time>.log`) with the check that cleared or stopped it. One
-line per case goes to `.casestatus.md` ("auto deleted: 120 ASCII PLT, 120
-binary PLT, 2400 .out, 14 restart sets; 61.3 GB"). The ledger entry of a
-deleted binary PLT gets `deleted: <when>`.
-
-**Not in this stage.**
-
-- Nothing is ever deleted on the remote.
-- `archive/`, `cleaned/`, the compiled history, inputs and job scripts are
-  never candidates.
-- The hand commands are unchanged: `case organise plt binary` and
-  `case organise output` do not get the md5 check here (U-4, U-5 of 13.5
-  stay open).
-- A restart part cut short inside a complete set is still not detected
-  (`keep_newest_rst` is the safeguard, 13.12).
-
-**Cost.** The md5 of a 150 MB PLT is read once here and once on the remote
-for every binary PLT deleted. On the login node that is disk reading, not
-network; the remote one runs there (`md5sum` over SSH).
+The labels C1 to C5 are no longer used in the output. The text that was here is in git history
+(commit `1abbe95`).
 
 ### 13.14 `auto show`: every Action is a command (2026-11-14)
 
@@ -1174,3 +1063,66 @@ asked the user to check its log, which also held back the plan for the later ste
 `snap.post_windows` for every job not already there; the casestatus line wins. Only the first
 8 KB of each file is read. What stays open is the other half: with a real miss, one flagged step
 still holds the post of every later step back.
+
+### 13.27 One delete path (design, 2026-11-28; not built)
+
+Phase 6's last task. `auto apply --delete` deletes through `executor.do_delete`, one file at a
+time from the explicit lists in `plan.ctx['delete']`. `case organise out|plt|rst` delete through
+`core/chain.py`. `auto show` prints the chain commands as the Action, so the thing it shows is
+not the thing `apply --delete` runs. Phases 47 and 49 each found a case where `auto`'s idea of a
+copy and the chain's differed; the next difference will be found the same way, on the cluster.
+
+**Where the two disagree today.**
+
+| | `do_delete` (C1–C5) | the chain commands |
+|---|---|---|
+| a copy on the remote counts when | the ledger has an `md5` entry with `mtime`, and md5 and size match now | `md5`, or `adopted` for a `.out` only (§13.23), with the "written after" test |
+| what stands in for a `.out` | the binary PLT's remote copy only | its ASCII PLT here, its binary PLT here, or a copy on the remote |
+| restart (newer `.out`) | `newer_than` against the binary PLT's time | `old(written)` against the newest `.out` of the step |
+| a PLT that is broken | left, reason said | left, with the way to make it again |
+| .vtu caches (C5) | deleted | not touched |
+
+What only `apply` has, and must keep: the hold-back while the case needs you or a post job is
+queued (`delete_hold`, `provisional`), `settled`, the one question with totals, the three-
+failures stop, the `.casestatus.md` line, `ledger.mark_deleted` / `mark_mismatch`.
+
+**Option A (recommended): `apply` runs the commands `auto show` lists.** For each `delete`
+step of the plan (`case organise out --t1 a --t2 b --remote R`, ...) `apply` calls the command
+in-process with `--yes` after its own question, and reads its result. The hold-backs and the
+question stay in `apply`; the per-file checks go to the chain, which is the one place that
+decides. `--dry-run` passes through as the command's own `--dry-run`. `do_delete` and
+`plan.ctx['delete']` are removed once a test shows both paths delete the same files on the same
+dummy cases (case13, 14, 15). The `mark_deleted`, `mark_mismatch` and `.casestatus.md` lines
+move into the chain commands, which then also serve a hand run. Costs: the question can no longer
+list exact files, only ranges and what the command's own dry run counts (`apply` can run it with
+`--dry-run` first to get the numbers); a range can reach a file that is not meant to go, but the
+chain keeps what has nothing to stand in for it, and `runs_apart` already keeps ranges from
+spanning such files.
+
+**Option B: keep both, test they agree.** One test per dummy case runs both paths and compares
+the files left. Small and safe, and the duplicate stays; each rule is written twice.
+
+Steps for A, each its own commit: (1) the chain commands record `deleted` / `mismatch` in the
+ledger and write the `.casestatus.md` line; (2) a test that runs `do_delete` and the commands on
+case13–15 and compares; (3) `apply` calls the commands and takes its numbers from their dry
+run; (4) remove `do_delete`, `ctx['delete']` and the C-rule text of 13.13; (5) C5 (.vtu) moves to
+`case organise` or stays a separate, documented rule.
+
+**Built so far (2026-11-28).** Step 1: the chain commands write the ledger's `deleted` and
+`mismatch` marks and a `.casestatus.md` line (`case organise out deleted: 5 .out; 2.1GB freed`).
+Step 2: `test_auto_delete_paths.py` runs `do_delete` and the listed commands on the dummy cases
+13, 14, 15, 3, 4, 6 and 11 and compares the files left. Case 14, a remote copy with the size of
+the local binary PLT and another md5, differed: the commands deleted the ASCII PLT of the step on
+the strength of the whole local binary PLT. The chain now asks the remote, when one is named, and
+keeps everything on that step until the cause is known (`RemoteCopies.mismatched`). The cost: a
+local binary PLT that stands in for something is compared with its remote copy by md5, not just
+checked for being whole.
+
+Step 3 (2026-11-28): `auto apply --delete` runs the plan's delete steps (`core/auto/organise_run.py`).
+The hold-back stays in `apply` (`plan.ctx['delete_allowed']`: the queue was read and the case does
+not need you); the question's totals come from a dry run of each command (`--result FILE`, which
+writes the files and sizes as JSON); the real run is each command with `--yes`, one process each, in
+the order `auto show` lists. A command that fails stops the stage. One visible change: the dry run
+records a remote copy with another md5 in the ledger, so the plan made right before the stage holds
+the whole case, where `do_delete` had left only that step's files. `organise vtu --age-hours 24`
+keeps the 24-hour rule for leftovers that the old executor applied itself.

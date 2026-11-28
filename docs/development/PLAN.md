@@ -20,41 +20,6 @@ Status marks: `[ ]` to do, `[x]` done, `[~]` dropped (say why).
 
 ## Open phases
 
-### Phase 6: `auto apply`, deleting (branch `auto-delete`)
-
-Built first, before Phases 12 to 17 changed `auto` to run the commands `auto
-show` lists; merged with them on 2026-11-16 (the delete stage reads
-`plan.ctx['delete']`, the new code reads `plan.steps`). The first design
-(`auto.md` §13.13, commit `1abbe95`) has `auto` delete files itself from an
-explicit list, each checked again by md5 right before it goes. The direction
-set on 2026-11-13 is that `auto apply` runs the same commands `auto show`
-lists, so the md5 check belongs to `case check plt --verify` (Phase 13) and
-the refusal to delete an unchecked file to `case organise plt` / `case
-organise out` (Phase 14). Both paths now exist side by side.
-
-- [x] Write the design as §13.13 at the end of `auto.md`
-- [x] **Review of §13.13 by the user.** Nothing below is built before it
-- [x] Remote md5 of a named file (`cloud.py`: `LocalCloud`, `SftpCloud`);
-      ledger entries record the local `mtime` and `deleted`
-- [x] Decide: the candidates of C1–C4 as explicit file lists in `plan.ctx`,
-      with the "written after" rule and the data-related *needs you* hold-back
-- [x] Executor `do_delete`: per-file checks right before each unlink, run log
-      lines, the `.casestatus.md` line, the ledger
-- [x] `auto apply --delete` and `--only delete`: order
-      `history → upload → delete → post`, the plan listing, the question with
-      totals, `--dry-run`
-- [x] Reports (`auto show`, `auto commands`): replace the `[not built yet]`
-      text
-- [x] Dummy cases and a test for each rule: copy differs, size-only copy,
-      `.out` newer than its PLT (restart), queued restart, post in flight,
-      restart-set keeps, a case that needs you
-- [x] Help text, completion, `docs/architecture/auto_flow.html`, the web
-      flowchart, `CHANGELOG.md`
-- [ ] Reconcile the two delete paths: have `do_delete` call the chain commands
-      (`case organise ...`) it now duplicates, keeping the "written after"
-      rule, the queued-restart hold-back and the one question with totals
-
-
 ### Phase 9: files for FlowReel (branch `flowreel-export`)
 
 Design: `docs/architecture/flowreel.md`. Check the key names against FlowReel's
@@ -177,6 +142,7 @@ As noted on 2026-11-26.
 | 3 | `plan-file` | This file; `problems.md` removed (its problem was fixed in `389ef30`); the `prompt.md` note (`run post --remote`, `--t1` / `--t2`) found already built |
 | 4 | `repo-cleanup` | Removed `module_backup/`, `main_old.py`, the shadowed command files, root `mainFlex.sh` and `sample.yaml`; `.gitignore` tidied. The `config` command was left (backlog). Still open, on the user's word: delete the local branches already merged |
 | 5 | `web-render-tests` | The two failing render tests: the route they fetched was removed on purpose in `70d5224`; the tests now go through `save` and `render-file/<token>` |
+| 6 | `auto-delete` | `auto apply --delete` runs the `case organise ...` commands of the plan (`core/auto/organise_run.py`) after one question whose totals come from a dry run of each; `do_delete` and the candidate lists are gone; the chain commands note their deletions in the ledger and `.casestatus.md` and keep a step whose remote copy has another md5 (§13.27) |
 | 7 | `auto-steady` | `auto` judges a finished case with the steady check; not steady goes to Needs you with the commands to run longer (§13.24) |
 | 10 | `docs-install` | The installer copies the docs' HTML and SVG files and turns `.md` links into `.html`; `docs/development/testing.md` and `tools.md`; the multi-case template fixed |
 | 11 | `webapp-checklist` | `webapp.md` §11 checked against the code and retired; §12 rewritten; what was left is Phase 45 |

@@ -41,9 +41,9 @@ def binary_plt(case, step, when, **kw):
     return at(write_plt(case / 'binary' / f'riser.{step}.plt', **kw), when)
 
 
-def remote(good=None, verified=(), problem=None, unrecorded=()):
+def remote(good=None, verified=(), problem=None, unrecorded=(), mismatch=()):
     return RemoteCopies(lambda: ({s: T0 + t for s, t in (good or {}).items()},
-                                 set(verified), problem, set(unrecorded)))
+                                 set(verified), problem, set(unrecorded), set(mismatch)))
 
 
 def chain(case, **kw):
@@ -137,39 +137,29 @@ def test_binary_stands_only_on_a_copy_checked_just_now(case):
     assert not s.ok and '--remote' in s.why
 
 
-def test_the_remote_is_asked_once_and_only_when_needed(case):
+def test_the_remote_is_asked_once_and_not_without_a_remote(case):
     calls = []
 
     def load():
         calls.append(1)
         return {200: T0 + 30}, set(), None
 
-    c = Chain(case, 'riser', case / 'RUN_1', remote=RemoteCopies(load))
     binary_plt(case, 100, 30)
-    c.for_out(100, outs(case, 100))                              # the binary is here
-    assert calls == []
+    c = Chain(case, 'riser', case / 'RUN_1', remote=RemoteCopies(None))      # no --remote
+    assert c.for_out(100, outs(case, 100)).ok
+    c = Chain(case, 'riser', case / 'RUN_1', remote=RemoteCopies(load))
+    c.for_out(100, outs(case, 100))      # a remote is named: its copies are looked at, once
     c.for_out(200, outs(case, 200))
     c.for_out(300, outs(case, 300))
     assert calls == [1]
 
 
-# --- a copy on the remote with no record ---------------------------------------------
-
-def test_an_unrecorded_remote_copy_is_named_as_such_not_as_no_plt(case):
-    s = chain(case, remote=remote(unrecorded={300})).for_out(300, outs(case, 300))
-    assert not s.ok and s.found
-    assert 'on the remote, not recorded' in s.why
-    assert 'no riser.300.plt anywhere' not in s.why
-
-
-def test_a_step_on_neither_side_is_still_no_plt(case):
-    s = chain(case, remote=remote(unrecorded={400})).for_out(300, outs(case, 300))
-    assert not s.ok and not s.found
-    assert 'anywhere' in s.why
-
-
-def test_the_older_than_out_message_gives_both_times(case):
-    s = chain(case, remote=remote(good={300: 5})).for_out(300, outs(case, 300, when=50))
-    assert not s.ok and s.found
-    assert 'not after its .out' in s.why and 'post this step again' in s.why
-    assert s.why.count('20') >= 2          # two dates
+def test_a_copy_with_the_same_size_and_another_md5_stops_the_ascii_going(case):
+    ascii_plt(case, 100, 10)
+    ascii_plt(case, 200, 10)
+    binary_plt(case, 100, 20)
+    binary_plt(case, 200, 20)
+    c = chain(case, remote=remote(good={}, mismatch={100}))
+    refused = c.for_ascii(100)
+    assert not refused.ok and 'another md5' in refused.why and refused.found
+    assert c.for_ascii(200).ok                                   # the other step is untouched

@@ -196,6 +196,10 @@ Organize and clean up case directories. Pick one subcommand.
         {Colors.CYAN}--orphans{Colors.RESET}
             Also the .vtu whose .plt is gone
 
+        {Colors.CYAN}--age-hours N{Colors.RESET}
+            Leave a file modified in the last N hours: a render may be
+            writing it (`auto` passes 24)
+
 {Colors.BOLD}TARGETING BY TIMESTEP:{Colors.RESET}
     --t1 STEP                 Only target timesteps >= STEP
     --t2 STEP                 Only target timesteps <= STEP

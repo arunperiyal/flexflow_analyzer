@@ -248,3 +248,71 @@ def test_no_verify_on_out_needs_a_range_and_rst_refuses_the_flag():
     assert _check_keep_flags(parse('out', 'C1'), 'out') is None
     with pytest.raises(SystemExit):
         parse('rst', 'C1', '--no-verify', '--t1', '1')
+
+
+# --- what a deleting command writes down (so apply can use it, 13.27) ------------------
+
+def test_a_deleted_binary_plt_is_marked_in_the_ledger_and_the_case_log(world):
+    organise(world, 'plt', delete_binary=True, t1=100, t2=200)
+    ledger = Ledger(world.folder)
+    assert ledger.get('local', 'CS1', 'binary/riser.100.plt')['deleted']
+    assert ledger.get('local', 'CS1', 'binary/riser.200.plt')['deleted']
+    assert not (ledger.get('local', 'CS1', 'binary/riser.300.plt') or {}).get('deleted')
+    log = (world.case / '.casestatus.md').read_text()
+    assert 'case organise plt deleted: 2 binary PLT' in log and 'freed' in log
+
+
+def test_out_deletion_writes_a_log_line_and_no_ledger_mark(world):
+    organise(world, 'out', t1=100, t2=100)
+    assert 'case organise out deleted: 2 .out' in (world.case / '.casestatus.md').read_text()
+    assert not (Ledger(world.folder).get('local', 'CS1', 'binary/riser.100.plt') or {}).get('deleted')
+
+
+def test_a_dry_run_and_a_kept_step_write_nothing(world):
+    organise(world, 'plt', delete_binary=True, dry_run=True)
+    assert not (world.case / '.casestatus.md').exists()
+    (world.there / 'riser.100.plt').unlink()
+    organise(world, 'plt', delete_binary=True, t1=100, t2=100)
+    assert not (world.case / '.casestatus.md').exists()
+
+
+def test_a_copy_with_another_md5_is_marked_for_auto_show(world):
+    copy = world.there / 'riser.300.plt'
+    copy.write_bytes(copy.read_bytes()[:-1] + b'?')
+    organise(world, 'plt', delete_binary=True)
+    assert Ledger(world.folder).get('local', 'CS1', 'binary/riser.300.plt')['mismatch']
+
+
+# --- --result: what `auto apply` reads after it runs the command (13.27) ----------------
+
+def test_result_lists_what_a_dry_run_would_delete_and_what_a_run_deleted(world, tmp_path):
+    import json
+    out = tmp_path / 'r.json'
+    organise(world, 'out', t1=100, t2=200, dry_run=True, result=str(out))
+    planned = json.loads(out.read_text())
+    assert planned['dry_run'] and planned['failed'] == 0
+    assert sorted(f for f, _ in planned['files']) == sorted(
+        f'RUN_1/riser.{t}_{k}.out' for t in (100, 200) for k in range(2))
+    assert (world.run / 'riser.100_0.out').exists()
+    organise(world, 'out', t1=100, t2=200, result=str(out))
+    done = json.loads(out.read_text())
+    assert not done['dry_run'] and len(done['files']) == 4 and done['failed'] == 0
+    assert not (world.run / 'riser.100_0.out').exists()
+
+
+def test_result_is_written_even_when_nothing_goes(world, tmp_path):
+    import json
+    out = tmp_path / 'r.json'
+    organise(world, 'out', t1=9000, t2=9999, result=str(out))
+    assert json.loads(out.read_text())['files'] == []
+
+
+def test_age_hours_leaves_a_young_vtu(world):
+    young = world.binary / 'riser.100.vtu'
+    old = world.binary / 'riser.200.vtu'
+    young.write_text('v')
+    old.write_text('v')
+    at(old, -3 * 24 * 3600)
+    os.utime(old, (T0 - 3 * 24 * 3600, T0 - 3 * 24 * 3600))
+    organise(world, 'vtu', age_hours=24)
+    assert young.exists() and not old.exists()

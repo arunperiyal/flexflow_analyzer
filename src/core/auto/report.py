@@ -260,7 +260,7 @@ def _plt(v):
                                   ('fresh', 'young leftover'), ('orphans', 'with no PLT'))
                  if v_[k]]
         s.row('VTU', ' · '.join(parts))
-        gone_v = (plan.ctx.get('delete') or {}).get('vtu')
+        gone_v = plan.ctx.get('vtu_go')
         if gone_v:
             s.row('Delete VTU', f"{len(gone_v)} file(s) ({_size_text(sum(gone_v.values()))}): "
                                 f"a render makes them again; none without its PLT")

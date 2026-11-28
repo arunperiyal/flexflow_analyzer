@@ -58,6 +58,7 @@ class RemoteCopies:
         self._good: Optional[Dict[int, float]] = None
         self._verified: set = set()
         self._unrecorded: set = set()
+        self._mismatch: set = set()
         self.problem: Optional[str] = None
 
     def _ask(self):
@@ -68,6 +69,7 @@ class RemoteCopies:
                 got = self._load()
                 self._good, self._verified, self.problem = got[:3]
                 self._unrecorded = got[3] if len(got) > 3 else set()
+                self._mismatch = got[4] if len(got) > 4 else set()
 
     def written(self, step: int) -> Optional[float]:
         """When the PLT of this step that the remote holds was written here,
@@ -80,6 +82,17 @@ class RemoteCopies:
         it having been checked against a whole local file."""
         self._ask()
         return step in self._unrecorded
+
+    @property
+    def wanted(self) -> bool:
+        """A remote was named, so a copy there is to be taken into account."""
+        return self._load is not None
+
+    def mismatched(self, step: int) -> bool:
+        """The copy on the remote has the size of the local binary PLT and another md5:
+        one of the two is damaged, and nothing can tell which."""
+        self._ask()
+        return step in self._mismatch
 
     def verified_now(self, step: int) -> bool:
         """The local binary PLT of this step matches its copy by md5, read now."""
@@ -136,6 +149,10 @@ class Chain:
             check = self.binary_check(step)
             if not check.ok:
                 tried.append(f"binary/{binary.name} is {check.reason}")
+            elif self.remote.wanted and self.remote.mismatched(step):
+                tried.append(f"binary/{binary.name} and its copy on the remote have the same "
+                             f"size and another md5: one is damaged, so nothing is deleted on "
+                             f"its strength until the cause is known")
             elif old(_mtime(binary)):
                 tried.append(f"binary/{binary.name} is not newer than {than}")
             else:
@@ -237,6 +254,13 @@ def remote_copies(case_dir, problem: str, remote_name: Optional[str], window=Non
             return {}, set(), str(e)
         finally:
             cloud.close()
+        # a copy with the same size and another md5: say so where `auto show` reads it (a
+        # deletion was being considered); check plt --verify alone leaves the ledger as it was
+        mismatch = set()
+        for name, why in result.differs.items():
+            if why.startswith('md5 '):
+                ledger.mark_mismatch(used, case_dir.name, f"binary/{name}")
+                mismatch.add(int(name.rsplit('.', 2)[-2]))
         good, verified = {}, set()
         unrecorded = {int(n.rsplit('.', 2)[-2]) for n in result.only_there}
         for name in result.verified + result.kept_there:
@@ -246,6 +270,6 @@ def remote_copies(case_dir, problem: str, remote_name: Optional[str], window=Non
                 good[step] = entry['mtime']
         for name in result.verified:
             verified.add(int(name.rsplit('.', 2)[-2]))
-        return good, verified, None, unrecorded
+        return good, verified, None, unrecorded, mismatch
 
     return RemoteCopies(load)

@@ -443,7 +443,7 @@ def test_dry_run_with_delete_lists_and_deletes_nothing(dummy, capsys):
     before = rst_files_of(dummy, 'case5')
     assert apply('case5', only='delete', dry_run=True) == 0
     out = ' '.join(capsys.readouterr().out.split())
-    assert 'C4 restart sets' in out and 'only computed in a real run' in out
+    assert 'restart sets step 750: 4 files' not in out and 'restart sets' in out and 'a dry run of each' in out
     assert rst_files_of(dummy, 'case5') == before
 
 
@@ -461,15 +461,15 @@ def test_only_delete_removes_the_restart_sets_off_the_grid_and_logs_it(dummy):
     assert apply('case5', only='delete') == 0
     after = rst_files_of(dummy, 'case5')
     assert 0 < len(after) < len(before)
-    assert 'deleted' in last_log(dummy) and 'C4 restart set' in last_log(dummy)
-    assert 'auto deleted:' in (dummy / 'bare' / 'case5' / '.casestatus.md').read_text()
+    assert 'deleted' in last_log(dummy) and 'restart set' in last_log(dummy)
+    assert 'case organise rst deleted:' in (dummy / 'bare' / 'case5' / '.casestatus.md').read_text()
 
 
 def test_the_delete_flag_adds_the_stage_to_a_plain_apply(dummy, capsys):
     apply('case5', dry_run=True)
     assert 'C4' not in capsys.readouterr().out
     apply('case5', delete=True, dry_run=True)
-    assert 'C4' in capsys.readouterr().out
+    assert 'restart sets' in capsys.readouterr().out
 
 
 def test_the_order_is_history_upload_delete_post():
