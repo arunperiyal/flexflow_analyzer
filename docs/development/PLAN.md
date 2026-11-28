@@ -50,9 +50,18 @@ organise out` (Phase 14). Both paths now exist side by side.
       restart-set keeps, a case that needs you
 - [x] Help text, completion, `docs/architecture/auto_flow.html`, the web
       flowchart, `CHANGELOG.md`
-- [ ] Reconcile the two delete paths: have `do_delete` call the chain commands
-      (`case organise ...`) it now duplicates, keeping the "written after"
-      rule, the queued-restart hold-back and the one question with totals
+- [ ] Reconcile the two delete paths (design: `auto.md` §13.27, option A,
+      chosen 2026-11-28), in five commits:
+  - [x] The chain commands write down what they delete: the ledger's `deleted`
+        and `mismatch` marks, and a `.casestatus.md` line
+  - [ ] A test that runs `do_delete` and the commands on case13, 14 and 15
+        and compares the files left
+  - [ ] `apply` runs the commands of the plan's delete steps after its own
+        question, and takes its numbers from their dry run
+  - [ ] `do_delete`, `plan.ctx['delete']` and the C-rule text of §13.13 are
+        removed
+  - [ ] The `.vtu` caches (C5) get a place in `case organise` or stay a
+        documented rule of their own
 
 
 ### Phase 9: files for FlowReel (branch `flowreel-export`)

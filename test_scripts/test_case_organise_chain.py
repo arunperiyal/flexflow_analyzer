@@ -248,3 +248,36 @@ def test_no_verify_on_out_needs_a_range_and_rst_refuses_the_flag():
     assert _check_keep_flags(parse('out', 'C1'), 'out') is None
     with pytest.raises(SystemExit):
         parse('rst', 'C1', '--no-verify', '--t1', '1')
+
+
+# --- what a deleting command writes down (so apply can use it, 13.27) ------------------
+
+def test_a_deleted_binary_plt_is_marked_in_the_ledger_and_the_case_log(world):
+    organise(world, 'plt', delete_binary=True, t1=100, t2=200)
+    ledger = Ledger(world.folder)
+    assert ledger.get('local', 'CS1', 'binary/riser.100.plt')['deleted']
+    assert ledger.get('local', 'CS1', 'binary/riser.200.plt')['deleted']
+    assert not (ledger.get('local', 'CS1', 'binary/riser.300.plt') or {}).get('deleted')
+    log = (world.case / '.casestatus.md').read_text()
+    assert 'case organise plt deleted: 2 binary PLT' in log and 'freed' in log
+
+
+def test_out_deletion_writes_a_log_line_and_no_ledger_mark(world):
+    organise(world, 'out', t1=100, t2=100)
+    assert 'case organise out deleted: 2 .out' in (world.case / '.casestatus.md').read_text()
+    assert not (Ledger(world.folder).get('local', 'CS1', 'binary/riser.100.plt') or {}).get('deleted')
+
+
+def test_a_dry_run_and_a_kept_step_write_nothing(world):
+    organise(world, 'plt', delete_binary=True, dry_run=True)
+    assert not (world.case / '.casestatus.md').exists()
+    (world.there / 'riser.100.plt').unlink()
+    organise(world, 'plt', delete_binary=True, t1=100, t2=100)
+    assert not (world.case / '.casestatus.md').exists()
+
+
+def test_a_copy_with_another_md5_is_marked_for_auto_show(world):
+    copy = world.there / 'riser.300.plt'
+    copy.write_bytes(copy.read_bytes()[:-1] + b'?')
+    organise(world, 'plt', delete_binary=True)
+    assert Ledger(world.folder).get('local', 'CS1', 'binary/riser.300.plt')['mismatch']

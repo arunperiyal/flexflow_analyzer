@@ -237,6 +237,11 @@ def remote_copies(case_dir, problem: str, remote_name: Optional[str], window=Non
             return {}, set(), str(e)
         finally:
             cloud.close()
+        # a copy with the same size and another md5: say so where `auto show` reads it (a
+        # deletion was being considered); check plt --verify alone leaves the ledger as it was
+        for name, why in result.differs.items():
+            if why.startswith('md5 '):
+                ledger.mark_mismatch(used, case_dir.name, f"binary/{name}")
         good, verified = {}, set()
         unrecorded = {int(n.rsplit('.', 2)[-2]) for n in result.only_there}
         for name in result.verified + result.kept_there:

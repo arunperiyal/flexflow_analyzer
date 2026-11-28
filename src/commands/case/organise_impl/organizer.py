@@ -70,6 +70,7 @@ class CaseOrganizer(HistoryMixin):
         # Files to delete/rename
         self.files_to_delete: List[Path] = []
         self.files_to_rename: List[Tuple[Path, Path]] = []  # (old, new)
+        self.deleted: List[Tuple[Path, int]] = []           # what _perform_deletions removed
 
         # Log file
         self.log_file = None
@@ -154,6 +155,7 @@ class CaseOrganizer(HistoryMixin):
         subcommand : str
             'history', 'out', 'rst', 'plt' or 'vtu'
         """
+        self.subcommand = subcommand
         t1, t2 = self._t1_t2()
 
         self.console.print()
@@ -896,6 +898,7 @@ class CaseOrganizer(HistoryMixin):
                     log_handle.write(f"  Reason: Redundant/intermediate file\n\n")
 
                 file_path.unlink()
+                self.deleted.append((file_path, size))
 
                 if self.args.verbose:
                     self.logger.info(f"  Deleted: {file_path.name}")
@@ -931,6 +934,53 @@ class CaseOrganizer(HistoryMixin):
         if log_handle:
             log_handle.close()
             self.console.print(f"\n[dim]Log saved to: {self.log_file}[/dim]")
+        self._record_deletions()
+
+    def _record_deletions(self):
+        """What went, written down where it is looked for later: the ledger learns that a
+        binary PLT is gone here (its copy on the remote then stands in for it), and the
+        case's .casestatus.md gets one line. Neither is ever fatal."""
+        if not self.deleted:
+            return
+        counts, rst_sets, freed = {}, set(), 0
+        for path, size in self.deleted:
+            freed += size
+            if path.suffix == '.plt':
+                what = 'binary PLT' if path.parent.name == 'binary' else 'ASCII PLT'
+            else:
+                what = path.suffix or 'file'
+            counts[what] = counts.get(what, 0) + 1
+            if path.suffix == '.rst':
+                rst_sets.add(path.name.rsplit('_', 1)[0])
+        if '.rst' in counts:
+            counts['restart sets'] = len(rst_sets)
+            del counts['.rst']
+        try:
+            self._ledger_deleted([p for p, _ in self.deleted
+                                  if p.suffix == '.plt' and p.parent.name == 'binary'])
+        except Exception as e:                                  # a ledger that cannot be written
+            self.logger.warning(f"could not note the deleted PLTs in the ledger: {e}")
+        try:
+            from ....core import case_status
+            parts = ', '.join(f"{n} {what}" for what, n in counts.items())
+            case_status.add_log(self.case_dir, f"case organise {self.subcommand} deleted: "
+                                               f"{parts}; {self._format_size(freed)} freed")
+        except OSError as e:
+            self.logger.warning(f"could not write .casestatus.md: {e}")
+
+    def _ledger_deleted(self, binary_plts):
+        """The ledger of the folder says each of these binary PLTs is gone here."""
+        remote = getattr(self.args, 'remote', None)
+        if not binary_plts or remote is None:
+            return
+        from ....core.transfer.cloud import remote_name_for
+        from ....core.transfer.ledger import Ledger
+        used = remote_name_for(self.case_dir.parent, remote or None)
+        if not used:
+            return
+        ledger = Ledger(self.case_dir.parent)
+        for path in binary_plts:
+            ledger.mark_deleted(used, self.case_dir.name, f"binary/{path.name}")
 
     def _show_final_summary(self, subcommand: str, steps=()):
         """Show final summary after cleanup. `steps` are the history flags that ran."""

@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### 🧹 `case organise` writes down what it deleted
+
+- After `case organise out`, `rst`, `plt` or `vtu` deletes files, the case's
+  `.casestatus.md` gets a line (`case organise out deleted: 5 .out; 2.1GB
+  freed`), and a binary PLT deleted with `--remote` is marked deleted in the
+  ledger, so its copy on the remote stands in for it later. A copy on the
+  remote that has the same size and another md5 is marked in the ledger, and
+  `auto show` then puts the case under *needs you*. First of five steps to
+  have `auto apply --delete` use these commands instead of its own code.
+
 ### 🔎 `auto` reads a post job's steps from its slurm output
 
 - When `.casestatus.md` has no "post job N started: steps a..b" line, `auto`
