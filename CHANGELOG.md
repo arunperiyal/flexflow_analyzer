@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### 🔎 `auto` no longer plans a deletion that `case organise out` would refuse
+
+- A PLT that is only on the remote, with no record that it was checked (put
+  there by hand), does not stand in for its `.out`. `auto show` used to plan
+  `case organise out` for those steps anyway; now it leaves them out and says,
+  under *needs you*, to run `case check plt --remote ... --adopt` for that
+  range. `auto` still adopts nothing itself.
+
 ### 🔎 `case check plt` knows a conversion is running
 
 - While a `run post` job of the case is pending or running, a 0-byte PLT in
