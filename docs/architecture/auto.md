@@ -1158,3 +1158,19 @@ remote listing, and the ledger has no such record. `_deletions` takes those step
 topic `adopt`, with the command for the range: `case check plt --case C --remote R --adopt --t1 a
 --t2 b --freq f`. `auto` still never adopts and `apply` runs no such command; adopting is the
 user's act (§13.23). Once the record exists, the next plan lists the steps again.
+
+### 13.26 The window of a post job from its slurm output
+
+`auto` blames a post job that ended `COMPLETED` for the PLTs it did not make, but only for the
+steps it was given. The window comes from the `post job N started: steps a..b` line of
+`.casestatus.md`; with no such line (a job from an older `postFlex.sh`) it was guessed from the
+PLTs written while the job ran, and when `binary/` was empty and the remote's write times were
+not known, every `.out` written before the job ended counted as given. `BR0SG0U1P0` showed it:
+the job had been given 6130..6460, the `.out` of 6465..6485 were written while it ran, and `auto`
+asked the user to check its log, which also held back the plan for the later steps.
+
+`observe.post_window_from_log` reads the header `postFlex.sh` prints at the top of `slurm-N.out`
+(`Start Time:`, `End Time:`, after the `FlexFlow Postprocessing Job` banner) and fills
+`snap.post_windows` for every job not already there; the casestatus line wins. Only the first
+8 KB of each file is read. What stays open is the other half: with a real miss, one flagged step
+still holds the post of every later step back.

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### 🔎 `auto` reads a post job's steps from its slurm output
+
+- When `.casestatus.md` has no "post job N started: steps a..b" line, `auto`
+  now reads the window from the `Start Time` and `End Time` lines at the top
+  of `slurm-N.out`. A post job given steps up to 6460 is no longer blamed for
+  the PLTs of `.out` that were written after 6460, while it ran.
+
 ### 🔎 `auto` no longer plans a deletion that `case organise out` would refuse
 
 - A PLT that is only on the remote, with no record that it was checked (put

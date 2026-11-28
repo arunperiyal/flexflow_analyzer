@@ -182,6 +182,22 @@ def _tail(case_dir, jobid, lines: int = LOG_LINES) -> Optional[List[str]]:
     return [l.rstrip() for l in text.split('\n')[-lines:]] if text else []
 
 
+def post_window_from_log(path) -> Optional[Tuple[int, int]]:
+    """The steps a post job was given, from the top of its slurm-<id>.out: postFlex.sh
+    prints "Start Time:   6130 ..." and "End Time:     6460" in its header. None when the
+    file is not a post job's, or has no such lines. Reads only the first 8 KB."""
+    try:
+        with open(path, 'rb') as f:
+            head = f.read(8192).decode('utf-8', errors='replace')
+    except OSError:
+        return None
+    if 'FlexFlow Postprocessing Job' not in head:
+        return None
+    a = re.search(r'^Start Time:\s+(\d+)', head, re.M)
+    b = re.search(r'^End Time:\s+(\d+)', head, re.M)
+    return (int(a.group(1)), int(b.group(1))) if a and b else None
+
+
 def _parse_time(text) -> Optional[float]:
     """sacct's 2026-11-09T03:31:00 or the ledger's 2026-11-09 03:31:00, as seconds; None
     when it is not a time ('Unknown' for a job that has not started)."""
@@ -352,6 +368,14 @@ def observe_case(case_dir, jobs: List[slurm.Job], ended: List[slurm.Job],
             snap.post_windows[m.group(1)] = (int(m.group(2)), int(m.group(3)))
     except OSError:
         pass
+    # a job that left no such line (an older postFlex.sh) still printed its window in its
+    # slurm output; the casestatus line, when there is one, wins
+    for f in case_dir.glob('slurm-*.out'):
+        jobid = f.name[len('slurm-'):-len('.out')]
+        if jobid not in snap.post_windows:
+            window = post_window_from_log(f)
+            if window:
+                snap.post_windows[jobid] = window
 
     # job scripts' names
     for script in ('mainFlex.sh', 'postFlex.sh'):
